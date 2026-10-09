@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { COPY, abbreviateMint } from '@shillex/shared';
 import { Popover } from '../../components/ui/Popover';
+import { useInDialog } from '../../components/ui/Dialog';
 import { cx } from '../../lib/cx';
 import { useToken } from './tokenCache';
 import { isPanelFocusReturn, useTokenPanel } from './useTokenPanel';
@@ -27,6 +28,7 @@ function isKeyboardFocus(el: HTMLElement): boolean {
  */
 export function TokenMention({ mint }: { mint: string }) {
   const token = useToken(mint);
+  const inDialog = useInDialog();
   const { openToken } = useTokenPanel();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -62,6 +64,23 @@ export function TokenMention({ mint }: { mint: string }) {
     if (leave) { e.preventDefault(); e.stopPropagation(); backToChip(); }
   };
 
+  const face = (
+    <>
+      {token.status === 'pending' ? <span className={s.loadingDot} aria-hidden="true" /> : <TokenAvatar token={token} size={15} />}
+      <span className={s.sym}>{label}</span>
+      <span className={s.addr} aria-hidden="true">{abbreviateMint(mint)}</span>
+      {token.source === 'demo' && <span className={s.demo} aria-hidden="true">{COPY.demoTag}</span>}
+    </>
+  );
+  // In a modal the preview and the token panel can't be used (they render behind its top layer): same chip, inert.
+  if (inDialog) {
+    return (
+      <span className={cx(s.chip, s.static, s[token.status])} title={mint} aria-busy={token.status === 'pending' || undefined}>
+        {face}<span className="sr-only">{` ${token.source === 'demo' ? '(demo) ' : ''}${mint}`}</span>
+      </span>
+    );
+  }
+
   return (
     <>
       <button ref={ref} type="button" className={cx(s.chip, s[token.status])} aria-label={a11y}
@@ -79,10 +98,7 @@ export function TokenMention({ mint }: { mint: string }) {
           if (wasTouch && !open) { show(true); return; }
           show(false); openToken(mint, ref.current);
         }}>
-        {token.status === 'pending' ? <span className={s.loadingDot} aria-hidden="true" /> : <TokenAvatar token={token} size={15} />}
-        <span className={s.sym}>{label}</span>
-        <span className={s.addr} aria-hidden="true">{abbreviateMint(mint)}</span>
-        {token.source === 'demo' && <span className={s.demo} aria-hidden="true">{COPY.demoTag}</span>}
+        {face}
       </button>
       <Popover anchor={ref.current} open={open} onClose={() => show(false)} id={previewId}
         onPointerEnter={cancel} onPointerLeave={() => later(() => setOpen(false), 150)}>

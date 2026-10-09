@@ -1,10 +1,11 @@
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; max-width: 100%; padding: 0 6px 0 3px; margin: 0 1px; vertical-align: -5px;
   border: 1px solid var(--token-line); border-radius: 6px; background: var(--token-soft); color: var(--token); font: 500 12.5px/1 var(--font-ui); cursor: pointer;
   white-space: nowrap; transition: background .12s, border-color .12s; }
-.chip:hover { background: var(--token-hover); }
+.chip:not(.static):hover { background: var(--token-hover); }
+.static { cursor: default; }
 .chip[aria-busy='true'] { color: var(--muted); border-color: var(--line-strong); background: var(--raised); }
 .chip.unindexed, .chip.error { color: var(--muted); border-style: dashed; border-color: var(--line-strong); background: transparent; }
-.chip.unindexed:hover, .chip.error:hover { background: var(--hover); }
+.chip.unindexed:not(.static):hover, .chip.error:not(.static):hover { background: var(--hover); }
 .sym { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .addr { font: 400 11px/1 var(--font-mono); opacity: .8; }
 .plain { font-family: var(--font-mono); font-size: .92em; overflow-wrap: anywhere; color: var(--muted); }
