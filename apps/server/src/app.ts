@@ -3,11 +3,12 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import type { UserRow } from './db/schema.ts';
 import type { AppDeps } from './deps.ts';
-import { registerErrorHandler, errors } from './lib/errors.ts';
+import { registerErrorHandler, sendNotFound, errors } from './lib/errors.ts';
 import { SESSION_COOKIE, userForToken } from './lib/auth.ts';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import authRoutes from './routes/auth.ts';
 import uploadsRoutes from './routes/uploads.ts';
 import mediaRoutes from './routes/media.ts';
@@ -41,7 +42,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorateRequest('user', null);
   await app.register(cookie, { secret: deps.config.sessionSecret });
   await app.register(rateLimit, { global: false });
-  registerErrorHandler(app);
+  const serveWeb = existsSync(join(deps.config.webDistDir, 'index.html'));
+  registerErrorHandler(app, { notFound: !serveWeb });
   await app.register(multipart);
   mkdirSync(deps.config.uploadsDir, { recursive: true });
   await app.register(fastifyStatic, { root: deps.config.uploadsDir, prefix: '/uploads/', decorateReply: false, immutable: true, maxAge: '365d',
@@ -78,5 +80,32 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(tokensRoutes, { prefix: '/api' });
   await app.register(discoverRoutes, { prefix: '/api' });
   // Later tasks register more route plugins here.
+
+  const APP_CSP = "default-src 'self'; img-src 'self' https: data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+  app.addHook('onSend', async (req, reply, payload) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('referrer-policy', 'strict-origin-when-cross-origin');
+    reply.header('x-frame-options', 'DENY');
+    // /uploads (its static setHeaders runs after this hook) and /media set their own stricter CSP.
+    if (!reply.hasHeader('content-security-policy') && !req.url.startsWith('/uploads/') && !req.url.startsWith('/media/')) {
+      reply.header('content-security-policy', APP_CSP);
+    }
+    return payload;
+  });
+
+  if (serveWeb) {
+    await app.register(fastifyStatic, {
+      root: deps.config.webDistDir, prefix: '/', decorateReply: true, wildcard: false, index: false,
+      setHeaders: (res, path) => {
+        // Vite fingerprints /assets/*; everything else (index.html) must revalidate so redeploys show up.
+        res.header('cache-control', /[\\/]assets[\\/]/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    });
+    app.setNotFoundHandler((req, reply) => {
+      const reserved = ['/api', '/socket.io', '/uploads', '/media'].some((p) => req.url === p || req.url.startsWith(`${p}/`) || req.url.startsWith(`${p}?`));
+      if ((req.method !== 'GET' && req.method !== 'HEAD') || reserved) return sendNotFound(reply);
+      return reply.code(200).type('text/html; charset=utf-8').sendFile('index.html');
+    });
+  }
   return app;
 }
