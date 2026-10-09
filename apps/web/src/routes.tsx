@@ -10,6 +10,7 @@ import { BookmarksPage } from './features/feed/BookmarksPage';
 import { CommunitiesPage } from './features/communities/CommunitiesPage';
 import { CommunityPage } from './features/communities/CommunityPage';
 import { InvitePage } from './features/communities/InvitePage';
+import { MessagesPage } from './features/messages/MessagesPage';
 
 // Temporary placeholder so the shell is navigable while later tasks build each screen; removed in Task 24.
 const ComingNext = ({ name }: { name: string }) => <EmptyState title={name} body="This screen is built in a later task." />;
@@ -25,8 +26,8 @@ export const router = createBrowserRouter([
       { path: '/communities', element: <CommunitiesPage /> },
       { path: '/c/:slug', element: <CommunityPage /> },
       { path: '/c/:slug/:channelId', element: <CommunityPage /> },
-      { path: '/messages', element: <ComingNext name="Messages" /> },
-      { path: '/messages/:id', element: <ComingNext name="Conversation" /> },
+      { path: '/messages', element: <MessagesPage /> },
+      { path: '/messages/:id', element: <MessagesPage /> },
       { path: '/notifications', element: <ComingNext name="Notifications" /> },
       { path: '/u/:username', element: <ComingNext name="Profile" /> },
       { path: '/p/:id', element: <ThreadPage /> },

@@ -54,6 +54,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
 }) {
   const me = useRequiredMe();
   const ref = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
   const { query, messages, pending } = chat;
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(0);
@@ -78,7 +79,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
     if (initial.current) {
       initial.current = false;
       const target = (focusId && document.getElementById(`msg-${focusId}`)) || (firstUnreadId && document.getElementById(`msg-${firstUnreadId}`));
-      if (target) centerIn(el, target); else el.scrollTop = el.scrollHeight;
+      if (target) { centerIn(el, target); stick.current = false; } else el.scrollTop = el.scrollHeight;
     } else if (el.scrollHeight !== prevHeight.current && el.scrollTop < 40 && count > prevCount.current && prevCount.current > 0 && !atBottom) {
       el.scrollTop += el.scrollHeight - prevHeight.current; // older page prepended: keep position
     } else if (count > prevCount.current) {
@@ -89,11 +90,23 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
     prevCount.current = count;
   }, [messages.length, pending.length, query.isPending]);
 
+  // Stay pinned to the bottom while content grows after render (token cards resolving, images loading), but only
+  // if the reader was already at the bottom; someone reading history is never yanked down.
+  const stick = useRef(true);
+  useEffect(() => {
+    const el = ref.current; const content = inner.current;
+    if (!el || !content || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => { if (stick.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [query.isPending]);
+
   useEffect(() => { if (highlight) { const t = setTimeout(() => setHighlight(null), 2000); return () => clearTimeout(t); } }, [highlight]);
 
   const onScroll = () => {
     const el = ref.current!;
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    stick.current = bottom;
     setAtBottom(bottom);
     if (bottom) setNewBelow(0);
     if (el.scrollTop < 200 && query.hasNextPage && !query.isFetchingNextPage) { prevHeight.current = el.scrollHeight; void query.fetchNextPage(); }
@@ -112,6 +125,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
   return (
     <div className={s.logWrap}>
       <div ref={ref} className={s.log} onScroll={onScroll} role="log" aria-label={label} aria-live="polite" aria-relevant="additions" tabIndex={0}>
+        <div ref={inner}>
         {query.isFetchingNextPage && <div aria-label="Loading older messages" role="status"><LogSkeletonRows /></div>}
         {!query.hasNextPage && messages.length > 0 && <p className={s.beginning}>This is the beginning of the conversation.</p>}
         {messages.length === 0 && pending.length === 0 && <EmptyState title={emptyTitle} body="Say something to get it started." />}
@@ -143,6 +157,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
             </motion.div>
           ))}
         </AnimatePresence>
+        </div>
       </div>
       <AnimatePresence>
         {newBelow > 0 && (
