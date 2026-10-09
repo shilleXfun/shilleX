@@ -34,6 +34,15 @@ describe('static serving', () => {
     expect((await ctx.app.inject({ method: 'POST', url: '/somewhere' })).statusCode).toBe(404);
     expect((await ctx.app.inject({ method: 'GET', url: '/uploads/missing.png' })).headers['content-type']).not.toContain('text/html');
     expect((await ctx.app.inject({ method: 'GET', url: '/media/nope/x.svg' })).headers['content-type']).not.toContain('text/html');
+    // A stale client asking for a chunk from an older build must get a 404, not index.html.
+    const stale = await ctx.app.inject({ method: 'GET', url: '/assets/old-chunk.js' });
+    expect(stale.statusCode).toBe(404);
+    expect(stale.headers['content-type']).not.toContain('text/html');
+  });
+  it('answers HEAD on client routes', async () => {
+    const r = await ctx.app.inject({ method: 'HEAD', url: '/c/x' });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toContain('text/html');
   });
   it('sends security headers and a health endpoint', async () => {
     const r = await ctx.app.inject({ method: 'GET', url: '/api/health' });
