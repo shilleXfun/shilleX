@@ -5,7 +5,12 @@ import type { UserRow } from './db/schema.ts';
 import type { AppDeps } from './deps.ts';
 import { registerErrorHandler, errors } from './lib/errors.ts';
 import { SESSION_COOKIE, userForToken } from './lib/auth.ts';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { mkdirSync } from 'node:fs';
 import authRoutes from './routes/auth.ts';
+import uploadsRoutes from './routes/uploads.ts';
+import mediaRoutes from './routes/media.ts';
 
 declare module 'fastify' {
   interface FastifyInstance { deps: AppDeps }
@@ -19,6 +24,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(cookie, { secret: deps.config.sessionSecret });
   await app.register(rateLimit, { global: false });
   registerErrorHandler(app);
+  await app.register(multipart);
+  mkdirSync(deps.config.uploadsDir, { recursive: true });
+  await app.register(fastifyStatic, { root: deps.config.uploadsDir, prefix: '/uploads/', decorateReply: false, immutable: true, maxAge: '365d' });
 
   app.addHook('onRequest', async (req) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.url.startsWith('/api')) {
@@ -29,8 +37,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   await app.register(authRoutes, { prefix: '/api' });
+  await app.register(uploadsRoutes, { prefix: '/api' });
+  await app.register(mediaRoutes);
   // Later tasks register more route plugins here, in this order:
-  // uploads, media, posts, feed, users, me, notifications, communities, channels,
+  // posts, feed, users, me, notifications, communities, channels,
   // conversations, messages, tokens, discover, reports, search.
   return app;
 }
