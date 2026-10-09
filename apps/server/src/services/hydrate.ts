@@ -167,8 +167,8 @@ export async function hydrateMessages(db: Db, viewerId: string, rows: MessageRow
       author: authors.get(r.authorId)!,
       body: deleted ? '' : r.body,
       replyTo: reply ? {
-        id: reply.id, author: authors.get(reply.authorId)!, deleted: reply.status === 'deleted',
-        snippet: reply.status === 'deleted' ? '' : reply.body.slice(0, 120),
+        id: reply.id, author: authors.get(reply.authorId)!, deleted: reply.status !== 'visible',
+        snippet: reply.status !== 'visible' ? '' : reply.body.slice(0, 120),
       } : null,
       attachments: deleted ? [] : r.attachments,
       reactions: deleted ? [] : reacts,

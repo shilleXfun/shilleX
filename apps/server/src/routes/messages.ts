@@ -9,8 +9,7 @@ import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
 import { requireChannel, requireConversationMember } from '../services/visibility.ts';
 import { hydrateMessages } from '../services/hydrate.ts';
-import { afterVisible, emitMessage, loadMessageAccess, sendMessage } from '../services/messages.ts';
-import { removeMentions } from '../services/mentions.ts';
+import { afterVisible, emitMessage, loadMessageAccess, removeMessage, sendMessage } from '../services/messages.ts';
 import { markRead } from '../services/unread.ts';
 
 const Send = z.object({
@@ -76,9 +75,7 @@ export default async function messagesRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const { row, isMod } = await loadMessageAccess(db, req.params.id, me.id);
     if (row.authorId !== me.id && !isMod) throw errors.forbidden('NOT_ALLOWED', 'Only the author or a moderator can delete this');
-    const [upd] = await db.update(messages).set({ status: 'deleted' }).where(eq(messages.id, row.id)).returning();
-    await removeMentions(db, 'message', row.id);
-    await emitMessage(deps, upd!, 'message:update');
+    await removeMessage(deps, row);
     return reply.status(204).send();
   });
 
@@ -91,11 +88,12 @@ export default async function messagesRoutes(app: FastifyInstance) {
     const { row, isMod, channel } = await loadMessageAccess(db, req.params.id, me.id);
     if (!isMod || !channel) throw errors.forbidden('MODS_ONLY', 'Only moderators can approve messages');
     if (row.status !== 'held') throw errors.badRequest('NOT_HELD', 'This message is not awaiting approval');
-    const [upd] = await db.update(messages).set({ status: 'visible' }).where(eq(messages.id, row.id)).returning();
+    const [upd] = await db.update(messages).set({ status: 'visible' }).where(and(eq(messages.id, row.id), eq(messages.status, 'held'))).returning();
+    if (!upd) throw errors.badRequest('NOT_HELD', 'This message is not awaiting approval');
     const [c] = await db.select({ v: communities.visibility }).from(communities).where(eq(communities.id, channel.communityId));
-    await afterVisible(deps, upd!, channel, c!.v);
-    const [view] = await hydrateMessages(db, me.id, [upd!]);
-    await emitMessage(deps, upd!, 'message:new', { tokens: await deps.tokens.getViews(view!.mints) });
+    await afterVisible(deps, upd, channel, c!.v);
+    const [view] = await hydrateMessages(db, me.id, [upd]);
+    await emitMessage(deps, upd, 'message:new', { tokens: await deps.tokens.getViews(view!.mints) });
     return { message: view };
   });
 

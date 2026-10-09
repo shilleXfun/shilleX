@@ -131,3 +131,65 @@ describe('message actions', () => {
     expect((await ctx.as(member).get('/api/communities/trench')).body.community.channels[0].unread).toBe(0);
   });
 });
+
+describe('held message isolation', () => {
+  let held: any; let holder: TestUser;
+  beforeAll(async () => {
+    await ctx.as(mod).patch(`/api/channels/${pubChannel}`, { holdNewMemberPosts: true });
+    holder = await ctx.createUser('holder_hal');
+    await ctx.as(holder).post('/api/communities/trench/join');
+  });
+  afterAll(async () => { await ctx.as(mod).patch(`/api/channels/${pubChannel}`, { holdNewMemberPosts: false }); });
+
+  it('cannot be replied to, so its snippet never reaches the channel', async () => {
+    held = (await ctx.as(holder).post(`/api/channels/${pubChannel}/messages`, { body: 'secret held text' })).body.message;
+    expect(held.status).toBe('held');
+    expect((await ctx.as(mod).post(`/api/channels/${pubChannel}/messages`, { body: 'replying to held', replyToId: held.id })).body.code).toBe('BAD_REPLY');
+    ctx.clock.advance(61_000);
+    expect((await ctx.as(holder).post(`/api/channels/${pubChannel}/messages`, { body: 'self reply', replyToId: held.id })).body.code).toBe('BAD_REPLY');
+  });
+  it('hydration blanks a held reply target', async () => {
+    const { messages } = await import('../src/db/schema.ts');
+    const { newId } = await import('../src/lib/ids.ts');
+    const id = newId();
+    await ctx.db.insert(messages).values({ id, channelId: pubChannel, authorId: mod.id, body: 'legacy reply', replyToId: held.id, attachments: [], status: 'visible', createdAt: ctx.clock.now() });
+    const item = (await ctx.as(member).get(`/api/channels/${pubChannel}/messages?limit=100`)).body.items.find((m: any) => m.id === id);
+    expect(item.replyTo).toMatchObject({ id: held.id, deleted: true, snippet: '' });
+  });
+  it('cannot be pinned', async () => {
+    const r = await ctx.as(mod).post('/api/communities/trench/pins', { targetType: 'message', targetId: held.id });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('NOT_VISIBLE');
+  });
+  it('deleting a held message leaves no trace for other members', async () => {
+    ctx.clock.advance(61_000);
+    const h2 = (await ctx.as(holder).post(`/api/channels/${pubChannel}/messages`, { body: 'held to delete' })).body.message;
+    ctx.bus.clear();
+    expect((await ctx.as(holder).del(`/api/messages/${h2.id}`)).status).toBe(204);
+    const targets = ctx.bus.find('message:update').map((e) => e.target);
+    expect(targets).not.toContain(`channel:${pubChannel}`);
+    expect(targets.every((t) => t.startsWith('user:'))).toBe(true);
+    const ids = (await ctx.as(member).get(`/api/channels/${pubChannel}/messages?limit=100`)).body.items.map((m: any) => m.id);
+    expect(ids).not.toContain(h2.id);
+    const rows = await ctx.db.select().from((await import('../src/db/schema.ts')).messages).where(eq((await import('../src/db/schema.ts')).messages.id, h2.id));
+    expect(rows).toHaveLength(0);
+  });
+  it('concurrent approvals publish once', async () => {
+    ctx.clock.advance(61_000);
+    const h3 = (await ctx.as(holder).post(`/api/channels/${pubChannel}/messages`, { body: `race ${MINT}` })).body.message;
+    const rs = await Promise.all([ctx.as(mod).post(`/api/messages/${h3.id}/approve`), ctx.as(mod).post(`/api/messages/${h3.id}/approve`)]);
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 400]);
+    expect(rs.find((r) => r.status === 400)!.body.code).toBe('NOT_HELD');
+    expect(await ctx.db.select().from(tokenMentions).where(eq(tokenMentions.sourceId, h3.id))).toHaveLength(1);
+  });
+});
+
+describe('send validation ordering', () => {
+  it('a failed send does not burn the duplicate window', async () => {
+    const bad = await ctx.as(member).post(`/api/channels/${pubChannel}/messages`, { body: 'retry after fixing reply', replyToId: 'nope' });
+    expect(bad.body.code).toBe('BAD_REPLY');
+    const target = (await ctx.as(mod).post(`/api/channels/${pubChannel}/messages`, { body: 'reply target' })).body.message;
+    const ok = await ctx.as(member).post(`/api/channels/${pubChannel}/messages`, { body: 'retry after fixing reply', replyToId: target.id });
+    expect(ok.status).toBe(201);
+  });
+});

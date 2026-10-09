@@ -21,7 +21,7 @@ export default async function pinsRoutes(app: FastifyInstance) {
     return rows.map((r) => ({
       id: r.id, channelId: r.channelId, createdAt: r.createdAt.toISOString(),
       post: postViews.find((p) => p.id === r.targetId) ?? null, message: msgViews.find((m) => m.id === r.targetId) ?? null,
-    })).filter((p) => !(p.post?.deleted || p.message?.status === 'deleted'));
+    })).filter((p) => !(p.post?.deleted || (p.message && p.message.status !== 'visible')));
   }
 
   app.get<{ Params: { slug: string } }>('/communities/:slug/pins', async (req) => {
@@ -42,6 +42,7 @@ export default async function pinsRoutes(app: FastifyInstance) {
     } else {
       const [m] = await db.select({ m: messages, ch: channels }).from(messages).innerJoin(channels, eq(channels.id, messages.channelId)).where(eq(messages.id, body.targetId));
       if (!m || m.ch.communityId !== a.community.id) throw errors.badRequest('WRONG_COMMUNITY', 'Only messages from this community can be pinned');
+      if (m.m.status !== 'visible') throw errors.badRequest('NOT_VISIBLE', 'Only visible messages can be pinned');
       channelId = m.ch.id;
     }
     const [row] = await db.insert(pins).values({ id: newId(), communityId: a.community.id, channelId, targetType: body.targetType, targetId: body.targetId, pinnedBy: me.id, createdAt: now() }).returning();

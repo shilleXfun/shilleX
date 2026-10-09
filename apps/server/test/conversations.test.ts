@@ -28,6 +28,7 @@ describe('conversations', () => {
     expect(r.body.message.attachments).toEqual([{ type: 'token', mint: MINT }]);
     expect(ctx.bus.find('message:new').map((e) => e.target).sort()).toEqual([`user:${a.id}`, `user:${b.id}`].sort());
     const m = await ctx.db.select().from(tokenMentions).where(eq(tokenMentions.sourceId, r.body.message.id));
+    expect(m.length).toBeGreaterThan(0);
     expect(m.every((x) => x.isPublic === false)).toBe(true);
   });
   it('non-members get 404, never 403', async () => {
@@ -76,5 +77,15 @@ describe('conversations', () => {
     const hits = (await ctx.as(a).get(`/api/search/messages?q=${encodeURIComponent('moon_shot')}`)).body.hits;
     expect(hits.map((h: any) => h.message.body)).toEqual(['sniped moon_shot early']);
     expect((await ctx.as(a).get(`/api/search/messages?q=${encodeURIComponent('%%')}`)).body.hits).toEqual([]);
+  });
+  it('lists conversations by latest message time, not by id', async () => {
+    const [e, , g] = await Promise.all(['sort_e', 'sort_f', 'sort_g'].map((n) => ctx.createUser(n)));
+    const empty = (await ctx.as(e!).post('/api/conversations', { kind: 'dm', username: 'sort_f' })).body.conversation.id;
+    ctx.clock.advance(61_000);
+    const active = (await ctx.as(e!).post('/api/conversations', { kind: 'dm', username: 'sort_g' })).body.conversation.id;
+    ctx.clock.advance(61_000);
+    await ctx.as(g!).post(`/api/conversations/${active}/messages`, { body: 'recent hello' });
+    const ids = (await ctx.as(e!).get('/api/conversations')).body.conversations.map((c: any) => c.id);
+    expect(ids).toEqual([active, empty]);
   });
 });
