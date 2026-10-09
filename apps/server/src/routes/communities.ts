@@ -94,6 +94,14 @@ export default async function communitiesRoutes(app: FastifyInstance) {
     if (body.visibility && (body.visibility === 'public') !== (a.community.visibility === 'public')) {
       await setCommunityMentionVisibility(db, a.community.id, body.visibility === 'public');
     }
+    if (body.visibility && body.visibility !== 'public' && a.community.visibility === 'public') {
+      // Outsiders who subscribed while the community was public must stop receiving its events.
+      const keep = (await db.select({ id: communityMembers.userId }).from(communityMembers)
+        .where(and(eq(communityMembers.communityId, a.community.id), eq(communityMembers.status, 'active')))).map((r) => r.id);
+      const chans = await db.select({ id: channels.id }).from(channels).where(eq(channels.communityId, a.community.id));
+      await deps.bus.evictAllExcept(`community:${a.community.id}`, keep);
+      for (const c of chans) await deps.bus.evictAllExcept(`channel:${c.id}`, keep);
+    }
     return { community: await communityDetail(deps, me.id, await access(req.params.slug, me.id)) };
   });
 

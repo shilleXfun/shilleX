@@ -89,6 +89,18 @@ describe('communities', () => {
     expect((await ctx.as(victim).post('/api/communities/pub/join')).body.code).toBe('BANNED');
     expect((await ctx.as(joiner).post(`/api/communities/pub/members/${owner.id}/ban`)).status).toBe(403);
   });
+  it('downgrading public to private evicts non-members from community and channel rooms', async () => {
+    await ctx.as(owner).post('/api/communities', { name: 'Down Grade', slug: 'downgrade', visibility: 'public' });
+    await ctx.as(joiner).post('/api/communities/downgrade/join');
+    const d = (await ctx.as(owner).get('/api/communities/downgrade')).body.community;
+    ctx.bus.clear();
+    expect((await ctx.as(owner).patch('/api/communities/downgrade', { description: 'x' })).status).toBe(200);
+    expect(ctx.bus.evictAllExceptCalls).toEqual([]); // no visibility change, no eviction
+    expect((await ctx.as(owner).patch('/api/communities/downgrade', { visibility: 'private' })).status).toBe(200);
+    const rooms = ctx.bus.evictAllExceptCalls.map((c) => c.room).sort();
+    expect(rooms).toEqual([`community:${d.community.id}`, ...d.channels.map((c: any) => `channel:${c.id}`)].sort());
+    for (const c of ctx.bus.evictAllExceptCalls) expect([...c.keepUserIds].sort()).toEqual([owner.id, joiner.id].sort());
+  });
   it('channel settings are mod-only and slow mode must be an allowed value', async () => {
     const ch = (await ctx.as(owner).get('/api/communities/pub')).body.community.channels[0];
     expect((await ctx.as(joiner).patch(`/api/channels/${ch.id}`, { slowModeSeconds: 30 })).status).toBe(403);
