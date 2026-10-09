@@ -5,7 +5,7 @@ const HUES = [196, 168, 262, 28, 340, 84, 220, 12];
 function rng(seed: string) {
   const h = createHash('sha256').update(seed).digest();
   let i = 0;
-  return () => h[(i++) % h.length]! / 255;
+  return () => h[(i++) % h.length]! / 256;
 }
 const esc = (s: string) => s.replace(/[^A-Za-z0-9_.-]/g, '');
 

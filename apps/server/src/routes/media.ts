@@ -12,6 +12,7 @@ export default async function mediaRoutes(app: FastifyInstance) {
     return reply
       .header('content-type', 'image/svg+xml; charset=utf-8')
       .header('cache-control', 'public, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
       .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'")
       .send(gen(m[1]!));
   });

@@ -26,7 +26,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerErrorHandler(app);
   await app.register(multipart);
   mkdirSync(deps.config.uploadsDir, { recursive: true });
-  await app.register(fastifyStatic, { root: deps.config.uploadsDir, prefix: '/uploads/', decorateReply: false, immutable: true, maxAge: '365d' });
+  await app.register(fastifyStatic, { root: deps.config.uploadsDir, prefix: '/uploads/', decorateReply: false, immutable: true, maxAge: '365d',
+    setHeaders: (res) => {
+      res.header('x-content-type-options', 'nosniff');
+      res.header('content-security-policy', "default-src 'none'; sandbox");
+    } });
 
   app.addHook('onRequest', async (req) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.url.startsWith('/api')) {
