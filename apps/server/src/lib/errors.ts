@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 
 export class AppError extends Error {
@@ -14,7 +14,11 @@ export const errors = {
   tooMany: (code: string, message: string, retryAfterSec?: number) => new AppError(429, code, message, retryAfterSec ? { retryAfterSec } : undefined),
 };
 
-export function registerErrorHandler(app: FastifyInstance) {
+export const sendNotFound = (reply: FastifyReply) =>
+  reply.status(404).send({ code: 'NOT_FOUND', message: 'Route not found' });
+
+/** Pass `{ notFound: false }` when the caller installs its own not-found handler (Fastify allows only one). */
+export function registerErrorHandler(app: FastifyInstance, opts: { notFound?: boolean } = {}) {
   app.setErrorHandler((err: unknown, _req, reply) => {
     if (err instanceof AppError) {
       return reply.status(err.status).send({ code: err.code, message: err.message, details: err.details });
@@ -29,8 +33,9 @@ export function registerErrorHandler(app: FastifyInstance) {
     app.log.error(err);
     return reply.status(500).send({ code: 'INTERNAL', message: 'Something went wrong' });
   });
+  if (opts.notFound === false) return;
   app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api')) return reply.status(404).send({ code: 'NOT_FOUND', message: 'Route not found' });
+    if (req.url.startsWith('/api')) return sendNotFound(reply);
     return reply.callNotFound();
   });
 }
