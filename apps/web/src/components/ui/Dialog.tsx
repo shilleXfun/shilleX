@@ -14,7 +14,10 @@ export function Dialog({ open, onClose, title, children, footer, className }: { 
     if (!open && d.open) d.close();
   }, [open]);
   return (
-    <dialog ref={ref} className={cx(s.dialog, className)} aria-labelledby={titleId} onClose={onClose} onCancel={(e) => { e.preventDefault(); onClose(); }}
+    <dialog ref={ref} className={cx(s.dialog, className)} aria-labelledby={titleId}
+      // The native `close` event also fires when our effect closes the dialog after the parent set open=false;
+      // only report closes the parent doesn't already know about, so onClose fires once.
+      onClose={() => { if (open) onClose(); }} onCancel={(e) => { e.preventDefault(); onClose(); }}
       onClick={(e) => { if (e.target === ref.current) onClose(); }}>
       {open && (
         <>

@@ -9,7 +9,7 @@
 @media (max-width: 767px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .left { display: none; }
-  .center { min-height: calc(100vh - var(--tabbar-h)); padding-bottom: var(--tabbar-h); }
+  .center { min-height: calc(100vh - var(--tabbar-total)); padding-bottom: var(--tabbar-total); }
   .shell[data-immersive='true'] .center { padding-bottom: 0; }
 }
 
@@ -53,7 +53,7 @@
   .account { justify-content: center; padding: 6px 0; }
 }
 
-.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); display: none; grid-template-columns: repeat(5, 1fr); background: var(--panel); border-top: 1px solid var(--line); }
+.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding-bottom: env(safe-area-inset-bottom, 0px); display: none; grid-template-columns: repeat(5, 1fr); background: var(--panel); border-top: 1px solid var(--line); }
 .tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 10px; font-weight: 500; }
 .tabbar a[aria-current='page'] { color: var(--accent); }
 .tabBadge { position: absolute; top: 5px; left: calc(50% + 4px); }

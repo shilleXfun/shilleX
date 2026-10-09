@@ -34,4 +34,6 @@
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 
   --left-w: 240px; --right-w: 320px; --panel-w: 420px; --tabbar-h: 56px; --mobile-header-h: 48px;
+  /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
+  --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
