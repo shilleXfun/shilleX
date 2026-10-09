@@ -8,6 +8,8 @@ import { communitySummaries, communityAvatar } from '../services/communities.ts'
 import { tokenRowToView } from '../tokens/view.ts';
 import { toUserSummary } from '../services/users.ts';
 
+const DISCOVER_COMMUNITY_POOL = 50;
+
 export default async function discoverRoutes(app: FastifyInstance) {
   const deps = app.deps;
   const { db, now, presence, config } = deps;
@@ -61,7 +63,7 @@ export default async function discoverRoutes(app: FastifyInstance) {
     const rows = await db.select({
       u: users,
       activity: sql<number>`(select count(*)::int from ${posts} p where p.author_id = "users"."id" and p.created_at > ${since} and p.deleted_at is null and p.community_id is null)
-        + (select count(*)::int from ${messages} m where m.author_id = "users"."id" and m.created_at > ${since} and m.channel_id is not null)`,
+        + (select count(*)::int from ${messages} m join ${channels} ch on ch.id = m.channel_id join ${communities} co on co.id = ch.community_id where m.author_id = "users"."id" and m.created_at > ${since} and m.status = 'visible' and co.visibility = 'public')`,
       followers: sql<number>`(select count(*)::int from ${follows} f where f.followee_id = "users"."id")`,
     }).from(users).where(notInArray(users.id, exclude)).orderBy(desc(sql`2`)).limit(limit * 3);
     const viaFollowed = followed.length ? await db.select({ followee: follows.followeeId, via: users.username }).from(follows)
@@ -74,7 +76,8 @@ export default async function discoverRoutes(app: FastifyInstance) {
 
   app.get('/discover', async (req) => {
     const me = requireUser(req);
-    const commRows = await db.select().from(communities).where(eq(communities.visibility, 'public')).limit(50);
+    const commRows = await db.select().from(communities).where(eq(communities.visibility, 'public'))
+      .orderBy(desc(sql`(select count(*) from ${communityMembers} cm where cm.community_id = "communities"."id" and cm.status = 'active')`), communities.id).limit(DISCOVER_COMMUNITY_POOL);
     const summaries = (await communitySummaries(deps, me.id, commRows))
       .sort((a, b) => b.onlineCount - a.onlineCount || b.memberCount - a.memberCount).slice(0, 8);
     const { newCoins, promoted } = await coins(20);

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
-import { tokens } from '../src/db/schema.ts';
+import { eq } from 'drizzle-orm';
+import { communities, communityMembers, tokens } from '../src/db/schema.ts';
 
 const MINT_A = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 const MINT_B = 'So11111111111111111111111111111111111111112';
@@ -62,5 +63,71 @@ describe('discover', () => {
     expect(s.newCoins.length).toBeLessThanOrEqual(5);
     expect(s.promoted.token.symbol).toBe('PRO');
     expect(s.demoSimulator).toBe(false);
+  });
+});
+
+describe('discover people exclusions and activity', () => {
+  it('excludes blocker, blocked and muted users even when they are active; keeps unrelated active users', async () => {
+    const blocked = await ctx.createUser('disc_blocked'); const muted = await ctx.createUser('disc_muted'); const other = await ctx.createUser('disc_other');
+    for (const u of [blocker, blocked, muted, other]) { ctx.clock.advance(61_000); await ctx.as(u).post('/api/posts', { body: `hello from ${u.id}` }); }
+    await ctx.as(me).put('/api/users/disc_blocked/block');
+    await ctx.as(me).put('/api/users/disc_muted/mute');
+    const names = (await ctx.as(me).get('/api/discover')).body.people.map((p: any) => p.user.username);
+    expect(names).toContain('disc_other');
+    for (const n of ['disc_blocker', 'disc_blocked', 'disc_muted', 'disc_me']) expect(names).not.toContain(n);
+  });
+
+  it('only visible messages in public communities count as activity', async () => {
+    const owner = await ctx.createUser('disc_owner');
+    const heldU = await ctx.createUser('disc_held'); const delU = await ctx.createUser('disc_deleted');
+    const privU = await ctx.createUser('disc_priv'); const pubU = await ctx.createUser('disc_pub');
+    await ctx.as(owner).post('/api/communities', { name: 'Act Pub', slug: 'actpub', visibility: 'public' });
+    await ctx.as(owner).post('/api/communities', { name: 'Act Priv', slug: 'actpriv', visibility: 'private' });
+    const pubCh = (await ctx.as(owner).get('/api/communities/actpub')).body.community.channels[0].id;
+    const privCh = (await ctx.as(owner).get('/api/communities/actpriv')).body.community.channels[0].id;
+    await ctx.as(heldU).post('/api/communities/actpub/join');
+    await ctx.as(delU).post('/api/communities/actpub/join');
+    await ctx.as(pubU).post('/api/communities/actpub/join');
+    const privId = (await ctx.db.select().from(communities).where(eq(communities.slug, 'actpriv')))[0]!.id;
+    await ctx.db.insert(communityMembers).values({ communityId: privId, userId: privU.id, role: 'member', status: 'active', joinedAt: new Date() });
+    await ctx.as(owner).patch(`/api/channels/${pubCh}`, { holdNewMemberPosts: true });
+    ctx.clock.advance(61_000);
+    const held = await ctx.as(heldU).post(`/api/channels/${pubCh}/messages`, { body: 'held one' });
+    expect(held.body.message.status).toBe('held');
+    await ctx.as(owner).patch(`/api/channels/${pubCh}`, { holdNewMemberPosts: false });
+    ctx.clock.advance(61_000);
+    const del = (await ctx.as(delU).post(`/api/channels/${pubCh}/messages`, { body: 'to delete' })).body.message;
+    expect((await ctx.as(delU).del(`/api/messages/${del.id}`)).status).toBe(204);
+    ctx.clock.advance(61_000);
+    const pm = await ctx.as(privU).post(`/api/channels/${privCh}/messages`, { body: 'private chatter' });
+    expect(pm.status).toBe(201);
+    ctx.clock.advance(61_000);
+    expect((await ctx.as(pubU).post(`/api/channels/${pubCh}/messages`, { body: 'public chatter' })).status).toBe(201);
+    const names = (await ctx.as(me).get('/api/discover')).body.people.map((p: any) => p.user.username);
+    expect(names).toContain('disc_pub');
+    for (const n of ['disc_held', 'disc_deleted', 'disc_priv']) expect(names).not.toContain(n);
+  });
+
+  it('community pool is ranked by active members before the pre-limit', async () => {
+    const owner = await ctx.createUser('disc_bulk');
+    const ids: string[] = [];
+    for (let i = 0; i < 55; i++) {
+      const r = await ctx.as(owner).post('/api/communities', { name: `Bulk ${i}`, slug: `bulk-${i}`, visibility: 'public' });
+      expect(r.status).toBe(201);
+      ids.push((await ctx.db.select().from(communities).where(eq(communities.slug, `bulk-${i}`)))[0]!.id);
+    }
+    // The last-created communities get the most members.
+    const extra: any[] = [];
+    for (let k = 0; k < 3; k++) {
+      const big = ids[52 + k]!;
+      for (let j = 0; j < 8 + k; j++) {
+        const u = await ctx.createUser(`disc_bm_${k}_${j}`);
+        extra.push({ communityId: big, userId: u.id, role: 'member', status: 'active', joinedAt: new Date() });
+      }
+    }
+    await ctx.db.insert(communityMembers).values(extra);
+    const slugs = (await ctx.as(me).get('/api/discover')).body.communities.map((c: any) => c.slug);
+    expect(slugs.slice(0, 3)).toEqual(['bulk-54', 'bulk-53', 'bulk-52']);
+    expect(slugs.length).toBeLessThanOrEqual(8);
   });
 });
