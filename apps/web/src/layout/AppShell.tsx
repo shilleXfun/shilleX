@@ -7,6 +7,7 @@ import { MobileHeader } from './MobileHeader';
 import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
 import { useTokenEvents } from '../features/tokens/tokenCache';
+import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import s from './layout.module.css';
 
 const route = {
@@ -35,7 +36,8 @@ export function AppShell() {
           <motion.div key={pathname} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
         </AnimatePresence>
       </main>
-      {/* Task 23 adds <aside className={s.right}><RightRail/></aside>; Task 19 adds <TokenPanelHost/> */}
+      {/* Task 23 adds <aside className={s.right}><RightRail/></aside> */}
+      <TokenPanelHost />
       <MobileTabBar />
       <Toaster />
       <ScrollRestoration />

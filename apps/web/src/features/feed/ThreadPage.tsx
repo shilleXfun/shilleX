@@ -16,6 +16,7 @@ import { PostCard } from './PostCard';
 import { PostSkeleton } from './PostSkeleton';
 import { Composer } from './Composer';
 import { usePostActions } from './postActions';
+import cardStyles from './PostCard.module.css';
 
 const REPLY_BOX = 'thread-reply';
 
@@ -37,7 +38,7 @@ export function ThreadPage() {
           : <ErrorState error={q.error} onRetry={() => void q.refetch()} />)
         : (
           <>
-            {q.data.ancestors.map((p) => <PostCard key={p.id} post={p} compact />)}
+            {q.data.ancestors.length > 0 && <div className={cardStyles.ancestors}>{q.data.ancestors.map((p) => <PostCard key={p.id} post={p} compact />)}</div>}
             <PostCard post={q.data.post} focused onReply={focusReply} />
             {!q.data.post.deleted && (
               <div id={REPLY_BOX}><Composer mode="reply" parent={q.data.post} placeholder={`Reply to @${q.data.post.author.username}`} /></div>

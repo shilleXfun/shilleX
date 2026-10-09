@@ -6,7 +6,7 @@
 .focused .body { font-size: var(--fs-lg); line-height: 1.55; }
 .compact { padding: 10px 18px 8px; grid-template-columns: 32px minmax(0, 1fr); }
 /* Ancestors in a thread: a spine connects their avatars to the focused post. */
-.compact::before { content: ''; position: absolute; left: calc(18px + 15px); top: 48px; bottom: -2px; width: 2px; border-radius: 2px; background: var(--line-strong); }
+.ancestors .compact::before { content: ''; position: absolute; left: calc(18px + 15px); top: 48px; bottom: -2px; width: 2px; border-radius: 2px; background: var(--line-strong); }
 .static { cursor: default; }
 .static:hover, .static:focus-within { background: none; }
 .avatarLink { align-self: start; border-radius: 50%; }
