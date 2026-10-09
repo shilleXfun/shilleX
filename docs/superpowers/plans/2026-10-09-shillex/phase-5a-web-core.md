@@ -63,7 +63,7 @@ Web conventions:
     "lucide-react": "1.54.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-router": "7.18.4",
+    "react-router": "8.4.0",
     "socket.io-client": "4.8.4"
   },
   "devDependencies": {
@@ -72,11 +72,11 @@ Web conventions:
     "@testing-library/user-event": "14.6.7",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "5.2.0",
+    "@vitejs/plugin-react": "6.1.2",
     "jsdom": "30.1.2",
-    "typescript": "5.9.3",
-    "vite": "7.3.7",
-    "vitest": "3.2.7"
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
   }
 }
 ```
