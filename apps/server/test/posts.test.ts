@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
-import { communities, communityMembers, tokenMentions, notifications } from '../src/db/schema.ts';
+import { communities, communityMembers, tokenMentions, notifications, subscriptions, follows } from '../src/db/schema.ts';
+import { and } from 'drizzle-orm';
+import { setCommunityMentionVisibility } from '../src/services/mentions.ts';
 import { newId } from '../src/lib/ids.ts';
 
 const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
@@ -122,5 +124,81 @@ describe('creating posts', () => {
     const bad = await ctx.as(alice).post('/api/posts', { body: 'pic', uploadIds: ['nope'] });
     expect(bad.status).toBe(400);
     expect(bad.body.code).toBe('BAD_UPLOAD');
+  });
+});
+
+describe('notification gating', () => {
+  const notesFor = async (userId: string, targetId: string) =>
+    (await ctx.db.select().from(notifications).where(eq(notifications.userId, userId))).filter((n) => n.targetId === targetId);
+
+  it('notifies a subscriber who is not the parent author, flagged onSubscribed', async () => {
+    const [o, sub, rep] = [await ctx.createUser('own1'), await ctx.createUser('sub1'), await ctx.createUser('rep1')];
+    const root = (await ctx.as(o).post('/api/posts', { body: 'root' })).body.post;
+    expect((await ctx.as(sub).put(`/api/posts/${root.id}/subscription`)).status).toBe(204);
+    const reply = (await ctx.as(rep).post('/api/posts', { body: 'hello', parentId: root.id })).body.post;
+    const notes = await notesFor(sub.id, reply.id);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ type: 'reply', data: { onSubscribed: '1' } });
+  });
+
+  it('does not notify subscribers who cannot read the post, or a parent author removed from the community', async () => {
+    const [owner, member, outsider, ex] = [await ctx.createUser('own2'), await ctx.createUser('mem2'), await ctx.createUser('out2'), await ctx.createUser('ex2')];
+    const priv = await community('private', owner.id, [member.id, ex.id]);
+    const root = (await ctx.as(member).post('/api/posts', { body: 'in private', communityId: priv })).body.post;
+    const exRoot = (await ctx.as(ex).post('/api/posts', { body: 'ex post', communityId: priv })).body.post;
+    await ctx.db.insert(subscriptions).values({ userId: outsider.id, targetType: 'post', targetId: root.id, createdAt: new Date() });
+    await ctx.db.delete(communityMembers).where(and(eq(communityMembers.communityId, priv), eq(communityMembers.userId, ex.id)));
+    const reply = (await ctx.as(owner).post('/api/posts', { body: 'reply', parentId: root.id })).body.post;
+    expect(await notesFor(outsider.id, reply.id)).toHaveLength(0);
+    expect(await notesFor(member.id, reply.id)).toHaveLength(1);
+    const reply2 = (await ctx.as(owner).post('/api/posts', { body: 'reply', parentId: exRoot.id })).body.post;
+    expect(await notesFor(ex.id, reply2.id)).toHaveLength(0);
+  });
+
+  it('does not notify an @mentioned user who is not a member of a private community', async () => {
+    const [owner, outsider] = [await ctx.createUser('own3'), await ctx.createUser('out3')];
+    const priv = await community('private', owner.id);
+    const p = (await ctx.as(owner).post('/api/posts', { body: 'psst @out3', communityId: priv })).body.post;
+    expect(await notesFor(outsider.id, p.id)).toHaveLength(0);
+  });
+
+  it('rejects more than 4 images', async () => {
+    const r = await ctx.as(alice).post('/api/posts', { body: 'pics', uploadIds: ['a', 'b', 'c', 'd', 'e'] });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('TOO_MANY_IMAGES');
+  });
+});
+
+describe('posts the viewer can no longer read (metadata leak)', () => {
+  it('shows a stripped tombstone for quoted posts whose community turned private', async () => {
+    const [owner, quoter, viewer] = [await ctx.createUser('own4'), await ctx.createUser('quo4'), await ctx.createUser('view4')];
+    const pubId = await community('public', owner.id);
+    const orig = (await ctx.as(owner).post('/api/posts', { body: `secret alpha ${BONK}`, communityId: pubId })).body.post;
+    await ctx.as(carol).put(`/api/posts/${orig.id}/reactions/${encodeURIComponent('🔥')}`);
+    const quote = (await ctx.as(quoter).post('/api/posts', { body: 'look', quoteOfId: orig.id })).body.post;
+    const repost = (await ctx.as(quoter).post(`/api/posts/${orig.id}/repost`)).body.post;
+    await ctx.db.insert(follows).values({ followerId: viewer.id, followeeId: quoter.id, createdAt: new Date() });
+    await ctx.db.update(communities).set({ visibility: 'private' }).where(eq(communities.id, pubId));
+    await setCommunityMentionVisibility(ctx.db, pubId, false);
+
+    const slug = (await ctx.db.select().from(communities).where(eq(communities.id, pubId)))[0]!.slug;
+    const check = (v: any) => {
+      expect(v).toMatchObject({
+        id: orig.id, deleted: true, body: '', media: [], mints: [], callUpdates: [], community: null, replyTo: null,
+        parentId: null, rootId: null, quoted: null, reposted: null, reactions: [],
+        counts: { replies: 0, reposts: 0, quotes: 0 }, author: { id: '', username: 'unavailable' },
+        viewer: { bookmarked: false, reposted: false, subscribed: false, canAddCallUpdate: false },
+      });
+    };
+    const thread = (await ctx.as(viewer).get(`/api/posts/${quote.id}`)).body;
+    expect(thread.post.kind).toBe('quote');
+    check(thread.post.quoted);
+    const feed = (await ctx.as(viewer).get('/api/feed?tab=following')).body;
+    const fq = feed.items.find((p: any) => p.id === quote.id);
+    check(fq.quoted);
+    const raw = JSON.stringify([thread, feed]);
+    for (const leak of [owner.id, 'own4', slug, 'secret alpha']) expect(raw).not.toContain(leak);
+    // a reposted unreadable post is dropped from the feed rather than shown
+    expect(feed.items.find((p: any) => p.id === repost.id)).toBeUndefined();
   });
 });

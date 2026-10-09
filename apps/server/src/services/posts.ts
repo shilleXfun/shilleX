@@ -64,23 +64,26 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
   const media = ups.map((u, i) => ({ url: u.url, width: u.width, height: u.height, alt: (input.alts?.[i] ?? '').slice(0, 200) }));
   const id = newId();
   const createdAt = now();
-  const [row] = await db.insert(posts).values({
-    id, authorId: author.id, kind, body, parentId: parent?.id ?? null, rootId: parent ? parent.rootId ?? parent.id : null,
-    quoteOfId: quoted?.id ?? null, communityId, visibility: communityId ? 'community' : 'public', media, createdAt,
-  }).returning();
-  const post = row!;
-
-  const mints = await recordMentions(db, {
-    sourceType: 'post', sourceId: id, text: body, authorId: author.id, communityId, channelId: null,
-    isPublic: computeMentionVisibility({ kind: 'post', communityVisibility }), createdAt,
+  const { post, mints } = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(posts).values({
+      id, authorId: author.id, kind, body, parentId: parent?.id ?? null, rootId: parent ? parent.rootId ?? parent.id : null,
+      quoteOfId: quoted?.id ?? null, communityId, visibility: communityId ? 'community' : 'public', media, createdAt,
+    }).returning();
+    const mints = await recordMentions(tx, {
+      sourceType: 'post', sourceId: id, text: body, authorId: author.id, communityId, channelId: null,
+      isPublic: computeMentionVisibility({ kind: 'post', communityVisibility }), createdAt,
+    });
+    await tx.insert(subscriptions).values({ userId: author.id, targetType: 'post', targetId: id, createdAt }).onConflictDoNothing();
+    return { post: row!, mints };
   });
   if (mints.length) deps.tokens.enqueue(mints);
-  await db.insert(subscriptions).values({ userId: author.id, targetType: 'post', targetId: id, createdAt }).onConflictDoNothing();
 
   // Notifications
   const notified = new Set<string>([author.id]);
   if (parent) {
-    await notify(deps, { userId: parent.authorId, type: 'reply', actorId: author.id, targetType: 'post', targetId: id, data: { postId: id } });
+    if (await canReadPost(db, post, parent.authorId)) {
+      await notify(deps, { userId: parent.authorId, type: 'reply', actorId: author.id, targetType: 'post', targetId: id, data: { postId: id } });
+    }
     notified.add(parent.authorId);
     const subs = await db.select({ u: subscriptions.userId }).from(subscriptions)
       .where(and(eq(subscriptions.targetType, 'post'), inArray(subscriptions.targetId, [post.rootId!, parent.id])));
