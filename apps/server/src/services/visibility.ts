@@ -49,7 +49,10 @@ export function requireMod(access: CommunityAccess): CommunityAccess {
 export async function requireChannel(db: Db, channelId: string, userId: string, mode: 'read' | 'post') {
   const [channel] = await db.select().from(channels).where(eq(channels.id, channelId)).limit(1);
   if (!channel) throw errors.notFound('Channel');
-  const access = requireCommunityRead(await getCommunityAccess(db, channel.communityId, userId));
+  const found = await getCommunityAccess(db, channel.communityId, userId);
+  // Hidden (invite-only) channels must be indistinguishable from nonexistent ones.
+  if (found && !found.canRead && found.community.visibility === 'invite') throw errors.notFound('Channel');
+  const access = requireCommunityRead(found);
   if (mode === 'post' && !access.canPost) {
     if (access.member?.status === 'banned') throw errors.forbidden('BANNED', 'You are banned from this community');
     throw errors.forbidden('JOIN_TO_POST', 'Join the community to chat');
