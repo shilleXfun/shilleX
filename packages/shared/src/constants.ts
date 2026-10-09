@@ -1,0 +1,50 @@
+export const LIMITS = {
+  postMax: 1000,
+  messageMax: 2000,
+  maxImages: 4,
+  uploadBytes: 5 * 1024 * 1024,
+  groupMax: 20,
+  profileLinksMax: 5,
+  newAccountLinkMentionCap: 2,
+  messageRateCount: 10,
+  messageRateWindowMs: 10_000,
+  duplicateWindowMs: 60_000,
+  newAccountMs: 24 * 60 * 60 * 1000,
+} as const;
+
+export const SLOW_MODE_OPTIONS = [0, 5, 15, 30, 60, 300] as const;
+export const REACTIONS = ['🔥', '🚀', '👀', '💀', '😂', '🫡'] as const;
+export type ReactionEmoji = (typeof REACTIONS)[number];
+
+export const CALL_STATUSES = ['watching', 'bought', 'taking_profit', 'out', 'thesis_changed'] as const;
+export type CallStatus = (typeof CALL_STATUSES)[number];
+export const CALL_STATUS_LABELS: Record<CallStatus, string> = {
+  watching: 'Watching',
+  bought: 'Bought',
+  taking_profit: 'Taking profit',
+  out: 'Out',
+  thesis_changed: 'Thesis changed',
+};
+
+export const NOTIFICATION_TYPES = [
+  'reply', 'mention', 'follow', 'reaction', 'quote', 'repost', 'dm',
+  'call_update', 'token_discussion', 'invite', 'join_request', 'report_resolved',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+
+export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
+export const COPY = {
+  selfReported: 'self-reported',
+  demoTag: 'DEMO',
+  promoted: 'Promoted',
+  tokenPanelNote: 'Mentions measure discussion, not quality. Do your own research.',
+  discoveryNote: 'Listed by recency. Mentions are not an endorsement.',
+  holdingsNote: 'Not verified — wallet connection is not implemented in this build',
+  demoLinkReason: 'Fictional demo token — not on-chain',
+  axiomNoPair: 'Axiom needs a trading pair address; none found yet',
+  liveLookupDisabled: 'Live lookup disabled',
+} as const;
