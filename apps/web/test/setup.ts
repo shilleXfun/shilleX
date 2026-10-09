@@ -1,3 +1,4 @@
+process.env.TZ = 'UTC'; // chat day boundaries use local time
 import '@testing-library/jest-dom/vitest';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
