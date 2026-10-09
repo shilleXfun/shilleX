@@ -18,7 +18,7 @@ export default async function notificationsRoutes(app: FastifyInstance) {
     const types = FILTERS[req.query.filter ?? 'all'] ?? null;
     const limit = clampLimit(req.query.limit, 30, 100);
     const rows = await db.select().from(notifications).where(and(
-      eq(notifications.userId, me.id), types ? inArray(notifications.type, types as never) : undefined,
+      eq(notifications.userId, me.id), types ? inArray(notifications.type, types) : undefined,
       req.query.cursor ? lt(notifications.id, req.query.cursor) : undefined,
     )).orderBy(desc(notifications.id)).limit(limit + 1);
     const page: Page<NotificationView> = { items: await toNotificationViews(db, rows.slice(0, limit)), nextCursor: rows.length > limit ? rows[limit - 1]!.id : null };
