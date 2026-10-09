@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { createDb, type DbHandle } from '../src/db/client.ts';
 import { seed, isDatabaseEmpty } from '../src/seed/seed.ts';
+import { unreadInScope } from '../src/services/unread.ts';
 import { PERSONAS } from '../src/seed/personas.ts';
 import { DEMO_TOKENS } from '../src/seed/world.ts';
-import { users, communities, tokens, tokenMentions, conversations, conversationMembers, readMarkers, posts, callUpdates } from '../src/db/schema.ts';
+import { users, communities, tokens, tokenMentions, conversations, conversationMembers, readMarkers, posts, callUpdates, messages } from '../src/db/schema.ts';
 import { isValidSolanaAddress } from '@shillex/shared';
 
 let h: DbHandle; const now = new Date('2026-10-09T12:00:00Z');
@@ -49,6 +50,22 @@ describe('seed', () => {
     const { n } = (await h.db.select({ n: sql<number>`count(*)::int` }).from(posts))[0]!;
     expect(n).toBeGreaterThanOrEqual(250);
     expect((await h.db.select().from(callUpdates)).length).toBeGreaterThanOrEqual(10);
+  });
+  it('leaves @demo real unread in joined channels and conversations, only from other authors', async () => {
+    const [demo] = await h.db.select().from(users).where(eq(users.username, 'demo'));
+    const markers = await h.db.select().from(readMarkers).where(eq(readMarkers.userId, demo!.id));
+    let channelsWithUnread = 0, convsWithUnread = 0;
+    for (const m of markers) {
+      const n = await unreadInScope(h.db, { userId: demo!.id, scopeType: m.scopeType, scopeId: m.scopeId, since: now });
+      if (n > 0) { if (m.scopeType === 'channel') channelsWithUnread++; else convsWithUnread++; }
+      // nothing after the marker may be demo's own message (sending a message marks the scope read)
+      const scopeCol = m.scopeType === 'channel' ? messages.channelId : messages.conversationId;
+      const after = await h.db.select({ a: messages.authorId }).from(messages).where(and(eq(scopeCol, m.scopeId), gt(messages.id, m.lastReadMessageId)));
+      expect(after.length).toBeGreaterThanOrEqual(n);
+      expect(after.every((x) => x.a !== demo!.id)).toBe(true);
+    }
+    expect(channelsWithUnread).toBeGreaterThanOrEqual(3);
+    expect(convsWithUnread).toBeGreaterThanOrEqual(2);
   });
   it('is deterministic and re-runnable', async () => {
     const before = (await h.db.select({ u: users.username }).from(users)).map((r) => r.u).sort();

@@ -268,7 +268,9 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
   for (const c of built) {
     if (!c.members.some((m) => m.userId === demo.id && m.status === 'active')) continue;
     for (const ch of c.channels) {
-      const idx = Math.max(0, ch.drafts.length - 1 - int(r, 3, 15));
+      // never before demo's own last message: sending a message marks the scope read
+      const lastOwn = ch.drafts.map((m) => m.authorId).lastIndexOf(demo.id);
+      const idx = Math.max(0, lastOwn, ch.drafts.length - 1 - int(r, 3, 15));
       await markRead(db, demo.id, 'channel', ch.id, ch.drafts[idx]!.id);
     }
   }

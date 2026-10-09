@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { makeTestApp, type TestCtx } from './helpers.ts';
 import { seed } from '../src/seed/seed.ts';
 import { startSimulator } from '../src/seed/simulator.ts';
-import { messages, posts, users } from '../src/db/schema.ts';
+import { createPost } from '../src/services/posts.ts';
+import { messages, notifications, posts, users } from '../src/db/schema.ts';
 
 let ctx: TestCtx;
 beforeAll(async () => { ctx = await makeTestApp(); await seed(ctx.db, { now: ctx.clock.now() }); });
@@ -22,5 +23,39 @@ describe('demo simulator', () => {
     const [demo] = await ctx.db.select().from(users).where(sql`${users.username} = 'demo'`);
     const { n } = (await ctx.db.select({ n: sql<number>`count(*)::int` }).from(messages).where(sql`${messages.authorId} = ${demo!.id} and ${messages.createdAt} > ${ctx.clock.now()}::timestamptz - interval '1 hour'`))[0]!;
     expect(n).toBe(0);
+  });
+
+  it('never replies to or notifies real (non-demo) users', async () => {
+    const real = await ctx.createUser(`real_${Date.now() % 1e6}`);
+    const [realRow] = await ctx.db.select().from(users).where(eq(users.id, real.id));
+    // make every "recent public post" candidate a real user's post
+    const realPostIds: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      ctx.clock.advance(1_000);
+      realPostIds.push((await createPost(ctx.deps, realRow!, { body: `real user thought number ${i}` })).id);
+    }
+    const replyCount = async () => (await ctx.db.select({ n: sql<number>`count(*)::int` }).from(posts).where(eq(posts.kind, 'reply')))[0]!.n;
+    const sim = startSimulator(ctx.app, { seed: 11, minMs: 1_000_000, maxMs: 1_000_000 });
+    const r0 = await replyCount();
+    for (let i = 0; i < 80; i++) { ctx.clock.advance(61_000); await sim.tick(); }
+    sim.stop();
+    expect(await replyCount()).toBeGreaterThan(r0); // the reply path ran (to demo personas' posts)
+    const replies = await ctx.db.select().from(posts).where(inArray(posts.parentId, realPostIds));
+    expect(replies).toHaveLength(0);
+    const notes = await ctx.db.select().from(notifications).where(eq(notifications.userId, real.id));
+    expect(notes).toHaveLength(0);
+  });
+
+  it('leaves no persona virtually online after stop(), even with a tick in flight or ticks after stop', async () => {
+    const personas = await ctx.db.select().from(users).where(and(eq(users.isDemo, true), ne(users.username, 'demo')));
+    const anyOnline = () => personas.some((p) => ctx.presence.isOnline(p.id));
+    const sim = startSimulator(ctx.app, { seed: 3, minMs: 1_000_000, maxMs: 1_000_000 });
+    for (let i = 0; i < 20; i++) { ctx.clock.advance(61_000); await sim.tick(); }
+    const inFlight = sim.tick();
+    sim.stop();
+    await inFlight;
+    expect(anyOnline()).toBe(false);
+    for (let i = 0; i < 30; i++) { ctx.clock.advance(61_000); await sim.tick(); }
+    expect(anyOnline()).toBe(false);
   });
 });
