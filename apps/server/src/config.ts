@@ -23,7 +23,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const nodeEnv = (env.NODE_ENV === 'production' || env.NODE_ENV === 'test' ? env.NODE_ENV : 'development') as Config['nodeEnv'];
   const port = Number(env.PORT ?? 3000);
   const publicUrl = env.PUBLIC_URL || `http://localhost:${nodeEnv === 'production' ? port : 5173}`;
-  if (nodeEnv === 'production' && (!env.SESSION_SECRET || env.SESSION_SECRET === 'change-me')) {
+  if (nodeEnv === 'production' && (!env.SESSION_SECRET || ['change-me', 'dev-secret'].includes(env.SESSION_SECRET))) {
     throw new Error('SESSION_SECRET must be set in production');
   }
   return {

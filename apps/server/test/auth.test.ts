@@ -23,6 +23,13 @@ describe('auth', () => {
     expect(r.json().code).toBe('USERNAME_TAKEN');
   });
 
+  it('concurrent signups for the same name yield one 201 and one 409, never 500', async () => {
+    const mk = (username: string) => ctx.app.inject({ method: 'POST', url: '/api/auth/signup', payload: { username, displayName: 'R', password: 'hunter2hunter2' } });
+    const rs = await Promise.all([mk('racer_x'), mk('RACER_X')]);
+    expect(rs.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    expect(rs.find((r) => r.statusCode === 409)!.json().code).toBe('USERNAME_TAKEN');
+  });
+
   it('validates input with a structured error', async () => {
     const r = await ctx.app.inject({ method: 'POST', url: '/api/auth/signup', payload: { username: 'a', displayName: '', password: 'x' } });
     expect(r.statusCode).toBe(400);

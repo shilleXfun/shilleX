@@ -15,16 +15,17 @@ export const errors = {
 };
 
 export function registerErrorHandler(app: FastifyInstance) {
-  app.setErrorHandler((err: Error, _req, reply) => {
+  app.setErrorHandler((err: unknown, _req, reply) => {
     if (err instanceof AppError) {
       return reply.status(err.status).send({ code: err.code, message: err.message, details: err.details });
     }
     if (err instanceof ZodError) {
       return reply.status(400).send({ code: 'VALIDATION', message: 'Invalid input', details: err.issues });
     }
-    const status = (err as { statusCode?: number }).statusCode;
+    const rawStatus = (err as { statusCode?: unknown } | null)?.statusCode;
+    const status = typeof rawStatus === 'number' ? rawStatus : undefined;
     if (status === 429) return reply.status(429).send({ code: 'RATE_LIMITED', message: 'Too many requests, slow down' });
-    if (status && status < 500) return reply.status(status).send({ code: 'BAD_REQUEST', message: err.message });
+    if (status && status < 500) return reply.status(status).send({ code: 'BAD_REQUEST', message: err instanceof Error ? err.message : 'Bad request' });
     app.log.error(err);
     return reply.status(500).send({ code: 'INTERNAL', message: 'Something went wrong' });
   });
