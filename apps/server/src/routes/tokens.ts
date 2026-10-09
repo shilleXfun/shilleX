@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import { buildTokenLinks, isValidSolanaAddress, type Page, type PostView, type PublicChatMention, type TokenDiscussionStats } from '@shillex/shared';
@@ -27,7 +27,7 @@ export default async function tokensRoutes(app: FastifyInstance) {
     return { mentions24h: posts24h + chat24h, posts24h, chat24h, subscribed: sub.length > 0 };
   }
 
-  app.get<{ Params: { mint: string } }>('/tokens/:mint', async (req) => {
+  app.get<{ Params: { mint: string } }>('/tokens/:mint', { config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } }, async (req) => {
     const me = requireUser(req);
     const mint = mintParam(req.params.mint);
     const token = await deps.tokens.resolve(mint);
@@ -35,7 +35,7 @@ export default async function tokensRoutes(app: FastifyInstance) {
     return { token, links, stats: await stats(mint, me.id) };
   });
 
-  app.post('/tokens/resolve', async (req) => {
+  app.post('/tokens/resolve', { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } }, async (req) => {
     requireUser(req);
     const { mints } = parse(z.object({ mints: z.array(z.string().refine(isValidSolanaAddress)).max(25) }), req.body);
     return { tokens: await deps.tokens.getViews(mints) };

@@ -9,7 +9,7 @@ import { resolveUploads } from '../routes/uploads.ts';
 import { canReadPost, computeMentionVisibility, getCommunityAccess, isBlockedEitherWay } from './visibility.ts';
 import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
-import { notifyTokenSubscribers } from './token-subs.ts';
+import { notifyTokenSubscribersSafe } from './token-subs.ts';
 
 export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[] }
 
@@ -79,7 +79,7 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
     return { post: row!, mints };
   });
   if (mints.length) deps.tokens.enqueue(mints);
-  if (mints.length && isPublicMention) await notifyTokenSubscribers(deps, mints, author.id);
+  if (mints.length && isPublicMention) await notifyTokenSubscribersSafe(deps, mints, author.id);
 
   // Notifications
   const notified = new Set<string>([author.id]);

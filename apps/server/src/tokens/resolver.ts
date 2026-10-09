@@ -3,16 +3,20 @@ import { COPY, isValidSolanaAddress, type TokenView } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import type { EventBus, TokenResolverPort } from '../deps.ts';
 import { tokens, type TokenRow } from '../db/schema.ts';
-import { fetchMintAccount } from './rpc.ts';
+import { fetchMintAccount, UpstreamError } from './rpc.ts';
 import { fetchDexBest } from './dexscreener.ts';
 import { isStale, pendingTokenView, readTokenViews, tokenRowToView, ERROR_RETRY_MS } from './view.ts';
+
+/** Max background (enqueue) lookups waiting for a slot; beyond this, enqueue drops mints (a later read retries). */
+export const BACKGROUND_QUEUE_CAP = 200;
 
 export interface ResolverOptions { db: Db; bus: EventBus; rpcUrl: string; live: boolean; fetchImpl?: typeof fetch; now?: () => Date; concurrency?: number }
 
 export class TokenResolver implements TokenResolverPort {
   private inflight = new Map<string, Promise<TokenView>>();
   private failedRefresh = new Map<string, number>(); // mint -> time of last failed refresh of a good row
-  private waiting: Array<() => void> = [];
+  private waitingHigh: Array<() => void> = [];
+  private waitingLow: Array<() => void> = [];
   private active = 0;
   private fetchImpl: typeof fetch;
   private now: () => Date;
@@ -23,6 +27,10 @@ export class TokenResolver implements TokenResolverPort {
 
   async getViews(mints: string[]): Promise<Record<string, TokenView>> {
     const { views, missing, stale } = await readTokenViews(this.o.db, mints, this.now());
+    if (!this.o.live) {
+      for (const m of missing) views[m] = { ...pendingTokenView(m), status: 'error', error: COPY.liveLookupDisabled };
+      return views;
+    }
     this.enqueue([...missing, ...stale]);
     return views;
   }
@@ -30,14 +38,23 @@ export class TokenResolver implements TokenResolverPort {
   enqueue(mints: string[]): void {
     for (const m of new Set(mints)) {
       if (!isValidSolanaAddress(m) || this.inflight.has(m)) continue;
-      void this.resolve(m).catch(() => undefined);
+      if (this.waitingLow.length >= BACKGROUND_QUEUE_CAP) break;
+      void this.start(m, false).catch((e) => console.error('token lookup failed', m, e));
     }
   }
 
+  /** Direct (user-facing) lookup; takes priority over background enqueues. */
   resolve(mint: string): Promise<TokenView> {
+    return this.start(mint, true);
+  }
+
+  /** Background lookups currently waiting for a slot. */
+  pendingBackground(): number { return this.waitingLow.length; }
+
+  private start(mint: string, priority: boolean): Promise<TokenView> {
     const existing = this.inflight.get(mint);
     if (existing) return existing;
-    const p = this.schedule(() => this.doResolve(mint)).finally(() => this.inflight.delete(mint));
+    const p = this.schedule(() => this.doResolve(mint), priority).finally(() => this.inflight.delete(mint));
     this.inflight.set(mint, p);
     return p;
   }
@@ -47,11 +64,18 @@ export class TokenResolver implements TokenResolverPort {
     while (this.inflight.size) await Promise.allSettled([...this.inflight.values()]);
   }
 
-  private async schedule<T>(fn: () => Promise<T>): Promise<T> {
+  private async schedule<T>(fn: () => Promise<T>, priority: boolean): Promise<T> {
     const limit = this.o.concurrency ?? 4;
-    if (this.active >= limit) await new Promise<void>((r) => this.waiting.push(r));
-    this.active++;
-    try { return await fn(); } finally { this.active--; this.waiting.shift()?.(); }
+    if (this.active >= limit) {
+      // The releasing task hands its slot straight to us, so the active count stays accurate.
+      await new Promise<void>((r) => (priority ? this.waitingHigh : this.waitingLow).push(r));
+    } else {
+      this.active++;
+    }
+    try { return await fn(); } finally {
+      const next = this.waitingHigh.shift() ?? this.waitingLow.shift();
+      if (next) next(); else this.active--;
+    }
   }
 
   private async doResolve(mint: string): Promise<TokenView> {
@@ -68,8 +92,10 @@ export class TokenResolver implements TokenResolverPort {
     try {
       if (row && (row.status === 'resolved' || row.status === 'unindexed')) {
         const dex = await fetchDexBest(mint, this.fetchImpl);
-        const next: Partial<TokenRow> = dex ? this.fromDex(dex, row) : { fetchedAt: now };
-        return this.save(mint, { ...row, ...next, status: dex ? 'resolved' : row.status, fetchedAt: now, error: null }, row);
+        // No base pairs any more: drop market data rather than present stale numbers as fresh.
+        const next: Partial<TokenRow> = dex ? this.fromDex(dex, row)
+          : { liquidityUsd: null, marketCapUsd: null, fdvUsd: null, pairAddress: null, dexId: null, pairCreatedAt: null };
+        return this.save(mint, { ...row, ...next, status: dex ? 'resolved' : 'unindexed', fetchedAt: now, error: null }, row);
       }
       const acct = await fetchMintAccount(this.o.rpcUrl, mint, this.fetchImpl);
       if (acct.kind === 'not_mint') return this.save(mint, { mint, source: 'live', status: 'not_a_token', fetchedAt: now, metaFetchedAt: now, error: null }, row);
@@ -77,7 +103,8 @@ export class TokenResolver implements TokenResolverPort {
       const base: Partial<TokenRow> = { mint, source: 'live', decimals: acct.decimals, name: acct.name, symbol: acct.symbol, fetchedAt: now, metaFetchedAt: now, error: null };
       return this.save(mint, dex ? { ...base, ...this.fromDex(dex, base), status: 'resolved' } : { ...base, status: 'unindexed' }, row);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'lookup failed';
+      if (!(e instanceof UpstreamError)) console.error('token lookup failed', mint, e);
+      const message = e instanceof UpstreamError ? e.message : 'lookup failed';
       if (row && (row.status === 'resolved' || row.status === 'unindexed')) {
         this.failedRefresh.set(mint, now.getTime());
         return tokenRowToView(row);
