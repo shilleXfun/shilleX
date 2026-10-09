@@ -1,16 +1,20 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useInfiniteQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { AnimatePresence } from 'motion/react';
 import type { Page, PostView } from '@shillex/shared';
 import { get } from '../../lib/api';
+import { useRequiredMe } from '../../lib/useMe';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { Spinner } from '../../components/ui/Spinner';
+import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { primeTokens } from '../tokens/tokenCache';
 import { PostCard } from './PostCard';
 import { PostSkeleton } from './PostSkeleton';
+import s from './PostCard.module.css';
 
 /** Generic infinite list of posts for any `Page<PostView>` endpoint (opaque `cursor` param). Primes token chips per page. */
 export function FeedList({ queryKey, path, empty }: { queryKey: QueryKey; path: string; empty: ReactNode }) {
   const qc = useQueryClient();
+  const me = useRequiredMe();
   const q = useInfiniteQuery({
     queryKey, initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
@@ -32,17 +36,23 @@ export function FeedList({ queryKey, path, empty }: { queryKey: QueryKey; path: 
     return () => io.disconnect();
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
-  if (q.isPending) return <div aria-busy="true" aria-label="Loading posts">{Array.from({ length: 5 }, (_, i) => <PostSkeleton key={i} />)}</div>;
+  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const arrival = useArrivals(items.map((p) => p.id), 'top');
+  if (q.isPending) return <div aria-busy="true" aria-label="Loading posts">{Array.from({ length: 5 }, (_, i) => <PostSkeleton key={i} lines={i % 2 ? 1 : 2} />)}</div>;
   if (q.isError && !q.data) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
-  const items = q.data.pages.flatMap((p) => p.items);
   if (!items.length) return <>{empty}</>;
   return (
     <div role="feed" aria-busy={isFetchingNextPage}>
-      {items.map((p) => <PostCard key={p.id} post={p} />)}
+      {/* New posts at the top slide in and glow (yours violet, token posts teal); removals collapse. */}
+      <AnimatePresence initial={false}>
+        {items.map((p, i) => (
+          <Arrival key={p.id} as={arrival(p.id, i)} glow={p.author.id === me.id ? 'accent' : p.mints.length ? 'token' : 'accent'}><PostCard post={p} /></Arrival>
+        ))}
+      </AnimatePresence>
       <div ref={sentinel} style={{ height: 1 }} />
-      {isFetchingNextPage && <div style={{ display: 'grid', placeItems: 'center', padding: 16 }}><Spinner label="Loading more" /></div>}
+      {isFetchingNextPage && <div aria-label="Loading more" role="status"><PostSkeleton /><PostSkeleton lines={1} /></div>}
       {isFetchNextPageError && <ErrorState title="Couldn’t load more" error={q.error} onRetry={() => void fetchNextPage()} />}
-      {!hasNextPage && items.length > 10 && <p style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, margin: 0 }}>You’re all caught up.</p>}
+      {!hasNextPage && items.length > 10 && <p className={s.endNote}>You’re all caught up.</p>}
     </div>
   );
 }

@@ -1,27 +1,41 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CALL_STATUSES, CALL_STATUS_LABELS, COPY, relativeTime, type CallStatus, type CallUpdateView, type PostView } from '@shillex/shared';
 import { errorMessage, post as apiPost } from '../../lib/api';
 import { patchPost } from '../../lib/cache';
 import { cx } from '../../lib/cx';
+import { dur, ease, spring } from '../../lib/motion';
+import { useArrivals } from '../../components/ui/Arrival';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import s from './PostCard.module.css';
 
-/** The author's call updates on a post, oldest first, each labeled self-reported. */
+/** The author's call updates on a post, oldest first, each labeled self-reported. A new update arrives with a heat flash. */
 export function CallUpdates({ post }: { post: PostView }) {
+  const arrival = useArrivals(post.callUpdates.map((u) => u.id), 'bottom');
   if (!post.callUpdates.length) return null;
   return (
-    <ol className={s.calls} aria-label="Call updates" onClick={(e) => e.stopPropagation()}>
-      {post.callUpdates.map((u) => (
-        <li key={u.id} className={s.call}>
-          <span className={cx(s.callStatus, s[`status_${u.status}`])}>{CALL_STATUS_LABELS[u.status]}</span>
-          {u.note && <span>{u.note}</span>}
-          <time className={s.time} dateTime={u.createdAt}>{relativeTime(u.createdAt)}</time>
-          <span className={s.selfReported} title="Posted by the author; not verified by Shillex">{COPY.selfReported}</span>
-        </li>
-      ))}
-    </ol>
+    <div className={s.calls} onClick={(e) => e.stopPropagation()}>
+      <motion.span aria-hidden="true" className={s.callLine} initial={{ scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true }} transition={{ duration: dur.enter, ease: ease.out }} />
+      <ol className={s.callList} aria-label="Call updates">
+        {post.callUpdates.map((u, i) => <CallRow key={u.id} u={u} fresh={arrival(u.id, i)?.kind === 'arrived'} />)}
+      </ol>
+    </div>
+  );
+}
+
+function CallRow({ u, fresh }: { u: CallUpdateView; fresh: boolean }) {
+  const [flash] = useState(fresh);
+  return (
+    <motion.li className={cx(s.call, s[`status_${u.status}`])} initial={flash ? { opacity: 0, x: -8 } : false} animate={{ opacity: 1, x: 0 }} transition={spring.soft}>
+      {flash && <motion.span aria-hidden="true" className={s.callFlash} initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 1.2, delay: 0.2 }} />}
+      <span className={s.callDot} aria-hidden="true" />
+      <span className={s.callStatus}>{CALL_STATUS_LABELS[u.status]}</span>
+      {u.note && <span className={s.callNoteText}>{u.note}</span>}
+      <time className={s.time} dateTime={u.createdAt}>{relativeTime(u.createdAt)}</time>
+      <span className={s.selfReported} title="Posted by the author; not verified by Shillex">{COPY.selfReported}</span>
+    </motion.li>
   );
 }
 
