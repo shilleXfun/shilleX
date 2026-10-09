@@ -8,6 +8,8 @@ export class RecordingBus implements EventBus {
   evict(userId: string, room: string) { this.evictions.push({ userId, room }); }
   evictAllExceptCalls: { room: string; keepUserIds: string[] }[] = [];
   evictAllExcept(room: string, keepUserIds: string[]) { this.evictAllExceptCalls.push({ room, keepUserIds }); }
+  disconnectedSessions: string[] = [];
+  disconnectSession(sessionId: string) { this.disconnectedSessions.push(sessionId); }
   find(event: string) { return this.events.filter((e) => e.event === event); }
-  clear() { this.events = []; this.evictions = []; this.evictAllExceptCalls = []; }
+  clear() { this.events = []; this.evictions = []; this.evictAllExceptCalls = []; this.disconnectedSessions = []; }
 }
