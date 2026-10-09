@@ -7,6 +7,9 @@ import { EmptyState } from './components/ui/EmptyState';
 import { HomePage } from './features/feed/HomePage';
 import { ThreadPage } from './features/feed/ThreadPage';
 import { BookmarksPage } from './features/feed/BookmarksPage';
+import { CommunitiesPage } from './features/communities/CommunitiesPage';
+import { CommunityPage } from './features/communities/CommunityPage';
+import { InvitePage } from './features/communities/InvitePage';
 
 // Temporary placeholder so the shell is navigable while later tasks build each screen; removed in Task 24.
 const ComingNext = ({ name }: { name: string }) => <EmptyState title={name} body="This screen is built in a later task." />;
@@ -19,9 +22,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/discover', element: <ComingNext name="Discover" /> },
-      { path: '/communities', element: <ComingNext name="Communities" /> },
-      { path: '/c/:slug', element: <ComingNext name="Community" /> },
-      { path: '/c/:slug/:channelId', element: <ComingNext name="Channel" /> },
+      { path: '/communities', element: <CommunitiesPage /> },
+      { path: '/c/:slug', element: <CommunityPage /> },
+      { path: '/c/:slug/:channelId', element: <CommunityPage /> },
       { path: '/messages', element: <ComingNext name="Messages" /> },
       { path: '/messages/:id', element: <ComingNext name="Conversation" /> },
       { path: '/notifications', element: <ComingNext name="Notifications" /> },
@@ -29,7 +32,7 @@ export const router = createBrowserRouter([
       { path: '/p/:id', element: <ThreadPage /> },
       { path: '/bookmarks', element: <BookmarksPage /> },
       { path: '/settings', element: <ComingNext name="Settings" /> },
-      { path: '/invite/:code', element: <ComingNext name="Invite" /> },
+      { path: '/invite/:code', element: <InvitePage /> },
       { path: '*', element: <EmptyState title="Page not found" body="That link doesn’t go anywhere." /> },
     ],
   },

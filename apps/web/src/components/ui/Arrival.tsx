@@ -28,16 +28,20 @@ export function useArrivals(ids: string[], edge: 'top' | 'bottom' = 'top') {
 }
 
 /**
- * List item wrapper. `first` fades up with a 35 ms stagger (first 8 only); `arrived` grows in from zero height so the
- * siblings glide, then a glow fades over 1.2 s. Removal collapses the row (inside an AnimatePresence).
+ * List item wrapper. `first` fades up with a 35 ms stagger (first 8 only); `arrived` enters, then a glow fades over
+ * 1.2 s. `enter` picks how an arrival moves: `grow` from zero height so siblings glide (feeds), `slide` up from below
+ * (chat, where the list is pinned to the bottom), or `none` (glow only). Removal collapses the row (in AnimatePresence).
  */
-export function Arrival({ as, glow = 'accent', children, className }: { as: ArrivalKind; glow?: 'accent' | 'token' | 'heat'; children: ReactNode; className?: string }) {
+export function Arrival({ as, glow = 'accent', enter = 'grow', children, className, id }: {
+  as: ArrivalKind; glow?: 'accent' | 'token' | 'heat'; enter?: 'grow' | 'slide' | 'none'; children: ReactNode; className?: string; id?: string;
+}) {
   const [mount] = useState(as); // only the classification at mount matters
-  const initial = mount?.kind === 'arrived' ? { height: 0, opacity: 0 }
+  const [how] = useState(enter);
+  const initial = mount?.kind === 'arrived' ? (how === 'grow' ? { height: 0, opacity: 0 } : how === 'slide' ? { opacity: 0, y: 14 } : false)
     : mount?.kind === 'first' && mount.index < 8 ? { opacity: 0, y: 8 } : false;
   const delay = mount?.kind === 'first' ? mount.index * 0.035 : 0;
   return (
-    <motion.div className={cx(s.arrival, className)} initial={initial}
+    <motion.div id={id} className={cx(s.arrival, how !== 'grow' && s.arrivalOpen, className)} initial={initial}
       animate={{ height: 'auto', opacity: 1, y: 0, transition: mount?.kind === 'arrived' ? spring.soft : { duration: dur.enter, ease: ease.out, delay } }}
       exit={{ height: 0, opacity: 0, transition: { duration: dur.standard, ease: ease.out } }}>
       {children}

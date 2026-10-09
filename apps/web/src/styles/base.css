@@ -29,6 +29,7 @@ h1, h2, h3 { font-family: var(--font-brand); line-height: var(--lh-display); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; box-shadow: var(--glow-accent); }
 ::selection { background: rgba(139, 108, 255, 0.35); }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (min-width: 768px) { .mobile-only { display: none !important; } }
 .mono { font-family: var(--font-mono); font-feature-settings: 'zero' 1; }
 /* Condensed heavy Bricolage: page titles and empty-state headlines. */
 .display { font-family: var(--font-brand); font-weight: 800; font-stretch: 78%; letter-spacing: -0.01em; line-height: var(--lh-display); }

@@ -8,6 +8,7 @@ import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
 import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
+import { useRealtimeSync } from './useRealtimeSync';
 import s from './layout.module.css';
 
 const route = {
@@ -18,7 +19,11 @@ const route = {
 
 export function AppShell() {
   useTokenEvents();
+  useRealtimeSync();
   const { pathname } = useLocation();
+  // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
+  const parts = pathname.split('/');
+  const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
   // Conversation screens are immersive on mobile: no tab bar or global header (they render their own back header).
@@ -31,9 +36,9 @@ export function AppShell() {
       <aside className={s.left} aria-label="Primary"><LeftNav /></aside>
       <main id="main" className={s.center} tabIndex={-1}>
         <MobileHeader />
-        {/* Keyed by pathname only: the token panel (?token=) and feed tabs (?tab=) change search, not the page. */}
+        {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={pathname} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+          <motion.div key={pageKey} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
         </AnimatePresence>
       </main>
       {/* Task 23 adds <aside className={s.right}><RightRail/></aside> */}

@@ -109,3 +109,6 @@
 .flash_up { color: var(--up); transition: none; }
 .flash_down { color: var(--down); transition: none; }
 .flashArrow { font-size: .45em; }
+
+/* Slide/none arrivals never collapse, so they don't clip (hover toolbars can overhang). */
+.arrivalOpen { overflow: visible; }
