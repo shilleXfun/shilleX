@@ -6,7 +6,7 @@ import { users, notifications } from '../db/schema.ts';
 import { parse } from '../lib/validate.ts';
 import { AppError, errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
-import { SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession } from '../lib/auth.ts';
+import { SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, hashToken } from '../lib/auth.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { MeView } from '@shillex/shared';
 import type { UserRow } from '../db/schema.ts';
@@ -70,7 +70,7 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.post('/auth/logout', async (req, reply) => {
     const t = req.cookies[SESSION_COOKIE];
-    if (t) await destroySession(db, t);
+    if (t) { await destroySession(db, t); app.deps.bus.disconnectSession(hashToken(t)); }
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.status(204).send();
   });

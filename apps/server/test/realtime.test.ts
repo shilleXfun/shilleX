@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { io as ioc, type Socket } from 'socket.io-client';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
+import { eq } from 'drizzle-orm';
+import { sessions } from '../src/db/schema.ts';
 import { SocketBus, attachRealtime } from '../src/realtime/socket.ts';
 
 let ctx: TestCtx; let url: string; let mod: TestUser; let member: TestUser; let outsider: TestUser; let channelId: string;
@@ -97,5 +99,80 @@ describe('realtime: visibility downgrade', () => {
     await ctx.as(mod).post(`/api/channels/${chId}/messages`, { body: 'members only now' });
     expect((await got).message.body).toBe('members only now');
     await silent;
+  });
+});
+
+describe('realtime: hardening', () => {
+  it('survives malformed payloads and still serves valid subscribes', async () => {
+    const s = await connect(outsider);
+    const raw = s as any;
+    raw.emit('unsubscribe'); raw.emit('unsubscribe', null); raw.emit('unsubscribe', 42); raw.emit('unsubscribe', { scope: {}, id: [] });
+    raw.emit('subscribe'); raw.emit('subscribe', null); raw.emit('subscribe', { scope: 'x', id: 1 });
+    raw.emit('typing'); raw.emit('typing', 7);
+    expect(await new Promise<any>((res) => raw.emit('subscribe', null, res))).toEqual({ ok: false, code: 'BAD_REQUEST' });
+    expect(await new Promise<any>((res) => raw.emit('subscribe', { scope: 'channel', id: 'x'.repeat(65) }, res))).toEqual({ ok: false, code: 'BAD_REQUEST' });
+    expect(await sub(s, 'channel', channelId)).toEqual({ ok: true });
+    const s2 = await connect(outsider);
+    expect(await sub(s2, 'channel', channelId)).toEqual({ ok: true });
+  });
+  it('acks a subscribe emitted immediately on connect', async () => {
+    for (let i = 0; i < 5; i++) {
+      const s = ioc(url, { transports: ['websocket'], extraHeaders: { cookie: outsider.cookie }, reconnection: false, forceNew: true });
+      sockets.push(s);
+      const ack = await new Promise<any>((res, rej) => { s.on('connect', () => s.emit('subscribe', { scope: 'channel', id: channelId }, res)); s.on('connect_error', rej); setTimeout(() => rej(new Error('no ack')), 2000); });
+      expect(ack).toEqual({ ok: true });
+    }
+  });
+  it('caps rooms per socket', async () => {
+    const s = await connect(outsider);
+    const bs58 = (await import('bs58')).default;
+    const results: any[] = [];
+    for (let i = 0; i < 205; i++) {
+      const b = Buffer.alloc(32); b.writeUInt32BE(i + 1, 0); b.writeUInt8(7, 31);
+      results.push(await sub(s, 'token', bs58.encode(b)));
+    }
+    expect(results.filter((r) => r.ok).length).toBe(200);
+    expect(results.at(-1)).toEqual({ ok: false, code: 'TOO_MANY_ROOMS' });
+  });
+  it('logout disconnects the socket and stops delivery', async () => {
+    const u = await ctx.createUser('rt_logout');
+    await ctx.as(u).post('/api/communities/rtc/join');
+    const s = await connect(u);
+    expect(await sub(s, 'channel', channelId)).toEqual({ ok: true });
+    const gone = new Promise<void>((res) => s.once('disconnect', () => res()));
+    expect((await ctx.app.inject({ method: 'POST', url: '/api/auth/logout', headers: { cookie: u.cookie } })).statusCode).toBe(204);
+    await gone;
+    expect(s.connected).toBe(false);
+  });
+  it('a socket whose session was deleted gets UNAUTHORIZED on next subscribe', async () => {
+    const u = await ctx.createUser('rt_nosess');
+    const s = await connect(u);
+    await ctx.db.delete(sessions).where(eq(sessions.userId, u.id));
+    const gone = new Promise<void>((res) => s.once('disconnect', () => res()));
+    expect(await sub(s, 'channel', channelId)).toEqual({ ok: false, code: 'UNAUTHORIZED' });
+    await gone;
+  });
+  it('presence reaches fellow members but not public-room outsiders or blockers', async () => {
+    const rc = await ctx.as(mod).get('/api/communities/rtc');
+    const cid = rc.body.community.community.id;
+    const fellow = await ctx.createUser('rt_fellow'); const out = await ctx.createUser('rt_outsider2');
+    await ctx.as(fellow).post('/api/communities/rtc/join');
+    const sf = await connect(fellow); const so = await connect(out);
+    await sub(so, 'community', cid);
+    const newbie = await ctx.createUser('rt_newbie');
+    await ctx.as(newbie).post('/api/communities/rtc/join');
+    const gotF = next(sf, 'presence'); const silent = none(so, 'presence', 600);
+    await connect(newbie);
+    expect(await gotF).toEqual({ userId: newbie.id, online: true });
+    await silent;
+
+    // conversation peer who blocked the user
+    const a = await ctx.createUser('rt_pa'); const b = await ctx.createUser('rt_pb');
+    await ctx.as(a).post('/api/conversations', { kind: 'dm', username: 'rt_pb' });
+    expect((await ctx.as(b).put('/api/users/rt_pa/block')).status).toBeLessThan(300);
+    const sb = await connect(b);
+    const silentB = none(sb, 'presence', 600);
+    await connect(a);
+    await silentB;
   });
 });

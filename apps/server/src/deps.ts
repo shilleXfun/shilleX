@@ -7,6 +7,8 @@ export interface EventBus {
   toUser(userId: string, event: string, payload: unknown): void;
   evict(userId: string, room: string): void;
   /** Remove every socket in `room` whose user is not in `keepUserIds`. */
+  /** Disconnect every socket authenticated by the given session id (hash). */
+  disconnectSession(sessionId: string): void;
   evictAllExcept(room: string, keepUserIds: string[]): void | Promise<void>;
 }
 export interface TokenResolverPort {
