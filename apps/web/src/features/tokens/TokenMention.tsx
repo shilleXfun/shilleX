@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { animate, useReducedMotion } from 'motion/react';
 import { COPY, abbreviateMint } from '@shillex/shared';
 import { Popover } from '../../components/ui/Popover';
 import { useInDialog } from '../../components/ui/Dialog';
 import { cx } from '../../lib/cx';
+import { spring } from '../../lib/motion';
 import { useToken } from './tokenCache';
 import { isPanelFocusReturn, useTokenPanel } from './useTokenPanel';
 import { TokenAvatar } from './TokenAvatar';
@@ -36,6 +38,12 @@ export function TokenMention({ mint }: { mint: string }) {
   const touch = useRef(false); // set per press; consumed by the click that follows it
   const quiet = useRef(false); // our own focus return to the chip must not reopen the preview
   const previewId = useId();
+  const reduced = useReducedMotion();
+  // Resolved after being seen pending: the colours cross-fade (CSS) and the chip gives a tiny pop.
+  const [lastStatus, setLastStatus] = useState(token.status);
+  const [pops, setPops] = useState(0);
+  if (lastStatus !== token.status) { setLastStatus(token.status); if (lastStatus === 'pending') setPops((n) => n + 1); }
+  useEffect(() => { if (pops && ref.current && !reduced) void animate(ref.current, { scale: [1.12, 1] }, spring.bouncy); }, [pops, reduced]);
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
   const later = (fn: () => void, ms: number) => { cancel(); timer.current = setTimeout(fn, ms); };
   useEffect(() => cancel, []);

@@ -1,9 +1,12 @@
 import { useState, type MouseEvent } from 'react';
+import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
 import { relativeTime, type PostView } from '@shillex/shared';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
+import { press, spring } from '../../lib/motion';
+import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { Avatar } from '../../components/ui/Avatar';
 import { Dialog } from '../../components/ui/Dialog';
 import { Menu } from '../../components/ui/Menu';
@@ -62,7 +65,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
   return (
     <article className={cx(s.card, focused && s.focused, compact && s.compact)} onClick={open} aria-labelledby={`post-${post.id}-author`}>
       {repostedBy}
-      <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} /></Link>
+      <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} me={p.author.id === me.id} /></Link>
       <div className={s.main}>
         <div className={s.meta}>
           <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{p.author.displayName}</Link>
@@ -78,28 +81,32 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
             <MediaGrid media={p.media} />
             {p.quoted && <QuoteEmbed post={p.quoted} />}
             <CallUpdates post={p} />
-            <ReactionPills reactions={p.reactions} onToggle={a.react} />
+            <ReactionPills reactions={p.reactions} onToggle={a.react} scope={p.id} />
             <div className={s.actions} role="group" aria-label="Post actions">
-              <button type="button" className={s.action} aria-label={`Reply, ${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`} onClick={(e) => { e.stopPropagation(); reply(); }}>
-                <MessageCircle size={15} aria-hidden="true" />{p.counts.replies || ''}
-              </button>
+              <motion.button {...press} type="button" className={s.action} aria-label={`Reply, ${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`} onClick={(e) => { e.stopPropagation(); reply(); }}>
+                <MessageCircle size={16} aria-hidden="true" />{p.counts.replies > 0 && <AnimatedNumber value={p.counts.replies} />}
+              </motion.button>
               <Menu label="Repost options" items={[
                 { label: p.viewer.reposted ? 'Undo repost' : 'Repost', onSelect: a.toggleRepost },
                 { label: 'Quote', onSelect: () => setQuoting(true) },
               ]} trigger={(t) => (
-                <button {...t} type="button" className={s.action} aria-pressed={p.viewer.reposted} aria-label={`Repost options, ${shares} reposts and quotes`} onClick={(e) => { e.stopPropagation(); t.onClick(); }}>
-                  <Repeat2 size={15} aria-hidden="true" />{shares || ''}
-                </button>
+                <motion.button {...t} {...press} type="button" className={cx(s.action, s.repost)} aria-pressed={p.viewer.reposted} aria-label={`Repost options, ${shares} reposts and quotes`} onClick={(e) => { e.stopPropagation(); t.onClick(); }}>
+                  <motion.span className={s.actionIcon} initial={false} animate={{ rotate: p.viewer.reposted ? 180 : 0 }} transition={spring.bouncy}><Repeat2 size={16} aria-hidden="true" /></motion.span>
+                  {shares > 0 && <AnimatedNumber value={shares} />}
+                </motion.button>
               )} />
-              <ReactionPicker onPick={a.react} />
-              <button type="button" className={s.action} aria-pressed={p.viewer.bookmarked} aria-label={p.viewer.bookmarked ? 'Remove bookmark' : 'Bookmark'} onClick={(e) => { e.stopPropagation(); void a.toggleBookmark(); }}>
-                <Bookmark size={15} aria-hidden="true" />
-              </button>
-              <button type="button" className={s.action} aria-label="Copy link" onClick={(e) => { e.stopPropagation(); void a.copyLink(); }}><Link2 size={15} aria-hidden="true" /></button>
+              <ReactionPicker onPick={a.react} scope={p.id} reactions={p.reactions} />
+              <motion.button {...press} type="button" className={cx(s.action, s.bookmark)} aria-pressed={p.viewer.bookmarked} aria-label={p.viewer.bookmarked ? 'Remove bookmark' : 'Bookmark'} onClick={(e) => { e.stopPropagation(); void a.toggleBookmark(); }}>
+                {/* Initial false: a settled post renders still; a toggle springs (pop in on save, dip on remove). */}
+                <motion.span className={s.actionIcon} initial={false} animate={{ scale: p.viewer.bookmarked ? [1.45, 1] : [0.75, 1] }} transition={spring.bouncy}>
+                  <Bookmark size={16} aria-hidden="true" />
+                </motion.span>
+              </motion.button>
+              <motion.button {...press} type="button" className={s.action} aria-label="Copy link" onClick={(e) => { e.stopPropagation(); void a.copyLink(); }}><Link2 size={16} aria-hidden="true" /></motion.button>
               {p.viewer.canAddCallUpdate && (
-                <button type="button" className={cx(s.action, s.callAction)} aria-label="Update call" title="Add a self-reported call update" onClick={(e) => { e.stopPropagation(); setAddingCall(true); }}>
-                  <TrendingUp size={15} aria-hidden="true" /><span className={s.callLabel}>Update call</span>
-                </button>
+                <motion.button {...press} type="button" className={cx(s.action, s.callAction)} aria-label="Update call" title="Add a self-reported call update" onClick={(e) => { e.stopPropagation(); setAddingCall(true); }}>
+                  <TrendingUp size={16} aria-hidden="true" /><span className={s.callLabel}>Update call</span>
+                </motion.button>
               )}
               <span className={s.more}>
                 <Menu label="More" items={[
@@ -109,7 +116,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
                     { label: `Block @${p.author.username}`, onSelect: () => userActions.block(true), danger: true },
                     { label: 'Report post', onSelect: () => setReport({ type: 'post', id: p.id }), danger: true },
                   ]),
-                ]} trigger={(t) => <button {...t} type="button" className={s.action} onClick={(e) => { e.stopPropagation(); t.onClick(); }}><Ellipsis size={15} aria-hidden="true" /></button>} />
+                ]} trigger={(t) => <motion.button {...t} {...press} type="button" className={s.action} onClick={(e) => { e.stopPropagation(); t.onClick(); }}><Ellipsis size={16} aria-hidden="true" /></motion.button>} />
               </span>
             </div>
           </>

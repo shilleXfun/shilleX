@@ -1,9 +1,13 @@
 import { NavLink } from 'react-router';
+import { motion } from 'motion/react';
 import { CircleUser, Compass, House, MessagesSquare, UsersRound } from 'lucide-react';
 import { useRequiredMe } from '../lib/useMe';
-import { cx } from '../lib/cx';
+import { press, spring } from '../lib/motion';
 import { useConversations } from './LeftNav';
+import { NavBadge } from './NavBadge';
 import s from './layout.module.css';
+
+const MotionNavLink = motion.create(NavLink);
 
 export function MobileTabBar() {
   const me = useRequiredMe();
@@ -17,10 +21,15 @@ export function MobileTabBar() {
   return (
     <nav className={s.tabbar} aria-label="Tabs">
       {tabs.map(({ to, label, icon: Icon, end, badge }) => (
-        <NavLink key={to} to={to} end={end}>
-          <Icon size={21} aria-hidden="true" /><span>{label}</span>
-          {!!badge && <span className={cx(s.navBadge, s.tabBadge)} aria-label={`${badge} unread`}>{badge > 99 ? '99+' : badge}</span>}
-        </NavLink>
+        <MotionNavLink key={to} to={to} end={end} {...press}>
+          {({ isActive }) => (
+            <>
+              {isActive && <motion.span layoutId="tab-pill" className={s.tabPill} transition={spring.snappy} />}
+              <Icon size={21} aria-hidden="true" strokeWidth={isActive ? 2.4 : 2} /><span>{label}</span>
+              {!!badge && <NavBadge count={badge} className={s.tabBadge} />}
+            </>
+          )}
+        </MotionNavLink>
       ))}
     </nav>
   );

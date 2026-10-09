@@ -83,7 +83,8 @@ describe('TokenMention', () => {
     expect(screen.getByTestId('panel')).toHaveTextContent('');
     tap();
     expect(screen.getByTestId('panel')).toHaveTextContent(MINT);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // The preview animates out, so it leaves the DOM a frame later.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
   it('touch: tapping outside dismisses the preview (WebKit gives no blur)', async () => {
     renderWithApp(<><TokenMention mint={MINT} /><p>elsewhere</p></>, { seed: seed({}) });
@@ -93,7 +94,7 @@ describe('TokenMention', () => {
     fireEvent.pointerDown(screen.getByRole('dialog'), { pointerType: 'touch' });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent.pointerDown(screen.getByText('elsewhere'), { pointerType: 'touch' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
   it('a stale touch press does not hijack a later keyboard activation', () => {
     renderWithApp(<><TokenMention mint={MINT} /><PanelProbe /></>, { seed: seed({}) });

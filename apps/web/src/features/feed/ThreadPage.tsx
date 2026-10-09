@@ -1,11 +1,14 @@
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Bell, BellRing } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import { Bell, BellRing, MessageCircle } from 'lucide-react';
 import type { ThreadView } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 import { useSocketEvent } from '../../lib/socket';
 import { patchPost } from '../../lib/cache';
-import { Button, IconButton } from '../../components/ui/Button';
+import { Button } from '../../components/ui/Button';
+import { Arrival, useArrivals } from '../../components/ui/Arrival';
+import { PageHeader } from '../../layout/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { primeTokens } from '../tokens/tokenCache';
@@ -13,27 +16,22 @@ import { PostCard } from './PostCard';
 import { PostSkeleton } from './PostSkeleton';
 import { Composer } from './Composer';
 import { usePostActions } from './postActions';
-import { pageHeader } from './HomePage';
 
 const REPLY_BOX = 'thread-reply';
 
 export function ThreadPage() {
   const { id = '' } = useParams();
-  const nav = useNavigate();
-  const location = useLocation();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['thread', id], queryFn: async ({ signal }) => { const t = await get<ThreadView>(`/posts/${id}`, signal); primeTokens(qc, t.tokens); return t; } });
   useSocketEvent('call:update', ({ postId, update }) => patchPost(qc, postId, (p) => (p.callUpdates.some((u) => u.id === update.id) ? p : { ...p, callUpdates: [...p.callUpdates, update] })));
+  const arrival = useArrivals(q.data?.replies.map((r) => r.id) ?? [], 'bottom');
   const focusReply = () => document.querySelector<HTMLTextAreaElement>(`#${REPLY_BOX} textarea`)?.focus();
   return (
     <section aria-labelledby="thread-title">
-      <div style={{ ...pageHeader, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--line)' }}>
-        {/* The first entry of a session (e.g. an opened link) has no in-app history to go back to. */}
-        <IconButton label="Back" onClick={() => (location.key !== 'default' ? nav(-1) : nav('/'))}><ArrowLeft size={18} /></IconButton>
-        <h1 id="thread-title" style={{ margin: 0, fontSize: 'var(--fs-xl)' }}>Conversation</h1>
+      <PageHeader title="Conversation" titleId="thread-title" back>
         {q.data && !q.data.post.deleted && <SubscribeButton thread={q.data} />}
-      </div>
-      {q.isPending ? <div aria-busy="true" aria-label="Loading conversation"><PostSkeleton /><PostSkeleton /></div>
+      </PageHeader>
+      {q.isPending ? <div aria-busy="true" aria-label="Loading conversation"><PostSkeleton /><PostSkeleton lines={1} /></div>
         : q.isError ? (q.error instanceof ApiError && q.error.status === 404
           ? <EmptyState title="This post isn’t available" body="It may have been deleted, or it’s in a community you can’t see." />
           : <ErrorState error={q.error} onRetry={() => void q.refetch()} />)
@@ -45,8 +43,14 @@ export function ThreadPage() {
               <div id={REPLY_BOX}><Composer mode="reply" parent={q.data.post} placeholder={`Reply to @${q.data.post.author.username}`} /></div>
             )}
             {q.data.replies.length === 0
-              ? <EmptyState title="No replies yet" body={q.data.post.deleted ? undefined : 'Start the conversation.'} />
-              : <div role="feed" aria-label="Replies">{q.data.replies.map((p) => <PostCard key={p.id} post={p} />)}</div>}
+              ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" body={q.data.post.deleted ? undefined : 'Be the first to reply.'} />
+              : (
+                <div role="feed" aria-label="Replies">
+                  <AnimatePresence initial={false}>
+                    {q.data.replies.map((p, i) => <Arrival key={p.id} as={arrival(p.id, i)} glow={p.mints.length ? 'token' : 'accent'}><PostCard post={p} /></Arrival>)}
+                  </AnimatePresence>
+                </div>
+              )}
           </>
         )}
     </section>
