@@ -1,16 +1,29 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { COPY, abbreviateMint } from '@shillex/shared';
 import { Popover } from '../../components/ui/Popover';
 import { cx } from '../../lib/cx';
 import { useToken } from './tokenCache';
-import { useTokenPanel } from './useTokenPanel';
+import { isPanelFocusReturn, useTokenPanel } from './useTokenPanel';
 import { TokenAvatar } from './TokenAvatar';
 import { TokenPreview } from './TokenPreview';
 import s from './tokens.module.css';
 
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Only keyboard-style focus opens the preview: a pointer press is not :focus-visible. (Programmatic focus returns, from
+ * the preview or the token panel, are excluded separately since they can be focus-visible after keyboard use.) Fallbacks: if the selector is unsupported, treat the focus as keyboard focus; if the element
+ * isn't actually focused (a synthetic focus event, e.g. jsdom's fireEvent.focus), there is no pointer press to exclude.
+ */
+function isKeyboardFocus(el: HTMLElement): boolean {
+  if (document.activeElement !== el) return true;
+  try { return el.matches(':focus-visible'); } catch { return true; }
+}
+
 /**
  * Inline contract-address chip. Hover (300 ms) or keyboard focus shows a preview; click/Enter opens the token panel.
  * On touch, the first tap shows the preview (with an "Open token panel" button) and a second tap opens the panel.
+ * From the chip, Tab/ArrowDown moves into an open preview; leaving it either way (or Esc) returns to the chip.
  */
 export function TokenMention({ mint }: { mint: string }) {
   const token = useToken(mint);
@@ -18,9 +31,8 @@ export function TokenMention({ mint }: { mint: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touch = useRef(false);
-  // A press focuses the button before its click; that focus must not open the preview (the click decides).
-  const pressing = useRef(false);
+  const touch = useRef(false); // set per press; consumed by the click that follows it
+  const quiet = useRef(false); // our own focus return to the chip must not reopen the preview
   const previewId = useId();
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
   const later = (fn: () => void, ms: number) => { cancel(); timer.current = setTimeout(fn, ms); };
@@ -32,21 +44,39 @@ export function TokenMention({ mint }: { mint: string }) {
   const state = token.status === 'pending' ? '(loading) ' : token.status === 'unindexed' ? '(unindexed mint) ' : token.status === 'error' ? '(couldn’t load) ' : '';
   const a11y = `Token ${token.symbol ? `$${token.symbol} ` : ''}${token.source === 'demo' ? '(demo) ' : ''}${state}${mint}. Open token panel`;
   const show = (v: boolean) => { cancel(); setOpen(v); };
+  const focusables = () => [...(document.getElementById(previewId)?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+  const backToChip = () => { show(false); quiet.current = true; ref.current?.focus(); quiet.current = false; };
+
+  const onChipKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    touch.current = false;
+    if (e.key === 'Escape' && open) { e.stopPropagation(); show(false); return; }
+    if (open && ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowDown')) {
+      const first = focusables()[0];
+      if (first) { e.preventDefault(); cancel(); first.focus(); }
+    }
+  };
+  const onPreviewKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const items = focusables();
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const leave = e.key === 'Escape' || (e.key === 'Tab' && (e.shiftKey ? i <= 0 : i === items.length - 1));
+    if (leave) { e.preventDefault(); e.stopPropagation(); backToChip(); }
+  };
 
   return (
     <>
       <button ref={ref} type="button" className={cx(s.chip, s[token.status])} aria-label={a11y}
         aria-busy={token.status === 'pending' || undefined} aria-describedby={open ? previewId : undefined} aria-expanded={open}
-        onPointerDown={(e) => { touch.current = e.pointerType === 'touch'; pressing.current = true; }}
+        onPointerDown={(e) => { touch.current = e.pointerType === 'touch'; }}
+        onPointerCancel={() => { touch.current = false; }}
         onPointerEnter={(e) => { if (e.pointerType === 'mouse') later(() => setOpen(true), 300); }}
         onPointerLeave={(e) => { if (e.pointerType === 'mouse') later(() => setOpen(false), 150); }}
-        onFocus={() => { if (pressing.current) pressing.current = false; else show(true); }}
-        onBlur={(e) => { pressing.current = false; if (!document.getElementById(previewId)?.contains(e.relatedTarget as Node)) later(() => setOpen(false), 150); }}
-        onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); show(false); } }}
+        onFocus={(e) => { if (!quiet.current && !isPanelFocusReturn() && isKeyboardFocus(e.currentTarget)) show(true); }}
+        onBlur={(e) => { if (!document.getElementById(previewId)?.contains(e.relatedTarget as Node)) later(() => setOpen(false), 150); }}
+        onKeyDown={onChipKey}
         onClick={(e) => {
           e.stopPropagation(); e.preventDefault();
-          pressing.current = false;
-          if (touch.current && !open) { show(true); return; }
+          const wasTouch = touch.current; touch.current = false;
+          if (wasTouch && !open) { show(true); return; }
           show(false); openToken(mint, ref.current);
         }}>
         {token.status === 'pending' ? <span className={s.loadingDot} aria-hidden="true" /> : <TokenAvatar token={token} size={15} />}
@@ -56,7 +86,9 @@ export function TokenMention({ mint }: { mint: string }) {
       </button>
       <Popover anchor={ref.current} open={open} onClose={() => show(false)} id={previewId}
         onPointerEnter={cancel} onPointerLeave={() => later(() => setOpen(false), 150)}>
-        <TokenPreview token={token} onOpen={() => { show(false); openToken(mint, ref.current); }} />
+        <div onKeyDown={onPreviewKey}>
+          <TokenPreview token={token} onOpen={() => { show(false); openToken(mint, ref.current); }} />
+        </div>
       </Popover>
     </>
   );

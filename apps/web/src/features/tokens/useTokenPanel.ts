@@ -4,6 +4,9 @@ import { isValidSolanaAddress } from '@shillex/shared';
 
 // Module-level so the panel host (a different component) can return focus to the chip that opened it.
 let lastTrigger: HTMLElement | null = null;
+// True only during close()'s synchronous focus() call, so the chip can tell a focus return from a user's focus.
+let returningFocus = false;
+export const isPanelFocusReturn = () => returningFocus;
 
 /** Token side-panel state lives in `?token=<mint>` so the underlying route stays mounted. */
 export function useTokenPanel() {
@@ -17,7 +20,7 @@ export function useTokenPanel() {
   const close = useCallback(() => {
     setParams((p) => { const n = new URLSearchParams(p); n.delete('token'); return n; }, { preventScrollReset: true });
     const t = lastTrigger; lastTrigger = null;
-    if (t?.isConnected) requestAnimationFrame(() => t.focus());
+    if (t?.isConnected) requestAnimationFrame(() => { returningFocus = true; try { t.focus(); } finally { returningFocus = false; } });
   }, [setParams]);
   return { mint, openToken, close };
 }
