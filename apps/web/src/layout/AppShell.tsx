@@ -4,9 +4,11 @@ import { MobileTabBar } from './MobileTabBar';
 import { MobileHeader } from './MobileHeader';
 import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
+import { useTokenEvents } from '../features/tokens/tokenCache';
 import s from './layout.module.css';
 
 export function AppShell() {
+  useTokenEvents();
   // Conversation screens are immersive on mobile: no tab bar or global header (they render their own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
