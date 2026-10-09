@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+.env
+.claude/
+.superpowers/
+.playwright-mcp/
+.vitest/
+test-results/
+playwright-report/
+*.log
