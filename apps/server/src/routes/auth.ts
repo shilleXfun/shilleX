@@ -11,6 +11,11 @@ import { toUserSummary } from '../services/users.ts';
 import type { MeView } from '@shillex/shared';
 import type { UserRow } from '../db/schema.ts';
 
+const isUniqueViolation = (e: unknown): boolean => {
+  for (let x: any = e, i = 0; x && i < 4; x = x.cause, i++) if (x.code === '23505') return true;
+  return false;
+};
+
 const Username = z.string().regex(/^[A-Za-z0-9_]{3,20}$/, '3–20 letters, numbers or underscores');
 const Signup = z.object({ username: Username, displayName: z.string().trim().min(1).max(40), password: z.string().min(8).max(128) });
 const Login = z.object({ username: z.string().min(1).max(40), password: z.string().min(1).max(128) });
@@ -35,7 +40,13 @@ export default async function authRoutes(app: FastifyInstance) {
     if (taken.length) throw errors.conflict('USERNAME_TAKEN', 'That username is taken');
     const id = newId();
     const passwordHash = await hash(body.password);
-    const [u] = await db.insert(users).values({ id, username: body.username, displayName: body.displayName, passwordHash, createdAt: now() }).returning();
+    let u: UserRow | undefined;
+    try {
+      [u] = await db.insert(users).values({ id, username: body.username, displayName: body.displayName, passwordHash, createdAt: now() }).returning();
+    } catch (e) {
+      if (isUniqueViolation(e)) throw errors.conflict('USERNAME_TAKEN', 'That username is taken');
+      throw e;
+    }
     setCookie(reply, await createSession(db, id, now()));
     return reply.status(201).send({ user: await meView(u!) });
   });
