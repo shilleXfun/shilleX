@@ -1,0 +1,21 @@
+{
+  "name": "shillex",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "concurrently -n server,web -c green,cyan \"npm:dev -w @shillex/server\" \"npm:dev -w @shillex/web\"",
+    "build": "npm run build -w @shillex/web",
+    "start": "npm run start -w @shillex/server",
+    "seed": "npm run seed -w @shillex/server",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6",
+    "typescript": "5.9.3",
+    "@playwright/test": "1.64.0"
+  }
+}
