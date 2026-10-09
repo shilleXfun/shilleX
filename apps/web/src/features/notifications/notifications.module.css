@@ -1,0 +1,14 @@
+.list { list-style: none; margin: 0; padding: 0; }
+.row { position: relative; display: grid; grid-template-columns: 30px 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--line); transition: background .15s; }
+a.row:hover { background: rgba(29, 33, 64, 0.38); }
+.unread { background: rgba(139, 108, 255, 0.05); box-shadow: inset 2px 0 0 var(--accent); }
+.icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-hover); }
+.toneToken { background: var(--token-soft); color: var(--token); }
+.toneWarn { background: var(--warn-soft); color: var(--warn); }
+.text { min-width: 0; line-height: 1.45; }
+.unread .text { font-weight: 550; }
+.side { display: grid; justify-items: end; gap: 6px; }
+.time { color: var(--muted); font: 11px var(--font-mono); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: var(--glow-accent); }
+.more { display: grid; place-items: center; padding: 18px; }
+@media (max-width: 480px) { .row { padding: 12px 14px; gap: 10px; grid-template-columns: 28px 30px minmax(0, 1fr) auto; } }

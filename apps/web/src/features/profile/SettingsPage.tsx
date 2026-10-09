@@ -1,0 +1,173 @@
+import { useEffect, useState, type ChangeEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ImagePlus, Plus, X } from 'lucide-react';
+import { isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
+import { del, errorMessage, get, patch, put, uploadImage } from '../../lib/api';
+import { Avatar } from '../../components/ui/Avatar';
+import { Button, IconButton } from '../../components/ui/Button';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { toast } from '../../components/ui/Toaster';
+import { PageHeader } from '../../layout/PageHeader';
+import s from './profile.module.css';
+
+const PREF_LABELS: Record<NotificationType, string> = {
+  reply: 'Replies to your posts and followed conversations', mention: 'Mentions', follow: 'New followers', reaction: 'Reactions', quote: 'Quotes', repost: 'Reposts',
+  dm: 'New conversations', call_update: 'Call updates on posts you follow', token_discussion: 'New public discussion of tokens you follow',
+  invite: 'Community invites', join_request: 'Join requests (communities you moderate)', report_resolved: 'Updates on your reports',
+};
+
+export function SettingsPage() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['settings'], queryFn: () => get<SettingsView>('/me/settings') });
+  const save: Save = async (fn, ok) => {
+    try {
+      qc.setQueryData(['settings'], await fn());
+      toast(ok, { tone: 'success' });
+      void qc.invalidateQueries({ queryKey: ['me'] });
+      void qc.invalidateQueries({ queryKey: ['profile'] });
+      return true;
+    } catch (e) { toast(errorMessage(e), { tone: 'error' }); return false; }
+  };
+  return (
+    <section aria-labelledby="settings-title">
+      <PageHeader title="Settings" titleId="settings-title" />
+      {q.isPending ? <div className={s.section} aria-busy="true" aria-label="Loading settings"><div className={s.form}><Skeleton w={160} h={20} /><Skeleton h={40} r={10} /><Skeleton h={76} r={10} /></div></div>
+        : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+        : (
+          <>
+            <ProfileSection data={q.data} save={save} />
+            <WalletSection data={q.data} save={save} />
+            <NotificationSection data={q.data} save={save} />
+            <HiddenAccounts />
+          </>
+        )}
+    </section>
+  );
+}
+
+type Save = (fn: () => Promise<SettingsView>, ok: string) => Promise<boolean>;
+
+function ProfileSection({ data, save }: { data: SettingsView; save: Save }) {
+  const [displayName, setName] = useState(data.profile.displayName);
+  const [bio, setBio] = useState(data.profile.bio);
+  const [links, setLinks] = useState(data.profile.links);
+  const [busy, setBusy] = useState(false);
+  const upload = (field: 'avatarUploadId' | 'bannerUploadId') => async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    try { const u = await uploadImage(f); await save(() => patch<SettingsView>('/me/profile', { [field]: u.id }), field === 'avatarUploadId' ? 'Avatar updated' : 'Banner updated'); }
+    catch (err) { toast(errorMessage(err), { tone: 'error' }); }
+  };
+  const submit = async () => {
+    setBusy(true);
+    await save(() => patch<SettingsView>('/me/profile', { displayName, bio, links: links.filter((l) => l.label && l.url) }), 'Profile saved');
+    setBusy(false);
+  };
+  return (
+    <form className={s.section} aria-labelledby="set-profile" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <h2 id="set-profile" className={s.sectionTitle}>Profile</h2>
+      <p className={s.sectionHelp}>How you appear on posts, in chat and on your profile.</p>
+      <div className={s.form}>
+        <div className={s.mediaRow}>
+          <Avatar src={data.profile.avatarUrl} size={56} me />
+          <label className={s.fileButton}><ImagePlus size={14} aria-hidden="true" />Change avatar<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={upload('avatarUploadId')} /></label>
+          <label className={s.fileButton}><ImagePlus size={14} aria-hidden="true" />Change banner<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={upload('bannerUploadId')} /></label>
+        </div>
+        <label className={s.field}>Display name<input className={s.input} value={displayName} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
+        <label className={s.field}>Bio<textarea className={s.input} value={bio} maxLength={160} onChange={(e) => setBio(e.target.value)} /></label>
+        <fieldset className={s.field} style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend style={{ marginBottom: 7 }}>Links (up to 5, http or https)</legend>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {links.map((l, i) => (
+              <div key={i} className={s.linkRow}>
+                <input className={s.input} aria-label={`Link ${i + 1} label`} placeholder="Label" value={l.label} maxLength={24} onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                <input className={s.input} aria-label={`Link ${i + 1} URL`} placeholder="https://" value={l.url} onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
+                <IconButton label={`Remove link ${i + 1}`} onClick={() => setLinks(links.filter((_, j) => j !== i))}><X size={15} /></IconButton>
+              </div>
+            ))}
+            {links.length < 5 && <div><Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={() => setLinks([...links, { label: '', url: '' }])}>Add link</Button></div>}
+          </div>
+        </fieldset>
+        <div className={s.formActions}><Button type="submit" variant="primary" loading={busy}>Save profile</Button></div>
+      </div>
+    </form>
+  );
+}
+
+function WalletSection({ data, save }: { data: SettingsView; save: Save }) {
+  const [address, setAddress] = useState(data.wallet?.address ?? '');
+  const [displayWallet, setDW] = useState(data.wallet?.displayWallet ?? false);
+  const [displayHoldings, setDH] = useState(data.wallet?.displayHoldings ?? false);
+  useEffect(() => { setAddress(data.wallet?.address ?? ''); setDW(data.wallet?.displayWallet ?? false); setDH(data.wallet?.displayHoldings ?? false); }, [data.wallet]);
+  const valid = isValidSolanaAddress(address.trim());
+  return (
+    <form className={s.section} aria-labelledby="set-wallet" onSubmit={(e) => { e.preventDefault(); if (valid) void save(() => put<SettingsView>('/me/wallet', { address: address.trim(), displayWallet, displayHoldings }), 'Wallet settings saved'); }}>
+      <h2 id="set-wallet" className={s.sectionTitle}>Wallet (optional)</h2>
+      <p className={s.sectionHelp}>Shillex never shows a wallet unless you turn it on here.</p>
+      <div className={s.form}>
+        <p className={s.warnBox} style={{ margin: 0 }}>Wallet connection and holdings verification are <strong>not implemented in this build</strong>. Anything shown is labelled not verified.</p>
+        <label className={s.field}>Wallet address
+          <input className={`${s.input} mono`} aria-label="Wallet address" placeholder="Solana address" value={address} onChange={(e) => setAddress(e.target.value)} aria-invalid={!!address && !valid} />
+        </label>
+        {address && !valid && <span className={s.error}>That isn’t a valid Solana address. Check for missing or extra characters.</span>}
+        <label className={s.toggle}><input type="checkbox" className={s.switch} checked={displayWallet} onChange={(e) => { setDW(e.target.checked); if (!e.target.checked) setDH(false); }} /><span className={s.toggleText}>Show this wallet on my profile</span></label>
+        <label className={s.toggle}><input type="checkbox" className={s.switch} checked={displayHoldings} disabled={!displayWallet} onChange={(e) => setDH(e.target.checked)} /><span className={s.toggleText}>Show a holdings section (labelled not verified)</span></label>
+        <div className={s.formActions}>
+          <Button type="submit" variant="primary" disabled={!valid}>Save wallet settings</Button>
+          {data.wallet && <Button variant="ghost" onClick={() => void save(() => del<SettingsView>('/me/wallet'), 'Wallet removed')}>Remove wallet</Button>}
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function NotificationSection({ data, save }: { data: SettingsView; save: Save }) {
+  return (
+    <section className={s.section} aria-labelledby="notif-prefs">
+      <h2 id="notif-prefs" className={s.sectionTitle}>Notifications</h2>
+      <p className={s.sectionHelp}>Choose what reaches your bell. Changes save as you flip them.</p>
+      <div className={s.prefs}>
+        {data.notificationPrefs.map((p) => (
+          <label key={p.type} className={s.toggle}>
+            <input type="checkbox" className={s.switch} checked={p.enabled}
+              onChange={(e) => void save(() => put<SettingsView>('/me/notification-prefs', { prefs: [{ type: p.type, enabled: e.target.checked }] }), 'Notification settings saved')} />
+            <span className={s.toggleText}>{PREF_LABELS[p.type]}</span>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HiddenAccounts() {
+  const qc = useQueryClient();
+  const muted = useQuery({ queryKey: ['muted'], queryFn: () => get<{ users: UserSummary[] }>('/me/muted').then((r) => r.users) });
+  const blocked = useQuery({ queryKey: ['blocked'], queryFn: () => get<{ users: UserSummary[] }>('/me/blocked').then((r) => r.users) });
+  const undo = (kind: 'mute' | 'block', u: UserSummary) => async () => {
+    try { await del(`/users/${u.username}/${kind}`); void qc.invalidateQueries({ queryKey: [kind === 'mute' ? 'muted' : 'blocked'] }); toast(`${kind === 'mute' ? 'Unmuted' : 'Unblocked'} @${u.username}`); }
+    catch (e) { toast(errorMessage(e), { tone: 'error' }); }
+  };
+  const list = (title: string, users: UserSummary[] | undefined, kind: 'mute' | 'block') => (
+    <div>
+      <h3 className={s.subTitle}>{title}</h3>
+      {!users?.length ? <p className={s.muted} style={{ margin: 0 }}>No one.</p> : (
+        <div className={s.hiddenList}>
+          {users.map((u) => (
+            <div key={u.id} className={s.hiddenRow}>
+              <Avatar src={u.avatarUrl} size={28} /><span>{u.displayName} <span className={s.muted}>@{u.username}</span></span>
+              <Button size="sm" variant="ghost" style={{ marginLeft: 'auto' }} onClick={undo(kind, u)}>{kind === 'mute' ? 'Unmute' : 'Unblock'}</Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <section className={s.section} aria-labelledby="set-hidden">
+      <h2 id="set-hidden" className={s.sectionTitle}>Muted and blocked</h2>
+      <p className={s.sectionHelp}>Muted accounts disappear from your feeds. Blocked accounts can’t reach you at all.</p>
+      {list('Muted', muted.data, 'mute')}{list('Blocked', blocked.data, 'block')}
+    </section>
+  );
+}
