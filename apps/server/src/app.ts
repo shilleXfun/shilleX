@@ -26,6 +26,7 @@ import reportsRoutes from './routes/reports.ts';
 import searchRoutes from './routes/search.ts';
 import tokensRoutes from './routes/tokens.ts';
 import discoverRoutes from './routes/discover.ts';
+import healthRoutes from './routes/health.ts';
 import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
@@ -57,6 +58,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (req.url.startsWith('/api')) req.user = await userForToken(deps.db, req.cookies[SESSION_COOKIE], deps.now());
   });
 
+  await app.register(healthRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api' });
   await app.register(uploadsRoutes, { prefix: '/api' });
   await app.register(mediaRoutes);

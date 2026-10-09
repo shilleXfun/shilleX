@@ -14,6 +14,7 @@ export async function createDb(opts: { url?: string; pgliteDir?: string }): Prom
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const { migrate } = await import('drizzle-orm/node-postgres/migrator');
     const pool = new pg.Pool({ connectionString: opts.url, max: 10 });
+    pool.on('error', (err) => console.error('[db] idle client error', err));
     const db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder });
     return { db: db as unknown as Db, close: () => pool.end(), kind: 'postgres' };
