@@ -25,6 +25,7 @@ import pinsRoutes from './routes/pins.ts';
 import reportsRoutes from './routes/reports.ts';
 import searchRoutes from './routes/search.ts';
 import tokensRoutes from './routes/tokens.ts';
+import discoverRoutes from './routes/discover.ts';
 import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
@@ -73,6 +74,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(reportsRoutes, { prefix: '/api' });
   await app.register(searchRoutes, { prefix: '/api' });
   await app.register(tokensRoutes, { prefix: '/api' });
-  // Later tasks register more route plugins here, in this order: discover.
+  await app.register(discoverRoutes, { prefix: '/api' });
+  // Later tasks register more route plugins here.
   return app;
 }
