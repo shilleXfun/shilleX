@@ -2,14 +2,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
 import { follows, mutes } from '../src/db/schema.ts';
 
-let ctx: TestCtx; let me: TestUser; let friend: TestUser; let stranger: TestUser; let loud: TestUser; let muted: TestUser;
+let ctx: TestCtx; let me: TestUser; let friend: TestUser; let stranger: TestUser; let loud: TestUser; let muted: TestUser; let quiet: TestUser;
 
 beforeAll(async () => {
   ctx = await makeTestApp();
   me = await ctx.createUser('me'); friend = await ctx.createUser('friend'); stranger = await ctx.createUser('stranger');
-  loud = await ctx.createUser('loud'); muted = await ctx.createUser('muted');
+  loud = await ctx.createUser('loud'); muted = await ctx.createUser('muted'); quiet = await ctx.createUser('quiet');
   await ctx.db.insert(follows).values([{ followerId: me.id, followeeId: friend.id, createdAt: new Date() }, { followerId: me.id, followeeId: muted.id, createdAt: new Date() }]);
-  await ctx.db.insert(mutes).values({ userId: me.id, targetId: muted.id, createdAt: new Date() });
+  await ctx.db.insert(mutes).values([{ userId: me.id, targetId: muted.id, createdAt: new Date() }, { userId: me.id, targetId: quiet.id, createdAt: new Date() }]);
+  await ctx.as(quiet).post('/api/posts', { body: 'quiet post' });
   await ctx.as(friend).post('/api/posts', { body: 'friend post' });
   await ctx.as(me).post('/api/posts', { body: 'my post' });
   await ctx.as(muted).post('/api/posts', { body: 'muted post' });
@@ -42,6 +43,7 @@ describe('GET /api/feed', () => {
     expect(authors).not.toContain('me');
     expect(authors).not.toContain('friend');
     expect(authors).not.toContain('muted');
+    expect(authors).not.toContain('quiet'); // muted but not followed
     expect(authors).toContain('stranger');
     expect(authors.filter((a: string) => a === 'loud').length).toBeLessThanOrEqual(2);
     expect(r.body.items.every((p: any) => p.kind === 'post' || p.kind === 'quote')).toBe(true);

@@ -8,6 +8,8 @@ import {
 import { toUserSummary } from './users.ts';
 import { accessFor } from './visibility.ts';
 
+const UNAVAILABLE_AUTHOR: UserSummary = { id: '', username: 'unavailable', displayName: 'Unavailable', avatarUrl: '/media/avatar/unavailable.svg', isDemo: false };
+
 export async function userSummaries(db: Db, ids: string[]): Promise<Map<string, UserSummary>> {
   const uniq = [...new Set(ids)];
   if (!uniq.length) return new Map();
@@ -83,7 +85,18 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
   const canRead = new Map(commRows.map((c) => [c.id, accessFor(c, memberRows.find((m) => m.communityId === c.id) ?? null).canRead]));
 
   const build = (r: PostRow, depth: number): PostView => {
-    const hidden = !!r.deletedAt || (r.communityId !== null && !canRead.get(r.communityId));
+    const unreadable = r.communityId !== null && !canRead.get(r.communityId);
+    if (unreadable) {
+      // Reveal nothing about a post the viewer cannot read: neutral author, no community, counts or threading.
+      return {
+        id: r.id, kind: r.kind, author: UNAVAILABLE_AUTHOR, body: '', createdAt: new Date(0).toISOString(), deleted: true,
+        parentId: null, rootId: null, replyTo: null, community: null, media: [], quoted: null, reposted: null,
+        counts: { replies: 0, reposts: 0, quotes: 0 }, reactions: [],
+        viewer: { bookmarked: false, reposted: false, subscribed: false, canAddCallUpdate: false },
+        mints: [], callUpdates: [],
+      };
+    }
+    const hidden = !!r.deletedAt;
     const c = r.communityId ? comms.get(r.communityId) : undefined;
     const postMints = hidden ? [] : mints.get(r.id) ?? [];
     const quotedRow = r.quoteOfId ? all.get(r.quoteOfId) : undefined;
