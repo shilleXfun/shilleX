@@ -86,7 +86,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'strict-origin-when-cross-origin');
     reply.header('x-frame-options', 'DENY');
-    // /uploads (its static setHeaders runs after this hook) and /media set their own stricter CSP.
+    // /uploads and /media set their own stricter CSP. The uploads static setHeaders runs after this
+    // hook (so hasHeader can't see it); the prefix checks keep the app CSP off both regardless.
     if (!reply.hasHeader('content-security-policy') && !req.url.startsWith('/uploads/') && !req.url.startsWith('/media/')) {
       reply.header('content-security-policy', APP_CSP);
     }
@@ -102,7 +103,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       },
     });
     app.setNotFoundHandler((req, reply) => {
-      const reserved = ['/api', '/socket.io', '/uploads', '/media'].some((p) => req.url === p || req.url.startsWith(`${p}/`) || req.url.startsWith(`${p}?`));
+      const reserved = ['/api', '/socket.io', '/uploads', '/media', '/assets'].some((p) => req.url === p || req.url.startsWith(`${p}/`) || req.url.startsWith(`${p}?`));
       if ((req.method !== 'GET' && req.method !== 'HEAD') || reserved) return sendNotFound(reply);
       return reply.code(200).type('text/html; charset=utf-8').sendFile('index.html');
     });
