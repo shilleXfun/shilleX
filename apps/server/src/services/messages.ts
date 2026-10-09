@@ -2,12 +2,12 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { LIMITS, codePointLength, extractMentions, isValidSolanaAddress, type ScopeRef, type TokenView, type MessageView } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
-import { messages, channels, communities, communityMembers, conversationMembers, users, type ChannelRow, type MessageRow, type UserRow } from '../db/schema.ts';
+import { messages, reactions, channels, communities, communityMembers, conversationMembers, users, type ChannelRow, type MessageRow, type UserRow } from '../db/schema.ts';
 import { AppError, errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
 import { resolveUploads } from '../routes/uploads.ts';
 import { computeMentionVisibility, getCommunityAccess, isBlockedEitherWay, requireChannel, requireConversationMember } from './visibility.ts';
-import { recordMentions } from './mentions.ts';
+import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
 import { hydrateMessages } from './hydrate.ts';
 import { markRead } from './unread.ts';
@@ -19,7 +19,7 @@ export interface SendMessageInput { scope: ScopeRef; author: UserRow; body: stri
 export async function memberIdsOf(db: Db, conversationId: string): Promise<string[]> {
   return (await db.select({ u: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId))).map((r) => r.u);
 }
-async function modIdsOf(db: Db, communityId: string): Promise<string[]> {
+export async function modIdsOf(db: Db, communityId: string): Promise<string[]> {
   return (await db.select({ u: communityMembers.userId }).from(communityMembers).where(and(
     eq(communityMembers.communityId, communityId), eq(communityMembers.status, 'active'), inArray(communityMembers.role, ['owner', 'mod'])))).map((r) => r.u);
 }
@@ -67,23 +67,10 @@ export async function sendMessage(deps: AppDeps, guards: MessageGuards, input: S
     }
   }
 
-  const rate = guards.rate.hit(input.author.id, at.getTime());
-  if (!rate.ok) throw errors.tooMany('RATE_LIMITED', 'You’re sending messages too fast', rate.retryAfterSec);
-  if (isNewAccount(input.author.createdAt, at) && linkMentionCount(body) > LIMITS.newAccountLinkMentionCap) {
-    throw errors.badRequest('TOO_MANY_LINKS', `New accounts can include up to ${LIMITS.newAccountLinkMentionCap} links, mentions or addresses per message`);
-  }
-  if (channel && channel.slowModeSeconds > 0 && !isMod) {
-    const [last] = await db.select({ at: messages.createdAt }).from(messages)
-      .where(and(eq(messages.channelId, channel.id), eq(messages.authorId, input.author.id))).orderBy(desc(messages.id)).limit(1);
-    const sm = checkSlowMode(last?.at ?? null, channel.slowModeSeconds, at);
-    if (!sm.ok) throw new AppError(429, 'SLOW_MODE', `Slow mode is on — wait ${sm.retryAfterSec}s`, { retryAfterSec: sm.retryAfterSec });
-  }
-  if (body && guards.dupes.isDuplicate(input.author.id, body, at.getTime())) throw errors.tooMany('DUPLICATE', 'You just sent that');
-
   if (input.replyToId) {
     const [target] = await db.select().from(messages).where(eq(messages.id, input.replyToId));
     const same = target && (channel ? target.channelId === channel.id : target.conversationId === input.scope.id);
-    if (!same) throw errors.badRequest('BAD_REPLY', 'You can only reply within the same conversation');
+    if (!same || target.status === 'held') throw errors.badRequest('BAD_REPLY', 'You can only reply within the same conversation');
   }
 
   const imageIds = atts.filter((a) => a.type === 'image').map((a) => (a as { uploadId: string }).uploadId);
@@ -97,6 +84,19 @@ export async function sendMessage(deps: AppDeps, guards: MessageGuards, input: S
       attachments.push({ type: 'token', mint: a.mint });
     }
   }
+
+  if (isNewAccount(input.author.createdAt, at) && linkMentionCount(body) > LIMITS.newAccountLinkMentionCap) {
+    throw errors.badRequest('TOO_MANY_LINKS', `New accounts can include up to ${LIMITS.newAccountLinkMentionCap} links, mentions or addresses per message`);
+  }
+  const rate = guards.rate.hit(input.author.id, at.getTime());
+  if (!rate.ok) throw errors.tooMany('RATE_LIMITED', 'You’re sending messages too fast', rate.retryAfterSec);
+  if (channel && channel.slowModeSeconds > 0 && !isMod) {
+    const [last] = await db.select({ at: messages.createdAt }).from(messages)
+      .where(and(eq(messages.channelId, channel.id), eq(messages.authorId, input.author.id))).orderBy(desc(messages.id)).limit(1);
+    const sm = checkSlowMode(last?.at ?? null, channel.slowModeSeconds, at);
+    if (!sm.ok) throw new AppError(429, 'SLOW_MODE', `Slow mode is on — wait ${sm.retryAfterSec}s`, { retryAfterSec: sm.retryAfterSec });
+  }
+  if (body && guards.dupes.isDuplicate(input.author.id, body, at.getTime())) throw errors.tooMany('DUPLICATE', 'You just sent that');
 
   const held = !!channel && channel.holdNewMemberPosts && !isMod && !!memberJoinedAt && isNewAccount(memberJoinedAt, at);
   const [row] = await db.insert(messages).values({
@@ -155,4 +155,24 @@ export async function loadMessageAccess(db: Db, messageId: string, userId: strin
   const { channel, access } = await requireChannel(db, row.channelId!, userId, 'read');
   if (row.status === 'held' && row.authorId !== userId && !access.isMod) throw errors.notFound('Message');
   return { row, isMod: access.isMod, channel };
+}
+
+/**
+ * Removes a message. Held messages were never public, so they are hard-deleted and only the author and
+ * moderators are told; visible messages become tombstones broadcast to the scope.
+ */
+export async function removeMessage(deps: AppDeps, row: MessageRow): Promise<void> {
+  const { db } = deps;
+  await removeMentions(db, 'message', row.id);
+  if (row.status === 'held') {
+    await db.delete(reactions).where(and(eq(reactions.targetType, 'message'), eq(reactions.targetId, row.id)));
+    await db.delete(messages).where(eq(messages.id, row.id));
+    const [ch] = await db.select().from(channels).where(eq(channels.id, row.channelId!));
+    const [view] = await hydrateMessages(db, '', [{ ...row, status: 'deleted' }]);
+    const targets = new Set([row.authorId, ...(ch ? await modIdsOf(db, ch.communityId) : [])]);
+    for (const u of targets) deps.bus.toUser(u, 'message:update', { message: view });
+    return;
+  }
+  const [upd] = await db.update(messages).set({ status: 'deleted' }).where(eq(messages.id, row.id)).returning();
+  await emitMessage(deps, upd!, 'message:update');
 }

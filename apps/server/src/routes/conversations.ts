@@ -42,7 +42,7 @@ export default async function conversationsRoutes(app: FastifyInstance) {
     const rows = (await db.select({ c: conversations }).from(conversationMembers).innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
       .where(eq(conversationMembers.userId, me.id))).map((r) => r.c);
     const views = await Promise.all(rows.map((c) => view(c, me.id)));
-    views.sort((a, b) => (b.lastMessage?.id ?? b.createdAt).localeCompare(a.lastMessage?.id ?? a.createdAt));
+    views.sort((a, b) => (b.lastMessage?.createdAt ?? b.createdAt).localeCompare(a.lastMessage?.createdAt ?? a.createdAt));
     return { conversations: views };
   });
 

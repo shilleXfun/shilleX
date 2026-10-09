@@ -44,3 +44,13 @@ describe('reports', () => {
   });
   it('validates communityId linkage', () => { expect(communityId).toBeTruthy(); });
 });
+
+describe('reports visibility', () => {
+  it('invite-only community reports 404 for non-members, same as a missing slug', async () => {
+    await ctx.as(mod).post('/api/communities', { name: 'Hidden', slug: 'hidden-one', visibility: 'invite' });
+    const hidden = await ctx.as(user).get('/api/communities/hidden-one/reports');
+    const missing = await ctx.as(user).get('/api/communities/no-such-slug/reports');
+    expect(hidden.status).toBe(404);
+    expect(hidden.body).toEqual(missing.body);
+  });
+});

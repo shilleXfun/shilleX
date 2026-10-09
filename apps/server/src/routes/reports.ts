@@ -7,8 +7,8 @@ import { requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
-import { canReadPost, getCommunityAccess, getCommunityAccessBySlug, requireMod } from '../services/visibility.ts';
-import { loadMessageAccess, emitMessage } from '../services/messages.ts';
+import { canReadPost, getCommunityAccess, getCommunityAccessBySlug, requireCommunityRead, requireMod } from '../services/visibility.ts';
+import { loadMessageAccess, removeMessage } from '../services/messages.ts';
 import { removeMentions } from '../services/mentions.ts';
 import { userSummaries } from '../services/hydrate.ts';
 import { notify } from '../services/notify.ts';
@@ -41,9 +41,7 @@ export default async function reportsRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { slug: string } }>('/communities/:slug/reports', async (req) => {
     const me = requireUser(req);
-    const a = await getCommunityAccessBySlug(db, req.params.slug, me.id);
-    if (!a) throw errors.notFound('Community');
-    requireMod(a);
+    const a = requireMod(requireCommunityRead(await getCommunityAccessBySlug(db, req.params.slug, me.id)));
     const rows = await db.select().from(reports).where(and(eq(reports.communityId, a.community.id), eq(reports.status, 'open'))).orderBy(desc(reports.id));
     const people = await userSummaries(db, rows.map((r) => r.reporterId));
     const out: ReportView[] = [];
@@ -73,9 +71,8 @@ export default async function reportsRoutes(app: FastifyInstance) {
         await db.update(posts).set({ deletedAt: now() }).where(eq(posts.id, r.targetId));
         await removeMentions(db, 'post', r.targetId);
       } else if (r.targetType === 'message') {
-        const [upd] = await db.update(messages).set({ status: 'deleted' }).where(eq(messages.id, r.targetId)).returning();
-        await removeMentions(db, 'message', r.targetId);
-        if (upd) await emitMessage(deps, upd, 'message:update');
+        const [m] = await db.select().from(messages).where(eq(messages.id, r.targetId));
+        if (m && m.status !== 'deleted') await removeMessage(deps, m);
       }
     }
     await db.update(reports).set({ status: action === 'dismiss' ? 'dismissed' : 'resolved', resolvedBy: me.id }).where(eq(reports.id, r.id));
