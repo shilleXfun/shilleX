@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
 import { loadConfig } from '../src/config.ts';
+import { resolveUploads } from '../src/routes/uploads.ts';
 
 function multipart(filename: string, mime: string, data: Buffer) {
   const boundary = '----shillextest';
@@ -62,6 +63,37 @@ describe('uploads', () => {
   });
 });
 
+async function upload(user: TestUser) {
+  const m = multipart('a.png', 'image/png', png(3, 4));
+  const r = await ctx.app.inject({ method: 'POST', url: '/api/uploads', payload: m.payload, headers: { ...m.headers, cookie: user.cookie } });
+  return r.json().upload as { id: string; url: string };
+}
+
+describe('serving', () => {
+  it('serves uploaded files with hardening headers', async () => {
+    const up = await upload(u);
+    const r = await ctx.app.inject({ method: 'GET', url: up.url });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toMatch(/^image\/png/);
+    expect(r.headers['x-content-type-options']).toBe('nosniff');
+    expect(r.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+  });
+});
+
+describe('resolveUploads', () => {
+  it('resolves own uploads in order and returns [] for none', async () => {
+    const a = await upload(u); const b = await upload(u);
+    expect((await resolveUploads(ctx.db, u.id, [b.id, a.id])).map((x) => x.id)).toEqual([b.id, a.id]);
+    expect(await resolveUploads(ctx.db, u.id, [])).toEqual([]);
+  });
+  it('rejects another users upload and unknown ids with BAD_UPLOAD', async () => {
+    const other = await ctx.createUser('other-up');
+    const theirs = await upload(other);
+    await expect(resolveUploads(ctx.db, u.id, [theirs.id])).rejects.toMatchObject({ status: 400, code: 'BAD_UPLOAD' });
+    await expect(resolveUploads(ctx.db, u.id, ['NOPE'])).rejects.toMatchObject({ status: 400, code: 'BAD_UPLOAD' });
+  });
+});
+
 describe('generated media', () => {
   it('serves deterministic svg avatars', async () => {
     const a = await ctx.app.inject({ method: 'GET', url: '/media/avatar/abc.svg' });
@@ -70,6 +102,7 @@ describe('generated media', () => {
     expect(a.headers['content-type']).toMatch(/image\/svg\+xml/);
     expect(a.body).toBe(b.body);
     expect(a.headers['cache-control']).toMatch(/immutable/);
+    expect(a.headers['x-content-type-options']).toBe('nosniff');
   });
   it('404s unknown kinds', async () => {
     expect((await ctx.app.inject({ method: 'GET', url: '/media/nope/abc.svg' })).statusCode).toBe(404);
