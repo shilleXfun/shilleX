@@ -1,0 +1,37 @@
+:root {
+  color-scheme: dark;
+  --bg: #0E1219;
+  --panel: #141924;
+  --raised: #1A2030;
+  --hover: #1F2638;
+  --line: #232B3D;
+  --line-strong: #2E3850;
+  --text: #E6E9EF;
+  --muted: #8B94A8;
+  --accent: #C8F135;
+  --accent-hover: #D6F85C;
+  --accent-ink: #0E1219;
+  --accent-soft: rgba(200, 241, 53, 0.12);
+  --token: #3DD6F5;
+  --token-soft: rgba(61, 214, 245, 0.1);
+  --token-line: rgba(61, 214, 245, 0.35);
+  --up: #3DDC84;
+  --down: #F2546B;
+  --warn: #F5B53D;
+  --warn-soft: rgba(245, 181, 61, 0.12);
+  --scrim: rgba(5, 7, 12, 0.7);
+  --glass: rgba(14, 18, 25, 0.92);
+
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-brand: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+
+  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 18px;
+  --lh: 1.45;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --radius: 8px; --radius-sm: 6px; --radius-pill: 999px;
+  --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-strong);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+  --left-w: 240px; --right-w: 320px; --panel-w: 420px; --tabbar-h: 56px; --mobile-header-h: 48px;
+}

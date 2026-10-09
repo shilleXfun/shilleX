@@ -1,0 +1,2 @@
+.wordmark { display: inline-flex; align-items: baseline; gap: 0.02em; font-family: var(--font-brand); font-weight: 700; letter-spacing: -0.045em; line-height: 1; color: var(--text); }
+.x { transform: translateY(0.06em); margin-left: 0.01em; }

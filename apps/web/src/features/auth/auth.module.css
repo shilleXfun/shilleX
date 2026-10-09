@@ -1,0 +1,18 @@
+.page { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.card { width: min(380px, 100%); padding: 28px 24px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--highlight); }
+.title { margin: 0; line-height: 1; }
+.tagline { margin: 12px 0 22px; color: var(--muted); }
+.form { display: grid; gap: 12px; }
+.field { display: grid; gap: 6px; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+.input { height: 38px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: var(--fs-md); transition: border-color .12s; }
+.input:hover { border-color: var(--muted); }
+.input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.submit { height: 38px; margin-top: 4px; }
+.error { color: var(--down); font-size: var(--fs-sm); }
+.divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: var(--muted); font-size: var(--fs-sm); }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.demoButton { width: 100%; height: 38px; }
+.demoHint { margin: 10px 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.switch { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-sm); text-align: center; }
+.switch a { color: var(--accent); font-weight: 500; }
+.switch a:hover { text-decoration: underline; text-underline-offset: 3px; }
