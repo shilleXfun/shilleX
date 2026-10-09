@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import bs58 from 'bs58';
+import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createDb, type DbHandle } from '../src/db/client.ts';
 import { tokens } from '../src/db/schema.ts';
-import { TokenResolver } from '../src/tokens/resolver.ts';
+import { TokenResolver, BACKGROUND_QUEUE_CAP } from '../src/tokens/resolver.ts';
 import { RecordingBus } from '../src/realtime/bus.ts';
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@shillex/shared';
 
@@ -32,7 +34,8 @@ const pair = (o: Partial<{ base: string; liq: number | undefined; pairAddress: s
 });
 
 let h: DbHandle; let bus: RecordingBus; let clock: Date;
-const make = (fetchImpl: typeof fetch, live = true) => new TokenResolver({ db: h.db, bus, rpcUrl: RPC, live, fetchImpl, now: () => clock });
+const make = (fetchImpl: typeof fetch, live = true, concurrency?: number) => new TokenResolver({ db: h.db, bus, rpcUrl: RPC, live, fetchImpl, now: () => clock, concurrency });
+const randomMint = () => bs58.encode(randomBytes(32));
 beforeEach(async () => { h = await createDb({}); bus = new RecordingBus(); clock = new Date('2026-10-09T12:00:00Z'); });
 afterAll(async () => { await h?.close(); });
 
@@ -129,5 +132,75 @@ describe('TokenResolver', () => {
     expect(views[MINT]!.status).toBe('pending');
     await r.idle();
     expect(calls.rpc).toBe(1);
+  });
+
+  describe('review fixes', () => {
+    it('refresh with no base pairs clears market data and becomes unindexed', async () => {
+      let empty = false;
+      const { f } = fakeFetch({ rpc: () => mintAccount(), dex: () => json(empty ? [] : [pair({ liq: 500 })]) });
+      const r = make(f);
+      expect(await r.resolve(MINT)).toMatchObject({ status: 'resolved', liquidityUsd: 500, pairAddress: PAIR });
+      empty = true;
+      clock = new Date(clock.getTime() + 6 * 60_000);
+      expect(await r.resolve(MINT)).toMatchObject({
+        status: 'unindexed', symbol: 'BONK', decimals: 6, liquidityUsd: null, marketCapUsd: null, fdvUsd: null,
+        pairAddress: null, dexId: null, pairCreatedAt: null, fetchedAt: clock.toISOString(),
+      });
+    });
+    it('live lookup off: getViews reports an honest error for unknown mints, nothing enqueued or persisted', async () => {
+      await h.db.insert(tokens).values({ mint: PAIR, source: 'demo', status: 'resolved', name: 'Demo', symbol: 'DEMO' });
+      const { f, calls } = fakeFetch({});
+      const r = make(f, false);
+      const views = await r.getViews([MINT, PAIR]);
+      expect(views[MINT]).toMatchObject({ status: 'error', error: 'Live lookup disabled' });
+      expect(views[PAIR]).toMatchObject({ status: 'resolved', source: 'demo' });
+      await r.idle();
+      expect(calls).toEqual({ rpc: 0, dex: 0 });
+      expect(await h.db.select().from(tokens).where(eq(tokens.mint, MINT))).toHaveLength(0);
+    });
+    it('non-upstream errors never leak into the view or the row', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { f } = fakeFetch({ rpc: () => ({ get ok(): boolean { throw new Error('ECONNRESET db internal secret'); } }) as unknown as Response });
+      const v = await make(f).resolve(MINT);
+      expect(v).toMatchObject({ status: 'error', error: 'lookup failed' });
+      const [row] = await h.db.select().from(tokens).where(eq(tokens.mint, MINT));
+      expect(row!.error).toBe('lookup failed');
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+    });
+    it('never exceeds the concurrency limit', async () => {
+      let inflight = 0; let max = 0;
+      const slow = async (r: () => Response) => { inflight++; max = Math.max(max, inflight); await new Promise((res) => setTimeout(res, 5)); inflight--; return r(); };
+      const { f } = fakeFetch({ rpc: () => slow(() => mintAccount()), dex: () => slow(() => json([pair({ liq: 1 })])) });
+      const r = make(f, true, 2);
+      await Promise.all(Array.from({ length: 10 }, () => r.resolve(randomMint())));
+      expect(max).toBeLessThanOrEqual(2);
+      expect(max).toBe(2);
+    });
+    it('direct resolves jump ahead of queued background lookups', async () => {
+      const order: string[] = [];
+      const { f } = fakeFetch({
+        rpc: (_u, init) => { order.push(JSON.parse(String(init!.body)).params[0]); return mintAccount(); },
+        dex: () => json([pair({ liq: 1 })]),
+      });
+      const r = make(f, true, 1);
+      const bg = Array.from({ length: 5 }, () => randomMint());
+      r.enqueue(bg);
+      const direct = randomMint();
+      await r.resolve(direct);
+      await r.idle();
+      expect(order[0]).toBe(bg[0]);
+      expect(order[1]).toBe(direct);
+      expect(order).toHaveLength(6);
+    });
+    it('caps the background queue and drops the overflow', async () => {
+      const { f } = fakeFetch({ rpc: () => mintAccount(), dex: () => json([pair({ liq: 1 })]) });
+      const r = make(f, true, 1);
+      r.enqueue(Array.from({ length: BACKGROUND_QUEUE_CAP + 50 }, () => randomMint()));
+      expect(r.pendingBackground()).toBe(BACKGROUND_QUEUE_CAP); // 1 running + 200 waiting; 49 dropped
+      r.enqueue([randomMint()]);
+      expect(r.pendingBackground()).toBe(BACKGROUND_QUEUE_CAP);
+      await r.idle();
+    }, 120_000);
   });
 });

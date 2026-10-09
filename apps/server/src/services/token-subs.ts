@@ -22,3 +22,8 @@ export async function notifyTokenSubscribers(deps: Pick<AppDeps, 'db' | 'bus' | 
     }
   }
 }
+
+/** Post-commit variant: the content is already saved, so a notification failure must not fail the request. */
+export async function notifyTokenSubscribersSafe(deps: Pick<AppDeps, 'db' | 'bus' | 'now'>, mints: string[], actorId: string) {
+  try { await notifyTokenSubscribers(deps, mints, actorId); } catch (e) { console.error('token subscriber notification failed', e); }
+}
