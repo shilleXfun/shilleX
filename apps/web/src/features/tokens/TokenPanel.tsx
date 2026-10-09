@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
-import { Bell, BellRing, Copy, ExternalLink, X } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Bell, BellRing, Copy, ExternalLink, Send, X } from 'lucide-react';
 import { COPY, formatAge, formatUsd, type ExternalLink as Ext, type Page, type PostView, type PublicChatMention, type TokenDiscussionStats, type TokenView } from '@shillex/shared';
 import { del, errorMessage, get, put } from '../../lib/api';
+import { useRequiredMe } from '../../lib/useMe';
+import { useConversations } from '../../layout/LeftNav';
+import { Menu } from '../../components/ui/Menu';
+import { conversationName } from '../messages/conversationName';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Badge } from '../../components/ui/Badge';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -32,6 +37,9 @@ type Tab = (typeof TABS)[number];
 export function TokenPanel({ mint, onClose, asSheet, onHandleDown }: { mint: string; onClose: () => void; asSheet?: boolean; onHandleDown?: (e: ReactPointerEvent) => void }) {
   const qc = useQueryClient();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const me = useRequiredMe();
+  const nav = useNavigate();
+  const { data: convs } = useConversations();
   const [tab, setTab] = useState<Tab>('posts');
   const d = useQuery({
     queryKey: ['tokenDetail', mint],
@@ -121,6 +129,11 @@ export function TokenPanel({ mint, onClose, asSheet, onHandleDown }: { mint: str
                 <Button size="sm" aria-pressed={d.data.stats.subscribed} className={s.follow} icon={d.data.stats.subscribed ? <BellRing size={14} /> : <Bell size={14} />} onClick={toggleFollow}>
                   {d.data.stats.subscribed ? 'Following discussion' : 'Follow discussion'}
                 </Button>
+                {/* Shared cards are private messages: they never create public mentions (server rule). */}
+                <Menu label="Share to chat" items={[
+                  ...(convs ?? []).slice(0, 8).map((c) => ({ label: conversationName(c, me.id), onSelect: () => nav(`/messages/${c.id}?share=${mint}`) })),
+                  { label: 'All messages…', onSelect: () => nav(`/messages?share=${mint}`) },
+                ]} trigger={(t) => <Button {...t} size="sm" className={s.follow} icon={<Send size={14} />}>Share to chat</Button>} />
               </div>
               <p className={s.note}>{COPY.tokenPanelNote}</p>
               <div className={s.discussion}>

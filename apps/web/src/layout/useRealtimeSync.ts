@@ -1,5 +1,5 @@
 import { useQueryClient, type QueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { CommunityDetail, CommunitySummary, MeView, MemberView, NotificationView, Page, ScopeRef } from '@shillex/shared';
+import type { CommunityDetail, CommunitySummary, ConversationView, MeView, MemberView, NotificationView, Page, ScopeRef } from '@shillex/shared';
 import { useSocketEvent } from '../lib/socket';
 import { useRequiredMe } from '../lib/useMe';
 import { activeScope } from '../features/chat/activeScope';
@@ -22,7 +22,7 @@ export function clearUnread(qc: QueryClient, scope: ScopeRef) {
   if (communityId) qc.setQueryData<CommunitySummary[]>(['communities', 'joined'], (l) => l?.map((c) => (c.id === communityId ? { ...c, unread: Math.max(0, c.unread - cleared) } : c)));
 }
 
-/** Global socket → cache wiring: channel unread counts and mention dots, community changes, presence, notifications. */
+/** Global socket → cache wiring: channel unread counts and mention dots, inbox order and unread, community changes, presence, notifications. */
 export function useRealtimeSync() {
   const qc = useQueryClient();
   const me = useRequiredMe();
@@ -35,6 +35,24 @@ export function useRealtimeSync() {
     qc.setQueriesData<CommunityDetail>({ queryKey: ['community'] }, (d) => d && d.community.id === communityId
       ? { ...d, channels: d.channels.map((c) => (c.id === channelId ? { ...c, unread: Math.min(99, c.unread + 1) } : c)) } : d);
     if (mentions.includes(me.username.toLowerCase())) addMentionDot(communityId);
+  });
+  useSocketEvent('message:new', ({ message }) => {
+    if (message.scope.type !== 'conversation') return;
+    const active = activeScope.get();
+    const isActive = active?.type === 'conversation' && active.id === message.scope.id && document.visibilityState === 'visible';
+    let known = false;
+    qc.setQueryData<ConversationView[]>(['conversations'], (list) => {
+      if (!list) return list;
+      known = list.some((c) => c.id === message.scope.id);
+      return list.map((c) => (c.id === message.scope.id ? { ...c, lastMessage: message, unread: isActive || message.author.id === me.id ? c.unread : Math.min(99, c.unread + 1) } : c))
+        .sort((a, b) => (b.lastMessage?.id ?? b.createdAt).localeCompare(a.lastMessage?.id ?? a.createdAt));
+    });
+    // A conversation we don't know yet (someone just started it): refetch the inbox.
+    if (!known) void qc.invalidateQueries({ queryKey: ['conversations'] });
+  });
+  useSocketEvent('conversation:update', ({ conversationId }) => {
+    void qc.invalidateQueries({ queryKey: ['conversations'] });
+    void qc.invalidateQueries({ queryKey: ['conversation', conversationId] });
   });
   useSocketEvent('community:update', ({ communityId }) => {
     void qc.invalidateQueries({ queryKey: ['communities'] });
