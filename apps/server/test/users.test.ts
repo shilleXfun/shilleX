@@ -31,6 +31,13 @@ describe('profiles and follows', () => {
     const r = await ctx.as(a).get('/api/users?q=bob');
     expect(r.body.users.map((u: any) => u.username)).toEqual(['based_bob']);
   });
+  it('matches underscores literally and does not treat % or _ as wildcards', async () => {
+    expect((await ctx.as(a).get('/api/users?q=based_bob')).body.users.map((u: any) => u.username)).toEqual(['based_bob']);
+    expect((await ctx.as(a).get('/api/users?q=' + encodeURIComponent('%'))).body.users).toEqual([]);
+    const us = (await ctx.as(a).get('/api/users?q=_')).body.users;
+    for (const u of us) expect(`${u.username}${u.displayName}`).toContain('_');
+    expect(us.map((u: any) => u.username)).toEqual(['based_bob']);
+  });
 });
 
 describe('settings', () => {
