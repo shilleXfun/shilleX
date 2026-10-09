@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MeView } from '@shillex/shared';
 import { errorMessage, post } from '../../lib/api';
+import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
 import s from './auth.module.css';
@@ -11,9 +12,7 @@ export function LoginPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const rawNext = params.get('next');
-  // Only same-origin paths: "//evil.example" would be protocol-relative.
-  const next = rawNext?.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
+  const next = safeNext(params.get('next'));
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +42,7 @@ export function LoginPage() {
         <div className={s.divider}>or</div>
         <Button className={s.demoButton} onClick={() => go('demo')} loading={busy === 'demo'} disabled={busy !== null}>Enter the demo world</Button>
         <p className={s.demoHint}>Signs you in as <span className="mono">@demo</span> — a fictional account in a seeded world of fictional people, communities and tokens.</p>
-        <p className={s.switch}>New here? <Link to="/signup">Create an account</Link></p>
+        <p className={s.switch}>New here? <Link to={next === '/' ? '/signup' : `/signup?next=${encodeURIComponent(next)}`}>Create an account</Link></p>
       </main>
     </div>
   );

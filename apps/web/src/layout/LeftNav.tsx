@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Bookmark, CircleUser, Compass, House, LogOut, MessagesSquare, Plus, Settings, UsersRound } from 'lucide-react';
 import type { CommunitySummary, ConversationView } from '@shillex/shared';
-import { get, post } from '../lib/api';
+import { errorMessage, get, post } from '../lib/api';
 import { useRequiredMe } from '../lib/useMe';
 import { socket } from '../lib/socket';
 import { useStore } from '../lib/store';
@@ -10,6 +10,7 @@ import { mentionDots } from './unreadStore';
 import { Wordmark, XMark } from '../components/brand/Wordmark';
 import { Avatar } from '../components/ui/Avatar';
 import { Menu } from '../components/ui/Menu';
+import { toast } from '../components/ui/Toaster';
 import { DemoWorldNote } from './DemoWorldNote';
 import s from './layout.module.css';
 
@@ -36,7 +37,11 @@ export function LeftNav() {
     { to: '/notifications', label: 'Notifications', icon: Bell, badge: me.unreadNotifications },
     { to: `/u/${me.username}`, label: 'Profile', icon: CircleUser },
   ];
-  const logout = async () => { await post('/auth/logout'); socket.disconnect(); qc.clear(); nav('/login'); };
+  const logout = async () => {
+    try { await post('/auth/logout'); }
+    catch (e) { toast(errorMessage(e), { tone: 'error' }); return; }
+    socket.disconnect(); qc.clear(); nav('/login');
+  };
   return (
     <nav className={s.nav} aria-label="Main">
       <NavLink to="/" className={s.brand} aria-label="Shillex home">

@@ -1,8 +1,9 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MeView } from '@shillex/shared';
 import { ApiError, errorMessage, post } from '../../lib/api';
+import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
 import s from './auth.module.css';
@@ -10,6 +11,8 @@ import s from './auth.module.css';
 export function SignupPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get('next'));
   const [form, setForm] = useState({ username: '', displayName: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -19,7 +22,7 @@ export function SignupPage() {
     try {
       const r = await post<{ user: MeView }>('/auth/signup', form);
       qc.setQueryData(['me'], r.user);
-      nav('/', { replace: true });
+      nav(next, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError && err.code === 'VALIDATION' ? 'Check the fields: username 3–20 letters, numbers or _; password at least 8 characters.' : errorMessage(err));
     } finally { setBusy(false); }
@@ -36,7 +39,7 @@ export function SignupPage() {
           {error && <div className={s.error} role="alert">{error}</div>}
           <Button type="submit" variant="primary" className={s.submit} loading={busy}>Create account</Button>
         </form>
-        <p className={s.switch}>Already have an account? <Link to="/login">Sign in</Link></p>
+        <p className={s.switch}>Already have an account? <Link to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`}>Sign in</Link></p>
       </main>
     </div>
   );
