@@ -47,9 +47,9 @@ export default async function feedRoutes(app: FastifyInstance) {
       const since = new Date(deps.now().getTime() - DISCOVER_WINDOW_MS);
       const cands = await db.select({
         p: posts,
-        rc: sql<number>`(select count(*)::int from ${reactions} r where r.target_type = 'post' and r.target_id = ${posts.id})`,
-        cc: sql<number>`(select count(*)::int from ${posts} c where c.parent_id = ${posts.id} and c.deleted_at is null)`,
-        sc: sql<number>`(select count(*)::int from ${posts} s where (s.quote_of_id = ${posts.id} or s.repost_of_id = ${posts.id}) and s.deleted_at is null)`,
+        rc: sql<number>`(select count(*)::int from ${reactions} r where r.target_type = 'post' and r.target_id = "posts"."id")`,
+        cc: sql<number>`(select count(*)::int from ${posts} c where c.parent_id = "posts"."id" and c.deleted_at is null)`,
+        sc: sql<number>`(select count(*)::int from ${posts} s where (s.quote_of_id = "posts"."id" or s.repost_of_id = "posts"."id") and s.deleted_at is null)`,
       }).from(posts).where(and(
         inArray(posts.kind, ['post', 'quote']), isNull(posts.communityId), isNull(posts.deletedAt),
         notInArray(posts.authorId, exclude), gt(posts.createdAt, since),
