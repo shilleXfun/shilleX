@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "dev": "concurrently -n server,web -c green,cyan \"npm:dev -w @shillex/server\" \"npm:dev -w @shillex/web\"",
-    "build": "npm run build -w @shillex/web",
+    "build": "npm run build --workspaces --if-present",
     "start": "npm run start -w @shillex/server",
     "seed": "npm run seed -w @shillex/server",
     "test": "npm run test --workspaces --if-present",
