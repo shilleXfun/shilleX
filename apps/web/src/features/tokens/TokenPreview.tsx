@@ -16,7 +16,8 @@ export function provenance(t: TokenView, now = Date.now()): string {
   switch (t.status) {
     case 'pending': return 'Looking up this address…';
     case 'resolved': {
-      const age = t.fetchedAt ? relativeTime(t.fetchedAt, now) : 'now';
+      if (!t.fetchedAt) return 'Live · Dexscreener · fetch time unknown';
+      const age = relativeTime(t.fetchedAt, now);
       return `Live · Dexscreener · fetched ${age === 'now' ? 'just now' : `${age} ago`}`;
     }
     case 'unindexed': return 'Verified token mint · no trading pair found on Dexscreener';

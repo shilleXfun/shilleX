@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode, type PointerEventHandler } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type PointerEventHandler } from 'react';
 import { createPortal } from 'react-dom';
 import s from './ui.module.css';
 
@@ -7,6 +7,10 @@ export function Popover({ anchor, open, onClose, id, children, onPointerEnter, o
   onPointerEnter?: PointerEventHandler; onPointerLeave?: PointerEventHandler;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const closable = !!onClose;
   useLayoutEffect(() => {
     if (!open || !anchor) return;
     const place = () => {
@@ -21,14 +25,24 @@ export function Popover({ anchor, open, onClose, id, children, onPointerEnter, o
     return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
   }, [open, anchor, width]);
   useEffect(() => {
-    if (!open || !onClose) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (!open || !closable) return;
+    const close = () => closeRef.current?.();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    // A press anywhere outside the popover and its anchor dismisses it. Pointer-based because WebKit doesn't focus
+    // buttons on tap, so a touch-opened popover never gets a blur to close on.
+    const onPress = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (t && !root.current?.contains(t) && !anchor?.contains(t)) close();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    document.addEventListener('pointerdown', onPress, true);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onPress, true); };
+  }, [open, closable, anchor]);
   if (!open || !pos) return null;
   return createPortal(
-    <div id={id} role="dialog" aria-modal="false" className={s.popover} style={{ top: pos.top, left: pos.left, width }} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>{children}</div>,
+    // React events bubble through portals to the anchor's ancestors (e.g. a post card's open-thread click): stop them here.
+    <div ref={root} id={id} role="dialog" aria-modal="false" className={s.popover} style={{ top: pos.top, left: pos.left, width }}
+      onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave} onClick={(e) => e.stopPropagation()}>{children}</div>,
     document.body,
   );
 }

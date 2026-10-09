@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { TokenView } from '@shillex/shared';
-import { errorMessage, get, post } from '../../lib/api';
-import { useRoom, useSocketEvent } from '../../lib/socket';
+import { ApiError, errorMessage, get, post } from '../../lib/api';
+import { socket, useRoom, useSocketEvent } from '../../lib/socket';
 
 export const tokenKey = (mint: string) => ['token', mint] as const;
 export const pendingView = (mint: string): TokenView => ({ mint, status: 'pending', source: null, name: null, symbol: null, imageUrl: null, decimals: null, liquidityUsd: null, marketCapUsd: null, fdvUsd: null, pairAddress: null, dexId: null, pairCreatedAt: null, promoted: false, fetchedAt: null, error: null });
@@ -36,14 +37,33 @@ function loadToken(mint: string): Promise<TokenView> {
   });
 }
 
-/** Never throws: a failed lookup is reported as an `error` view. Pending views poll briefly and listen on the token room. */
+const POLL_MS = 4000;
+const MAX_LOOKUPS = 6;
+/**
+ * Delay to the next shared wall-clock tick (a multiple of POLL_MS). Every pending chip polls on the same tick, so their
+ * refetches land in the same 15 ms batch window and go out as one request. Too close to a tick → skip to the next one.
+ */
+export function msToNextPollTick(now = Date.now()): number {
+  const r = POLL_MS - (now % POLL_MS);
+  return r < 500 ? r + POLL_MS : r;
+}
+const unresolved = (t: TokenView | undefined) => !t || t.status === 'pending';
+
+/** Never throws: a failed lookup is reported as an `error` view. Unresolved tokens poll briefly and listen on the token room. */
 export function useToken(mint: string): TokenView {
   const q = useQuery({
     queryKey: tokenKey(mint), queryFn: () => loadToken(mint), staleTime: Infinity,
-    refetchInterval: (query) => (query.state.data?.status === 'pending' && query.state.dataUpdateCount < 6 ? 4000 : false),
+    retry: false, // polling is the retry; per-query retries would multiply requests against the server's rate limit
+    refetchInterval: (query) => {
+      const { data, error, dataUpdateCount, errorUpdateCount } = query.state;
+      if (!unresolved(data)) return false;
+      if (error instanceof ApiError && error.status === 429) return false; // the socket push still updates it
+      if (dataUpdateCount + errorUpdateCount >= MAX_LOOKUPS) return false;
+      return msToNextPollTick();
+    },
   });
-  const view = q.data ?? (q.error ? { ...pendingView(mint), status: 'error' as const, error: errorMessage(q.error) } : pendingView(mint));
-  useRoom('token', view.status === 'pending' ? mint : null);
+  const view = unresolved(q.data) && q.error ? { ...pendingView(mint), status: 'error' as const, error: errorMessage(q.error) } : (q.data ?? pendingView(mint));
+  useRoom('token', unresolved(q.data) ? mint : null);
   return view;
 }
 
@@ -54,10 +74,16 @@ export async function retryToken(qc: QueryClient, mint: string): Promise<void> {
   void qc.invalidateQueries({ queryKey: ['tokenDetail', mint] });
 }
 
+/** Global listener (mounted once in AppShell): applies pushed token views and recovers pushes missed while offline. */
 export function useTokenEvents() {
   const qc = useQueryClient();
   useSocketEvent('token:resolved', ({ token }) => {
-    qc.setQueryData(tokenKey(token.mint), token);
+    primeTokens(qc, { [token.mint]: token });
     void qc.invalidateQueries({ queryKey: ['tokenDetail', token.mint] });
   });
+  useEffect(() => {
+    const onConnect = () => void qc.invalidateQueries({ queryKey: ['token'], predicate: (q) => unresolved(q.state.data as TokenView | undefined) });
+    socket.on('connect', onConnect);
+    return () => { socket.off('connect', onConnect); };
+  }, [qc]);
 }
