@@ -1,0 +1,25 @@
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; max-width: 100%; padding: 0 6px 0 3px; margin: 0 1px; vertical-align: -5px;
+  border: 1px solid var(--token-line); border-radius: 6px; background: var(--token-soft); color: var(--token); font: 500 12.5px/1 var(--font-ui); cursor: pointer;
+  white-space: nowrap; transition: background .12s, border-color .12s; }
+.chip:hover { background: var(--token-hover); }
+.chip[aria-busy='true'] { color: var(--muted); border-color: var(--line-strong); background: var(--raised); }
+.chip.unindexed, .chip.error { color: var(--muted); border-style: dashed; border-color: var(--line-strong); background: transparent; }
+.chip.unindexed:hover, .chip.error:hover { background: var(--hover); }
+.sym { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.addr { font: 400 11px/1 var(--font-mono); opacity: .8; }
+.plain { font-family: var(--font-mono); font-size: .92em; overflow-wrap: anywhere; color: var(--muted); }
+.demo { padding: 2px 4px; border-radius: 3px; background: var(--warn-soft); color: var(--warn); font: 600 9px/1 var(--font-mono); letter-spacing: .05em; }
+.tokAvatar { flex: none; border-radius: 50%; background: var(--raised); object-fit: cover; }
+.loadingDot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--line-strong); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.preview { padding: 12px; display: grid; gap: 10px; }
+.pvHead { display: flex; gap: 10px; align-items: center; }
+.pvName { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-weight: 600; }
+.pvSym { font-family: var(--font-mono); color: var(--token); }
+.pvSub { color: var(--muted); font-size: var(--fs-sm); }
+.pvStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stat { padding: 6px 8px; border-radius: var(--radius-sm); background: var(--panel); }
+.statLabel { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.statValue { font: 500 12.5px var(--font-mono); }
+.pvAddr { display: flex; gap: 6px; align-items: center; font: 400 11px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.pvActions { display: flex; gap: 6px; }

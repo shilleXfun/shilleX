@@ -1,0 +1,5 @@
+.body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.link { color: var(--token); text-decoration: underline; text-decoration-color: var(--token-line); text-underline-offset: 2px; }
+.link:hover { text-decoration-color: var(--token); }
+.mention { color: var(--accent); font-weight: 500; }
+.mention:hover { text-decoration: underline; }
