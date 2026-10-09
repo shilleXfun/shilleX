@@ -15,6 +15,8 @@ import postsRoutes from './routes/posts.ts';
 import feedRoutes from './routes/feed.ts';
 import usersRoutes from './routes/users.ts';
 import meRoutes from './routes/me.ts';
+import notificationsRoutes from './routes/notifications.ts';
+import callsRoutes from './routes/calls.ts';
 
 declare module 'fastify' {
   interface FastifyInstance { deps: AppDeps }
@@ -51,8 +53,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(feedRoutes, { prefix: '/api' });
   await app.register(usersRoutes, { prefix: '/api' });
   await app.register(meRoutes, { prefix: '/api' });
+  await app.register(notificationsRoutes, { prefix: '/api' });
+  await app.register(callsRoutes, { prefix: '/api' });
   // Later tasks register more route plugins here, in this order:
-  // notifications, communities, channels,
+  // communities, channels,
   // conversations, messages, tokens, discover, reports, search.
   return app;
 }
