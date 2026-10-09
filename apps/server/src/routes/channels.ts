@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { SLOW_MODE_OPTIONS } from '@shillex/shared';
 import { channels } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
+import { errors } from '../lib/errors.ts';
 import { parse } from '../lib/validate.ts';
 import { requireChannel, requireMod } from '../services/visibility.ts';
 import { channelViews } from '../services/communities.ts';
@@ -22,6 +23,7 @@ export default async function channelsRoutes(app: FastifyInstance) {
     const { channel, access } = await requireChannel(db, req.params.id, me.id, 'read');
     requireMod(access);
     const body = parse(Patch, req.body);
+    if (!Object.keys(body).length) throw errors.badRequest('VALIDATION', 'Nothing to update');
     const [row] = await db.update(channels).set(body).where(eq(channels.id, channel.id)).returning();
     bus.toRoom(`community:${channel.communityId}`, 'community:update', { communityId: channel.communityId });
     return { channel: (await channelViews(db, me.id, [row!], access.member))[0] };
