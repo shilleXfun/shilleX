@@ -9,7 +9,7 @@ import { errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
 import { loadPost } from '../services/posts.ts';
 import { hydratePosts } from '../services/hydrate.ts';
-import { canReadPost } from '../services/visibility.ts';
+import { canReadPost, hiddenAuthorIds } from '../services/visibility.ts';
 import { notify } from '../services/notify.ts';
 
 const Body = z.object({ status: z.enum(CALL_STATUSES), note: z.string().trim().max(280).optional() });
@@ -35,6 +35,11 @@ export default async function callsRoutes(app: FastifyInstance) {
     const subs = await db.select({ u: subscriptions.userId }).from(subscriptions)
       .where(and(eq(subscriptions.targetType, 'post'), eq(subscriptions.targetId, post.id)));
     for (const s of subs) {
+      if (s.u !== me.id) {
+        // Subscribers who can no longer read the post, or who blocked/muted the author, get nothing.
+        if (!(await canReadPost(db, post, s.u))) continue;
+        if ((await hiddenAuthorIds(db, s.u)).includes(me.id)) continue;
+      }
       bus.toUser(s.u, 'call:update', { postId: post.id, update });
       if (s.u !== me.id) await notify(deps, { userId: s.u, type: 'call_update', actorId: me.id, targetType: 'post', targetId: post.id, data: { postId: post.id, label: CALL_STATUS_LABELS[body.status] } });
     }
