@@ -103,3 +103,9 @@
 .glow_heat { background: rgba(255, 122, 61, 0.09); box-shadow: inset 3px 0 0 var(--heat); }
 .tray { display: flex; gap: 2px; min-width: 0; border-radius: var(--radius-pill); }
 .tray .menuItem { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; }
+
+/* CountUp: colour flash on change (transition back over 600 ms). */
+.countUp { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; transition: color .6s ease-out; }
+.flash_up { color: var(--up); transition: none; }
+.flash_down { color: var(--down); transition: none; }
+.flashArrow { font-size: .45em; }
