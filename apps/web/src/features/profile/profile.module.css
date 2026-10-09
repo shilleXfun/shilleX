@@ -1,0 +1,72 @@
+/* Profile */
+.banner { position: relative; height: 168px; background: var(--raised) center / cover no-repeat; image-rendering: pixelated; border-bottom: 1px solid var(--line); }
+.banner::after { content: ''; position: absolute; inset: 0; background: rgba(8, 9, 20, 0.15); }
+.top { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: -46px; padding: 0 18px; }
+.avatarRing { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 5px var(--bg); background: var(--bg); }
+.actions { display: flex; gap: 8px; padding-bottom: 8px; }
+.info { display: grid; gap: 10px; padding: 12px 18px 16px; }
+.nameRow { display: grid; gap: 2px; }
+.name { margin: 0; font: 800 var(--fs-3xl) / var(--lh-display) var(--font-brand); font-stretch: 76%; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.handleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
+.muted { color: var(--muted); font-size: var(--fs-sm); }
+.bio { margin: 0; max-width: 60ch; }
+.demoNote { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-sm); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--muted); font-size: var(--fs-sm); }
+.meta a, .meta span { display: inline-flex; align-items: center; gap: 5px; }
+.meta a { color: var(--text); font-weight: 550; }
+.meta a:hover { color: var(--accent-hover); }
+.meta svg { color: var(--muted); }
+/* Counts are a display moment: condensed Bricolage numerals. */
+.counts { display: flex; gap: 22px; }
+.count { display: grid; }
+.countValue { font: 800 var(--fs-2xl) / 1 var(--font-brand); font-stretch: 78%; }
+.countLabel { color: var(--muted); font-size: var(--fs-sm); }
+.wallet { display: grid; gap: 6px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--warn-line); border-radius: var(--radius-pop); background: var(--warn-soft); }
+.walletHead { display: flex; align-items: center; gap: 8px; font-weight: 650; }
+.walletAddr { display: flex; align-items: center; gap: 6px; font: 13px var(--font-mono); }
+.walletNote { color: var(--warn); font-size: var(--fs-sm); }
+.tabsWrap { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+.communityGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; padding: 16px 18px 24px; } /* loading state only */
+
+/* Settings */
+.section { padding: 22px 18px; border-bottom: 1px solid var(--line); }
+.sectionTitle { margin: 0 0 4px; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); font-stretch: 85%; }
+.sectionHelp { margin: 0 0 16px; color: var(--muted); font-size: var(--fs-sm); max-width: 60ch; }
+.form { display: grid; gap: 14px; max-width: 560px; }
+.field { display: grid; gap: 7px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
+.input { height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: var(--fs-md); font-weight: 400; transition: border-color .15s; }
+textarea.input { height: 76px; padding: 10px 12px; resize: vertical; }
+.input:hover { border-color: #444A80; }
+.input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.input[aria-invalid='true'] { border-color: var(--down); }
+.mediaRow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.fileButton { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font-size: var(--fs-sm); font-weight: 550; cursor: pointer; transition: background .12s; }
+.fileButton:hover { background: var(--hover); }
+.fileButton:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fileButton input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.linkRow { display: flex; gap: 6px; }
+.linkRow .input:first-child { width: 120px; flex: none; }
+.linkRow .input:nth-child(2) { flex: 1; min-width: 0; }
+.formActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.error { color: var(--down); font-size: var(--fs-sm); }
+.warnBox { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, 0.2); color: var(--text); font-size: var(--fs-sm); }
+/* Toggle: a native checkbox drawn as a switch (still a checkbox to assistive tech and tests). */
+.toggle { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.toggle:has(input:disabled) { cursor: not-allowed; opacity: .55; }
+.switch { position: relative; flex: none; appearance: none; width: 38px; height: 22px; margin: 0; border-radius: var(--radius-pill); background: var(--line-strong); cursor: inherit; transition: background .2s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text); transition: translate .25s cubic-bezier(.34, 1.56, .64, 1); }
+.switch:checked { background: var(--accent); box-shadow: var(--glow-accent); }
+.switch:checked::after { translate: 16px 0; }
+.toggleText { padding-top: 1px; }
+.toggleText small { display: block; color: var(--muted); font-size: var(--fs-sm); }
+.prefs { display: grid; gap: 14px; }
+.hiddenList { display: grid; gap: 4px; margin: 6px 0 14px; }
+.hiddenRow { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.subTitle { margin: 12px 0 4px; font-size: var(--fs-md); font-weight: 650; font-family: var(--font-ui); }
+
+@media (max-width: 480px) {
+  .banner { height: 128px; }
+  .top { margin-top: -38px; padding: 0 14px; }
+  .info, .section { padding-left: 14px; padding-right: 14px; }
+  .name { font-size: 34px; }
+}

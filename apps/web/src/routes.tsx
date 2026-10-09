@@ -11,6 +11,9 @@ import { CommunitiesPage } from './features/communities/CommunitiesPage';
 import { CommunityPage } from './features/communities/CommunityPage';
 import { InvitePage } from './features/communities/InvitePage';
 import { MessagesPage } from './features/messages/MessagesPage';
+import { ProfilePage } from './features/profile/ProfilePage';
+import { SettingsPage } from './features/profile/SettingsPage';
+import { NotificationsPage } from './features/notifications/NotificationsPage';
 
 // Temporary placeholder so the shell is navigable while later tasks build each screen; removed in Task 24.
 const ComingNext = ({ name }: { name: string }) => <EmptyState title={name} body="This screen is built in a later task." />;
@@ -28,11 +31,11 @@ export const router = createBrowserRouter([
       { path: '/c/:slug/:channelId', element: <CommunityPage /> },
       { path: '/messages', element: <MessagesPage /> },
       { path: '/messages/:id', element: <MessagesPage /> },
-      { path: '/notifications', element: <ComingNext name="Notifications" /> },
-      { path: '/u/:username', element: <ComingNext name="Profile" /> },
+      { path: '/notifications', element: <NotificationsPage /> },
+      { path: '/u/:username', element: <ProfilePage /> },
       { path: '/p/:id', element: <ThreadPage /> },
       { path: '/bookmarks', element: <BookmarksPage /> },
-      { path: '/settings', element: <ComingNext name="Settings" /> },
+      { path: '/settings', element: <SettingsPage /> },
       { path: '/invite/:code', element: <InvitePage /> },
       { path: '*', element: <EmptyState title="Page not found" body="That link doesn’t go anywhere." /> },
     ],
