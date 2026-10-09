@@ -9,6 +9,7 @@ import { resolveUploads } from '../routes/uploads.ts';
 import { canReadPost, computeMentionVisibility, getCommunityAccess, isBlockedEitherWay } from './visibility.ts';
 import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
+import { notifyTokenSubscribers } from './token-subs.ts';
 
 export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[] }
 
@@ -64,6 +65,7 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
   const media = ups.map((u, i) => ({ url: u.url, width: u.width, height: u.height, alt: (input.alts?.[i] ?? '').slice(0, 200) }));
   const id = newId();
   const createdAt = now();
+  const isPublicMention = computeMentionVisibility({ kind: 'post', communityVisibility });
   const { post, mints } = await db.transaction(async (tx) => {
     const [row] = await tx.insert(posts).values({
       id, authorId: author.id, kind, body, parentId: parent?.id ?? null, rootId: parent ? parent.rootId ?? parent.id : null,
@@ -71,12 +73,13 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
     }).returning();
     const mints = await recordMentions(tx, {
       sourceType: 'post', sourceId: id, text: body, authorId: author.id, communityId, channelId: null,
-      isPublic: computeMentionVisibility({ kind: 'post', communityVisibility }), createdAt,
+      isPublic: isPublicMention, createdAt,
     });
     await tx.insert(subscriptions).values({ userId: author.id, targetType: 'post', targetId: id, createdAt }).onConflictDoNothing();
     return { post: row!, mints };
   });
   if (mints.length) deps.tokens.enqueue(mints);
+  if (mints.length && isPublicMention) await notifyTokenSubscribers(deps, mints, author.id);
 
   // Notifications
   const notified = new Set<string>([author.id]);
