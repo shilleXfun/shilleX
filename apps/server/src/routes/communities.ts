@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { InviteView, MemberView, Page, PostView } from '@shillex/shared';
 import { communities, communityMembers, channels, invites, posts, users, type CommunityRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
@@ -40,6 +40,11 @@ export default async function communitiesRoutes(app: FastifyInstance) {
     return rows.map(({ m, u }) => ({ user: toUserSummary(u), role: m.role, status: m.status, online: deps.presence.isOnline(u.id), joinedAt: m.joinedAt.toISOString() }))
       .sort((a, b) => rank[a.role] - rank[b.role] || Number(b.online) - Number(a.online) || a.user.username.localeCompare(b.user.username));
   };
+
+  async function requireUserExists(id: string) {
+    const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!u) throw errors.notFound('User');
+  }
 
   app.get<{ Querystring: { filter?: string; q?: string } }>('/communities', async (req) => {
     const me = requireUser(req);
@@ -83,6 +88,7 @@ export default async function communitiesRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const a = requireMod(await access(req.params.slug, me.id));
     const body = parse(Update, req.body);
+    if (!Object.keys(body).length) throw errors.badRequest('VALIDATION', 'Nothing to update');
     if (body.visibility && !a.isOwner) throw errors.forbidden('OWNER_ONLY', 'Only the owner can change visibility');
     await db.update(communities).set(body).where(eq(communities.id, a.community.id));
     if (body.visibility && (body.visibility === 'public') !== (a.community.visibility === 'public')) {
@@ -93,14 +99,17 @@ export default async function communitiesRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { slug: string } }>('/communities/:slug/join', async (req) => {
     const me = requireUser(req);
-    // Unlike other routes, join must reach the invite-only case to answer INVITE_REQUIRED instead of 404.
-    const a = await getCommunityAccessBySlug(db, req.params.slug, me.id);
-    if (!a) throw errors.notFound('Community');
+    const a = await access(req.params.slug, me.id);
     if (a.member?.status === 'banned') throw errors.forbidden('BANNED', 'You are banned from this community');
     if (a.member) return { status: a.member.status };
-    if (a.community.visibility === 'invite') throw errors.forbidden('INVITE_REQUIRED', 'This community is invite-only');
     const status = a.community.visibility === 'public' ? 'active' as const : 'pending' as const;
-    await db.insert(communityMembers).values({ communityId: a.community.id, userId: me.id, role: 'member', status, joinedAt: now() });
+    const inserted = await db.insert(communityMembers).values({ communityId: a.community.id, userId: me.id, role: 'member', status, joinedAt: now() })
+      .onConflictDoNothing().returning({ u: communityMembers.userId });
+    if (!inserted.length) {
+      const [cur] = await db.select().from(communityMembers).where(and(eq(communityMembers.communityId, a.community.id), eq(communityMembers.userId, me.id)));
+      if (cur?.status === 'banned') throw errors.forbidden('BANNED', 'You are banned from this community');
+      return { status: cur?.status ?? status };
+    }
     if (status === 'pending') {
       const mods = await db.select({ u: communityMembers.userId }).from(communityMembers).where(and(
         eq(communityMembers.communityId, a.community.id), eq(communityMembers.status, 'active'), inArray(communityMembers.role, ['owner', 'mod'])));
@@ -145,14 +154,23 @@ export default async function communitiesRoutes(app: FastifyInstance) {
   });
   app.post<{ Params: { code: string } }>('/invites/:code/accept', async (req) => {
     const me = requireUser(req);
-    const { inv, valid, community } = await loadInvite(req.params.code);
+    const { inv, community } = await loadInvite(req.params.code);
     const [existing] = await db.select().from(communityMembers).where(and(eq(communityMembers.communityId, community.id), eq(communityMembers.userId, me.id)));
     if (existing?.status === 'banned') throw errors.forbidden('BANNED', 'You are banned from this community');
     if (existing?.status !== 'active') {
-      if (!valid) throw new AppError(410, 'INVITE_EXPIRED', 'This invite has expired or been used up');
-      await db.insert(communityMembers).values({ communityId: community.id, userId: me.id, role: 'member', status: 'active', joinedAt: now() })
-        .onConflictDoUpdate({ target: [communityMembers.communityId, communityMembers.userId], set: { status: 'active', joinedAt: now() } });
-      await db.update(invites).set({ uses: sql`${invites.uses} + 1` }).where(eq(invites.code, inv.code));
+      await db.transaction(async (tx) => {
+        const t = now();
+        const claimed = await tx.update(invites).set({ uses: sql`${invites.uses} + 1` }).where(and(
+          eq(invites.code, inv.code),
+          or(isNull(invites.maxUses), sql`${invites.uses} < ${invites.maxUses}`),
+          or(isNull(invites.expiresAt), gt(invites.expiresAt, t)),
+        )).returning({ code: invites.code });
+        if (!claimed.length) throw new AppError(410, 'INVITE_EXPIRED', 'This invite has expired or been used up');
+        const joined = await tx.insert(communityMembers).values({ communityId: community.id, userId: me.id, role: 'member', status: 'active', joinedAt: t })
+          .onConflictDoUpdate({ target: [communityMembers.communityId, communityMembers.userId], set: { status: 'active', joinedAt: t }, setWhere: ne(communityMembers.status, 'banned') })
+          .returning({ u: communityMembers.userId });
+        if (!joined.length) throw errors.forbidden('BANNED', 'You are banned from this community');
+      });
     }
     return { community: (await communitySummaries(deps, me.id, [community]))[0] };
   });
@@ -181,6 +199,7 @@ export default async function communitiesRoutes(app: FastifyInstance) {
   app.post<{ Params: { slug: string; userId: string; action: string } }>('/communities/:slug/members/:userId/:action', async (req, reply) => {
     const me = requireUser(req);
     const a = requireMod(await access(req.params.slug, me.id));
+    await requireUserExists(req.params.userId);
     const [target] = await db.select().from(communityMembers).where(and(eq(communityMembers.communityId, a.community.id), eq(communityMembers.userId, req.params.userId)));
     if (target?.role === 'owner' || (target?.role === 'mod' && !a.isOwner) || req.params.userId === me.id) {
       throw errors.forbidden('CANNOT_MODERATE', 'You can’t moderate this member');
@@ -206,6 +225,7 @@ export default async function communitiesRoutes(app: FastifyInstance) {
     if (!a.isOwner) throw errors.forbidden('OWNER_ONLY', 'Only the owner can change roles');
     const { role } = parse(z.object({ role: z.enum(['mod', 'member']) }), req.body);
     if (req.params.userId === me.id) throw errors.badRequest('SELF', 'You are the owner');
+    await requireUserExists(req.params.userId);
     await db.update(communityMembers).set({ role }).where(and(eq(communityMembers.communityId, a.community.id), eq(communityMembers.userId, req.params.userId), eq(communityMembers.status, 'active')));
     return reply.status(204).send();
   });
