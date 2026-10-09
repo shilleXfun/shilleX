@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=24" },
   "scripts": {
     "dev": "concurrently -n server,web -c green,cyan \"npm:dev -w @shillex/server\" \"npm:dev -w @shillex/web\"",
     "build": "npm run build -w @shillex/web",
@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "concurrently": "10.0.6",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "@playwright/test": "1.64.0"
   }
 }

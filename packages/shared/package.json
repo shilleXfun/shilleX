@@ -8,5 +8,5 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": { "test": "vitest run", "typecheck": "tsc -p tsconfig.json" },
   "dependencies": { "bs58": "6.0.0" },
-  "devDependencies": { "vitest": "3.2.7", "typescript": "5.9.3" }
+  "devDependencies": { "vitest": "5.0.3", "typescript": "7.0.2" }
 }
