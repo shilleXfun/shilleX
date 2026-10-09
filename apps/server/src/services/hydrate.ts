@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { REACTIONS, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
+import { REACTIONS, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  users, posts, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers,
-  type PostRow,
+  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers,
+  type PostRow, type MessageRow,
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
 import { accessFor } from './visibility.ts';
@@ -137,4 +137,45 @@ export function collectMints(views: MintHolder[]): string[] {
   };
   views.forEach(walk);
   return [...out];
+}
+
+export async function hydrateMessages(db: Db, viewerId: string, rows: MessageRow[]): Promise<MessageView[]> {
+  if (!rows.length) return [];
+  const replyIds = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => !!x))];
+  const replies = replyIds.length ? await db.select().from(messages).where(inArray(messages.id, replyIds)) : [];
+  const replyById = new Map(replies.map((r) => [r.id, r]));
+  const authors = await userSummaries(db, [...rows.map((r) => r.authorId), ...replies.map((r) => r.authorId)]);
+  const ids = rows.map((r) => r.id);
+  const reactRows = await db.select({ id: reactions.targetId, emoji: reactions.emoji, userId: reactions.userId }).from(reactions)
+    .where(and(eq(reactions.targetType, 'message'), inArray(reactions.targetId, ids)));
+  const reactBy = new Map<string, Map<string, string[]>>();
+  for (const r of reactRows) {
+    const m = reactBy.get(r.id) ?? new Map<string, string[]>();
+    m.set(r.emoji, [...(m.get(r.emoji) ?? []), r.userId]);
+    reactBy.set(r.id, m);
+  }
+  return rows.map((r) => {
+    const deleted = r.status === 'deleted';
+    const reply = r.replyToId ? replyById.get(r.replyToId) : undefined;
+    const tokenAttachments = r.attachments.filter((a) => a.type === 'token').map((a) => (a as { mint: string }).mint);
+    const reacts = [...(reactBy.get(r.id) ?? new Map<string, string[]>()).entries()]
+      .map(([emoji, userIds]) => ({ emoji: emoji as ReactionEmoji, count: userIds.length, mine: userIds.includes(viewerId), userIds: userIds.slice(0, 50) }))
+      .sort((a, b) => REACTIONS.indexOf(a.emoji) - REACTIONS.indexOf(b.emoji));
+    return {
+      id: r.id,
+      scope: r.channelId ? { type: 'channel' as const, id: r.channelId } : { type: 'conversation' as const, id: r.conversationId! },
+      author: authors.get(r.authorId)!,
+      body: deleted ? '' : r.body,
+      replyTo: reply ? {
+        id: reply.id, author: authors.get(reply.authorId)!, deleted: reply.status === 'deleted',
+        snippet: reply.status === 'deleted' ? '' : reply.body.slice(0, 120),
+      } : null,
+      attachments: deleted ? [] : r.attachments,
+      reactions: deleted ? [] : reacts,
+      status: r.status,
+      mints: deleted ? [] : [...new Set([...uniqueMints(r.body), ...tokenAttachments])],
+      createdAt: r.createdAt.toISOString(),
+      nonce: null,
+    };
+  });
 }

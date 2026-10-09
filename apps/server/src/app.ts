@@ -19,15 +19,22 @@ import notificationsRoutes from './routes/notifications.ts';
 import callsRoutes from './routes/calls.ts';
 import communitiesRoutes from './routes/communities.ts';
 import channelsRoutes from './routes/channels.ts';
+import conversationsRoutes from './routes/conversations.ts';
+import messagesRoutes from './routes/messages.ts';
+import pinsRoutes from './routes/pins.ts';
+import reportsRoutes from './routes/reports.ts';
+import searchRoutes from './routes/search.ts';
+import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
-  interface FastifyInstance { deps: AppDeps }
+  interface FastifyInstance { deps: AppDeps; guards: MessageGuards }
   interface FastifyRequest { user: UserRow | null }
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.config.nodeEnv === 'development' ? { level: 'info' } : false, bodyLimit: 1_000_000 });
   app.decorate('deps', deps);
+  app.decorate('guards', createGuards());
   app.decorateRequest('user', null);
   await app.register(cookie, { secret: deps.config.sessionSecret });
   await app.register(rateLimit, { global: false });
@@ -59,7 +66,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(callsRoutes, { prefix: '/api' });
   await app.register(communitiesRoutes, { prefix: '/api' });
   await app.register(channelsRoutes, { prefix: '/api' });
-  // Later tasks register more route plugins here, in this order:
-  // conversations, messages, tokens, discover, reports, search.
+  await app.register(conversationsRoutes, { prefix: '/api' });
+  await app.register(messagesRoutes, { prefix: '/api' });
+  await app.register(pinsRoutes, { prefix: '/api' });
+  await app.register(reportsRoutes, { prefix: '/api' });
+  await app.register(searchRoutes, { prefix: '/api' });
+  // Later tasks register more route plugins here, in this order: tokens, discover.
   return app;
 }
