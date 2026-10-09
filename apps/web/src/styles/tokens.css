@@ -4,6 +4,7 @@
   --panel: #141924;
   --raised: #1A2030;
   --hover: #1F2638;
+  --bg-hover: #10151E;
   --line: #232B3D;
   --line-strong: #2E3850;
   --text: #E6E9EF;
@@ -12,6 +13,7 @@
   --accent-hover: #D6F85C;
   --accent-ink: #0E1219;
   --accent-soft: rgba(200, 241, 53, 0.12);
+  --accent-line: rgba(200, 241, 53, 0.45);
   --token: #3DD6F5;
   --token-soft: rgba(61, 214, 245, 0.1);
   --token-line: rgba(61, 214, 245, 0.35);

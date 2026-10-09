@@ -65,5 +65,7 @@
 .headerLink:hover { color: var(--text); background: var(--hover); }
 .headerDot { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
 @media (max-width: 767px) { .mobileHeader { display: flex; } .shell[data-immersive='true'] .mobileHeader { display: none; } }
+/* Offset for sticky page headers (pageHeader in features/feed/HomePage) so they stick below the mobile header. */
+@media (max-width: 767px) { .shell { --sticky-top: var(--mobile-header-h); } .shell[data-immersive='true'] { --sticky-top: 0px; } }
 
 .banner { position: fixed; z-index: 95; top: 8px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: var(--radius-pill); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--warn); font-size: var(--fs-sm); font-weight: 500; }

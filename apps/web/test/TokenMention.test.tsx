@@ -7,6 +7,7 @@ import { socket } from '../src/lib/socket';
 import type { TokenView } from '@shillex/shared';
 import { renderWithApp, mockFetch } from './utils';
 import { TokenMention } from '../src/features/tokens/TokenMention';
+import { Dialog } from '../src/components/ui/Dialog';
 import { useTokenPanel } from '../src/features/tokens/useTokenPanel';
 import { pendingView, primeTokens, tokenKey, useTokenEvents } from '../src/features/tokens/tokenCache';
 import { provenance } from '../src/features/tokens/TokenPreview';
@@ -269,5 +270,16 @@ describe('provenance', () => {
     expect(provenance({ ...base, status: 'unindexed' }, now)).toBe('Verified token mint · no trading pair found on Dexscreener');
     expect(provenance({ ...base, status: 'error', error: 'rpc timeout' }, now)).toBe('Couldn’t load: rpc timeout');
     expect(provenance(pendingView(MINT), now)).toBe('Looking up this address…');
+  });
+});
+
+describe('TokenMention inside a modal Dialog', () => {
+  // Popovers and the token panel render outside the modal's top layer, so a chip there would open something unusable.
+  it('renders a static chip with the same label and no button', () => {
+    renderWithApp(<Dialog open onClose={() => {}} title="Quote post"><TokenMention mint={MINT} /></Dialog>, { seed: seed({ source: 'demo' }) });
+    expect(screen.queryByRole('button', { name: new RegExp(MINT) })).toBeNull();
+    const chip = screen.getByTitle(MINT);
+    expect(chip).toHaveTextContent('$BONK');
+    expect(chip).toHaveTextContent('DEMO');
   });
 });
