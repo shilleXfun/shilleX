@@ -10,6 +10,7 @@ import { hydratePosts, collectMints } from '../services/hydrate.ts';
 import { hiddenAuthorIds, isBlockedEitherWay } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { notify } from '../services/notify.ts';
+import { escapeLike } from '../lib/like.ts';
 
 export async function loadUserByUsername(db: Db, username: string): Promise<UserRow> {
   const [u] = await db.select().from(users).where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
@@ -26,11 +27,12 @@ export default async function usersRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { q?: string } }>('/users', async (req) => {
     const me = requireUser(req);
-    const q = (req.query.q ?? '').trim().replace(/[%_]/g, '');
+    const q = (req.query.q ?? '').trim();
     if (!q) return { users: [] };
+    const pattern = `%${escapeLike(q)}%`;
     const hidden = await hiddenAuthorIds(db, me.id);
     const rows = await db.select().from(users).where(and(
-      or(ilike(users.username, `%${q}%`), ilike(users.displayName, `%${q}%`)), ne(users.id, me.id),
+      or(ilike(users.username, pattern), ilike(users.displayName, pattern)), ne(users.id, me.id),
       hidden.length ? notInArray(users.id, hidden) : undefined,
     )).orderBy(users.username).limit(10);
     return { users: rows.map(toUserSummary) };
