@@ -5,6 +5,7 @@ import { ImagePlus, X } from 'lucide-react';
 import { LIMITS, codePointLength, uniqueMints, type PostView, type ThreadView, type TokenView, type UploadView } from '@shillex/shared';
 import { ApiError, errorMessage, post as apiPost, uploadImage } from '../../lib/api';
 import { useImageDrop } from '../../lib/useImageDrop';
+import { useDraft } from '../../lib/drafts';
 import { patchPost, prependToFeed } from '../../lib/cache';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
@@ -29,7 +30,9 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const me = useRequiredMe();
   const inDialog = useInDialog();
   const qc = useQueryClient();
-  const [text, setText] = useState('');
+  // The main post box and each reply box keep unsent text; quotes (in a dialog) don't.
+  const draftKey = mode === 'post' && !inDialog ? `${me.id}:post:${communityId ?? 'home'}` : mode === 'reply' && parent ? `${me.id}:reply:${parent.id}` : null;
+  const [text, setText] = useDraft(draftKey);
   const [uploads, setUploads] = useState<UploadView[]>([]);
   const [uploading, setUploading] = useState(0);
   const [busy, setBusy] = useState(false);
