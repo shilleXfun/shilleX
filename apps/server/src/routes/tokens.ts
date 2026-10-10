@@ -21,10 +21,14 @@ export default async function tokensRoutes(app: FastifyInstance) {
     const since = new Date(now().getTime() - DAY);
     const rows = await db.select({ t: tokenMentions.sourceType, n: sql<number>`count(*)::int` }).from(tokenMentions)
       .where(and(eq(tokenMentions.mint, mint), eq(tokenMentions.isPublic, true), gt(tokenMentions.createdAt, since))).groupBy(tokenMentions.sourceType);
+    const buckets = await db.select({ b: sql<number>`floor((extract(epoch from ${tokenMentions.createdAt}) - ${since.getTime() / 1000}) / 3600)::int`.as('b'), n: sql<number>`count(*)::int` })
+      .from(tokenMentions).where(and(eq(tokenMentions.mint, mint), eq(tokenMentions.isPublic, true), gt(tokenMentions.createdAt, since))).groupBy(sql`b`);
+    const hourly = Array<number>(24).fill(0);
+    for (const { b, n } of buckets) hourly[Math.min(23, Math.max(0, b))]! += n;
     const posts24h = rows.find((r) => r.t === 'post')?.n ?? 0;
     const chat24h = rows.find((r) => r.t === 'message')?.n ?? 0;
     const sub = await db.select().from(subscriptions).where(and(eq(subscriptions.userId, userId), eq(subscriptions.targetType, 'token'), eq(subscriptions.targetId, mint))).limit(1);
-    return { mentions24h: posts24h + chat24h, posts24h, chat24h, subscribed: sub.length > 0 };
+    return { mentions24h: posts24h + chat24h, posts24h, chat24h, subscribed: sub.length > 0, hourly };
   }
 
   app.get<{ Params: { mint: string } }>('/tokens/:mint', { config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } }, async (req) => {

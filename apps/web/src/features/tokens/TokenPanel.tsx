@@ -24,6 +24,7 @@ import { primeTokens, tokenKey } from './tokenCache';
 import { TokenAvatar } from './TokenAvatar';
 import { copyAddress, provenance } from './TokenPreview';
 import { ChatMentionItem } from './ChatMentionItem';
+import { MentionHeat } from './MentionHeat';
 import s from './panel.module.css';
 
 interface Detail { token: TokenView; links: Ext[]; stats: TokenDiscussionStats }
@@ -138,6 +139,7 @@ export function TokenPanel({ mint, onClose, asSheet, onHandleDown }: { mint: str
               <p className={s.note}>{COPY.tokenPanelNote}</p>
               <div className={s.discussion}>
                 <h3 className={s.discTitle}>Public discussion</h3>
+                {Array.isArray(d.data.stats.hourly) && <MentionHeat hourly={d.data.stats.hourly} />}
                 <Tabs label="Discussion" idPrefix="tokdisc" value={tab} onChange={(v) => setTab(v as Tab)}
                   tabs={[{ id: 'posts', label: 'Posts', count: d.data.stats.posts24h }, { id: 'chat', label: 'Community chat', count: d.data.stats.chat24h }]} />
                 <p className="sr-only">Counts are public mentions in the last 24 hours.</p>
