@@ -26,3 +26,5 @@
 .submit { min-width: 72px; }
 .error { color: var(--down); font-size: var(--fs-sm); padding-top: 6px; }
 @media (max-width: 480px) { .composer { padding: 12px 14px 10px; gap: 10px; grid-template-columns: 38px minmax(0, 1fr); } }
+/* Dragging images over the composer: a dashed accent target. */
+.composer[data-drop]::after { content: 'Drop images to attach'; position: absolute; inset: 6px; z-index: 3; display: grid; place-items: center; border: 1.5px dashed var(--accent); border-radius: var(--radius-pop); background: rgba(19, 17, 46, 0.88); color: var(--accent-hover); font-weight: 600; pointer-events: none; }

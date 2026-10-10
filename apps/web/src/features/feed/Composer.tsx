@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ImagePlus, X } from 'lucide-react';
 import { LIMITS, codePointLength, uniqueMints, type PostView, type ThreadView, type TokenView, type UploadView } from '@shillex/shared';
 import { ApiError, errorMessage, post as apiPost, uploadImage } from '../../lib/api';
+import { useImageDrop } from '../../lib/useImageDrop';
 import { patchPost, prependToFeed } from '../../lib/cache';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
@@ -46,7 +47,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   useEffect(() => { if (!done) return; const t = setTimeout(() => setDone(false), 1200); return () => clearTimeout(t); }, [done]);
   useEffect(() => { const el = area.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }, [text]);
 
-  async function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | File[] | null) {
     if (!files) return;
     const room = LIMITS.maxImages - uploads.length - uploading;
     if (files.length > room) toast(`Up to ${LIMITS.maxImages} images per post`, { tone: 'error' });
@@ -57,6 +58,9 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
       finally { setUploading((n) => n - 1); }
     }
   }
+
+  // Quotes carry no images, so pasting or dropping one there does nothing.
+  const drop = useImageDrop((fs) => void addFiles(fs), mode !== 'quote');
 
   async function submit() {
     if (!canSubmit) return;
@@ -92,7 +96,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const label = mode === 'reply' ? 'Write your reply' : mode === 'quote' ? 'Add your take' : 'What’s happening in the trenches? Post';
 
   return (
-    <div className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)}>
+    <div className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}>
       <Avatar src={me.avatarUrl} size={inDialog ? 36 : 42} me />
       <div className={s.main}>
         {/* Grows on focus (min-height springs open); the auto-size effect handles longer text. */}
