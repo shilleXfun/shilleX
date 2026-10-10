@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { Link, NavLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion } from 'motion/react';
@@ -74,7 +74,8 @@ export function CommunityPage() {
 
   return (
     <div className={s.page} data-channel={!!channelId}>
-      <header className={s.header}>
+      {/* The community skyline glows in from the right, behind the name. */}
+      <header className={s.header} style={{ '--banner': `url(${detail.bannerUrl ?? `/media/banner/c${c.id}.svg`})` } as CSSProperties}>
         {(channelId || tab) && <IconButton label="Back to community" className="mobile-only" onClick={() => nav(`/c/${slug}`)}><ArrowLeft size={18} /></IconButton>}
         <img src={c.avatarUrl} alt="" />
         <div className={s.headText}>
@@ -116,7 +117,8 @@ export function CommunityPage() {
               : tab === 'members' ? <MembersTab detail={detail} />
               : tab === 'about' ? <AboutTab detail={detail} />
               : tab === 'mod' && detail.isMod ? <ModPanel detail={detail} />
-              : channelId ? <EmptyState icon={<Hash size={26} />} title="Channel not found" body="It may have been removed. Pick another channel." /> : null}
+              : channelId ? <EmptyState icon={<Hash size={26} />} title="Channel not found" body="It may have been removed. Pick another channel." />
+              : <EmptyState icon={<Hash size={26} />} title={c.name} body="Pick a channel to join the conversation." />}
           </section>
         </div>
       )}

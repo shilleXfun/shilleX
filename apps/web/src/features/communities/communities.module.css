@@ -1,6 +1,8 @@
 /* Community page: header, then channel rail + main. Desktop is a fixed-height app layout; main scrolls itself. */
 .page { display: flex; flex-direction: column; min-height: 100vh; }
 .header { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 16px 10px 18px; border-bottom: 1px solid var(--line); background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+.header[style] { position: relative; isolation: isolate; }
+.header[style]::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, rgba(9, 10, 24, 0.94) 25%, rgba(9, 10, 24, 0.55) 70%, rgba(9, 10, 24, 0.25)), var(--banner) right bottom / auto 150% no-repeat; }
 .header > img { flex: none; width: 40px; height: 40px; border-radius: 10px; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line-strong); }
 .headText { min-width: 0; flex: 1; }
 .title { display: flex; align-items: center; gap: 8px; margin: 0; font: 800 24px / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; }
@@ -113,3 +115,8 @@
 .invite { display: grid; gap: 16px; width: min(440px, 100%); margin: 0 auto; padding: 56px 18px; }
 .inviteTitle { margin: 0; font: 800 var(--fs-3xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; }
 .grid > .cardCell { overflow: visible; }
+/* Mobile community index: the header becomes a short hero so the skyline banner reads. */
+@media (max-width: 767px) {
+  .page:not([data-channel='true']) .header[style] { min-height: 128px; align-items: flex-end; padding-bottom: 14px; }
+  .page:not([data-channel='true']) .header[style]::before { background: linear-gradient(0deg, rgba(9, 10, 24, 0.9) 8%, rgba(9, 10, 24, 0.2) 55%, transparent), var(--banner) center 70% / cover no-repeat; }
+}
