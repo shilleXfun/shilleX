@@ -23,11 +23,11 @@
 .heldMsg { box-shadow: inset 2px 0 0 var(--warn); }
 .avatarLink { align-self: start; margin-top: 2px; border-radius: 50%; }
 .content { min-width: 0; }
-.head { display: flex; align-items: baseline; gap: 8px; }
-.author { font-weight: 650; }
+.head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 .author:hover { text-decoration: underline; text-underline-offset: 3px; }
 .authorMe { color: var(--accent-hover); }
-.time { color: var(--muted); font: 11px var(--font-mono); }
+.time { flex: none; color: var(--muted); font: 11px var(--font-mono); }
 .body { line-height: 1.5; }
 .gutterTime { visibility: hidden; color: var(--muted); font: 10px/22px var(--font-mono); text-align: right; white-space: nowrap; }
 .replyRef { display: flex; align-items: center; gap: 6px; max-width: 100%; margin: 1px 0 3px; padding: 0; border: 0; background: none; color: var(--muted); font-size: var(--fs-sm); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
