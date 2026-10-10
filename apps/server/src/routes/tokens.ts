@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, ilike, lt, or, sql } from 'drizzle-orm';
 import { buildTokenLinks, isValidSolanaAddress, type Page, type PostView, type PublicChatMention, type TokenDiscussionStats } from '@shillex/shared';
-import { tokenMentions, posts, messages, channels, communities, subscriptions } from '../db/schema.ts';
+import { tokenMentions, tokens, posts, messages, channels, communities, subscriptions } from '../db/schema.ts';
+import { escapeLike } from '../lib/like.ts';
+import { tokenRowToView } from '../tokens/view.ts';
 import { requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
@@ -37,6 +39,27 @@ export default async function tokensRoutes(app: FastifyInstance) {
     const token = await deps.tokens.resolve(mint);
     const links = token.status === 'resolved' || token.status === 'unindexed' ? buildTokenLinks({ mint, pairAddress: token.pairAddress, source: token.source }) : [];
     return { token, links, stats: await stats(mint, me.id) };
+  });
+
+  /**
+   * Find tokens by $SYMBOL or name, among tokens publicly mentioned here (never ones only discussed in private rooms).
+   * An exact symbol match ranks first, then the most-discussed in the last day; the client shows every address,
+   * since copycat tokens reuse popular tickers.
+   */
+  app.get<{ Querystring: { q?: string } }>('/tokens/search', async (req) => {
+    requireUser(req);
+    const q = (req.query.q ?? '').trim().replace(/^\$/, '').slice(0, 40);
+    if (!q) return { results: [] };
+    const since = new Date(now().getTime() - DAY);
+    // Correlated on "tokens"."mint" spelled out: an interpolated column renders unqualified in a select list and would
+    // then bind to m.mint inside the subquery.
+    const recent = sql<number>`(select count(*)::int from ${tokenMentions} m where m.mint = "tokens"."mint" and m.is_public and m.created_at > ${since.toISOString()}::timestamptz)`;
+    const rows = await db.select({ t: tokens, mentions24h: recent }).from(tokens).where(and(
+      eq(tokens.status, 'resolved'),
+      or(ilike(tokens.symbol, `${escapeLike(q)}%`), ilike(tokens.name, `%${escapeLike(q)}%`)),
+      sql`exists (select 1 from ${tokenMentions} m where m.mint = "tokens"."mint" and m.is_public)`,
+    )).orderBy(desc(sql`upper(${tokens.symbol}) = upper(${q})`), desc(recent)).limit(6);
+    return { results: rows.map((r) => ({ token: tokenRowToView(r.t), mentions24h: r.mentions24h })) };
   });
 
   app.post('/tokens/resolve', { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } }, async (req) => {

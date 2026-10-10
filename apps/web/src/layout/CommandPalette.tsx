@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Bookmark, Compass, CornerDownLeft, House, MessagesSquare, Search, Settings, UsersRound } from 'lucide-react';
-import { abbreviateMint, isValidSolanaAddress, plural, type CommunitySummary, type UserSummary } from '@shillex/shared';
+import { abbreviateMint, isValidSolanaAddress, plural, type CommunitySummary, type TokenView, type UserSummary } from '@shillex/shared';
 import { get } from '../lib/api';
 import { createStore, useStore } from '../lib/store';
 import { cx } from '../lib/cx';
 import { Avatar } from '../components/ui/Avatar';
 import { TokenAvatar } from '../features/tokens/TokenAvatar';
-import { useToken } from '../features/tokens/tokenCache';
+import { primeTokens, useToken } from '../features/tokens/tokenCache';
 import { useTokenPanel } from '../features/tokens/useTokenPanel';
 import s from './palette.module.css';
 
@@ -44,6 +44,7 @@ export function CommandPalette() {
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const { openToken } = useTokenPanel();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
@@ -68,6 +69,8 @@ export function CommandPalette() {
   const mint = isValidSolanaAddress(query) ? query : null;
   const searching = query.length >= 2 && !mint;
   const people = useQuery({ queryKey: ['palette', 'users', query], queryFn: () => get<{ users: UserSummary[] }>(`/users?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
+  const toks = useQuery({ queryKey: ['palette', 'tokens', query], queryFn: () => get<{ results: { token: TokenView; mentions24h: number }[] }>(`/tokens/search?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
+  useEffect(() => { if (toks.data) primeTokens(qc, Object.fromEntries(toks.data.results.map((r) => [r.token.mint, r.token]))); }, [toks.data, qc]);
   const comms = useQuery({ queryKey: ['palette', 'communities', query], queryFn: () => get<{ communities: CommunitySummary[] }>(`/communities?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
 
   const close = () => paletteOpen.set(false);
@@ -75,6 +78,15 @@ export function CommandPalette() {
   const items: Item[] = [];
   if (mint) items.push({ id: `token-${mint}`, group: 'Token', icon: <TokenIcon mint={mint} />, title: <TokenTitle mint={mint} />, meta: <span className="mono">{abbreviateMint(mint, 6, 6)}</span>, run: () => { close(); openToken(mint, null); } });
   if (searching) {
+    const results = toks.data?.results ?? [];
+    for (const { token: t, mentions24h } of results.slice(0, 4)) {
+      // Copycats reuse popular tickers: say so whenever two results share one, and always show the address.
+      const twins = results.filter((r) => r.token.symbol && r.token.symbol.toUpperCase() === t.symbol?.toUpperCase()).length;
+      items.push({ id: `tok-${t.mint}`, group: 'Tokens', icon: <TokenAvatar token={t} size={28} />,
+        title: <><strong>${t.symbol}</strong>{t.name ? ` · ${t.name}` : ''}</>,
+        meta: <><span className="mono">{abbreviateMint(t.mint, 4, 4)}</span> · {twins > 1 ? <span className={s.twin}>{twins} tokens use ${t.symbol}, check the address</span> : plural(mentions24h, 'mention') + ' today'}</>,
+        run: () => { close(); openToken(t.mint, null); } });
+    }
     for (const u of (people.data?.users ?? []).slice(0, 5)) {
       items.push({ id: `user-${u.id}`, group: 'People', icon: <Avatar src={u.avatarUrl} size={28} />, title: u.displayName, meta: `@${u.username}`, run: go(`/u/${u.username}`) });
     }
@@ -88,7 +100,7 @@ export function CommandPalette() {
   }
 
   const current = Math.min(active, Math.max(0, items.length - 1));
-  const pending = searching && (people.isFetching || comms.isFetching) && items.every((i) => i.group === 'Go to');
+  const pending = searching && (people.isFetching || comms.isFetching || toks.isFetching) && items.every((i) => i.group === 'Go to');
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((current + 1) % Math.max(1, items.length)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((current - 1 + items.length) % Math.max(1, items.length)); }
@@ -106,8 +118,8 @@ export function CommandPalette() {
             <Search size={18} aria-hidden="true" className={s.searchIcon} />
             <input ref={input} className={s.input} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={onKeyDown}
               role="combobox" aria-expanded={items.length > 0} aria-controls={listId} aria-autocomplete="list"
-              aria-activedescendant={items.length ? `${listId}-${current}` : undefined} aria-label="Search people, communities, or paste a contract address"
-              placeholder="Search people, communities, or paste a CA…" autoComplete="off" spellCheck={false} />
+              aria-activedescendant={items.length ? `${listId}-${current}` : undefined} aria-label="Search people, communities, tokens, or paste a contract address"
+              placeholder="Search people, communities, $tokens, or paste a CA…" autoComplete="off" spellCheck={false} />
             <kbd className={s.kbd}>Esc</kbd>
           </div>
           <div id={listId} role="listbox" aria-label="Results" className={s.list}>
@@ -126,7 +138,7 @@ export function CommandPalette() {
             ))}
           </div>
           <p className={s.status} role="status">
-            {pending ? 'Searching…' : searching && !items.some((i) => i.group !== 'Go to') && people.isSuccess && comms.isSuccess ? `No people or communities match “${query}”.` : ''}
+            {pending ? 'Searching…' : searching && !items.some((i) => i.group !== 'Go to') && people.isSuccess && comms.isSuccess && toks.isSuccess ? `No people, communities or tokens match “${query}”.` : ''}
           </p>
         </div>
       )}
