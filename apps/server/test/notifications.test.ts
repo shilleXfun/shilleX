@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { notify } from '../src/services/notify.ts';
+import { excerptOf, notify } from '../src/services/notify.ts';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
 
 let ctx: TestCtx; let a: TestUser; let b: TestUser;
@@ -57,5 +57,40 @@ describe('notifications', () => {
     expect(p2.items.map((n: any) => n.id)).toEqual(all.slice(2, 4).map((n: any) => n.id));
     const last = (await ctx.as(a).get(`/api/notifications?limit=${all.length}`)).body;
     expect(last.nextCursor).toBeNull();
+  });
+});
+
+describe('notification excerpts', () => {
+  const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
+  it('formats one line: addresses shortened, whitespace collapsed, long text cut on a character', () => {
+    expect(excerptOf(`look at\n\n  ${MINT}  now`)).toBe('look at DezX…B263 now');
+    expect(excerptOf('   ')).toBeNull();
+    const long = excerptOf(`${'a'.repeat(138)}🪖🪖🪖`)!;
+    expect([...long]).toHaveLength(140);
+    expect(long.endsWith('🪖…')).toBe(true);
+  });
+  it('carries the reply or mention text; follows have none', async () => {
+    const items = (await ctx.as(a).get('/api/notifications?limit=100')).body.items;
+    const byType = (t: string) => items.find((n: any) => n.type === t);
+    expect(byType('reply').excerpt).toBe('reply');
+    expect(items.filter((n: any) => n.type === 'mention').map((n: any) => n.excerpt)).toContain('yo @notif_a');
+    expect(byType('follow').excerpt).toBeNull();
+  });
+  it('drops the excerpt once the post is deleted', async () => {
+    const p = (await ctx.as(b).post('/api/posts', { body: 'gone soon @notif_a' })).body.post;
+    expect((await ctx.as(a).get('/api/notifications')).body.items[0].excerpt).toBe('gone soon @notif_a');
+    expect((await ctx.as(b).del(`/api/posts/${p.id}`)).status).toBe(204);
+    expect((await ctx.as(a).get('/api/notifications')).body.items[0].excerpt).toBeNull();
+  });
+  it('hides a private channel mention once the viewer leaves the community', async () => {
+    await ctx.as(b).post('/api/communities', { name: 'Hideout', slug: 'hideout', visibility: 'private' });
+    await ctx.as(a).post('/api/communities/hideout/join');
+    expect((await ctx.as(b).post(`/api/communities/hideout/requests/${a.id}/approve`)).status).toBe(204);
+    const channel = (await ctx.as(b).get('/api/communities/hideout')).body.community.channels[0].id;
+    expect((await ctx.as(b).post(`/api/channels/${channel}/messages`, { body: 'psst @notif_a' })).status).toBe(201);
+    const mention = () => ctx.as(a).get('/api/notifications').then((r) => r.body.items.find((n: any) => n.target.type === 'message'));
+    expect((await mention()).excerpt).toBe('psst @notif_a');
+    expect((await ctx.as(a).del('/api/communities/hideout/membership')).status).toBe(204);
+    expect((await mention()).excerpt).toBeNull();
   });
 });

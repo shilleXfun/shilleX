@@ -119,6 +119,8 @@ export interface NotificationView {
   id: string; type: NotificationType; actor: UserSummary | null;
   target: { type: 'post' | 'message' | 'user' | 'community' | 'token' | 'report'; id: string };
   text: string; href: string; read: boolean; createdAt: Iso;
+  /** One line of the post or message it is about, when the viewer can still read it. */
+  excerpt: string | null;
 }
 export interface NotificationPref { type: NotificationType; enabled: boolean }
 
