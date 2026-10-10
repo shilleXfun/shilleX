@@ -83,7 +83,7 @@
 
 .mobileHeader { position: sticky; top: 0; z-index: 30; display: none; align-items: center; justify-content: space-between; height: var(--mobile-header-h); padding: 0 8px 0 16px; background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-bottom: 1px solid var(--line); }
 .headerActions { display: flex; gap: 2px; }
-.headerLink { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-sm); color: var(--muted); }
+.headerLink { position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--muted); }
 .headerLink:hover { color: var(--text); background: var(--hover); }
 .headerDot { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg), var(--glow-accent); }
 @media (max-width: 767px) { .mobileHeader { display: flex; } .shell[data-immersive='true'] .mobileHeader { display: none; } }
