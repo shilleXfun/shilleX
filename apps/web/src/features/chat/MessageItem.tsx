@@ -10,6 +10,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
 import { toast } from '../../components/ui/Toaster';
+import { Lightbox } from '../../components/ui/Lightbox';
 import { PostBody } from '../feed/PostBody';
 import { ReactionPicker, ReactionPills } from '../feed/ReactionBar';
 import { ReportDialog } from '../feed/ReportDialog';
@@ -26,6 +27,8 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
   const me = useRequiredMe();
   const qc = useQueryClient();
   const [report, setReport] = useState(false);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const images = m.attachments.flatMap((a) => (a.type === 'image' ? [a] : []));
   const key = ['messages', m.scope.type, m.scope.id];
   const time = new Date(m.createdAt);
   const mineAuthor = m.author.id === me.id;
@@ -63,11 +66,12 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
           </button>
         )}
         {m.body && <PostBody text={m.body} className={s.body} />}
-        {m.attachments.some((a) => a.type === 'image') && (
-          <div className={s.images}>{m.attachments.map((a) => a.type === 'image' && (
-            <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={a.alt} width={a.width} height={a.height} loading="lazy" /></a>
+        {images.length > 0 && (
+          <div className={s.images}>{images.map((a, i) => (
+            <button key={a.url} type="button" className={s.imageButton} aria-label={`View image${a.alt ? `: ${a.alt}` : ''}`} onClick={() => setViewing(i)}><img src={a.url} alt={a.alt} width={a.width} height={a.height} loading="lazy" /></button>
           ))}</div>
         )}
+        {images.length > 0 && <Lightbox images={images} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />}
         {m.attachments.map((a) => a.type === 'token' && <TokenCard key={a.mint} mint={a.mint} />)}
         {m.status === 'held' && (
           <div className={s.held}><ShieldAlert size={14} aria-hidden="true" />Awaiting moderator approval
