@@ -6,6 +6,17 @@ import { TokenAvatar } from './TokenAvatar';
 import { useTokenPanel } from './useTokenPanel';
 import s from './panel.module.css';
 
+/** Other tokens discussed here with the same ticker as `token` (shared by the panel warning and the chip preview). */
+export function useTickerTwins(token: TokenView): TokenView[] {
+  const symbol = token.symbol;
+  const q = useQuery({
+    queryKey: ['tickerTwins', symbol?.toUpperCase()], enabled: !!symbol && token.status === 'resolved', staleTime: 60_000,
+    queryFn: () => get<{ results: { token: TokenView }[] }>(`/tokens/search?q=${encodeURIComponent(symbol ?? '')}`),
+  });
+  return (q.data?.results ?? []).map((r) => r.token)
+    .filter((t) => t.mint !== token.mint && t.symbol?.toUpperCase() === symbol?.toUpperCase());
+}
+
 /**
  * Copycat check: other tokens discussed here that use the same $TICKER. Tickers aren't unique and scams reuse popular
  * ones, so the panel says so and lets you compare addresses. Nothing renders when the ticker is unique here.
@@ -13,12 +24,7 @@ import s from './panel.module.css';
 export function TickerTwins({ token }: { token: TokenView }) {
   const { openToken } = useTokenPanel();
   const symbol = token.symbol;
-  const q = useQuery({
-    queryKey: ['tickerTwins', symbol?.toUpperCase()], enabled: !!symbol, staleTime: 60_000,
-    queryFn: () => get<{ results: { token: TokenView }[] }>(`/tokens/search?q=${encodeURIComponent(`$${symbol}`)}`),
-  });
-  const twins = (q.data?.results ?? []).map((r) => r.token)
-    .filter((t) => t.mint !== token.mint && t.symbol?.toUpperCase() === symbol?.toUpperCase());
+  const twins = useTickerTwins(token);
   if (!symbol || !twins.length) return null;
   return (
     <div className={s.twins} role="note">

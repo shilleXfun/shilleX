@@ -71,7 +71,7 @@ describe('TokenMention', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('Couldn’t load: dexscreener http 429');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(screen.getByRole('button', { name: new RegExp(MINT) })).toHaveTextContent('$BACK'));
-    expect(f).toHaveBeenCalledTimes(1);
+    expect(f.mock.calls.filter(([u]) => String(u).endsWith(`/api/tokens/${MINT}`))).toHaveLength(1);
   });
   it('touch: first tap shows the preview, a second tap opens the panel', async () => {
     renderWithApp(<><TokenMention mint={MINT} /><PanelProbe /></>, { seed: seed({}) });
