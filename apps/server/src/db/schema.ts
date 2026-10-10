@@ -12,6 +12,8 @@ export const users = pgTable('users', {
   bannerUrl: text('banner_url'),
   bio: text('bio').notNull().default(''),
   links: jsonb('links').$type<{ label: string; url: string }[]>().notNull().default([]),
+  /** Words, $tickers or addresses this user muted; their client collapses matching posts and messages. */
+  mutedWords: jsonb('muted_words').$type<string[]>().notNull().default([]),
   createdAt: ts('created_at').notNull(),
   isDemo: boolean('is_demo').notNull().default(false),
 }, (t) => [uniqueIndex('users_username_lower_idx').on(sql`lower(${t.username})`)]);

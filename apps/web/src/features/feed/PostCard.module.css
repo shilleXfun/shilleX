@@ -125,3 +125,8 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .stamp { margin: 10px 0 2px; color: var(--muted); font-size: var(--fs-sm); }
 /* The post selected with j/k: an inset accent ring (an outside ring would be clipped by the column). */
 .card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 0; box-shadow: inset 0 0 24px rgba(139, 108, 255, 0.12); }
+/* A post collapsed by a muted word: one quiet line with a way to see it anyway. */
+.mutedCard { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
+.mutedNote { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.mutedShow { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-weight: 600; cursor: pointer; }
+.mutedShow:hover { text-decoration: underline; text-underline-offset: 3px; }

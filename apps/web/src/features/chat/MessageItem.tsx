@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Reply, Ellipsis, ShieldAlert } from 'lucide-react';
 import { relativeTime, type MessageView, type ReactionEmoji } from '@shillex/shared';
+import { useMutedMatch } from '../../lib/muted';
 import { del, errorMessage, post, put } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
@@ -28,6 +29,7 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
   const qc = useQueryClient();
   const [report, setReport] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const images = m.attachments.flatMap((a) => (a.type === 'image' ? [a] : []));
   const key = ['messages', m.scope.type, m.scope.id];
   const time = new Date(m.createdAt);
@@ -42,10 +44,20 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
       qc.setQueryData<MsgPages>(key, (d) => upsertMessage(d, { ...m, reactions: r.reactions }));
     } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
   };
+  // Muted words collapse other people's messages to one line with a way to see them anyway.
+  const muted = useMutedMatch(m.body, m.mints ?? [], mineAuthor || revealed || !!highlight);
   const act = (fn: () => Promise<unknown>, ok: string) => async () => { try { await fn(); toast(ok); } catch (e) { toast(errorMessage(e), { tone: 'error' }); } };
 
   if (m.status === 'deleted') {
     return <div className={cx(s.msg, grouped && s.grouped)} id={`msg-${m.id}`}><span /><div className={s.deleted}>Message deleted</div></div>;
+  }
+  if (muted) {
+    return (
+      <div className={cx(s.msg, s.grouped)} id={`msg-${m.id}`}>
+        <span />
+        <div className={s.deleted}>Hidden: {m.author.displayName} mentioned “{muted}”, which you muted. <button type="button" className={s.mutedShow} onClick={() => setRevealed(true)}>Show</button></div>
+      </div>
+    );
   }
   return (
     <div className={cx(s.msg, grouped && s.grouped, highlight && s.highlight, m.status === 'held' && s.heldMsg)} id={`msg-${m.id}`} tabIndex={-1}>

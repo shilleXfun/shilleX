@@ -37,6 +37,9 @@ export const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/
 export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
+/** Muted words: how many, and how long each may be. */
+export const MUTED_WORDS = { max: 50, maxLength: 40 } as const;
+
 export const COPY = {
   selfReported: 'self-reported',
   callsNote: 'Calls are self-reported: the author says what they are doing with a token. Shillex does not verify trades or holdings.',

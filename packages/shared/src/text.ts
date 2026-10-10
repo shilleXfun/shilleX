@@ -47,3 +47,17 @@ export function extractMentions(text: string): string[] {
 export function codePointLength(s: string): number {
   return [...s].length;
 }
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The first muted word that appears in `text`, or null. Case-insensitive and whole-word: muting "rug" does not hide
+ * "drug", while muting "scam" also hides "$SCAM". Works for $tickers, phrases and contract addresses alike.
+ */
+export function mutedMatch(text: string, words: readonly string[]): string | null {
+  for (const w of words) {
+    const word = w.trim();
+    if (word && new RegExp(`(?<![A-Za-z0-9_])${escapeRe(word)}(?![A-Za-z0-9_])`, 'i').test(text)) return word;
+  }
+  return null;
+}

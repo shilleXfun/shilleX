@@ -40,6 +40,16 @@ describe('profiles and follows', () => {
     expect(calls.some((x: any) => x.id === plain.id)).toBe(false);
     expect((await ctx.as(a).get('/api/users/anon_ape/posts?tab=calls')).body.items).toEqual([]);
   });
+  it('saves muted words cleaned up (trimmed, one space, no blanks or case duplicates) and returns them on /me', async () => {
+    const r = await ctx.as(a).put('/api/me/muted-words', { words: ['  $SCAM ', 'send   it', '', '$scam', 'Rug'] });
+    expect(r.status).toBe(200);
+    expect(r.body.mutedWords).toEqual(['$SCAM', 'send it', 'Rug']);
+    expect((await ctx.as(a).get('/api/auth/me')).body.user.mutedWords).toEqual(['$SCAM', 'send it', 'Rug']);
+    expect((await ctx.as(b).get('/api/me/settings')).body.mutedWords).toEqual([]);
+    const many = Array.from({ length: 70 }, (_, i) => `w${i}`);
+    expect((await ctx.as(a).put('/api/me/muted-words', { words: many })).body.mutedWords).toHaveLength(50);
+    expect((await ctx.as(a).put('/api/me/muted-words', { words: ['x'.repeat(60)] })).body.mutedWords).toEqual(['x'.repeat(40)]);
+  });
   it('searches users', async () => {
     const r = await ctx.as(a).get('/api/users?q=bob');
     expect(r.body.users.map((u: any) => u.username)).toEqual(['based_bob']);

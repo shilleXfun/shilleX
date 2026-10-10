@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
 import { relativeTime, type PostView } from '@shillex/shared';
+import { useMutedMatch } from '../../lib/muted';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { press, spring } from '../../lib/motion';
@@ -45,6 +46,9 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
   const [quoting, setQuoting] = useState(false);
   const [replying, setReplying] = useState(false);
   const [addingCall, setAddingCall] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  // Muted words collapse other people's posts in lists; a thread you opened on purpose shows its post.
+  const mutedWord = useMutedMatch(`${p.body ?? ''} ${p.quoted?.body ?? ''}`, [...(p.mints ?? []), ...(p.quoted?.mints ?? [])], p.author.id === me.id || !!focused || revealed);
 
   const repostedBy = post.kind === 'repost' && (
     <div className={s.context}><Repeat2 size={13} aria-hidden="true" /><Link to={`/u/${post.author.username}`}>{post.author.displayName} reposted</Link></div>
@@ -59,6 +63,14 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
   }
 
   const isMine = p.author.id === me.id;
+  if (mutedWord) {
+    return (
+      <article className={cx(s.card, s.static, s.mutedCard, compact && s.compact)} aria-label="Hidden post" tabIndex={-1} data-post-card="">
+        {repostedBy}
+        <p className={s.mutedNote}>Hidden: mentions “{mutedWord}”, which you muted. <button type="button" className={s.mutedShow} onClick={() => setRevealed(true)}>Show</button></p>
+      </article>
+    );
+  }
   const open = (e: MouseEvent) => {
     if (focused || (e.target as HTMLElement).closest('a,button,input,textarea,label,dialog')) return;
     if (window.getSelection()?.toString()) return;

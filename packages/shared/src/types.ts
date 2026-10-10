@@ -17,7 +17,7 @@ export interface UserProfile extends UserSummary {
   isSelf: boolean; isFollowing: boolean; followsYou: boolean; isMuted: boolean; isBlocked: boolean;
   wallet: { address: string; showHoldings: boolean; verified: false } | null;
 }
-export interface MeView extends UserSummary { unreadNotifications: number; createdAt: Iso }
+export interface MeView extends UserSummary { unreadNotifications: number; createdAt: Iso; mutedWords: string[] }
 
 /** `userIds` is set for message reactions (broadcast to many viewers; clients derive `mine` from it). */
 export interface ReactionSummary { emoji: ReactionEmoji; count: number; mine: boolean; userIds?: string[] }
@@ -134,6 +134,7 @@ export interface SettingsView {
   profile: { displayName: string; bio: string; links: { label: string; url: string }[]; avatarUrl: string; bannerUrl: string | null };
   wallet: { address: string; displayWallet: boolean; displayHoldings: boolean; verified: false } | null;
   notificationPrefs: NotificationPref[];
+  mutedWords: string[];
 }
 
 export interface LiveRoomView {
