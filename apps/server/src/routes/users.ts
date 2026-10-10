@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
-import type { Page, PostView, UserProfile, UserSummary } from '@shillex/shared';
+import { generatedBannerUrl, type Page, type PostView, type UserProfile, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { users, follows, mutes, blocks, posts, walletLinks, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
@@ -51,7 +51,7 @@ export default async function usersRoutes(app: FastifyInstance) {
     ]);
     const w = wallet[0];
     const profile: UserProfile = {
-      ...toUserSummary(u), bannerUrl: u.bannerUrl ?? `/media/banner/${u.id}.svg`, bio: u.bio, links: u.links,
+      ...toUserSummary(u), bannerUrl: u.bannerUrl ?? generatedBannerUrl(u.id), bio: u.bio, links: u.links,
       createdAt: u.createdAt.toISOString(), followers, following, isSelf: u.id === me.id,
       isFollowing: iFollow.length > 0, followsYou: theyFollow.length > 0, isMuted: muted.length > 0, isBlocked: blocked.length > 0,
       wallet: w && w.displayWallet ? { address: w.address, showHoldings: w.displayHoldings, verified: false } : null,

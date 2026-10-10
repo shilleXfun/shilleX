@@ -39,7 +39,8 @@ function stream(seed: string) {
 
 /**
  * Profile and community banners: a personal night skyline (visual v3). A seeded candle walk stands on fading towers
- * under a tinted sky with a horizon glow and a dashed last-price line, matching the app's live backdrop.
+ * under a tinted sky with a horizon glow, echoing the app's live backdrop. No last-price line: in a profile or community
+ * header that would read as the entity's own price history, and these walks are decoration.
  */
 export function bannerSvg(seed: string): string {
   const r = stream(`b:${seed}`);
@@ -66,8 +67,7 @@ export function bannerSvg(seed: string): string {
     + `<radialGradient id="g" cx="${(0.3 + r() * 0.4).toFixed(2)}" cy="1" r=".7"><stop offset="0" stop-color="hsl(${(hue + 40) % 360} 75% 50%)" stop-opacity=".35"/><stop offset="1" stop-color="hsl(${hue} 70% 40%)" stop-opacity="0"/></radialGradient>`
     + `<linearGradient id="u" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27E0C0" stop-opacity=".22"/><stop offset="1" stop-color="#27E0C0" stop-opacity="0"/></linearGradient>`
     + `<linearGradient id="d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF4F7B" stop-opacity=".2"/><stop offset="1" stop-color="#FF4F7B" stop-opacity="0"/></linearGradient></defs>`
-    + `<rect width="${W}" height="${H}" fill="url(#s)"/><rect width="${W}" height="${H}" fill="url(#g)"/>${candles.join('')}`
-    + `<line x1="0" x2="${W}" y1="${y(prev)}" y2="${y(prev)}" stroke="#27E0C0" stroke-opacity=".3" stroke-dasharray="3 6"/></svg>`;
+    + `<rect width="${W}" height="${H}" fill="url(#s)"/><rect width="${W}" height="${H}" fill="url(#g)"/>${candles.join('')}</svg>`;
 }
 
 export function artSvg(seed: string): string {

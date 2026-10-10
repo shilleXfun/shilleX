@@ -2,6 +2,7 @@ import { Link, useMatch } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { SidebarView } from '@shillex/shared';
 import { get } from '../lib/api';
+import { useRequiredMe } from '../lib/useMe';
 import { Avatar } from '../components/ui/Avatar';
 import { Skeleton } from '../components/ui/Skeleton';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -17,9 +18,19 @@ export function useSidebar() {
 }
 
 function OnlineMembers({ slug }: { slug: string }) {
+  const me = useRequiredMe();
   const q = useMembers(slug);
-  const online = (q.data?.members ?? []).filter((m) => m.online);
+  // Everyone else who is here: you already know you're online.
+  const online = (q.data?.members ?? []).filter((m) => m.online && m.user.id !== me.id);
   if (q.isError) return null;
+  if (q.isPending) {
+    return (
+      <section className={s.section} aria-busy="true" aria-label="Loading who is online">
+        <Skeleton w={110} h={14} />
+        {[0, 1, 2].map((i) => <div key={i} className={s.onlineRow}><Skeleton w={28} h={28} r={14} /><Skeleton w={120} h={12} /></div>)}
+      </section>
+    );
+  }
   return (
     <section className={s.section} aria-labelledby="rail-online">
       <h2 id="rail-online" className={s.compactH}>Online now <span className={s.count}>{online.length}</span></h2>

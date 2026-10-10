@@ -1,5 +1,5 @@
 import { and, eq, inArray, max } from 'drizzle-orm';
-import type { ChannelView, CommunityDetail, CommunitySummary } from '@shillex/shared';
+import { generatedBannerUrl, type ChannelView, type CommunityDetail, type CommunitySummary } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
 import { channels, communityMembers, messages, users, type ChannelRow, type CommunityRow, type MemberRow } from '../db/schema.ts';
@@ -68,7 +68,7 @@ export async function communityDetail(deps: Pick<AppDeps, 'db' | 'presence'>, vi
     .where(and(eq(communityMembers.communityId, c.id), eq(communityMembers.status, 'active'), eq(communityMembers.role, 'mod')));
   const chans = await db.select().from(channels).where(eq(channels.communityId, c.id));
   return {
-    community: summary!, bannerUrl: c.bannerUrl ?? `/media/banner/c${c.id}.svg`, rules: c.rules, createdAt: c.createdAt.toISOString(),
+    community: summary!, bannerUrl: c.bannerUrl ?? generatedBannerUrl(`c${c.id}`), rules: c.rules, createdAt: c.createdAt.toISOString(),
     owner: ownerRow ? toUserSummary(ownerRow) : null, moderators: mods.map((m) => toUserSummary(m.u)),
     canRead: true, canPost: access.canPost, isMod: access.isMod,
     channels: await channelViews(db, viewerId, chans, access.member),

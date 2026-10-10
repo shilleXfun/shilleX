@@ -13,7 +13,8 @@ export function useHotkeys(map: Record<string, () => void>) {
     let prefix: string | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+      // Held keys repeat, and an open modal owns the keyboard: shortcuts must not navigate behind it.
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || typing(e.target) || document.querySelector('dialog[open]')) return;
       const key = e.key;
       if (prefix) {
         const fn = ref.current[`${prefix} ${key}`];
