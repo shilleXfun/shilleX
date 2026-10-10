@@ -15,7 +15,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "world:spike": "tsx --env-file-if-exists=../../.env scripts/world-spike.ts",
     "world": "tsx --env-file-if-exists=../../.env src/world/cli.ts",
-    "world:seed": "npm run world -- seed"
+    "world:seed": "npm run world -- seed",
+    "world:treasury": "npm run world -- treasury",
+    "world:launchpad": "npm run world -- launchpad",
+    "world:fund": "npm run world -- fund"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",

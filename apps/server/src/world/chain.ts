@@ -80,14 +80,14 @@ export class MemoryChain implements Chain {
     return out;
   }
 
-  async buy(signer: Keypair, mint: string, lamportsIn: number): Promise<TradeResult> {
+  async buy(signer: Keypair, mint: string, lamportsIn: number, _slippageBps?: number): Promise<TradeResult> {
     const p = this.pool(mint), a = this.acct(signer.publicKey.toBase58());
     this.spend(a, TX_FEE + lamportsIn); a.lamports += lamportsIn;
     const tokenDelta = this.swapIn(a, p, lamportsIn);
     return { signature: this.sig(), lamportsDelta: -(lamportsIn + TX_FEE), tokenDelta, feeLamports: TX_FEE };
   }
 
-  async sell(signer: Keypair, mint: string, rawTokensIn: number): Promise<TradeResult> {
+  async sell(signer: Keypair, mint: string, rawTokensIn: number, _slippageBps?: number): Promise<TradeResult> {
     const p = this.pool(mint), a = this.acct(signer.publicKey.toBase58());
     const held = a.tokens.get(mint) ?? 0;
     if (held < rawTokensIn || rawTokensIn <= 0) throw new ChainError('INSUFFICIENT_TOKENS', `Holds ${held} raw units, tried to sell ${rawTokensIn}`);
