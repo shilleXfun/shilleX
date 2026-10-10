@@ -14,3 +14,8 @@ a.row:hover { background: rgba(29, 33, 64, 0.38); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: var(--glow-accent); }
 .more { display: grid; place-items: center; padding: 18px; }
 @media (max-width: 480px) { .row { padding: 12px 14px; gap: 10px; grid-template-columns: 28px 30px minmax(0, 1fr) auto; } }
+/* Grouped rows: two (24px) or three (20px) avatars overlap to fill exactly the 34px avatar slot. */
+.stack { display: flex; align-items: center; width: 34px; }
+.stack > * { flex: none; box-shadow: 0 0 0 2px var(--bg); border-radius: 50%; }
+.stack[data-count='2'] > * + * { margin-left: -14px; }
+.stack[data-count='3'] > * + * { margin-left: -13px; }

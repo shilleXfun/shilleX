@@ -78,7 +78,8 @@ export async function toNotificationViews(db: Db, rows: (typeof notifications.$i
     const actor = r.actorId ? actors.get(r.actorId) ?? null : null;
     const { text, href } = describeNotification(r.type as NotificationType, actor?.displayName ?? 'Someone', r.data);
     return { id: r.id, type: r.type as NotificationType, actor, target: { type: r.targetType as NotificationView['target']['type'], id: r.targetId },
-      text, href, read: !!r.readAt, createdAt: r.createdAt.toISOString(), excerpt: excerpt.get(`${r.targetType}:${r.targetId}`) ?? null };
+      text, href, read: !!r.readAt, createdAt: r.createdAt.toISOString(), excerpt: excerpt.get(`${r.targetType}:${r.targetId}`) ?? null,
+      emoji: r.type === 'reaction' ? r.data.emoji ?? null : null };
   });
 }
 
