@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { TokenAvatar } from '../tokens/TokenAvatar';
 import { useTokenPanel } from '../tokens/useTokenPanel';
 import { primeTokens } from '../tokens/tokenCache';
+import { useUnmutedCoins } from '../../lib/muted';
 import s from './discover.module.css';
 
 export function CoinRow({ c, peak }: { c: NewCoinView; peak: number }) {
@@ -24,7 +25,8 @@ export function CoinRow({ c, peak }: { c: NewCoinView; peak: number }) {
 }
 
 /** Paid placements, always boxed and labeled Promoted, apart from the recency list. */
-export function PromotedCoins({ coins, peak }: { coins: NewCoinView[]; peak: number }) {
+export function PromotedCoins({ coins: all, peak }: { coins: NewCoinView[]; peak: number }) {
+  const coins = useUnmutedCoins(all);
   if (!coins.length) return null;
   return (
     <section className={s.promoBox} aria-label={COPY.promoted}>
@@ -38,11 +40,12 @@ export function NewCoinsList({ coins, promoted }: { coins: NewCoinView[]; promot
   const qc = useQueryClient();
   useEffect(() => { primeTokens(qc, Object.fromEntries([...coins, ...promoted].map((c) => [c.token.mint, c.token]))); }, [qc, coins, promoted]);
   const peak = Math.max(0, ...coins.map((c) => c.mentions24h), ...promoted.map((c) => c.mentions24h));
+  const visible = useUnmutedCoins(coins);
   return (
     <div>
       <PromotedCoins coins={promoted} peak={peak} />
       <section aria-label="New coins">
-        {coins.length ? coins.map((c) => <CoinRow key={c.token.mint} c={c} peak={peak} />) : <p className={s.roomMeta}>No new tokens mentioned publicly yet.</p>}
+        {visible.length ? visible.map((c) => <CoinRow key={c.token.mint} c={c} peak={peak} />) : <p className={s.roomMeta}>No new tokens mentioned publicly yet.</p>}
       </section>
       <p className={s.note}>{COPY.discoveryNote}</p>
     </div>
