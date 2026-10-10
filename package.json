@@ -9,6 +9,10 @@
     "build": "npm run build --workspaces --if-present",
     "start": "npm run start -w @shillex/server",
     "seed": "npm run seed -w @shillex/server",
+    "world:seed": "npm run world:seed -w @shillex/server",
+    "world:treasury": "npm run world:treasury -w @shillex/server",
+    "world:launchpad": "npm run world:launchpad -w @shillex/server",
+    "world:fund": "npm run world:fund -w @shillex/server",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "e2e": "playwright test -c e2e/playwright.config.ts"

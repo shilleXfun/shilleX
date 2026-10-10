@@ -13,7 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
-    "world:spike": "tsx --env-file-if-exists=../../.env scripts/world-spike.ts"
+    "world:spike": "tsx --env-file-if-exists=../../.env scripts/world-spike.ts",
+    "world": "tsx --env-file-if-exists=../../.env src/world/cli.ts",
+    "world:seed": "npm run world -- seed"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
