@@ -41,6 +41,25 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(screen.getByTestId('where')).toHaveTextContent(`?token=${MINT}`);
   });
+  it('finds tokens by $ticker, and warns when two share one', async () => {
+    const tok = (mint: string, name: string) => ({ mint, status: 'resolved', source: 'demo', name, symbol: 'GRUB', imageUrl: null, decimals: null, liquidityUsd: null, marketCapUsd: null, fdvUsd: null, pairAddress: null, dexId: null, pairCreatedAt: null, promoted: false, fetchedAt: null, error: null });
+    mockFetch({
+      '/api/tokens/search': { results: [{ token: tok(MINT, 'Grubworm'), mentions24h: 9 }, { token: tok('So11111111111111111111111111111111111111112', 'Grub Copy'), mentions24h: 1 }] },
+      '/api/users': { users: [] }, '/api/communities': { communities: [] },
+    });
+    app();
+    act(() => openPalette());
+    const box = await screen.findByRole('combobox');
+    fireEvent.change(box, { target: { value: '$grub' } });
+    await wait(200);
+    const options = await screen.findAllByRole('option', { name: /GRUB/ });
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveTextContent('Grubworm');
+    expect(options[0]).toHaveTextContent('DezX…B263');
+    expect(options[0]).toHaveTextContent('2 tokens use $GRUB, check the address');
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByTestId('where')).toHaveTextContent(`?token=${MINT}`);
+  });
   it('filters pages by name with no query needed', async () => {
     app();
     act(() => openPalette());

@@ -36,6 +36,30 @@ describe('token routes', () => {
     expect(hourly[18]).toBe(1);
     expect(hourly.reduce((x: number, y: number) => x + y, 0)).toBe(mentions24h);
   });
+  it('searches publicly discussed tokens by $symbol or name, exact symbol first, never private-only ones', async () => {
+    const COPY = 'So11111111111111111111111111111111111111112', SECRET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    await ctx.db.insert(tokens).values([
+      { mint: COPY, source: 'demo', status: 'resolved', name: 'Not Demo Bonk', symbol: 'DBONKX' },
+      { mint: SECRET, source: 'demo', status: 'resolved', name: 'Secret Bonk', symbol: 'DBONKS' },
+    ]);
+    const at = ctx.clock.now();
+    await ctx.db.insert(tokenMentions).values([
+      { id: 'ts1', mint: COPY, sourceType: 'post', sourceId: 'ts1', authorId: a.id, isPublic: true, createdAt: at },
+      { id: 'ts2', mint: SECRET, sourceType: 'message', sourceId: 'ts2', authorId: a.id, isPublic: false, createdAt: at },
+    ]);
+    const found = (q: string) => ctx.as(b).get(`/api/tokens/search?q=${encodeURIComponent(q)}`).then((r) => r.body.results.map((x: any) => x.token.symbol));
+    expect(await found('$DBONK')).toEqual(['DBONK', 'DBONKX']);
+    expect(await found('bonk')).toEqual(expect.arrayContaining(['DBONK', 'DBONKX']));
+    expect(await found('bonk')).not.toContain('DBONKS');
+    expect(await found('zzz')).toEqual([]);
+    const top = (await ctx.as(b).get('/api/tokens/search?q=dbonk')).body.results[0];
+    expect(top.token.mint).toBe(MINT);
+    expect(top.mentions24h).toBeGreaterThan(0);
+    // Counts are per token: the copy has exactly its one public mention, not everyone's.
+    const copy = (await ctx.as(b).get('/api/tokens/search?q=dbonkx')).body.results[0];
+    expect(copy).toMatchObject({ token: { mint: COPY } });
+    expect(copy.mentions24h).toBe((await ctx.as(b).get(`/api/tokens/${COPY}`)).body.stats.mentions24h);
+  });
   it('rejects invalid addresses', async () => {
     expect((await ctx.as(b).get('/api/tokens/not-a-mint')).body.code).toBe('INVALID_ADDRESS');
     expect((await ctx.as(b).post('/api/tokens/resolve', { mints: Array(26).fill(MINT) })).status).toBe(400);
