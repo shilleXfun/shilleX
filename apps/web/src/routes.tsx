@@ -3,7 +3,6 @@ import { AppShell } from './layout/AppShell';
 import { RequireAuth } from './features/auth/RequireAuth';
 import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
-import { EmptyState } from './components/ui/EmptyState';
 import { HomePage } from './features/feed/HomePage';
 import { ThreadPage } from './features/feed/ThreadPage';
 import { BookmarksPage } from './features/feed/BookmarksPage';
@@ -15,6 +14,7 @@ import { ProfilePage } from './features/profile/ProfilePage';
 import { SettingsPage } from './features/profile/SettingsPage';
 import { NotificationsPage } from './features/notifications/NotificationsPage';
 import { DiscoverPage } from './features/discover/DiscoverPage';
+import { NotFoundPage } from './layout/NotFoundPage';
 
 
 export const router = createBrowserRouter([
@@ -36,7 +36,7 @@ export const router = createBrowserRouter([
       { path: '/bookmarks', element: <BookmarksPage /> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '/invite/:code', element: <InvitePage /> },
-      { path: '*', element: <EmptyState title="Page not found" body="That link doesn’t go anywhere." /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);

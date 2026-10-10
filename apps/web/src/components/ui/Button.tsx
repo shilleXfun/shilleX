@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
+import { Link } from 'react-router';
 import { Check } from 'lucide-react';
 import { cx } from '../../lib/cx';
 import { dur, press, spring } from '../../lib/motion';
@@ -34,6 +35,16 @@ export function Button({ variant = 'secondary', size = 'md', loading, done, icon
     </PressScale>
   );
 }
+/** Navigation that looks like a Button but stays a link (middle-click, "open in new tab", announced as a link). */
+export function ButtonLink({ to, variant = 'secondary', size = 'md', icon, children, className }:
+  { to: string; variant?: Variant; size?: 'sm' | 'md'; icon?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <Link to={to} className={cx(s.btn, variant !== 'secondary' && s[variant], size === 'sm' && s.sm, className)}>
+      {icon && <span className={s.btnSlot}>{icon}</span>}{children}
+    </Link>
+  );
+}
+
 export function IconButton({ label, className, ...rest }: PressProps & { label: string }) {
   return <PressScale aria-label={label} title={label} className={cx(s.iconBtn, className)} {...rest} />;
 }

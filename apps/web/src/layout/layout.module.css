@@ -110,3 +110,15 @@
 .shortcutRow dd { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
 .key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border: 1px solid var(--line-strong); border-bottom-width: 3px; border-radius: 7px; background: var(--raised); color: var(--text); font: 600 12px/1 var(--font-mono); }
 .keyJoin { color: var(--muted); font-size: var(--fs-xs); }
+/* 404: a short candle row with one missing, the gap breathing. */
+.notFound { display: grid; justify-items: center; gap: 12px; padding: 72px 24px; text-align: center; }
+.nfArt { width: 170px; height: auto; margin-bottom: 8px; overflow: visible; }
+.nfBase { stroke: var(--line-strong); stroke-width: 1; }
+.nfUp { fill: var(--token); stroke: var(--token); stroke-width: 1.5; opacity: .85; }
+.nfDown { fill: var(--down); stroke: var(--down); stroke-width: 1.5; opacity: .85; }
+.nfGhost { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4; animation: nfBreathe 2.4s ease-in-out infinite; }
+@keyframes nfBreathe { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .nfGhost { animation: none; } }
+.nfTitle { margin: 0; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; }
+.nfBody { max-width: 40ch; margin: 0; color: var(--muted); }
+.nfActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
