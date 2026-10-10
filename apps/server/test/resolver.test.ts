@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import bs58 from 'bs58';
 import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { createDb, type DbHandle } from '../src/db/client.ts';
+import type { DbHandle } from '../src/db/client.ts';
+import { testDb } from './helpers.ts';
 import { tokens } from '../src/db/schema.ts';
 import { TokenResolver, BACKGROUND_QUEUE_CAP } from '../src/tokens/resolver.ts';
 import { RecordingBus } from '../src/realtime/bus.ts';
@@ -36,7 +37,7 @@ const pair = (o: Partial<{ base: string; liq: number | undefined; pairAddress: s
 let h: DbHandle; let bus: RecordingBus; let clock: Date;
 const make = (fetchImpl: typeof fetch, live = true, concurrency?: number) => new TokenResolver({ db: h.db, bus, rpcUrl: RPC, live, fetchImpl, now: () => clock, concurrency });
 const randomMint = () => bs58.encode(randomBytes(32));
-beforeEach(async () => { h = await createDb({}); bus = new RecordingBus(); clock = new Date('2026-10-09T12:00:00Z'); });
+beforeEach(async () => { h = await testDb(); bus = new RecordingBus(); clock = new Date('2026-10-09T12:00:00Z'); });
 afterAll(async () => { await h?.close(); });
 
 describe('TokenResolver', () => {

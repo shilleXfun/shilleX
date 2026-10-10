@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { inject } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { TokenView } from '@shillex/shared';
 import { createDb } from '../src/db/client.ts';
@@ -27,8 +29,15 @@ export class FakeTokens implements TokenResolverPort {
 export interface Res { status: number; body: any }
 export interface TestUser { id: string; username: string; cookie: string }
 
+let snapshot: Promise<Blob> | null = null;
+/** A fresh, migrated in-memory database restored from the run's snapshot (test/global-setup.ts). */
+export function testDb() {
+  snapshot ??= readFile(inject('pgliteSnapshot')).then((b) => new Blob([b]));
+  return snapshot.then((pgliteSnapshot) => createDb({ pgliteSnapshot }));
+}
+
 export async function makeTestApp(over: Partial<AppDeps> = {}) {
-  const handle = await createDb({});
+  const handle = await testDb();
   let current = new Date('2026-10-09T12:00:00Z');
   const clock = { now: () => current, set: (d: Date) => { current = d; }, advance: (ms: number) => { current = new Date(current.getTime() + ms); } };
   const bus = new RecordingBus();

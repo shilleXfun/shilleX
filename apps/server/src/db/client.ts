@@ -8,7 +8,8 @@ export interface DbHandle { db: Db; close(): Promise<void>; kind: 'pglite' | 'po
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
-export async function createDb(opts: { url?: string; pgliteDir?: string }): Promise<DbHandle> {
+/** `pgliteSnapshot` boots an in-memory PGlite from a dumped data dir (tests): ~1 s instead of ~5 s for initdb. */
+export async function createDb(opts: { url?: string; pgliteDir?: string; pgliteSnapshot?: Blob }): Promise<DbHandle> {
   if (opts.url) {
     const pg = (await import('pg')).default;
     const { drizzle } = await import('drizzle-orm/node-postgres');
@@ -23,7 +24,7 @@ export async function createDb(opts: { url?: string; pgliteDir?: string }): Prom
   const { drizzle } = await import('drizzle-orm/pglite');
   const { migrate } = await import('drizzle-orm/pglite/migrator');
   if (opts.pgliteDir) mkdirSync(opts.pgliteDir, { recursive: true });
-  const client = opts.pgliteDir ? new PGlite(opts.pgliteDir) : new PGlite();
+  const client = opts.pgliteDir ? new PGlite(opts.pgliteDir) : new PGlite(opts.pgliteSnapshot ? { loadDataDir: opts.pgliteSnapshot } : {});
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder });
   return { db: db as unknown as Db, close: () => client.close(), kind: 'pglite' };
