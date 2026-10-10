@@ -9,6 +9,8 @@ import { Toaster } from '../components/ui/Toaster';
 import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import { useRealtimeSync } from './useRealtimeSync';
+import { RightRail } from './RightRail';
+import { useAtmospherePulse } from '../components/atmosphere/Atmosphere';
 import s from './layout.module.css';
 
 const route = {
@@ -20,6 +22,7 @@ const route = {
 export function AppShell() {
   useTokenEvents();
   useRealtimeSync();
+  useAtmospherePulse();
   const { pathname } = useLocation();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
@@ -30,7 +33,7 @@ export function AppShell() {
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
   return (
-    <div className={s.shell} data-immersive={!!(inChannel || inDm)}>
+    <div className={s.shell} data-immersive={!!(inChannel || inDm)} data-wide={parts[1] === 'c' || parts[1] === 'messages'}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <ReconnectBanner />
       <aside className={s.left} aria-label="Primary"><LeftNav /></aside>
@@ -41,7 +44,7 @@ export function AppShell() {
           <motion.div key={pageKey} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
         </AnimatePresence>
       </main>
-      {/* Task 23 adds <aside className={s.right}><RightRail/></aside> */}
+      <aside className={s.right} aria-label="Activity"><RightRail /></aside>
       <TokenPanelHost />
       <MobileTabBar />
       <Toaster />

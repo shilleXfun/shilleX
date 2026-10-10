@@ -2,6 +2,9 @@
 :root {
   color-scheme: dark;
   --bg: #080914;
+  /* Sky gradient behind everything (components/atmosphere). */
+  --sky-top: #05060F;
+  --sky-low: #120C26;
   --panel: #0F1122;
   --raised: #171A31;
   --hover: #1D2140;
@@ -29,8 +32,11 @@
   --heat: #FF7A3D;
   --heat-soft: rgba(255, 122, 61, 0.14);
   --scrim: rgba(4, 4, 12, 0.66);
-  --glass: rgba(8, 9, 20, 0.72);
-  --glass-blur: blur(14px) saturate(140%);
+  --glass: rgba(9, 10, 24, 0.66);
+  --glass-blur: blur(18px) saturate(150%);
+  /* Column surfaces are frosted so the sky reads through them. */
+  --column: rgba(9, 10, 24, 0.74);
+  --column-side: rgba(10, 11, 26, 0.38);
 
   --glow-accent: 0 0 24px rgba(139, 108, 255, 0.35);
   --glow-token: 0 0 24px rgba(39, 224, 192, 0.35);
@@ -48,7 +54,7 @@
   --shadow-pop: 0 18px 48px rgba(2, 2, 10, 0.6), 0 0 0 1px var(--line-strong);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
-  --left-w: 248px; --right-w: 320px; --panel-w: 420px; --tabbar-h: 58px; --mobile-header-h: 50px;
+  --left-w: 248px; --right-w: 320px; --center-max: 680px; --panel-w: 420px; --tabbar-h: 58px; --mobile-header-h: 50px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }

@@ -1,0 +1,39 @@
+/* Night sky behind every screen (visual v3 § Atmosphere). Layer order: sky, aurora, horizon glow, skyline, grain. */
+.root { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
+.sky { position: absolute; inset: 0; background: linear-gradient(180deg, var(--sky-top) 0%, var(--bg) 46%, var(--sky-low) 100%); }
+
+/* Two very large, very soft clouds of light that drift on long, offset loops. */
+.aurora { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
+.auroraA { width: 70vw; height: 55vh; left: -18vw; top: -22vh; background: radial-gradient(closest-side, rgba(139, 108, 255, 0.3), transparent); }
+.auroraB { width: 60vw; height: 50vh; right: -16vw; top: 18vh; background: radial-gradient(closest-side, rgba(39, 224, 192, 0.14), transparent); }
+
+/* Where the city meets the sky: a plum band with a faint ember core. */
+.horizon {
+  position: absolute; left: -10%; right: -10%; bottom: -14vh; height: 52vh;
+  background:
+    radial-gradient(45% 55% at 64% 100%, rgba(255, 122, 61, 0.2), transparent 70%),
+    radial-gradient(75% 85% at 38% 100%, rgba(122, 48, 160, 0.42), transparent 72%);
+}
+
+.skyline {
+  position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 50vh;
+  opacity: 0.85;
+  mask-image: linear-gradient(to top, #000 55%, transparent);
+  -webkit-mask-image: linear-gradient(to top, #000 55%, transparent);
+}
+
+.grain {
+  position: absolute; inset: 0; opacity: 0.025; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auroraA { animation: driftA 48s ease-in-out infinite alternate; }
+  .auroraB { animation: driftB 62s ease-in-out infinite alternate; }
+  .horizon { animation: breathe 9s ease-in-out infinite alternate; }
+}
+@keyframes driftA { to { transform: translate3d(22vw, 10vh, 0) scale(1.15); } }
+@keyframes driftB { to { transform: translate3d(-18vw, 14vh, 0) scale(0.9); } }
+@keyframes breathe { from { opacity: 0.75; } to { opacity: 1; } }
+
+@media (max-width: 767px) { .skyline { height: 30vh; opacity: 0.45; } }

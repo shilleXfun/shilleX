@@ -14,9 +14,8 @@ import { MessagesPage } from './features/messages/MessagesPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { SettingsPage } from './features/profile/SettingsPage';
 import { NotificationsPage } from './features/notifications/NotificationsPage';
+import { DiscoverPage } from './features/discover/DiscoverPage';
 
-// Temporary placeholder so the shell is navigable while later tasks build each screen; removed in Task 24.
-const ComingNext = ({ name }: { name: string }) => <EmptyState title={name} body="This screen is built in a later task." />;
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -25,7 +24,7 @@ export const router = createBrowserRouter([
     element: <RequireAuth><AppShell /></RequireAuth>,
     children: [
       { path: '/', element: <HomePage /> },
-      { path: '/discover', element: <ComingNext name="Discover" /> },
+      { path: '/discover', element: <DiscoverPage /> },
       { path: '/communities', element: <CommunitiesPage /> },
       { path: '/c/:slug', element: <CommunityPage /> },
       { path: '/c/:slug/:channelId', element: <CommunityPage /> },
