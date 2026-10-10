@@ -12,6 +12,8 @@ export interface ServerToClientEvents {
   'post:new': (p: { postId: string; authorId: string }) => void;
   'call:update': (p: { postId: string; update: CallUpdateView }) => void;
   'token:resolved': (p: { token: TokenView }) => void;
+  /** A new public mention of this token (never private ones); sent to the token's room for open panels. */
+  'token:mention': (p: { mint: string; sourceType: 'post' | 'message' }) => void;
   'conversation:update': (p: { conversationId: string }) => void;
   'community:update': (p: { communityId: string }) => void;
 }

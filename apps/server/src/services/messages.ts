@@ -9,7 +9,7 @@ import { resolveUploads } from '../routes/uploads.ts';
 import { computeMentionVisibility, getCommunityAccess, isBlockedEitherWay, requireChannel, requireConversationMember } from './visibility.ts';
 import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
-import { notifyTokenSubscribersSafe } from './token-subs.ts';
+import { announcePublicMentions, notifyTokenSubscribersSafe } from './token-subs.ts';
 import { hydrateMessages } from './hydrate.ts';
 import { markRead } from './unread.ts';
 import { checkSlowMode, isNewAccount, linkMentionCount, type MessageGuards } from './moderation.ts';
@@ -130,7 +130,7 @@ export async function afterVisible(deps: AppDeps, msg: MessageRow, channel: Chan
     communityId: channel?.communityId ?? null, channelId: channel?.id ?? null, isPublic, createdAt: msg.createdAt, extraMints: tokenMints,
   });
   if (mints.length) deps.tokens.enqueue(mints);
-  if (mints.length && isPublic) await notifyTokenSubscribersSafe(deps, mints, msg.authorId);
+  if (mints.length && isPublic) { announcePublicMentions(deps, mints, 'message'); await notifyTokenSubscribersSafe(deps, mints, msg.authorId); }
   if (channel) {
     const handles = extractMentions(msg.body);
     if (handles.length) {

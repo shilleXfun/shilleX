@@ -24,6 +24,11 @@ export async function notifyTokenSubscribers(deps: Pick<AppDeps, 'db' | 'bus' | 
 }
 
 /** Post-commit variant: the content is already saved, so a notification failure must not fail the request. */
+/** Live discussion heat: tell open token panels about a new public mention. Callers only pass public mentions. */
+export function announcePublicMentions(deps: Pick<AppDeps, 'bus'>, mints: string[], sourceType: 'post' | 'message') {
+  for (const mint of mints) deps.bus.toRoom(`token:${mint}`, 'token:mention', { mint, sourceType });
+}
+
 export async function notifyTokenSubscribersSafe(deps: Pick<AppDeps, 'db' | 'bus' | 'now'>, mints: string[], actorId: string) {
   try { await notifyTokenSubscribers(deps, mints, actorId); } catch (e) { console.error('token subscriber notification failed', e); }
 }
