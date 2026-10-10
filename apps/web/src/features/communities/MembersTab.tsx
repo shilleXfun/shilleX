@@ -36,7 +36,7 @@ export function MembersTab({ detail }: { detail: CommunityDetail }) {
   const row = (m: MemberView) => (
     <li key={m.user.id} className={s.memberRow}>
       <Avatar src={m.user.avatarUrl} size={34} online={m.online} me={m.user.id === me.id} />
-      <span style={{ minWidth: 0 }}>
+      <span className={s.memberText}>
         <Link to={`/u/${m.user.username}`} className={s.memberName}>{m.user.displayName}</Link> <span className={s.memberHandle}>@{m.user.username}</span>
       </span>
       {m.role !== 'member' && <Badge tone="accent">{ROLE_LABEL[m.role]}</Badge>}

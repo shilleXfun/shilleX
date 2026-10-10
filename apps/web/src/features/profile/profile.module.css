@@ -9,7 +9,7 @@
 .name { margin: 0; font: 800 var(--fs-3xl) / var(--lh-display) var(--font-brand); font-stretch: 76%; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .handleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
 .muted { color: var(--muted); font-size: var(--fs-sm); }
-.bio { margin: 0; max-width: 60ch; }
+.bio { margin: 0; max-width: 60ch; overflow-wrap: anywhere; }
 .demoNote { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-sm); }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--muted); font-size: var(--fs-sm); }
 .meta a, .meta span { display: inline-flex; align-items: center; gap: 5px; }

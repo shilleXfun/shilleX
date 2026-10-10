@@ -36,13 +36,13 @@
 .navPill { position: absolute; inset: 0; border-radius: inherit; background: #1F1B45; box-shadow: inset 0 0 0 1px var(--accent-line), var(--glow-accent); }
 .navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 600 11px/1 var(--font-mono); box-shadow: 0 0 12px rgba(139, 108, 255, 0.55); }
 .sectionLabel { margin: 18px 12px 6px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
-.communityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.communityList { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .community { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--muted); font-weight: 500; transition: background .12s, color .12s; }
 .community:hover { background: var(--hover); color: var(--text); }
 .community[aria-current='page'] { background: var(--raised); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .community img { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--raised); image-rendering: pixelated; }
 .communityAdd { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 1px dashed var(--line-strong); }
-.communityName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.communityName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unreadDot { flex: none; margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: var(--glow-accent); }
 .unreadCount { margin-left: auto; color: var(--text); font: 500 11px var(--font-mono); }
 .navFoot { margin-top: auto; padding-top: 14px; display: grid; gap: 10px; }
