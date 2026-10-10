@@ -64,14 +64,16 @@ export function usePostActions(p: PostView) {
 
 export function useUserActions(u: UserSummary) {
   const qc = useQueryClient();
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
+  /** Resolves true on success, so optimistic callers can roll back. */
+  const run = async (fn: () => Promise<unknown>, ok: string): Promise<boolean> => {
     try {
       await fn();
       toast(ok);
       void qc.invalidateQueries({ queryKey: ['profile', u.username] });
       void qc.invalidateQueries({ queryKey: ['feed'] });
       void qc.invalidateQueries({ queryKey: ['sidebar'] });
-    } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
+      return true;
+    } catch (e) { toast(errorMessage(e), { tone: 'error' }); return false; }
   };
   return {
     follow: (on: boolean) => run(() => (on ? put(`/users/${u.username}/follow`) : del(`/users/${u.username}/follow`)), on ? `Following @${u.username}` : `Unfollowed @${u.username}`),

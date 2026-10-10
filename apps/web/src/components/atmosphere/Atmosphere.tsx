@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { useSocketEvent } from '../../lib/socket';
 import s from './atmosphere.module.css';
 
@@ -58,11 +59,12 @@ function nextCandle(prev: number, r: () => number): Candle {
 export function Atmosphere() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const phase = usePhase();
+  // Live: turning reduced motion on or off while the app is open restarts the skyline in the matching mode.
+  const reduced = useReducedMotion() ?? false;
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext('2d');
     if (!el || !ctx) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const css = getComputedStyle(document.documentElement);
     const color = { up: css.getPropertyValue('--token').trim() || '#27E0C0', down: css.getPropertyValue('--down').trim() || '#FF4F7B', accent: css.getPropertyValue('--accent').trim() || '#8B6CFF' };
 
@@ -88,6 +90,8 @@ export function Atmosphere() {
       el.width = Math.round(w * dpr); el.height = Math.round(hgt * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       fill();
+      // Resizing clears the canvas; redraw now so the still frame (reduced motion, hidden tab) survives it.
+      draw(performance.now());
     };
 
     const y = (v: number) => hgt - 24 - v * (hgt * 0.8);
@@ -153,7 +157,8 @@ export function Atmosphere() {
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       if (now - last < FRAME_MS) return;
-      last = now;
+      // Carry the remainder so a 60 Hz display lands on every second frame instead of skipping unevenly.
+      last = now - ((now - last) % FRAME_MS);
       if (now - printedAt >= PRINT_MS) {
         candles.push(live); candles.shift();
         const next = nextCandle(live.c, r);
@@ -183,15 +188,14 @@ export function Atmosphere() {
     resize();
     window.addEventListener('resize', resize);
     listeners.add(onPulse);
-    if (reduced) draw(performance.now());
-    else { document.addEventListener('visibilitychange', onVisibility); raf = requestAnimationFrame(tick); }
+    if (!reduced) { document.addEventListener('visibilitychange', onVisibility); raf = requestAnimationFrame(tick); }
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', onVisibility);
       listeners.delete(onPulse);
     };
-  }, []);
+  }, [reduced]);
 
   return (
     <div className={s.root} data-phase={phase} aria-hidden="true">

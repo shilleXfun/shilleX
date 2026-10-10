@@ -10,6 +10,7 @@ import { TokenAvatar } from '../tokens/TokenAvatar';
 import { useTokenPanel } from '../tokens/useTokenPanel';
 import { LiveRooms } from './LiveRooms';
 import { PeopleList } from './PeopleList';
+import { PromotedCoins } from './NewCoinsList';
 import s from './discover.module.css';
 import cs from '../communities/communities.module.css';
 
@@ -30,16 +31,7 @@ export function DiscoverPage() {
           </section>
           <section className={s.section} aria-labelledby="d-people"><h2 id="d-people" className={s.h2}>People to follow</h2><div className={s.peopleGrid}><PeopleList people={q.data.people} /></div></section>
           <section className={s.section} aria-labelledby="d-coins"><h2 id="d-coins" className={s.h2}>New coins</h2>
-            {q.data.promoted.length > 0 && (
-              <div className={s.promoBox}>
-                <Badge tone="promoted" title="Paid placement (demo)">{COPY.promoted}</Badge>
-                {q.data.promoted.map((c) => (
-                  <button key={c.token.mint} type="button" className={s.coin} onClick={(e) => openToken(c.token.mint, e.currentTarget)}>
-                    <TokenAvatar token={c.token} size={22} /><span className={s.coinSym}>${c.token.symbol}</span><span className={s.coinStats}>{formatUsd(c.token.liquidityUsd)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <PromotedCoins coins={q.data.promoted} peak={Math.max(0, ...q.data.promoted.map((c) => c.mentions24h))} />
             <div style={{ overflowX: 'auto' }}>
               <table className={s.table}>
                 <caption className="sr-only">Tokens by most recent first public mention</caption>

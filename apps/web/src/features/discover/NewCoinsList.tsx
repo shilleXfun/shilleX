@@ -7,7 +7,7 @@ import { useTokenPanel } from '../tokens/useTokenPanel';
 import { primeTokens } from '../tokens/tokenCache';
 import s from './discover.module.css';
 
-function CoinRow({ c, peak }: { c: NewCoinView; peak: number }) {
+export function CoinRow({ c, peak }: { c: NewCoinView; peak: number }) {
   const { openToken } = useTokenPanel();
   const t = c.token;
   return (
@@ -23,18 +23,24 @@ function CoinRow({ c, peak }: { c: NewCoinView; peak: number }) {
   );
 }
 
+/** Paid placements, always boxed and labeled Promoted, apart from the recency list. */
+export function PromotedCoins({ coins, peak }: { coins: NewCoinView[]; peak: number }) {
+  if (!coins.length) return null;
+  return (
+    <section className={s.promoBox} aria-label={COPY.promoted}>
+      <Badge tone="promoted" title="Paid placement (demo)">{COPY.promoted}</Badge>
+      {coins.map((c) => <CoinRow key={c.token.mint} c={c} peak={peak} />)}
+    </section>
+  );
+}
+
 export function NewCoinsList({ coins, promoted }: { coins: NewCoinView[]; promoted: NewCoinView[]; compact?: boolean }) {
   const qc = useQueryClient();
   useEffect(() => { primeTokens(qc, Object.fromEntries([...coins, ...promoted].map((c) => [c.token.mint, c.token]))); }, [qc, coins, promoted]);
   const peak = Math.max(0, ...coins.map((c) => c.mentions24h), ...promoted.map((c) => c.mentions24h));
   return (
     <div>
-      {promoted.length > 0 && (
-        <section className={s.promoBox} aria-label={COPY.promoted}>
-          <Badge tone="promoted" title="Paid placement (demo)">{COPY.promoted}</Badge>
-          {promoted.map((c) => <CoinRow key={c.token.mint} c={c} peak={peak} />)}
-        </section>
-      )}
+      <PromotedCoins coins={promoted} peak={peak} />
       <section aria-label="New coins">
         {coins.length ? coins.map((c) => <CoinRow key={c.token.mint} c={c} peak={peak} />) : <p className={s.roomMeta}>No new tokens mentioned publicly yet.</p>}
       </section>

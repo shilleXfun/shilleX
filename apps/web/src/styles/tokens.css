@@ -37,6 +37,8 @@
   /* Column surfaces are frosted so the sky reads through them. */
   --column: rgba(9, 10, 24, 0.74);
   --column-side: rgba(10, 11, 26, 0.38);
+  /* The side columns thicken toward the bottom, where the skyline rises behind their muted text (AA). */
+  --column-side-fade: linear-gradient(180deg, var(--column-side) 30%, rgba(10, 11, 26, 0.9) 62%);
 
   --glow-accent: 0 0 24px rgba(139, 108, 255, 0.35);
   --glow-token: 0 0 24px rgba(39, 224, 192, 0.35);

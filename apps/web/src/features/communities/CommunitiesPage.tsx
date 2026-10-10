@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, UsersRound } from 'lucide-react';
-import type { CommunitySummary } from '@shillex/shared';
+import { generatedBannerUrl, type CommunitySummary } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Badge } from '../../components/ui/Badge';
@@ -19,7 +19,7 @@ export function CommunityCard({ c }: { c: CommunitySummary }) {
   return (
     <Link to={`/c/${c.slug}`} className={s.card}>
       {/* The community's skyline banner (same generated art as its page header). */}
-      <span className={s.cardBanner} style={{ backgroundImage: `url(/media/banner/c${c.id}.svg)` }} aria-hidden="true" />
+      <span className={s.cardBanner} style={{ backgroundImage: `url(${generatedBannerUrl(`c${c.id}`)})` }} aria-hidden="true" />
       <div className={s.cardTop}>
         <img src={c.avatarUrl} alt="" />
         <div style={{ minWidth: 0 }}>

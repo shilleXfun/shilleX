@@ -1,12 +1,11 @@
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { dur, ease, spring } from '../../lib/motion';
 import { useTokenPanel } from './useTokenPanel';
 import { TokenPanel } from './TokenPanel';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import s from './panel.module.css';
 
-const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
-const useIsMobile = () => useSyncExternalStore((l) => { mq?.addEventListener('change', l); return () => mq?.removeEventListener('change', l); }, () => !!mq?.matches, () => false);
 
 /**
  * Desktop: a non-modal aside that springs in from the right edge; the routed page stays mounted and usable.
@@ -15,7 +14,7 @@ const useIsMobile = () => useSyncExternalStore((l) => { mq?.addEventListener('ch
  */
 export function TokenPanelHost() {
   const { mint, close } = useTokenPanel();
-  const mobile = useIsMobile();
+  const mobile = useMediaQuery('(max-width: 767px)');
   if (mobile) return <Sheet mint={mint} onClose={close} />;
   return (
     <AnimatePresence>

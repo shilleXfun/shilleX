@@ -13,6 +13,7 @@ import { useRealtimeSync } from './useRealtimeSync';
 import { RightRail } from './RightRail';
 import { useAtmospherePulse } from '../components/atmosphere/Atmosphere';
 import { useHotkeys } from '../lib/hotkeys';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import s from './layout.module.css';
 
@@ -44,6 +45,8 @@ export function AppShell() {
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
   const nav = useNavigate();
+  // The rail only exists from 1200px (layout.module.css); below that it isn't mounted, so it fetches nothing.
+  const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
   const [help, setHelp] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
@@ -51,7 +54,8 @@ export function AppShell() {
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   useHotkeys({
     '/': () => { if (!document.querySelector('[data-shortcut="search"]')) nav('/communities'); focusShortcut('search'); },
-    n: () => { if (pathname !== '/') nav('/'); focusShortcut('compose'); },
+    // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
+    n: () => { if (pathname === '/' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/', { state: { compose: true } }); },
     'g h': () => nav('/'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     '?': () => setHelp(true),
   });
@@ -67,7 +71,7 @@ export function AppShell() {
           <motion.div key={pageKey} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
         </AnimatePresence>
       </main>
-      <aside className={s.right} aria-label="Activity"><RightRail /></aside>
+      {wideEnoughForRail && <aside className={s.right} aria-label="Activity"><RightRail /></aside>}
       <TokenPanelHost />
       <MobileTabBar />
       <Toaster />

@@ -30,7 +30,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
       <div className={s.shortcuts}>
         {GROUPS.map((g) => (
           <section key={g.title} aria-label={g.title}>
-            <h3 className={s.shortcutsTitle}>{g.title}</h3>
+            <h2 className={s.shortcutsTitle}>{g.title}</h2>
             <dl className={s.shortcutsList}>
               {g.rows.map((r) => (
                 <div key={r.label} className={s.shortcutRow}>

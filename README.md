@@ -64,7 +64,7 @@ npm run typecheck  # TypeScript across all workspaces
 npm run e2e        # Playwright end-to-end, desktop and mobile; run `npx playwright install chromium` once first
 ```
 
-The e2e suite starts its own server on :3100 and web app on :5174 with a throwaway database under `./data/e2e-*` (gitignored, safe to delete).
+The e2e suite starts its own server on :3100 and web app on :5199 (override with `E2E_API_PORT` / `E2E_WEB_PORT`) with a throwaway database under `./data/e2e-*` (gitignored); each run clears the previous run's.
 
 ## Deploying to Railway
 

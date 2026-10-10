@@ -1,11 +1,12 @@
 import { useEffect, type CSSProperties } from 'react';
-import { Link, NavLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, NavLink, Navigate, useMatch, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion } from 'motion/react';
 import { ArrowLeft, Hash, Info, Lock, MailPlus, MessageSquareText, Pin, Shield, Users } from 'lucide-react';
-import type { CommunityDetail } from '@shillex/shared';
+import { generatedBannerUrl, type CommunityDetail } from '@shillex/shared';
 import { ApiError, del, errorMessage, get, post } from '../../lib/api';
 import { useRoom } from '../../lib/socket';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { spring } from '../../lib/motion';
 import { Badge } from '../../components/ui/Badge';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -35,6 +36,11 @@ export function CommunityPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const q = useCommunity(slug);
+  // On desktop, /c/:slug without a sub-view opens the first channel; on mobile it is the channel index.
+  const desktop = useMediaQuery('(min-width: 768px)');
+  // While this page animates out, its hooks already see the next location (no ?tab=), so the redirect below must
+  // only run while the community index is really the current URL — otherwise leaving a tab bounces into #general.
+  const atIndex = !!useMatch('/c/:slug');
   const d = q.data;
   useRoom('community', d?.canRead ? d.community.id : null);
   useEffect(() => { if (d) clearMentionDot(d.community.id); }, [d?.community.id]);
@@ -61,9 +67,7 @@ export function CommunityPage() {
   const detail = d!;
   const c = detail.community;
   const isMember = c.myStatus === 'active';
-  // On desktop, /c/:slug without a sub-view opens the first channel; on mobile it is the channel index.
-  const desktop = typeof window !== 'undefined' && !!window.matchMedia?.('(min-width: 768px)').matches;
-  if (detail.canRead && !channelId && !tab && desktop && detail.channels[0]) return <Navigate to={`/c/${slug}/${detail.channels[0].id}`} replace />;
+  if (atIndex && detail.canRead && !channelId && !tab && desktop && detail.channels[0]) return <Navigate to={`/c/${slug}/${detail.channels[0].id}`} replace />;
   const channel = detail.channels.find((x) => x.id === channelId);
   const showIndex = !channelId && !tab;
   const sections = [
@@ -75,7 +79,7 @@ export function CommunityPage() {
   return (
     <div className={s.page} data-channel={!!channelId}>
       {/* The community skyline glows in from the right, behind the name. */}
-      <header className={s.header} style={{ '--banner': `url(${detail.bannerUrl ?? `/media/banner/c${c.id}.svg`})` } as CSSProperties}>
+      <header className={s.header} data-banner style={{ '--banner': `url(${detail.bannerUrl ?? generatedBannerUrl(`c${c.id}`)})` } as CSSProperties}>
         {(channelId || tab) && <IconButton label="Back to community" className="mobile-only" onClick={() => nav(`/c/${slug}`)}><ArrowLeft size={18} /></IconButton>}
         <img src={c.avatarUrl} alt="" />
         <div className={s.headText}>

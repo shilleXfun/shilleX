@@ -18,3 +18,11 @@ test('keyboard-only: compose with n, publish with Ctrl+Enter, open a chip with E
   await page.locator('body').press('m');
   await expect(page).toHaveURL(/\/messages$/);
 });
+test('n from a community page lands in the Home composer, not on a composer that is leaving', async ({ page }) => {
+  await enterDemo(page);
+  await page.goto('/c/trenches?tab=threads');
+  await expect(page.getByRole('heading', { level: 1, name: 'The Trenches' })).toBeVisible();
+  await page.locator('body').press('n');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('textbox', { name: /What’s happening/ })).toBeFocused();
+});

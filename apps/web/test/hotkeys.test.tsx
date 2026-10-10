@@ -16,4 +16,15 @@ describe('useHotkeys', () => {
     fireEvent.keyDown(document.body, { key: 'n', ctrlKey: true });
     expect(compose).toHaveBeenCalledTimes(1);
   });
+  it('ignores repeats and stays out of the way while a modal dialog is open', () => {
+    const compose = vi.fn();
+    render(<Probe map={{ n: compose }} />);
+    fireEvent.keyDown(document.body, { key: 'n', repeat: true });
+    const d = document.createElement('dialog'); d.setAttribute('open', ''); document.body.append(d);
+    fireEvent.keyDown(document.body, { key: 'n' });
+    d.remove();
+    expect(compose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.body, { key: 'n' });
+    expect(compose).toHaveBeenCalledTimes(1);
+  });
 });

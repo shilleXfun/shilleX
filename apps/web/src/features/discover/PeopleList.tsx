@@ -9,6 +9,11 @@ import s from './discover.module.css';
 function Person({ p }: { p: PersonSuggestion }) {
   const a = useUserActions(p.user);
   const [following, setFollowing] = useState(false);
+  const toggle = async () => {
+    const next = !following;
+    setFollowing(next);
+    if (!(await a.follow(next))) setFollowing(!next);
+  };
   return (
     <div className={s.person}>
       <Avatar src={p.user.avatarUrl} size={36} />
@@ -16,7 +21,7 @@ function Person({ p }: { p: PersonSuggestion }) {
         <Link to={`/u/${p.user.username}`} className={s.roomName} style={{ display: 'block' }}>{p.user.displayName}</Link>
         <span className={s.roomMeta}>{p.reason}</span>
       </span>
-      <Button size="sm" variant={following ? 'secondary' : 'primary'} onClick={() => { setFollowing(!following); void a.follow(!following); }}>{following ? 'Following' : 'Follow'}</Button>
+      <Button size="sm" variant={following ? 'secondary' : 'primary'} onClick={() => void toggle()}>{following ? 'Following' : 'Follow'}</Button>
     </div>
   );
 }
