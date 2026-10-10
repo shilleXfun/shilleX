@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitest/config';
-// Every test file boots its own PGlite (WASM Postgres). One per core starves them and beforeAll times out; half the
-// cores finishes just as fast.
-export default defineConfig({ test: { include: ['test/**/*.test.ts'], testTimeout: 20_000, hookTimeout: 30_000, pool: 'forks', maxWorkers: '50%' } });
+// Every test file boots its own PGlite. They restore a migrated snapshot made once in global-setup.ts (initdb alone
+// takes ~5 s), and half the cores is enough: more workers only starve each other.
+export default defineConfig({
+  test: { include: ['test/**/*.test.ts'], globalSetup: ['test/global-setup.ts'], testTimeout: 20_000, hookTimeout: 30_000, pool: 'forks', maxWorkers: '50%' },
+});

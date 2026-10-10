@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { and, eq, gt, sql } from 'drizzle-orm';
-import { createDb, type DbHandle } from '../src/db/client.ts';
+import type { DbHandle } from '../src/db/client.ts';
+import { testDb } from './helpers.ts';
 import { seed, isDatabaseEmpty } from '../src/seed/seed.ts';
 import { unreadInScope } from '../src/services/unread.ts';
 import { PERSONAS } from '../src/seed/personas.ts';
@@ -9,7 +10,7 @@ import { users, communities, tokens, tokenMentions, conversations, conversationM
 import { isValidSolanaAddress } from '@shillex/shared';
 
 let h: DbHandle; const now = new Date('2026-10-09T12:00:00Z');
-beforeAll(async () => { h = await createDb({}); expect(await isDatabaseEmpty(h.db)).toBe(true); await seed(h.db, { now }); });
+beforeAll(async () => { h = await testDb(); expect(await isDatabaseEmpty(h.db)).toBe(true); await seed(h.db, { now }); });
 afterAll(() => h.close());
 
 describe('seed', () => {
