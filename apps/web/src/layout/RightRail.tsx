@@ -18,6 +18,7 @@ export function useSidebar() {
 function OnlineMembers({ slug }: { slug: string }) {
   const q = useMembers(slug);
   const online = (q.data?.members ?? []).filter((m) => m.online);
+  if (q.isError) return null;
   return (
     <section className={s.section} aria-labelledby="rail-online">
       <h2 id="rail-online" className={s.compactH}>Online now <span className={s.count}>{online.length}</span></h2>

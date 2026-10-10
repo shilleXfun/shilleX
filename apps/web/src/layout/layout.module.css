@@ -99,3 +99,14 @@
 /* Side columns scroll quietly: the scrollbar appears on hover or keyboard focus. */
 .left, .right { scrollbar-width: none; }
 .left:hover, .right:hover, .left:focus-within, .right:focus-within { scrollbar-width: thin; }
+
+/* Keyboard shortcuts dialog: keycaps with a pressed-in bottom edge. */
+.shortcuts { display: grid; gap: 18px; }
+.shortcutsTitle { margin: 0 0 6px; color: var(--muted); font: 600 var(--fs-sm) var(--font-ui); }
+.shortcutsList { margin: 0; display: grid; }
+.shortcutRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.shortcutRow:last-child { border-bottom: 0; }
+.shortcutRow dt { color: var(--text); }
+.shortcutRow dd { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border: 1px solid var(--line-strong); border-bottom-width: 3px; border-radius: 7px; background: var(--raised); color: var(--text); font: 600 12px/1 var(--font-mono); }
+.keyJoin { color: var(--muted); font-size: var(--fs-xs); }

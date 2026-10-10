@@ -15,7 +15,7 @@
   --muted: #8A8FB8;
   --accent: #8B6CFF;
   --accent-hover: #A28BFF;
-  --accent-ink: #FFFFFF;
+  --accent-ink: #080914; /* midnight ink: white on ultraviolet is only 3.7:1 */
   --accent-soft: rgba(139, 108, 255, 0.12);
   --accent-line: rgba(139, 108, 255, 0.4);
   --token: #27E0C0;

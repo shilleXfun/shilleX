@@ -9,6 +9,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { Tabs } from '../../components/ui/Tabs';
 import s from './messages.module.css';
 
@@ -54,6 +55,7 @@ export function NewConversationDialog({ open, onClose, onCreated }: { open: bool
         <input className={s.textInput} autoFocus aria-label="Search people" placeholder="Search people by name or @handle" value={q} onChange={(e) => setQ(e.target.value)} />
         {!term ? <p className={s.hint}>{kind === 'dm' ? 'Pick someone to open a private conversation.' : `Add up to ${LIMITS.groupMax - 1} people. Groups are private and never appear in public discussion.`}</p>
           : users.isPending ? <div style={{ display: 'grid', gap: 8 }}><Skeleton h={40} r={10} /><Skeleton h={40} r={10} /></div>
+          : users.isError ? <ErrorState title="Search failed" error={users.error} onRetry={() => void users.refetch()} />
           : !users.data?.length ? <p className={s.hint}>No one matches “{term}”.</p>
           : (
             <ul className={s.people}>

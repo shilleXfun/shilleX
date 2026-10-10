@@ -94,7 +94,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
         {/* Grows on focus (min-height springs open); the auto-size effect handles longer text. */}
         <motion.textarea ref={area} className={s.textarea} value={text} onChange={(e) => { setText(e.target.value); setError(null); }} onKeyDown={onKey}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} initial={false} animate={{ minHeight: expanded ? 96 : 48 }} transition={spring.soft}
-          aria-label={label} placeholder={placeholder ?? (mode === 'reply' ? 'Post your reply' : mode === 'quote' ? 'Add your take…' : 'What’s happening in the trenches? Paste a CA to tag a token.')} rows={2} />
+          data-shortcut={mode === 'post' && !inDialog ? 'compose' : undefined} aria-label={label} placeholder={placeholder ?? (mode === 'reply' ? 'Post your reply' : mode === 'quote' ? 'Add your take…' : 'What’s happening in the trenches? Paste a CA to tag a token.')} rows={2} />
         <AnimatePresence initial={false}>
           {mints.length > 0 && (
             <motion.div className={s.chips} aria-live="polite" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: dur.standard, ease: ease.out }}>
