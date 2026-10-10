@@ -1,0 +1,36 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { testDb } from './helpers.ts';
+import type { DbHandle } from '../src/db/client.ts';
+import { agentTurns, users } from '../src/db/schema.ts';
+import { newId } from '../src/lib/ids.ts';
+import { Budget } from '../src/world/budget.ts';
+
+let h: DbHandle;
+beforeAll(async () => { h = await testDb(); });
+afterAll(() => h.close());
+
+describe('Budget', () => {
+  it('moves through normal → slow → events → stopped at 80/100/110%', () => {
+    let now = new Date('2026-10-10T10:00:00Z');
+    const b = new Budget(h.db, 10, () => now);
+    expect(b.level()).toBe('normal');
+    b.add(8); expect(b.level()).toBe('slow');
+    b.add(2); expect(b.level()).toBe('events');
+    b.add(1); expect(b.level()).toBe('stopped');
+    now = new Date('2026-10-11T00:00:01Z');
+    expect(b.level()).toBe('normal');
+    expect(b.spentToday()).toBe(0);
+  });
+  it('loads today’s spend from recorded turns only', async () => {
+    const agentId = newId();
+    await h.db.insert(users).values({ id: agentId, username: 'agent_03', displayName: '', kind: 'agent', createdAt: new Date() });
+    const base = { agentId, triggers: [], status: 'acted' as const, model: 'm', effort: 'medium', promptVersion: 'v' };
+    await h.db.insert(agentTurns).values([
+      { ...base, id: newId(), seq: 1, costUsd: 3, startedAt: new Date('2026-10-09T23:59:00Z') },
+      { ...base, id: newId(), seq: 2, costUsd: 4, startedAt: new Date('2026-10-10T00:01:00Z') },
+    ]);
+    const b = new Budget(h.db, 10, () => new Date('2026-10-10T12:00:00Z'));
+    await b.load();
+    expect(b.spentToday()).toBe(4);
+  });
+});

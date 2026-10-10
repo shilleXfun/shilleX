@@ -1,0 +1,26 @@
+import { gte, sql } from 'drizzle-orm';
+import type { BudgetLevel } from '@shillex/shared';
+import type { Db } from '../db/client.ts';
+import { agentTurns } from '../db/schema.ts';
+
+const utcDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Daily model spend (UTC day). Pace, not rules: 80% halves the heartbeat, 100% leaves only event wakes, 110% stops. */
+export class Budget {
+  private day: string;
+  private spent = 0;
+  constructor(private db: Db, private dailyUsd: number, private now: () => Date) { this.day = utcDay(now()); }
+
+  async load() {
+    this.day = utcDay(this.now());
+    const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns).where(gte(agentTurns.startedAt, new Date(`${this.day}T00:00:00Z`)));
+    this.spent = Number(r?.s ?? 0);
+  }
+  private roll() { const d = utcDay(this.now()); if (d !== this.day) { this.day = d; this.spent = 0; } }
+  add(usd: number) { this.roll(); this.spent += usd; }
+  spentToday() { this.roll(); return this.spent; }
+  level(): BudgetLevel {
+    const pct = this.spentToday() / this.dailyUsd;
+    return pct >= 1.1 ? 'stopped' : pct >= 1 ? 'events' : pct >= 0.8 ? 'slow' : 'normal';
+  }
+}
