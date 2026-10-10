@@ -80,7 +80,7 @@ button.replyRef:hover { color: var(--text); }
 .sharing { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-sm); }
 .attachThumb { position: relative; display: block; }
 .attachThumb img { width: 52px; height: 52px; border-radius: var(--radius); object-fit: cover; }
-.attachThumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--raised); box-shadow: var(--shadow-pop); }
+.attachRemove { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--raised); box-shadow: var(--shadow-pop); }
 .inputRow { position: relative; display: flex; align-items: flex-end; gap: 4px; padding: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: rgba(15, 17, 34, 0.85); overflow: hidden; transition: border-color .15s, box-shadow .2s; }
 .inputRow:focus-within { border-color: var(--accent-line); box-shadow: var(--glow-accent); }
 .inputBlocked { border-color: var(--warn-line); }
@@ -98,3 +98,4 @@ button.replyRef:hover { color: var(--text); }
 .disabled { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius-pop); color: var(--muted); }
 .composer { position: relative; }
 .composer[data-drop]::after { content: 'Drop images to attach'; position: absolute; inset: -4px 12px 8px; z-index: 3; display: grid; place-items: center; border: 1.5px dashed var(--accent); border-radius: var(--radius-pop); background: rgba(19, 17, 46, 0.9); color: var(--accent-hover); font-weight: 600; pointer-events: none; }
+.imageButton { padding: 0; border: 0; background: none; border-radius: var(--radius); cursor: zoom-in; }

@@ -6,6 +6,7 @@ import { errorMessage, retryAfterSec, uploadImage } from '../../lib/api';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { useImageDrop } from '../../lib/useImageDrop';
 import { useDraft } from '../../lib/drafts';
+import { AltTextButton } from '../../components/ui/AltTextButton';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
@@ -29,6 +30,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
   const [text, setText] = useDraft(`${me.id}:chat:${scope.type}:${scope.id}`);
   const touch = useMediaQuery('(pointer: coarse)');
   const [uploads, setUploads] = useState<UploadView[]>([]);
+  const [alts, setAlts] = useState<Record<string, string>>({});
   // Slow mode counts down to a deadline (not chained one-second timeouts), so it stays right in a throttled tab.
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [cooldownFrom, setCooldownFrom] = useState(0);
@@ -54,8 +56,8 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
   async function submit() {
     if (!can) return;
     const body = text.trim();
-    const attachments: SendAttachment[] = [...uploads.map((u) => ({ type: 'image' as const, uploadId: u.id })), ...(tokenCard ? [{ type: 'token' as const, mint: tokenCard }] : [])];
-    setText(''); setUploads([]); onClearTokenCard?.(); onCancelReply();
+    const attachments: SendAttachment[] = [...uploads.map((u) => ({ type: 'image' as const, uploadId: u.id, alt: alts[u.id] || undefined })), ...(tokenCard ? [{ type: 'token' as const, mint: tokenCard }] : [])];
+    setText(''); setUploads([]); setAlts({}); onClearTokenCard?.(); onCancelReply();
     try {
       const ok = await onSend(body, { replyTo, attachments: attachments.length ? attachments : undefined });
       if (ok && slowModeSeconds > 0 && !isMod) startCooldown(slowModeSeconds);
@@ -93,8 +95,9 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
           {tokenCard && <span className={s.sharing}>Sharing <TokenMention mint={tokenCard} /><IconButton label="Remove token card" onClick={onClearTokenCard}><X size={13} /></IconButton></span>}
           {uploads.map((u) => (
             <motion.span key={u.id} className={s.attachThumb} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.bouncy}>
-              <img src={u.url} alt="" width={52} height={52} />
-              <IconButton label="Remove image" onClick={() => setUploads((x) => x.filter((y) => y.id !== u.id))}><X size={12} /></IconButton>
+              <img src={u.url} alt={alts[u.id] ?? ''} width={52} height={52} />
+              <AltTextButton src={u.url} value={alts[u.id] ?? ''} onChange={(alt) => setAlts((a) => ({ ...a, [u.id]: alt }))} />
+              <IconButton label="Remove image" className={s.attachRemove} onClick={() => setUploads((x) => x.filter((y) => y.id !== u.id))}><X size={12} /></IconButton>
             </motion.span>
           ))}
         </div>
