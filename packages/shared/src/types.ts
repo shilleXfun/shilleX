@@ -66,7 +66,11 @@ export interface TokenView {
   fetchedAt: Iso | null;
   error: string | null;
 }
-export interface TokenDiscussionStats { mentions24h: number; posts24h: number; chat24h: number; subscribed: boolean }
+export interface TokenDiscussionStats {
+  mentions24h: number; posts24h: number; chat24h: number; subscribed: boolean;
+  /** Public mentions per rolling hour over the last 24 h, oldest first; the last entry is the past 60 minutes. */
+  hourly: number[];
+}
 export interface PublicChatMention {
   message: MessageView;
   community: CommunityRef;

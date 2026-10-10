@@ -63,3 +63,17 @@ a.link svg { color: var(--muted); }
 .chatAuthor a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .chatOpen { justify-self: start; color: var(--accent-hover); font-size: var(--fs-sm); font-weight: 600; }
 .chatOpen:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Discussion heat: 24 hourly columns, token teal, 2px surface gaps, square at the baseline. */
+.heat { margin: 10px 18px 6px; }
+.heatHead { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: var(--fs-xs); font-weight: 550; }
+.heatTotal { color: var(--text); font: 600 var(--fs-md) / 1 var(--font-mono); }
+.heatPlot { position: relative; display: flex; gap: 2px; height: 64px; margin-top: 6px; padding-top: 16px; border-bottom: 1px solid var(--line); }
+.heatCol { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.heatBar { width: 100%; max-width: 24px; border-radius: 4px 4px 0 0; background: var(--token); transform-origin: bottom; transition: filter .15s, box-shadow .15s; }
+.heatEmpty { background: var(--line-strong); }
+.heatNow { box-shadow: var(--glow-token); }
+.heatHover { filter: brightness(1.25); }
+.heatPeak { position: absolute; top: -15px; color: var(--muted); font: 600 10px / 1 var(--font-mono); white-space: nowrap; }
+.heatTip { position: absolute; bottom: calc(100% + 4px); z-index: 2; transform: translateX(-50%); padding: 5px 8px; border-radius: var(--radius-sm); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; pointer-events: none; }
+.heatTip strong { color: var(--text); font-weight: 600; }
+.heatAxis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font: 10px var(--font-mono); }

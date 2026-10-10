@@ -25,6 +25,17 @@ describe('token routes', () => {
     expect(r.body.links.every((l: any) => l.url === null && l.unavailableReason === 'Fictional demo token — not on-chain')).toBe(true);
     expect(r.body.stats).toMatchObject({ mentions24h: 2, posts24h: 1, chat24h: 1, subscribed: false });
   });
+  it('buckets public mentions by rolling hour, oldest first, ignoring private and older ones', async () => {
+    const SOL = 'So11111111111111111111111111111111111111112';
+    const now = ctx.clock.now().getTime(), h = 3_600_000;
+    const row = (id: string, ago: number, isPublic = true) => ({ id, mint: SOL, sourceType: 'post' as const, sourceId: id, authorId: a.id, isPublic, createdAt: new Date(now - ago) });
+    await ctx.db.insert(tokenMentions).values([row('h1', 10 * 60_000), row('h2', 20 * 60_000), row('h3', 5.5 * h), row('h4', 25 * h), row('h5', 30 * 60_000, false)]);
+    const { hourly, mentions24h } = (await ctx.as(b).get(`/api/tokens/${SOL}`)).body.stats;
+    expect(hourly).toHaveLength(24);
+    expect(hourly[23]).toBe(2);
+    expect(hourly[18]).toBe(1);
+    expect(hourly.reduce((x: number, y: number) => x + y, 0)).toBe(mentions24h);
+  });
   it('rejects invalid addresses', async () => {
     expect((await ctx.as(b).get('/api/tokens/not-a-mint')).body.code).toBe('INVALID_ADDRESS');
     expect((await ctx.as(b).post('/api/tokens/resolve', { mints: Array(26).fill(MINT) })).status).toBe(400);

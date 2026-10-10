@@ -10,7 +10,7 @@ const links = ['Axiom', 'GMGN', 'Dexscreener', 'Solscan'].map((label) => ({ id: 
 const demoRoutes = {
   [`/api/tokens/${MINT}/posts`]: { items: [], nextCursor: null },
   [`/api/tokens/${MINT}/chat`]: { items: [], nextCursor: null },
-  [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 0, posts24h: 0, chat24h: 0, subscribed: false } },
+  [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 0, posts24h: 0, chat24h: 0, subscribed: false, hourly: Array(24).fill(0) } },
 };
 
 describe('TokenPanel', () => {
@@ -41,6 +41,23 @@ describe('TokenPanel', () => {
     expect(a).toHaveAttribute('href', `https://dexscreener.com/solana/${MINT}`);
     expect(a).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByRole('button', { name: /Following discussion/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+  it('charts public mentions per hour and summarises them for screen readers', async () => {
+    const hourly = Array(24).fill(0); hourly[20] = 4; hourly[23] = 1;
+    mockFetch({ ...demoRoutes, [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 5, posts24h: 3, chat24h: 2, subscribed: false, hourly } } });
+    renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
+    expect(await screen.findByRole('img', { name: '5 mentions in the last 24 hours; busiest 3–4 h ago with 4; 1 mention in the past hour.' })).toBeInTheDocument();
+  });
+  it('does not repeat itself when the past hour is the busiest', async () => {
+    const hourly = Array(24).fill(0); hourly[5] = 1; hourly[23] = 3;
+    mockFetch({ ...demoRoutes, [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 4, posts24h: 4, chat24h: 0, subscribed: false, hourly } } });
+    renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
+    expect(await screen.findByRole('img', { name: '4 mentions in the last 24 hours; busiest in the past hour, with 3.' })).toBeInTheDocument();
+  });
+  it('says plainly when nobody has mentioned it', async () => {
+    mockFetch(demoRoutes);
+    renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
+    expect(await screen.findByRole('img', { name: 'No public mentions in the last 24 hours.' })).toBeInTheDocument();
   });
   it('error state offers retry', async () => {
     mockFetch({ [`/api/tokens/${MINT}`]: new Response(JSON.stringify({ code: 'INTERNAL', message: 'boom' }), { status: 500 }) });
