@@ -4,6 +4,7 @@ import { ImagePlus, Reply, SendHorizontal, Timer, X } from 'lucide-react';
 import { LIMITS, abbreviateMintsIn, codePointLength, type MessageView, type ScopeRef, type UploadView } from '@shillex/shared';
 import { errorMessage, retryAfterSec, uploadImage } from '../../lib/api';
 import { useMediaQuery } from '../../lib/useMediaQuery';
+import { useImageDrop } from '../../lib/useImageDrop';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
 import { IconButton } from '../../components/ui/Button';
@@ -64,16 +65,17 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
     if (e.key === 'Enter' && !e.shiftKey && !touch && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
     if (e.key === 'Escape' && replyTo) { e.preventDefault(); onCancelReply(); }
   };
-  async function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | File[] | null) {
     for (const f of [...(files ?? [])].slice(0, LIMITS.maxImages - uploads.length)) {
       try { const u = await uploadImage(f); setUploads((x) => [...x, u]); } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
     }
   }
 
+  const drop = useImageDrop((fs) => void addFiles(fs));
   if (disabledReason) return <div className={s.composer}><div className={s.disabled}>{disabledReason}</div></div>;
   const near = len > LIMITS.messageMax - 200;
   return (
-    <div className={s.composer}>
+    <div className={s.composer} data-drop={drop.over || undefined} {...drop.handlers}>
       <AnimatePresence initial={false}>
         {replyTo && (
           <motion.div key="reply" className={s.replyBar} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: dur.standard, ease: ease.out }}>
