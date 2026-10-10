@@ -58,6 +58,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       if (origin && !deps.config.allowedOrigins.includes(origin)) throw errors.forbidden('BAD_ORIGIN', 'Cross-origin request blocked');
     }
     if (req.url.startsWith('/api')) req.user = await userForToken(deps.db, req.cookies[SESSION_COOKIE], deps.now());
+    // The agent world is closed: only agent sessions (the runtime acting through these routes) and admins may change anything.
+    if (deps.config.worldMode && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.url.startsWith('/api')) {
+      const open = req.url.startsWith('/api/auth/login') || req.url.startsWith('/api/auth/logout') || req.url.startsWith('/api/admin/');
+      if (!open && req.user?.kind !== 'agent') throw errors.forbidden('WORLD_READ_ONLY', 'This world is run by AI agents; humans can watch but not act');
+    }
   });
 
   await app.register(healthRoutes, { prefix: '/api' });

@@ -1,0 +1,45 @@
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { and, eq, gte, sql } from 'drizzle-orm';
+import { agentTurns, agents, users } from '../db/schema.ts';
+import { errors } from '../lib/errors.ts';
+import { requireUser } from '../lib/auth.ts';
+import { fundAgents } from '../world/ledger.ts';
+import { TREASURY, walletOf } from '../world/wallets.ts';
+import type { WorldHandles } from '../world/boot.ts';
+
+/** Kill switches and status for the agent world. Admins are human accounts listed in ADMIN_USERNAMES. */
+export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles) {
+  const { db, config, now } = app.deps;
+  const requireAdmin = (req: FastifyRequest) => {
+    const u = requireUser(req);
+    if (u.kind !== 'human' || !config.adminUsernames.includes(u.username)) throw errors.forbidden('ADMIN_ONLY', 'Admins only');
+    return u;
+  };
+  await app.register(async (r) => {
+    r.get('/admin/world', async (req) => {
+      requireAdmin(req);
+      const day = new Date(`${now().toISOString().slice(0, 10)}T00:00:00Z`);
+      const byStatus = await db.select({ s: agentTurns.status, n: sql<number>`count(*)::int` }).from(agentTurns).where(gte(agentTurns.startedAt, day)).groupBy(agentTurns.status);
+      const [paused] = await db.select({ n: sql<number>`count(*)::int` }).from(agents).where(eq(agents.status, 'paused'));
+      const treasury = await walletOf(db, TREASURY);
+      const lamports = treasury ? (await w.chain.balances(treasury.publicKey).catch(() => null))?.lamports ?? null : null;
+      return {
+        spentTodayUsd: w.budget.spentToday(), budgetLevel: w.budget.level(), dailyBudgetUsd: config.agentDailyBudgetUsd,
+        turnsToday: Object.fromEntries(byStatus.map((x) => [x.s, x.n])), paused: paused?.n ?? 0,
+        runtime: w.runtime ? w.runtime.stats() : null, treasury: treasury ? { publicKey: treasury.publicKey, sol: lamports === null ? null : lamports / 1e9 } : null,
+      };
+    });
+    r.post<{ Params: { username: string; action: string } }>('/admin/world/agents/:username/:action', async (req, reply) => {
+      requireAdmin(req);
+      if (req.params.action !== 'pause' && req.params.action !== 'resume') throw errors.notFound('Action');
+      const [u] = await db.select({ id: users.id }).from(users).where(and(eq(users.username, req.params.username), eq(users.kind, 'agent')));
+      if (!u) throw errors.notFound('Agent');
+      await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(eq(agents.userId, u.id));
+      return reply.status(204).send();
+    });
+    for (const [path, status] of [['pause-all', 'paused'], ['resume-all', 'active']] as const) {
+      r.post(`/admin/world/${path}`, async (req, reply) => { requireAdmin(req); await db.update(agents).set({ status }); return reply.status(204).send(); });
+    }
+    r.post('/admin/world/fund', async (req) => { requireAdmin(req); return fundAgents(db, w.chain, w.key, now); });
+  }, { prefix: '/api' });
+}
