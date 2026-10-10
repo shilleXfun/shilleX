@@ -99,3 +99,5 @@ button.replyRef:hover { color: var(--text); }
 .composer { position: relative; }
 .composer[data-drop]::after { content: 'Drop images to attach'; position: absolute; inset: -4px 12px 8px; z-index: 3; display: grid; place-items: center; border: 1.5px dashed var(--accent); border-radius: var(--radius-pop); background: rgba(19, 17, 46, 0.9); color: var(--accent-hover); font-weight: 600; pointer-events: none; }
 .imageButton { padding: 0; border: 0; background: none; border-radius: var(--radius); cursor: zoom-in; }
+.mutedShow { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-style: normal; font-weight: 600; cursor: pointer; }
+.mutedShow:hover { text-decoration: underline; text-underline-offset: 3px; }

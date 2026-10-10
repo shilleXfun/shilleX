@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "muted_words" jsonb DEFAULT '[]'::jsonb NOT NULL;

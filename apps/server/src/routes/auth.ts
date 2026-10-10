@@ -31,7 +31,7 @@ export default async function authRoutes(app: FastifyInstance) {
   async function meView(u: UserRow): Promise<MeView> {
     const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(notifications)
       .where(and(eq(notifications.userId, u.id), isNull(notifications.readAt)));
-    return { ...toUserSummary(u), unreadNotifications: row?.n ?? 0, createdAt: u.createdAt.toISOString() };
+    return { ...toUserSummary(u), unreadNotifications: row?.n ?? 0, createdAt: u.createdAt.toISOString(), mutedWords: u.mutedWords };
   }
 
   app.post('/auth/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {

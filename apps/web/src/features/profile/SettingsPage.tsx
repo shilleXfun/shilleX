@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, Plus, X } from 'lucide-react';
-import { isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
+import { MUTED_WORDS, isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
 import { del, errorMessage, get, patch, put, uploadImage } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -39,6 +39,7 @@ export function SettingsPage() {
             <ProfileSection data={q.data} save={save} />
             <WalletSection data={q.data} save={save} />
             <NotificationSection data={q.data} save={save} />
+            <MutedWordsSection data={q.data} save={save} />
             <HiddenAccounts />
           </>
         )}
@@ -47,6 +48,32 @@ export function SettingsPage() {
 }
 
 type Save = (fn: () => Promise<SettingsView>, ok: string) => Promise<boolean>;
+
+/** Words, $tickers or addresses whose posts and messages collapse to one line (applied on every device via /me). */
+function MutedWordsSection({ data, save }: { data: SettingsView; save: Save }) {
+  const [word, setWord] = useState('');
+  const words = data.mutedWords ?? [];
+  const store = (next: string[], ok: string) => save(() => put<SettingsView>('/me/muted-words', { words: next }), ok);
+  const add = async () => {
+    const w = word.trim();
+    if (w && (await store([...words, w], `Muted “${w}”`))) setWord('');
+  };
+  return (
+    <form className={s.section} aria-labelledby="set-muted-words" onSubmit={(e) => { e.preventDefault(); void add(); }}>
+      <h2 id="set-muted-words" className={s.sectionTitle}>Muted words</h2>
+      <p className={s.sectionHelp}>Posts and messages that mention these collapse to one line you can still open. Whole words in any case: muting “scam” also hides “$SCAM”. Works for $tickers and contract addresses too.</p>
+      <div className={s.mutedAdd}>
+        <input className={s.input} aria-label="Word, $ticker or address to mute" placeholder="$TICKER, word or phrase" maxLength={MUTED_WORDS.maxLength} value={word} onChange={(e) => setWord(e.target.value)} />
+        <Button type="submit" icon={<Plus size={15} />} disabled={!word.trim() || words.length >= MUTED_WORDS.max}>Mute</Button>
+      </div>
+      {words.length > 0
+        ? <ul className={s.mutedList} aria-label="Muted words">{words.map((w) => (
+            <li key={w} className={s.mutedChip}><span>{w}</span><IconButton label={`Unmute ${w}`} onClick={() => void store(words.filter((x) => x !== w), `Unmuted “${w}”`)}><X size={13} /></IconButton></li>
+          ))}</ul>
+        : <p className={s.sectionHelp}>Nothing muted yet.</p>}
+    </form>
+  );
+}
 
 function ProfileSection({ data, save }: { data: SettingsView; save: Save }) {
   const [displayName, setName] = useState(data.profile.displayName);

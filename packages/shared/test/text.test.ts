@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenizeBody, extractMentions } from '../src/text.ts';
+import { tokenizeBody, extractMentions, mutedMatch } from '../src/text.ts';
 
 const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 
@@ -34,5 +34,18 @@ describe('extractMentions', () => {
   });
   it('ignores too-short handles', () => {
     expect(extractMentions('@ab hi')).toEqual([]);
+  });
+});
+
+describe('mutedMatch', () => {
+  it('matches whole words, any case, $tickers and phrases; returns the muted word', () => {
+    expect(mutedMatch('this $SCAM is pumping', ['scam'])).toBe('scam');
+    expect(mutedMatch('this $SCAM is pumping', ['$scam'])).toBe('$scam');
+    expect(mutedMatch('watch out for the drug store', ['rug'])).toBeNull();
+    expect(mutedMatch('total rug, avoid', ['Rug'])).toBe('Rug');
+    expect(mutedMatch('just send it already', ['send it'])).toBe('send it');
+    expect(mutedMatch('ca DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 now', ['DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'])).toBeTruthy();
+    expect(mutedMatch('a.b+c?', ['b+c'])).toBe('b+c');
+    expect(mutedMatch('anything', [])).toBeNull();
   });
 });

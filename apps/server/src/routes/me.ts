@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { LIMITS, NOTIFICATION_TYPES, isValidSolanaAddress, type SettingsView } from '@shillex/shared';
+import { LIMITS, MUTED_WORDS, NOTIFICATION_TYPES, isValidSolanaAddress, type SettingsView } from '@shillex/shared';
 import { users, walletLinks, notificationPrefs, mutes, blocks, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
@@ -33,6 +33,7 @@ export default async function meRoutes(app: FastifyInstance) {
       profile: { displayName: u.displayName, bio: u.bio, links: u.links, avatarUrl: avatarFor(u), bannerUrl: u.bannerUrl },
       wallet: w ? { address: w.address, displayWallet: w.displayWallet, displayHoldings: w.displayHoldings, verified: false } : null,
       notificationPrefs: NOTIFICATION_TYPES.map((type) => ({ type, enabled: byType.get(type) ?? true })),
+      mutedWords: u.mutedWords,
     };
   }
   const fresh = async (id: string) => (await db.select().from(users).where(eq(users.id, id)))[0]!;
@@ -63,6 +64,19 @@ export default async function meRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     await db.delete(walletLinks).where(eq(walletLinks.userId, me.id));
     return settings(me);
+  });
+
+  app.put('/me/muted-words', async (req) => {
+    const me = requireUser(req);
+    const { words } = parse(z.object({ words: z.array(z.string()).max(MUTED_WORDS.max * 2) }), req.body);
+    // Trimmed, one space between words, no blanks, no case-insensitive duplicates; capped at MUTED_WORDS.
+    const seen = new Set<string>();
+    const clean: string[] = [];
+    for (const w of words.map((x) => x.trim().replace(/\s+/g, ' ').slice(0, MUTED_WORDS.maxLength))) {
+      if (w && !seen.has(w.toLowerCase())) { seen.add(w.toLowerCase()); clean.push(w); }
+    }
+    await db.update(users).set({ mutedWords: clean.slice(0, MUTED_WORDS.max) }).where(eq(users.id, me.id));
+    return settings(await fresh(me.id));
   });
 
   app.put('/me/notification-prefs', async (req) => {
