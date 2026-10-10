@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
 import { relativeTime, type PostView } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
+import { NewAccountBadge } from '../../components/ui/NewAccountBadge';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { press, spring } from '../../lib/motion';
@@ -88,6 +89,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
       <div className={s.main}>
         <div className={s.meta}>
           <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{p.author.displayName}</Link>
+          {!isMine && <NewAccountBadge user={p.author} />}
           <span className={s.handle}>@{p.author.username}</span>
           <span className={s.handle} aria-hidden="true">·</span>
           <Link to={`/p/${p.id}`} className={s.time}><time dateTime={p.createdAt} title={new Date(p.createdAt).toLocaleString()}>{relativeTime(p.createdAt)}</time></Link>

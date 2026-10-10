@@ -10,6 +10,8 @@ export interface Page<T> { items: T[]; nextCursor: string | null; tokens?: Recor
 
 export interface UserSummary {
   id: string; username: string; displayName: string; avatarUrl: string; isDemo: boolean;
+  /** When the account was created; clients flag accounts younger than NEW_ACCOUNT_DAYS. */
+  createdAt?: Iso;
 }
 export interface UserProfile extends UserSummary {
   bannerUrl: string | null; bio: string; links: { label: string; url: string }[]; createdAt: Iso;
