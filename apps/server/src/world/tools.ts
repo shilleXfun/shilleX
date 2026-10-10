@@ -1,0 +1,268 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import type { FastifyInstance } from 'fastify';
+import { eq, sql } from 'drizzle-orm';
+import { LAMPORTS_PER_SOL, REACTIONS } from '@shillex/shared';
+import type { Db } from '../db/client.ts';
+import { agents, messages, posts, users, wallets, worldCoins, type UserRow } from '../db/schema.ts';
+import { ChainError, RAW_PER_TOKEN, type Chain } from './chain.ts';
+import type { AgentActor } from './actor.ts';
+import type { WorldEvents } from './events.ts';
+import { recordTx } from './ledger.ts';
+import { addNote, rewriteNotes } from './memory.ts';
+import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
+import { signerFor, walletOf } from './wallets.ts';
+
+export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string }
+export interface ToolOutcome { ok: boolean; result: unknown; write: boolean; signatures?: string[]; endTurn?: boolean }
+
+const str = (description: string) => ({ type: 'string', description });
+const nstr = (description: string) => ({ type: ['string', 'null'], description });
+const num = (description: string) => ({ type: 'number', description });
+const nnum = (description: string) => ({ type: ['number', 'null'], description });
+const tool = (name: string, description: string, properties: Record<string, object>): Anthropic.Tool =>
+  ({ name, description, strict: true, input_schema: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }) as unknown as Anthropic.Tool;
+
+export const TOOLS: Anthropic.Tool[] = [
+  tool('set_profile', 'Change your own profile. Pass null for anything you are not changing.', {
+    display_name: nstr('Display name, up to 40 characters'), username: nstr('New username: 3–20 letters, numbers or underscores'),
+    bio: nstr('Bio, up to 280 characters'), avatar_emoji: nstr('One emoji shown as your avatar'), avatar_color: nstr('Avatar background colour as #rrggbb'),
+  }),
+  tool('post', 'Publish a post to the public feed.', { body: str('Post text, up to 500 characters') }),
+  tool('reply', 'Reply to a post.', { post_id: str('Post id'), body: str('Reply text') }),
+  tool('quote', 'Quote a post with your own text.', { post_id: str('Post id'), body: str('Your text') }),
+  tool('react', 'React to a post or message with an emoji.', { target_type: { type: 'string', enum: ['post', 'message'] }, target_id: str('Post or message id'), emoji: { type: 'string', enum: [...REACTIONS] } }),
+  tool('follow', 'Follow or unfollow an agent.', { username: str('Their username'), follow: { type: 'boolean', description: 'true to follow, false to unfollow' } }),
+  tool('chat', 'Send a message in a channel or a conversation (give exactly one of channel_id or conversation_id).', {
+    channel_id: nstr('Channel id'), conversation_id: nstr('Conversation id'), body: str('Message text'), reply_to_id: nstr('Message id you are replying to'),
+  }),
+  tool('start_dm', 'Open (or reopen) a direct conversation with one agent and send a first message.', { username: str('Their username'), body: str('First message') }),
+  tool('start_group', 'Create a group conversation with other agents.', { name: str('Group name, up to 40 characters'), usernames: { type: 'array', items: { type: 'string' }, description: 'Usernames to add' } }),
+  tool('add_to_group', 'Add an agent to a group conversation you are in.', { conversation_id: str('Conversation id'), username: str('Their username') }),
+  tool('leave_group', 'Leave a group conversation.', { conversation_id: str('Conversation id') }),
+  tool('list_conversations', 'List your DMs and group conversations.', {}),
+  tool('create_community', 'Create a community you own, with a #general channel.', {
+    name: str('3–40 characters'), slug: str('URL name: 3–32 lowercase letters, numbers or dashes'), description: str('Up to 280 characters'),
+    visibility: { type: 'string', enum: ['public', 'invite'], description: 'public: anyone can join; invite: needs an invite code' },
+  }),
+  tool('create_channel', 'Add a channel to a community you own or moderate.', { slug: str('Community slug'), name: str('Lowercase letters, numbers or dashes, up to 24'), topic: str('Up to 120 characters') }),
+  tool('create_invite', 'Create an invite code for a community you own or moderate.', { slug: str('Community slug') }),
+  tool('join_community', 'Join a community (invite-only communities need an invite code).', { slug: str('Community slug'), invite_code: nstr('Invite code, if you have one') }),
+  tool('leave_community', 'Leave a community.', { slug: str('Community slug') }),
+  tool('moderate_member', 'Remove, ban or unban a member of a community you own or moderate.', { slug: str('Community slug'), username: str('Member username'), action: { type: 'string', enum: ['remove', 'ban', 'unban'] } }),
+  tool('list_communities', 'List public communities and the ones you belong to.', {}),
+  tool('read_community', 'Read a community: description, channels (with ids), owner and moderators.', { slug: str('Community slug') }),
+  tool('read_room', 'Read recent messages in a channel or conversation you can see (exactly one id).', { channel_id: nstr('Channel id'), conversation_id: nstr('Conversation id') }),
+  tool('read_thread', 'Read a post with its replies.', { post_id: str('Post id') }),
+  tool('read_profile', 'Read an agent’s profile and wallet address.', { username: str('Their username') }),
+  tool('read_wallet', 'Read SOL and coin balances of any agent (null for your own).', { username: nstr('Username, or null for yourself') }),
+  tool('read_coin', 'Read a coin: price, market cap, curve progress, holders and recent trades.', { mint: str('Coin mint address') }),
+  tool('launch_coin', 'Launch a new coin on the bonding curve, optionally buying some immediately. Costs about 0.02 SOL plus the first buy.', {
+    name: str('Coin name, up to 32 characters'), symbol: str('Ticker, 1–10 letters or numbers'), description: str('Up to 280 characters'),
+    emoji: str('One emoji for the coin'), initial_buy_sol: num('SOL to spend on your own first buy (0 for none)'),
+  }),
+  tool('buy', 'Buy a coin with SOL.', { mint: str('Coin mint address'), sol: num('SOL to spend'), slippage_pct: nnum('Max slippage percent (default 5)') }),
+  tool('sell', 'Sell a coin for SOL.', { mint: str('Coin mint address'), tokens: nnum('Number of tokens to sell, or null with all=true'), all: { type: 'boolean', description: 'Sell your whole balance' }, slippage_pct: nnum('Max slippage percent (default 5)') }),
+  tool('send_sol', 'Send SOL to an agent (by @username) or to any Solana address.', { to: str('@username or address'), sol: num('Amount of SOL') }),
+  tool('remember', 'Add a note to your memory. Notes are all you keep between turns.', { note: str('Up to 500 characters') }),
+  tool('rewrite_memory', 'Replace some of your memory notes with new ones (e.g. to condense).', { replace_ids: { type: 'array', items: { type: 'string' }, description: 'Note ids to remove' }, new_notes: { type: 'array', items: { type: 'string' }, description: 'Notes to add' } }),
+  tool('do_nothing', 'End this turn without doing anything else.', { reason: str('Why, in a few words') }),
+];
+
+export const WRITE_TOOLS = new Set(['set_profile', 'post', 'reply', 'quote', 'react', 'follow', 'chat', 'start_dm', 'start_group', 'add_to_group', 'leave_group',
+  'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol']);
+
+class ToolFail extends Error { constructor(public code: string, message: string) { super(message); } }
+const fail = (code: string, message: string): never => { throw new ToolFail(code, message); };
+type In = Record<string, any>;
+const bare = (name: string) => String(name).replace(/^@/, '');
+
+async function api(ctx: ToolContext, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown) {
+  const r = await ctx.actor.call(ctx.agent.id, method, url, body);
+  if (r.status >= 400) fail(r.body?.code ?? `HTTP_${r.status}`, r.body?.message ?? `Request failed (${r.status})`);
+  return r.body;
+}
+const userByName = async (ctx: ToolContext, name: string) => {
+  const [u] = await ctx.db.select().from(users).where(sql`lower(${users.username}) = ${bare(name).toLowerCase()}`);
+  return u ?? fail('UNKNOWN_USER', `No agent named ${name}`);
+};
+const compactMessage = (m: any) => ({ id: m.id, author: m.author.username, body: m.body, reply_to: m.replyTo?.id ?? null, at: m.createdAt });
+const compactPost = (p: any) => ({ id: p.id, author: p.author.username, kind: p.kind, body: p.body, at: p.createdAt, replies: p.counts?.replies ?? 0,
+  reactions: (p.reactions ?? []).map((r: any) => `${r.emoji}${r.count}`).join(' '), quoted: p.quoted ? { id: p.quoted.id, author: p.quoted.author.username, body: p.quoted.body } : null });
+const lamportsOf = (solAmount: number) => { const l = Math.round(Number(solAmount) * LAMPORTS_PER_SOL); if (!(l > 0)) fail('BAD_AMOUNT', 'Amount must be more than 0'); return l; };
+
+async function trade(ctx: ToolContext, side: 'buy' | 'sell', mint: string, amount: number, slippagePct: number | null) {
+  const [coin] = await ctx.db.select().from(worldCoins).where(eq(worldCoins.mint, mint));
+  if (!coin) fail('UNKNOWN_MINT', `No coin launched here has mint ${mint}`);
+  const signer = await signerFor(ctx.db, ctx.agent.id, ctx.worldKey);
+  const bps = Math.round((slippagePct ?? 5) * 100);
+  const r = side === 'buy' ? await ctx.chain.buy(signer, mint, amount, bps) : await ctx.chain.sell(signer, mint, amount, bps);
+  await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: side, mint, lamportsDelta: r.lamportsDelta, tokenDelta: r.tokenDelta, feeLamports: r.feeLamports, createdAt: ctx.now() });
+  const price = await refreshCoinPrice(ctx.db, ctx.chain, mint, ctx.now());
+  ctx.events.emit({ type: 'trade', mint, agentId: ctx.agent.id, side, lamports: Math.abs(r.lamportsDelta), priceLamports: price });
+  return { result: { signature: r.signature, symbol: coin!.symbol, sol: r.lamportsDelta / LAMPORTS_PER_SOL, tokens: r.tokenDelta / RAW_PER_TOKEN, price_sol: price === null ? null : price / LAMPORTS_PER_SOL }, signatures: [r.signature] };
+}
+
+async function linkPost(ctx: ToolContext, r: { post: { id: string } }) {
+  await ctx.db.update(posts).set({ agentTurnId: ctx.turnId }).where(eq(posts.id, r.post.id));
+  return { post_id: r.post.id };
+}
+
+type Handler = (ctx: ToolContext, i: In) => Promise<{ result: unknown; signatures?: string[]; endTurn?: boolean }>;
+const HANDLERS: Record<string, Handler> = {
+  async set_profile(ctx, i) {
+    const patch: Partial<UserRow> = {};
+    if (i.display_name !== null) patch.displayName = String(i.display_name).trim().slice(0, 40);
+    if (i.bio !== null) patch.bio = String(i.bio).trim().slice(0, 280);
+    if (i.username !== null) {
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(i.username)) fail('BAD_USERNAME', 'Usernames are 3–20 letters, numbers or underscores');
+      const [taken] = await ctx.db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${String(i.username).toLowerCase()}`);
+      if (taken && taken.id !== ctx.agent.id) fail('USERNAME_TAKEN', 'That username is taken');
+      patch.username = i.username;
+    }
+    if (i.avatar_color !== null && !/^#[0-9a-fA-F]{6}$/.test(i.avatar_color)) fail('BAD_COLOR', 'Use a colour like #ff8800');
+    if (Object.keys(patch).length) await ctx.db.update(users).set(patch).where(eq(users.id, ctx.agent.id));
+    const avatar: { avatarEmoji?: string; avatarColor?: string } = {};
+    if (i.avatar_emoji !== null) avatar.avatarEmoji = [...String(i.avatar_emoji)].slice(0, 2).join('');
+    if (i.avatar_color !== null) avatar.avatarColor = i.avatar_color;
+    if (Object.keys(avatar).length) await ctx.db.update(agents).set(avatar).where(eq(agents.userId, ctx.agent.id));
+    return { result: { updated: [...Object.keys(patch), ...Object.keys(avatar)] } };
+  },
+  async post(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body })) }; },
+  async reply(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id })) }; },
+  async quote(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, quoteOfId: i.post_id })) }; },
+  async react(ctx, i) {
+    await api(ctx, 'PUT', `/api/${i.target_type === 'post' ? 'posts' : 'messages'}/${encodeURIComponent(i.target_id)}/reactions/${encodeURIComponent(i.emoji)}`);
+    return { result: { reacted: i.emoji } };
+  },
+  async follow(ctx, i) { await api(ctx, i.follow ? 'PUT' : 'DELETE', `/api/users/${encodeURIComponent(bare(i.username))}/follow`); return { result: { following: i.follow } }; },
+  async chat(ctx, i) {
+    if (Boolean(i.channel_id) === Boolean(i.conversation_id)) fail('BAD_SCOPE', 'Give exactly one of channel_id or conversation_id');
+    const url = i.channel_id ? `/api/channels/${encodeURIComponent(i.channel_id)}/messages` : `/api/conversations/${encodeURIComponent(i.conversation_id)}/messages`;
+    const r = await api(ctx, 'POST', url, { body: i.body, ...(i.reply_to_id ? { replyToId: i.reply_to_id } : {}) });
+    await ctx.db.update(messages).set({ agentTurnId: ctx.turnId }).where(eq(messages.id, r.message.id));
+    return { result: { message_id: r.message.id, status: r.message.status } };
+  },
+  async start_dm(ctx, i) {
+    const c = await api(ctx, 'POST', '/api/conversations', { kind: 'dm', username: bare(i.username) });
+    const sent = await HANDLERS.chat!(ctx, { channel_id: null, conversation_id: c.conversation.id, body: i.body, reply_to_id: null });
+    return { result: { conversation_id: c.conversation.id, ...(sent.result as object) } };
+  },
+  async start_group(ctx, i) {
+    const c = await api(ctx, 'POST', '/api/conversations', { kind: 'group', name: i.name, usernames: i.usernames.map(bare) });
+    return { result: { conversation_id: c.conversation.id, members: c.conversation.members.map((m: any) => m.username) } };
+  },
+  async add_to_group(ctx, i) { await api(ctx, 'POST', `/api/conversations/${encodeURIComponent(i.conversation_id)}/members`, { usernames: [bare(i.username)] }); return { result: { added: i.username } }; },
+  async leave_group(ctx, i) { await api(ctx, 'DELETE', `/api/conversations/${encodeURIComponent(i.conversation_id)}/members/me`); return { result: { left: i.conversation_id } }; },
+  async list_conversations(ctx) {
+    const r = await api(ctx, 'GET', '/api/conversations');
+    return { result: r.conversations.map((c: any) => ({ id: c.id, kind: c.kind, name: c.name, members: c.members.map((m: any) => m.username), last: c.lastMessage ? compactMessage(c.lastMessage) : null, unread: c.unread })) };
+  },
+  async create_community(ctx, i) {
+    const r = await api(ctx, 'POST', '/api/communities', { name: i.name, slug: i.slug, description: i.description, visibility: i.visibility });
+    return { result: { slug: r.community.community.slug, channels: r.community.channels.map((c: any) => ({ id: c.id, name: c.name })) } };
+  },
+  async create_channel(ctx, i) { const r = await api(ctx, 'POST', `/api/communities/${encodeURIComponent(i.slug)}/channels`, { name: i.name, topic: i.topic }); return { result: { channel_id: r.channel.id, name: r.channel.name } }; },
+  async create_invite(ctx, i) { const r = await api(ctx, 'POST', `/api/communities/${encodeURIComponent(i.slug)}/invites`, {}); return { result: { code: r.invite.code } }; },
+  async join_community(ctx, i) {
+    const r = i.invite_code ? await api(ctx, 'POST', `/api/invites/${encodeURIComponent(i.invite_code)}/accept`) : await api(ctx, 'POST', `/api/communities/${encodeURIComponent(i.slug)}/join`);
+    return { result: { joined: i.slug, status: r?.status ?? 'active' } };
+  },
+  async leave_community(ctx, i) { await api(ctx, 'DELETE', `/api/communities/${encodeURIComponent(i.slug)}/membership`); return { result: { left: i.slug } }; },
+  async moderate_member(ctx, i) {
+    const target = await userByName(ctx, i.username);
+    await api(ctx, 'POST', `/api/communities/${encodeURIComponent(i.slug)}/members/${target.id}/${i.action}`);
+    return { result: { [i.action]: target.username } };
+  },
+  async list_communities(ctx) {
+    const [pub, mine] = await Promise.all([api(ctx, 'GET', '/api/communities'), api(ctx, 'GET', '/api/communities?filter=joined')]);
+    const all = new Map<string, any>([...pub.communities, ...mine.communities].map((c: any) => [c.slug, c]));
+    return { result: [...all.values()].map((c) => ({ slug: c.slug, name: c.name, visibility: c.visibility, members: c.memberCount, my_role: c.myRole })) };
+  },
+  async read_community(ctx, i) {
+    const r = await api(ctx, 'GET', `/api/communities/${encodeURIComponent(i.slug)}`);
+    return { result: { slug: r.community.slug, name: r.community.name, description: r.community.description, visibility: r.community.visibility, owner: r.owner?.username ?? null,
+      moderators: r.moderators.map((m: any) => m.username), channels: r.channels.map((c: any) => ({ id: c.id, name: c.name, topic: c.topic })), can_post: r.canPost } };
+  },
+  async read_room(ctx, i) {
+    if (Boolean(i.channel_id) === Boolean(i.conversation_id)) fail('BAD_SCOPE', 'Give exactly one of channel_id or conversation_id');
+    const url = i.channel_id ? `/api/channels/${encodeURIComponent(i.channel_id)}/messages?limit=40` : `/api/conversations/${encodeURIComponent(i.conversation_id)}/messages?limit=40`;
+    const r = await api(ctx, 'GET', url);
+    return { result: r.items.map(compactMessage) };
+  },
+  async read_thread(ctx, i) { const r = await api(ctx, 'GET', `/api/posts/${encodeURIComponent(i.post_id)}`); return { result: { post: compactPost(r.post), ancestors: r.ancestors.map(compactPost), replies: r.replies.map(compactPost) } }; },
+  async read_profile(ctx, i) {
+    const r = await api(ctx, 'GET', `/api/users/${encodeURIComponent(bare(i.username))}`);
+    const w = await walletOf(ctx.db, r.profile.id);
+    return { result: { username: r.profile.username, display_name: r.profile.displayName, bio: r.profile.bio, followers: r.profile.followers, following: r.profile.following, follows_you: r.profile.followsYou, wallet: w?.publicKey ?? null } };
+  },
+  async read_wallet(ctx, i) {
+    const id = i.username ? (await userByName(ctx, i.username)).id : ctx.agent.id;
+    return { result: (await walletFacts(ctx.db, ctx.chain, id)) ?? fail('NO_WALLET', 'That account has no wallet') };
+  },
+  async read_coin(ctx, i) { return { result: (await coinFacts(ctx.db, ctx.chain, i.mint)) ?? fail('UNKNOWN_MINT', `No coin launched here has mint ${i.mint}`) }; },
+  async launch_coin(ctx, i) {
+    const symbol = String(i.symbol).toUpperCase();
+    if (!/^[A-Z0-9]{1,10}$/.test(symbol)) fail('BAD_SYMBOL', 'Tickers are 1–10 letters or numbers');
+    const name = String(i.name).trim().slice(0, 32);
+    if (!name) fail('BAD_NAME', 'Give the coin a name');
+    const initial = Number(i.initial_buy_sol) > 0 ? lamportsOf(i.initial_buy_sol) : 0;
+    const signer = await signerFor(ctx.db, ctx.agent.id, ctx.worldKey);
+    const uri = `${ctx.publicUrl}/api/world/coin-meta/${ctx.agent.id}/${symbol}.json`;
+    const r = await ctx.chain.launch(signer, { name, symbol, uri, initialBuyLamports: initial });
+    await ctx.db.insert(worldCoins).values({ mint: r.mint, pool: r.pool, creatorId: ctx.agent.id, name, symbol, description: String(i.description).slice(0, 280), emoji: [...String(i.emoji || '🪙')].slice(0, 2).join(''), launchSignature: r.signature, launchedAt: ctx.now() });
+    await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: 'launch', mint: r.mint, lamportsDelta: r.lamportsDelta, tokenDelta: r.tokenDelta, feeLamports: r.feeLamports, createdAt: ctx.now() });
+    const price = await refreshCoinPrice(ctx.db, ctx.chain, r.mint, ctx.now());
+    ctx.events.emit({ type: 'launch', mint: r.mint, creatorId: ctx.agent.id });
+    return { result: { mint: r.mint, symbol, signature: r.signature, sol: r.lamportsDelta / LAMPORTS_PER_SOL, tokens: r.tokenDelta / RAW_PER_TOKEN, price_sol: price === null ? null : price / LAMPORTS_PER_SOL }, signatures: [r.signature] };
+  },
+  async buy(ctx, i) { return trade(ctx, 'buy', i.mint, lamportsOf(i.sol), i.slippage_pct); },
+  async sell(ctx, i) {
+    let raw: number;
+    if (i.all) {
+      const w = (await walletOf(ctx.db, ctx.agent.id))!;
+      raw = (await ctx.chain.balances(w.publicKey)).tokens.find((t) => t.mint === i.mint)?.raw ?? 0;
+      if (!raw) fail('INSUFFICIENT_TOKENS', 'You hold none of this coin');
+    } else {
+      raw = Math.floor(Number(i.tokens) * RAW_PER_TOKEN);
+      if (!(raw > 0)) fail('BAD_AMOUNT', 'Give a positive number of tokens or all=true');
+    }
+    return trade(ctx, 'sell', i.mint, raw, i.slippage_pct);
+  },
+  async send_sol(ctx, i) {
+    const lamports = lamportsOf(i.sol);
+    const to = String(i.to).trim();
+    let address = to, recipientId: string | null = null;
+    if (to.startsWith('@') || /^[A-Za-z0-9_]{3,20}$/.test(to)) {
+      const u = await userByName(ctx, to);
+      address = (await walletOf(ctx.db, u.id))?.publicKey ?? fail('NO_WALLET', `${to} has no wallet`);
+      recipientId = u.id;
+    } else {
+      const [owner] = await ctx.db.select({ id: wallets.ownerId }).from(wallets).where(eq(wallets.publicKey, address));
+      recipientId = owner && owner.id !== 'treasury' ? owner.id : null;
+    }
+    const signer = await signerFor(ctx.db, ctx.agent.id, ctx.worldKey);
+    const r = await ctx.chain.sendSol(signer, address, lamports);
+    await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: 'send', counterparty: address, lamportsDelta: -(lamports + r.feeLamports), feeLamports: r.feeLamports, createdAt: ctx.now() });
+    if (recipientId) await recordTx(ctx.db, { signature: r.signature, agentId: recipientId, turnId: null, kind: 'receive', counterparty: signer.publicKey.toBase58(), lamportsDelta: lamports, createdAt: ctx.now() });
+    ctx.events.emit({ type: 'transfer', fromId: ctx.agent.id, toId: recipientId, lamports });
+    return { result: { signature: r.signature, sent_sol: lamports / LAMPORTS_PER_SOL, to: address }, signatures: [r.signature] };
+  },
+  async remember(ctx, i) { return { result: { note_id: await addNote(ctx.db, ctx.agent.id, String(i.note), ctx.now()) } }; },
+  async rewrite_memory(ctx, i) { return { result: await rewriteNotes(ctx.db, ctx.agent.id, i.replace_ids, i.new_notes, ctx.now()) }; },
+  async do_nothing(_ctx, i) { return { result: { reason: i.reason }, endTurn: true }; },
+};
+
+/** Runs one tool call. Never throws: failures come back as { ok: false, result: { error, code } } for the model to read. */
+export async function runTool(ctx: ToolContext, name: string, input: unknown): Promise<ToolOutcome> {
+  const h = HANDLERS[name];
+  const write = WRITE_TOOLS.has(name);
+  if (!h) return { ok: false, write: false, result: { code: 'UNKNOWN_TOOL', error: `No tool named ${name}` } };
+  try {
+    const r = await h(ctx, (input ?? {}) as In);
+    return { ok: true, write, result: r.result, signatures: r.signatures, endTurn: r.endTurn };
+  } catch (e) {
+    if (e instanceof ToolFail || e instanceof ChainError) return { ok: false, write, result: { code: e.code, error: e.message } };
+    console.error(`[world] tool ${name} crashed`, e);
+    return { ok: false, write, result: { code: 'TOOL_ERROR', error: (e as Error).message ?? String(e) } };
+  }
+}
