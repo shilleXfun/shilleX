@@ -46,6 +46,14 @@ describe('demo simulator', () => {
     expect(notes).toHaveLength(0);
   });
 
+  it('puts some personas online as soon as it starts', async () => {
+    const personas = await ctx.db.select().from(users).where(and(eq(users.isDemo, true), ne(users.username, 'demo')));
+    const sim = startSimulator(ctx.app, { seed: 5, minMs: 1_000_000, maxMs: 1_000_000 });
+    await sim.ready;
+    expect(personas.some((p) => ctx.presence.isOnline(p.id))).toBe(true);
+    sim.stop();
+  });
+
   it('leaves no persona virtually online after stop(), even with a tick in flight or ticks after stop', async () => {
     const personas = await ctx.db.select().from(users).where(and(eq(users.isDemo, true), ne(users.username, 'demo')));
     const anyOnline = () => personas.some((p) => ctx.presence.isOnline(p.id));
