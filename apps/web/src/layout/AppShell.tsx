@@ -19,6 +19,21 @@ import { CommandPalette, openPalette } from './CommandPalette';
 import s from './layout.module.css';
 
 /** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
+/** j/k: focus the next or previous post card, starting from the focused one or else the one in view. */
+function stepPost(dir: 1 | -1) {
+  const cards = [...document.querySelectorAll<HTMLElement>('main [data-post-card]')];
+  if (!cards.length) return;
+  const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-post-card]');
+  let i = current ? cards.indexOf(current) + dir : -1;
+  if (!current) {
+    const inView = cards.findIndex((c) => c.getBoundingClientRect().bottom > 80);
+    i = inView < 0 ? cards.length - 1 : dir === 1 ? inView : Math.max(0, inView - 1);
+  }
+  const next = cards[Math.min(cards.length - 1, Math.max(0, i))]!;
+  next.focus({ preventScroll: true });
+  next.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
 function focusShortcut(name: string, tries = 12) {
   const el = document.querySelector<HTMLElement>('[data-shortcut="' + name + '"]');
   if (el) el.focus();
@@ -59,6 +74,7 @@ export function AppShell() {
     // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
     n: () => { if (pathname === '/' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/', { state: { compose: true } }); },
     'g h': () => nav('/'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
+    j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),
   });
   return (

@@ -37,3 +37,17 @@ test('Ctrl+K search: type a name, Enter opens the profile', async ({ page }) => 
   await expect(page).toHaveURL(/\/u\/alpha_jane$/);
   await expect(box).toBeHidden();
 });
+test('j/k move between posts and Enter opens the selected one', async ({ page }) => {
+  await enterDemo(page);
+  const cards = page.locator('main [data-post-card]');
+  await expect(cards.nth(2)).toBeVisible();
+  await page.locator('body').press('j');
+  await expect(cards.nth(0)).toBeFocused();
+  await page.locator('body').press('j');
+  await page.locator('body').press('j');
+  await expect(cards.nth(2)).toBeFocused();
+  await page.locator('body').press('k');
+  await expect(cards.nth(1)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/p\/[^/]+$/);
+});
