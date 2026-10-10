@@ -67,7 +67,7 @@ export function CommunityPage() {
   const detail = d!;
   const c = detail.community;
   const isMember = c.myStatus === 'active';
-  if (atIndex && detail.canRead && !channelId && !tab && desktop && detail.channels[0]) return <Navigate to={`/c/${slug}/${detail.channels[0].id}`} replace />;
+  if (atIndex && detail.canRead && !channelId && !tab && desktop && detail.channels[0]) return <Navigate to={{ pathname: `/c/${slug}/${detail.channels[0].id}`, search: params.toString() }} replace />;
   const channel = detail.channels.find((x) => x.id === channelId);
   const showIndex = !channelId && !tab;
   const sections = [

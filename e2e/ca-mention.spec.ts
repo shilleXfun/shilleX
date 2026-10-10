@@ -35,3 +35,11 @@ test('an unknown address shows an honest unavailable state when live lookup is o
   const posted = page.getByRole('article').filter({ hasText: 'addr' }).first();
   await expect(posted.getByRole('button', { name: new RegExp(wallet) })).toContainText('Couldn’t load'); // honest: lookup disabled
 });
+test('a shared community link keeps its token panel when it opens the first channel', async ({ page }) => {
+  await enterDemo(page);
+  await page.goto(`/c/trenches?token=${MINT}`);
+  await expect(page).toHaveURL(new RegExp(`/c/trenches/[^/?]+[?]token=${MINT}$`));
+  const panel = page.getByRole('complementary', { name: /Grubworm/ });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('img', { name: /in the last 24 hours/ })).toBeVisible();
+});
