@@ -12,3 +12,12 @@ for (const path of ['/', '/discover', '/communities', '/c/trenches', '/messages'
     expect(bad.map((v) => `${v.id}: ${v.nodes.length} nodes`)).toEqual([]);
   });
 }
+test('no serious accessibility violations in the search palette', async ({ page }) => {
+  await enterDemo(page);
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: /Search people, communities/ }).fill('ja');
+  await expect(page.getByRole('option', { name: /Jane/ })).toBeVisible();
+  const r = await new AxeBuilder({ page }).include('dialog[open]').withTags(['wcag2a', 'wcag2aa']).analyze();
+  const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  expect(bad.map((v) => `${v.id}: ${v.nodes.length} nodes`)).toEqual([]);
+});

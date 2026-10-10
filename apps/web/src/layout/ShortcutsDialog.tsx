@@ -12,7 +12,8 @@ const GROUPS: { title: string; rows: Row[] }[] = [
     { keys: ['g', 'n'], then: true, label: 'Notifications' },
   ] },
   { title: 'Actions', rows: [
-    { keys: ['/'], label: 'Search' },
+    { keys: ['Ctrl/⌘', 'K'], label: 'Search people, communities, tokens and pages' },
+    { keys: ['/'], label: 'Search this page (or everything)' },
     { keys: ['n'], label: 'New post' },
     { keys: ['Esc'], label: 'Close panels and dialogs' },
     { keys: ['?'], label: 'Show these shortcuts' },

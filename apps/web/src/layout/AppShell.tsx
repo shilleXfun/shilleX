@@ -15,6 +15,7 @@ import { useAtmospherePulse } from '../components/atmosphere/Atmosphere';
 import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { CommandPalette, openPalette } from './CommandPalette';
 import s from './layout.module.css';
 
 /** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
@@ -53,7 +54,8 @@ export function AppShell() {
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   useHotkeys({
-    '/': () => { if (!document.querySelector('[data-shortcut="search"]')) nav('/communities'); focusShortcut('search'); },
+    // A page's own search box wins; elsewhere / opens the palette.
+    '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
     // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
     n: () => { if (pathname === '/' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/', { state: { compose: true } }); },
     'g h': () => nav('/'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
@@ -76,6 +78,7 @@ export function AppShell() {
       <MobileTabBar />
       <Toaster />
       <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
+      <CommandPalette />
       <ScrollRestoration />
     </div>
   );

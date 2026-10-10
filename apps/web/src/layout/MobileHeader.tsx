@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bell, Settings } from 'lucide-react';
+import { Bell, Search, Settings } from 'lucide-react';
+import { openPalette } from './CommandPalette';
 import { Wordmark } from '../components/brand/Wordmark';
 import { useRequiredMe } from '../lib/useMe';
 import { spring } from '../lib/motion';
@@ -12,6 +13,7 @@ export function MobileHeader() {
     <header className={s.mobileHeader}>
       <Link to="/" aria-label="Shillex home"><Wordmark size={23} /></Link>
       <div className={s.headerActions}>
+        <button type="button" className={s.headerLink} aria-label="Search" onClick={openPalette}><Search size={20} aria-hidden="true" /></button>
         <Link to="/notifications" className={s.headerLink} aria-label={`Notifications${me.unreadNotifications ? `, ${me.unreadNotifications} unread` : ''}`}>
           <Bell size={20} aria-hidden="true" />
           <AnimatePresence>
