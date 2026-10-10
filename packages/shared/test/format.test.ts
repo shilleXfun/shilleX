@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatUsd, formatAge, formatCount } from '../src/format.ts';
+import { formatUsd, formatAge, formatCount, plural } from '../src/format.ts';
 
 describe('formatUsd', () => {
   it('formats compact values and unknowns', () => {
@@ -26,5 +26,14 @@ describe('formatCount', () => {
   it('compacts', () => {
     expect(formatCount(999)).toBe('999');
     expect(formatCount(1200)).toBe('1.2K');
+  });
+});
+
+describe('plural', () => {
+  it('puts the noun in the right number', () => {
+    expect(plural(1, 'member')).toBe('1 member');
+    expect(plural(0, 'member')).toBe('0 members');
+    expect(plural(25, 'member')).toBe('25 members');
+    expect(plural(2, 'reply', 'replies')).toBe('2 replies');
   });
 });

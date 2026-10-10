@@ -33,3 +33,8 @@ export function formatCount(n: number): string {
   if (n < 1e6) return `${(Math.round(n / 100) / 10).toString()}K`;
   return `${(Math.round(n / 1e5) / 10).toString()}M`;
 }
+
+/** "1 member", "25 members": a count with its noun in the right number. */
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}

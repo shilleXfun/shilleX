@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, useMatch, useNavigate, useParams, useSearchPar
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion } from 'motion/react';
 import { ArrowLeft, Hash, Info, Lock, MailPlus, MessageSquareText, Pin, Shield, Users } from 'lucide-react';
-import { generatedBannerUrl, type CommunityDetail } from '@shillex/shared';
+import { plural, generatedBannerUrl, type CommunityDetail } from '@shillex/shared';
 import { ApiError, del, errorMessage, get, post } from '../../lib/api';
 import { useRoom } from '../../lib/socket';
 import { useMediaQuery } from '../../lib/useMediaQuery';
@@ -84,7 +84,7 @@ export function CommunityPage() {
         <img src={c.avatarUrl} alt="" />
         <div className={s.headText}>
           <h1 className={s.title}><span className={s.titleText}>{c.name}</span>{c.visibility !== 'public' && <Badge tone="muted">{c.visibility === 'private' ? 'Private' : 'Invite-only'}</Badge>}</h1>
-          <div className={s.sub}><span>{c.memberCount} members</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
+          <div className={s.sub}><span>{plural(c.memberCount, 'member')}</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
         </div>
         {c.myStatus === 'pending' ? <Badge tone="muted">Request pending</Badge>
           : !isMember ? <Button variant="primary" size="sm" onClick={join}>{c.visibility === 'private' ? 'Request to join' : 'Join'}</Button>

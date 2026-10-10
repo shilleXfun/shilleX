@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { ArrowLeft, Ellipsis, Lock, MessagesSquare } from 'lucide-react';
-import type { ConversationView, MessageView } from '@shillex/shared';
+import { plural, type ConversationView, type MessageView } from '@shillex/shared';
 import { ApiError, del, errorMessage, get, patch } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { dur, ease } from '../../lib/motion';
@@ -65,7 +65,7 @@ function Pane({ conv, meId, share, focusId, clearShare, onLeft }: { conv: Conver
           : <span className={s.stack} style={{ width: 36, height: 36 }}><Avatar src={others[0]?.avatarUrl ?? ''} size={26} /><Avatar src={others[1]?.avatarUrl ?? others[0]?.avatarUrl ?? ''} size={22} /></span>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <h2 className={s.paneTitle}>{other ? <Link to={`/u/${other.username}`}>{name}</Link> : name}</h2>
-          <div className={s.paneSub}><Lock size={11} aria-hidden="true" />{conv.kind === 'group' ? `Private group, ${conv.members.length} members` : 'Direct message, private'}</div>
+          <div className={s.paneSub}><Lock size={11} aria-hidden="true" />{conv.kind === 'group' ? `Private group, ${plural(conv.members.length, 'member')}` : 'Direct message, private'}</div>
         </div>
         <Menu label="Conversation options" items={[
           { label: conv.muted ? 'Unmute' : 'Mute', onSelect: run(() => patch(`/conversations/${conv.id}`, { muted: !conv.muted }), conv.muted ? 'Unmuted' : 'Muted') },
