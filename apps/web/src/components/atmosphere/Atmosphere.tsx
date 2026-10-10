@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSocketEvent } from '../../lib/socket';
 import s from './atmosphere.module.css';
 
@@ -28,6 +28,23 @@ export function useAtmospherePulse() {
   useSocketEvent('message:new', () => pulseAtmosphere('up'));
 }
 
+type Phase = 'dawn' | 'day' | 'dusk' | 'night';
+/** The viewer's local time of day, which tints the horizon. */
+export function phaseAt(hour: number): Phase {
+  if (hour >= 5 && hour < 9) return 'dawn';
+  if (hour >= 9 && hour < 17) return 'day';
+  if (hour >= 17 && hour < 21) return 'dusk';
+  return 'night';
+}
+function usePhase(): Phase {
+  const [phase, setPhase] = useState(() => phaseAt(new Date().getHours()));
+  useEffect(() => {
+    const t = setInterval(() => setPhase(phaseAt(new Date().getHours())), 5 * 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return phase;
+}
+
 function rng(seed: number) { return () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }; }
 
 function nextCandle(prev: number, r: () => number): Candle {
@@ -40,6 +57,7 @@ function nextCandle(prev: number, r: () => number): Candle {
 
 export function Atmosphere() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const phase = usePhase();
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext('2d');
@@ -176,7 +194,7 @@ export function Atmosphere() {
   }, []);
 
   return (
-    <div className={s.root} aria-hidden="true">
+    <div className={s.root} data-phase={phase} aria-hidden="true">
       <div className={s.sky} />
       <div className={`${s.aurora} ${s.auroraA}`} />
       <div className={`${s.aurora} ${s.auroraB}`} />

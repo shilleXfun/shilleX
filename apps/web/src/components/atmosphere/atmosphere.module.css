@@ -7,12 +7,22 @@
 .auroraA { width: 70vw; height: 55vh; left: -18vw; top: -22vh; background: radial-gradient(closest-side, rgba(139, 108, 255, 0.3), transparent); }
 .auroraB { width: 60vw; height: 50vh; right: -16vw; top: 18vh; background: radial-gradient(closest-side, rgba(39, 224, 192, 0.14), transparent); }
 
-/* Where the city meets the sky: a plum band with a faint ember core. */
+/*
+ * Where the city meets the sky. The horizon follows the viewer's local time (data-phase, set by <Atmosphere/>):
+ * a plum band with an ember core at night, gold at dawn, a cool blue by day and magenta at dusk. The colours are
+ * registered properties, so a phase change cross-fades slowly instead of snapping.
+ */
+@property --horizon-core { syntax: '<color>'; inherits: true; initial-value: rgba(255, 122, 61, 0.2); }
+@property --horizon-band { syntax: '<color>'; inherits: true; initial-value: rgba(122, 48, 160, 0.42); }
+.root { --horizon-core: rgba(255, 122, 61, 0.26); --horizon-band: rgba(122, 48, 160, 0.5); transition: --horizon-core 8s ease, --horizon-band 8s ease; }
+.root[data-phase='dawn'] { --horizon-core: rgba(255, 181, 71, 0.32); --horizon-band: rgba(176, 72, 110, 0.44); }
+.root[data-phase='day'] { --horizon-core: rgba(39, 224, 192, 0.2); --horizon-band: rgba(52, 92, 200, 0.5); }
+.root[data-phase='dusk'] { --horizon-core: rgba(255, 96, 120, 0.3); --horizon-band: rgba(150, 50, 170, 0.52); }
 .horizon {
-  position: absolute; left: -10%; right: -10%; bottom: -14vh; height: 52vh;
+  position: absolute; left: -10%; right: -10%; bottom: -6vh; height: 62vh;
   background:
-    radial-gradient(45% 55% at 64% 100%, rgba(255, 122, 61, 0.2), transparent 70%),
-    radial-gradient(75% 85% at 38% 100%, rgba(122, 48, 160, 0.42), transparent 72%);
+    radial-gradient(45% 55% at 64% 100%, var(--horizon-core), transparent 70%),
+    radial-gradient(75% 85% at 38% 100%, var(--horizon-band), transparent 72%);
 }
 
 .skyline {
