@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Reply, Ellipsis, ShieldAlert } from 'lucide-react';
 import { relativeTime, type MessageView, type ReactionEmoji } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
+import { NewAccountBadge } from '../../components/ui/NewAccountBadge';
 import { del, errorMessage, post, put } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
@@ -67,6 +68,7 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
         {!grouped && (
           <div className={s.head}>
             <Link to={`/u/${m.author.username}`} className={cx(s.author, mineAuthor && s.authorMe)}>{m.author.displayName}</Link>
+            {!mineAuthor && <NewAccountBadge user={m.author} />}
             <time className={s.time} dateTime={m.createdAt} title={time.toLocaleString()}>{relativeTime(m.createdAt)}</time>
           </div>
         )}
