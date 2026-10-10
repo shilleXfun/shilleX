@@ -17,15 +17,15 @@ export class Indexer {
   private balances = new Map<string, { at: number; b: WalletBalances }>();
   private timer: NodeJS.Timeout | null = null;
   private ticks = 0;
-  constructor(private db: Db, private chain: Chain, private now: () => Date, private opts: { balanceTtlMs?: number } = {}) {}
+  private board: { at: number; value: Promise<AgentCard[]> } | null = null;
+  constructor(private db: Db, private chain: Chain, private now: () => Date, private opts: { balanceTtlMs?: number; viewTtlMs?: number } = {}) {}
 
   start() {
     const loop = async () => {
       try {
-        const since = new Date(this.now().getTime() - 10 * 60_000);
-        const mints = this.ticks++ % 8 === 0
-          ? (await this.db.select({ m: worldCoins.mint }).from(worldCoins)).map((r) => r.m)
-          : (await this.db.selectDistinct({ m: chainTxs.mint }).from(chainTxs).where(and(gte(chainTxs.createdAt, since), inArray(chainTxs.kind, ['buy', 'sell', 'launch'])))).map((r) => r.m!).filter(Boolean);
+        // Every tick: coins traded in the last 10 minutes; every 8th: anything traded today. Quiet coins keep their last price.
+        const since = new Date(this.now().getTime() - (this.ticks++ % 8 === 0 ? DAY : 10 * 60_000));
+        const mints = (await this.db.selectDistinct({ m: chainTxs.mint }).from(chainTxs).where(and(gte(chainTxs.createdAt, since), inArray(chainTxs.kind, ['buy', 'sell', 'launch'])))).map((r) => r.m!).filter(Boolean);
         for (const m of mints) await refreshCoinPrice(this.db, this.chain, m, this.now());
       } catch (e) { console.error('[world] indexer tick failed', e); }
       this.timer = setTimeout(loop, 15_000);
@@ -38,7 +38,7 @@ export class Indexer {
 
   private async balancesOf(userId: string, publicKey: string | null): Promise<WalletBalances | null> {
     const hit = this.balances.get(userId);
-    if (hit && this.now().getTime() - hit.at < (this.opts.balanceTtlMs ?? 30_000)) return hit.b;
+    if (hit && this.now().getTime() - hit.at < (this.opts.balanceTtlMs ?? 60_000)) return hit.b;
     if (!publicKey) return null;
     try { const b = await this.chain.balances(publicKey); this.balances.set(userId, { at: this.now().getTime(), b }); return b; }
     catch { return hit?.b ?? null; }
@@ -49,8 +49,8 @@ export class Indexer {
     return new Map((await this.db.select().from(users).where(inArray(users.id, [...new Set(ids)]))).map((u) => [u.id, toUserSummary(u)]));
   }
 
-  private coinStats(c: WorldCoinRow, txs: ChainTxRow[]) {
-    const mine = txs.filter((t) => t.mint === c.mint);
+  /** Callers pass only this coin's transactions (see byMint). */
+  private coinStats(c: WorldCoinRow, mine: ChainTxRow[]) {
     const creator = mine.filter((t) => t.agentId === c.creatorId);
     const acquired = creator.filter((t) => t.tokenDelta > 0).reduce((n, t) => n + t.tokenDelta, 0);
     const sold = creator.filter((t) => t.kind === 'sell').reduce((n, t) => n - t.tokenDelta, 0);
@@ -65,17 +65,18 @@ export class Indexer {
 
   private async views(rows: WorldCoinRow[]): Promise<CoinView[]> {
     if (!rows.length) return [];
-    const txs = await this.db.select().from(chainTxs).where(inArray(chainTxs.mint, rows.map((r) => r.mint)));
+    const txs = byMint(await this.db.select().from(chainTxs).where(inArray(chainTxs.mint, rows.map((r) => r.mint))));
     const people = await this.summaries(rows.map((r) => r.creatorId));
-    return Promise.all(rows.map(async (c) => {
-      const s = this.coinStats(c, txs);
+    const holders = await holderCounts(this.db, rows.map((r) => r.mint));
+    return rows.map((c) => {
+      const s = this.coinStats(c, txs.get(c.mint) ?? []);
       const priceSol = c.priceLamports === null ? null : sol(c.priceLamports);
       return {
         mint: c.mint, pool: c.pool, name: c.name, symbol: c.symbol, description: c.description, emoji: c.emoji, creator: people.get(c.creatorId)!,
         launchedAt: c.launchedAt.toISOString(), launchSignature: c.launchSignature, priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY,
-        curveProgress: c.curveProgress, holders: (await holdersOf(this.db, c.mint)).size, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
+        curveProgress: c.curveProgress, holders: holders.get(c.mint) ?? 0, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
       };
-    }));
+    });
   }
 
   async coins() { return this.views(await this.db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt))); }
@@ -103,10 +104,10 @@ export class Indexer {
     const positions = (b?.tokens ?? []).flatMap((t) => {
       const coin = prices.get(t.mint);
       if (!coin) return [];
-      const cost = c.txs.filter((x) => x.agentId === u.id && x.mint === t.mint && x.tokenDelta > 0).reduce((n, x) => n - sol(x.lamportsDelta), 0);
+      const cost = (c.txsByAgent.get(u.id) ?? []).filter((x) => x.mint === t.mint && x.tokenDelta > 0).reduce((n, x) => n - sol(x.lamportsDelta), 0);
       return [{ mint: t.mint, symbol: coin.symbol, emoji: coin.emoji, tokens: tok(t.raw), valueSol: coin.priceLamports ? sol(coin.priceLamports) * tok(t.raw) : 0, costSol: cost }];
     });
-    const solBalance = b ? sol(b.lamports) : c.txs.filter((x) => x.agentId === u.id).reduce((n, x) => n + sol(x.lamportsDelta), 0);
+    const solBalance = b ? sol(b.lamports) : (c.txsByAgent.get(u.id) ?? []).reduce((n, x) => n + sol(x.lamportsDelta), 0);
     const tokenValueSol = positions.reduce((n, p) => n + p.valueSol, 0);
     const mine = c.coins.filter((x) => x.creatorId === u.id);
     const ts = c.turnStats.get(u.id);
@@ -114,7 +115,7 @@ export class Indexer {
       positions,
       card: {
         user: toUserSummary(u), bio: u.bio, status, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
-        pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txs).rug).length,
+        pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
       },
     };
@@ -129,14 +130,25 @@ export class Indexer {
       this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets),
     ]);
     return {
-      rows, coins, txs,
+      rows, coins, txsByMint: byMint(txs), txsByAgent: byAgent(txs),
       turnStats: new Map(ts.map((r) => [r.a, { n: r.n, last: r.last ? new Date(r.last) : null }])),
       funded: new Set(ws.filter((w) => w.f).map((w) => w.o)),
       pks: new Map(ws.map((w) => [w.o, w.pk])),
     };
   }
 
-  async leaderboard(): Promise<AgentCard[]> {
+  /** Shared by every viewer for viewTtlMs, so polling pages don't multiply database work and RPC calls. */
+  leaderboard(): Promise<AgentCard[]> {
+    const t = this.now().getTime();
+    if (!this.board || t - this.board.at >= (this.opts.viewTtlMs ?? 15_000)) {
+      const value = this.computeLeaderboard();
+      value.catch(() => { if (this.board?.value === value) this.board = null; });
+      this.board = { at: t, value };
+    }
+    return this.board.value;
+  }
+
+  private async computeLeaderboard(): Promise<AgentCard[]> {
     const c = await this.context();
     const cards = await Promise.all(c.rows.map(async (r) => (await this.card(r.u, r.status, c)).card));
     return cards.sort((a, b) => b.totalSol - a.totalSol || a.user.username.localeCompare(b.user.username));
@@ -150,4 +162,21 @@ export class Indexer {
     const memory = (await liveNotes(this.db, userId, 100)).map((n) => ({ id: n.id, body: n.body, createdAt: n.createdAt.toISOString() }));
     return { ...card, positions, memory, chainHead: await chainHead(this.db, userId) };
   }
+}
+
+const groupBy = <K,>(rows: ChainTxRow[], key: (r: ChainTxRow) => K | null) => {
+  const m = new Map<K, ChainTxRow[]>();
+  for (const r of rows) { const k = key(r); if (k !== null) m.set(k, [...(m.get(k) ?? []), r]); }
+  return m;
+};
+const byMint = (rows: ChainTxRow[]) => groupBy(rows, (r) => r.mint);
+const byAgent = (rows: ChainTxRow[]) => groupBy(rows, (r) => r.agentId);
+
+/** Holders per mint (agents with a positive net balance in the world ledger), in one grouped query. */
+async function holderCounts(db: Db, mints: string[]): Promise<Map<string, number>> {
+  if (!mints.length) return new Map();
+  const rows = await db.select({ mint: chainTxs.mint, n: sql<number>`count(distinct ${chainTxs.agentId})::int` }).from(chainTxs)
+    .where(and(inArray(chainTxs.mint, mints), sql`(${chainTxs.agentId}, ${chainTxs.mint}) in (select agent_id, mint from chain_txs where mint is not null and agent_id is not null group by agent_id, mint having sum(token_delta) > 0)`))
+    .groupBy(chainTxs.mint);
+  return new Map(rows.map((r) => [r.mint!, r.n]));
 }

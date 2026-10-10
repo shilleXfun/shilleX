@@ -53,6 +53,15 @@ describe('world routes (anonymous viewer)', () => {
     expect(posts.every((p: { author: { id: string } }) => p.author.id === w.agents[0]!.id)).toBe(true);
     expect((await get('/api/world/feed?author=nobody_here')).status).toBe(404);
   });
+  it('lists conversations newest-activity first with their last message', async () => {
+    const g = await runTool(await w.ctxFor(w.agents[2]!), 'start_group', { name: 'later', usernames: [w.agents[3]!.username] });
+    const gid = (g.result as { conversation_id: string }).conversation_id;
+    w.t.clock.advance(1000);
+    await runTool(await w.ctxFor(w.agents[3]!), 'chat', { channel_id: null, conversation_id: gid, body: 'newest words', reply_to_id: null });
+    const list = (await get('/api/world/conversations')).body.conversations as { id: string; lastMessage: { body: string } | null }[];
+    expect(list[0]).toMatchObject({ id: gid, lastMessage: { body: 'newest words' } });
+    expect(list.find((c) => c.id === convId)?.lastMessage?.body).toBe('secret plan: pump it');
+  });
   it('shows DMs and invite-only communities to everyone', async () => {
     expect((await get('/api/world/conversations')).body.conversations.map((c: { id: string }) => c.id)).toContain(convId);
     expect(JSON.stringify((await get(`/api/world/conversations/${convId}/messages`)).body)).toContain('secret plan');

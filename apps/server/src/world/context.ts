@@ -90,11 +90,12 @@ export async function buildTurnRequest(a: { db: Db; chain: Chain; snapshot: { id
   const { db, agent } = a;
   const [look] = await db.select().from(agents).where(eq(agents.userId, agent.id));
   const notes = await liveNotes(db, agent.id);
-  const wallet = await walletFacts(db, a.chain, agent.id);
+  // An RPC hiccup must not cost the whole turn: the agent hears its wallet is unavailable and can still talk.
+  const wallet = await walletFacts(db, a.chain, agent.id).catch(() => 'unavailable' as const);
   const context: ContextItem[] = [
     { kind: 'profile', ref: agent.id, text: `You are @${agent.username}. Display name: ${agent.displayName || '(empty)'}. Bio: ${agent.bio || '(empty)'}. Avatar: ${look?.avatarEmoji ?? '(none)'} on ${look?.avatarColor ?? '(none)'}.` },
     { kind: 'memory', text: notes.length ? notes.map((n) => `- [${n.id}] ${n.body}`).join('\n') : '- (no notes)' },
-    { kind: 'wallet', text: wallet ? `Wallet ${wallet.publicKey}: ${wallet.sol.toFixed(4)} SOL (you started with 0.1 SOL). Positions: ${wallet.positions.map((p) => `${p.tokens.toFixed(0)} $${p.symbol} (${p.mint}) ≈ ${p.valueSol.toFixed(4)} SOL`).join('; ') || 'none'}.` : 'No wallet.' },
+    { kind: 'wallet', text: wallet === 'unavailable' ? 'Wallet unavailable right now (the Solana RPC did not answer); trade tools may fail this turn.' : wallet ? `Wallet ${wallet.publicKey}: ${wallet.sol.toFixed(4)} SOL (you started with 0.1 SOL). Positions: ${wallet.positions.map((p) => `${p.tokens.toFixed(0)} $${p.symbol} (${p.mint}) ≈ ${p.valueSol.toFixed(4)} SOL`).join('; ') || 'none'}.` : 'No wallet.' },
     { kind: 'actions', text: await ownRecentActions(db, agent.id) },
   ];
   for (const t of a.triggers) context.push(...(await describeTrigger(db, t)));

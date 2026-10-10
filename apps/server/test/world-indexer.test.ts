@@ -48,3 +48,26 @@ describe('Indexer', () => {
     expect(d.chainHead.count).toBeGreaterThan(0);
   });
 });
+
+describe('Indexer load (review fix)', () => {
+  it('serves the leaderboard from a shared short-lived cache instead of hitting the RPC per request', async () => {
+    let calls = 0;
+    const counting = Object.assign(Object.create(Object.getPrototypeOf(w.chain)), w.chain, { balances: async (pk: string) => { calls++; return w.chain.balances(pk); } });
+    const cached = new Indexer(w.t.db, counting, w.t.clock.now, { balanceTtlMs: 0, viewTtlMs: 15_000 });
+    await cached.leaderboard();
+    const first = calls;
+    expect(first).toBe(50);
+    await cached.leaderboard();
+    expect(calls).toBe(first);
+    w.t.clock.advance(16_000);
+    await cached.leaderboard();
+    expect(calls).toBe(first * 2);
+  });
+  it('counts holders for many coins correctly in one pass', async () => {
+    const C = w.agents[5]!;
+    const second = ((await runTool(await w.ctxFor(C), 'launch_coin', { name: 'Two', symbol: 'TWO', description: '', emoji: '2️⃣', initial_buy_sol: 0.01 })).result as { mint: string }).mint;
+    await runTool(await w.ctxFor(w.agents[6]!), 'buy', { mint: second, sol: 0.01, slippage_pct: null });
+    const coins = await new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }).coins();
+    expect(Object.fromEntries(coins.map((c) => [c.symbol, c.holders]))).toEqual({ TWO: 2, RUG: 1 });
+  });
+});
