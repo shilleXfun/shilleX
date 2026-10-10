@@ -60,6 +60,25 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(screen.getByTestId('where')).toHaveTextContent(`?token=${MINT}`);
   });
+  it('Enter right after pasting or typing acts on what was typed, not on the results from before', async () => {
+    mockFetch({
+      '/api/tokens/resolve': { tokens: {} }, [`/api/tokens/${MINT}`]: { token: null },
+      '/api/users': { users: [{ id: 'x', username: 'alpha_jane', displayName: 'Jane', avatarUrl: '/a.svg', isDemo: true }] },
+      '/api/communities': { communities: [] }, '/api/tokens/search': { results: [] },
+    });
+    app();
+    act(() => openPalette());
+    let box = await screen.findByRole('combobox');
+    fireEvent.change(box, { target: { value: MINT } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByTestId('where')).toHaveTextContent(`?token=${MINT}`);
+    act(() => openPalette());
+    box = await screen.findByRole('combobox');
+    fireEvent.change(box, { target: { value: 'jane' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await wait(300);
+    expect(screen.getByTestId('where')).toHaveTextContent('/u/alpha_jane');
+  });
   it('filters pages by name with no query needed', async () => {
     app();
     act(() => openPalette());

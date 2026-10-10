@@ -48,6 +48,8 @@ export function CommandPalette() {
   const { openToken } = useTokenPanel();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
+  // Enter pressed before the debounced search caught up: run the top result once it has.
+  const enterPending = useRef(false);
   // Searches wait for a 150 ms pause in typing, so each keystroke doesn't fire two requests.
   const [query, setQuery] = useState('');
   useEffect(() => { const t = setTimeout(() => setQuery(q.trim()), 150); return () => clearTimeout(t); }, [q]);
@@ -62,18 +64,20 @@ export function CommandPalette() {
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) { setQ(''); setQuery(''); setActive(0); d.showModal(); input.current?.focus(); }
+    if (open && !d.open) { setQ(''); setQuery(''); setActive(0); enterPending.current = false; d.showModal(); input.current?.focus(); }
     if (!open && d.open) d.close();
   }, [open]);
 
-  const mint = isValidSolanaAddress(query) ? query : null;
+  // An address needs no search, so it is read from the live text: Enter right after pasting opens it.
+  const live = q.trim();
+  const mint = isValidSolanaAddress(live) ? live : null;
   const searching = query.length >= 2 && !mint;
   const people = useQuery({ queryKey: ['palette', 'users', query], queryFn: () => get<{ users: UserSummary[] }>(`/users?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
   const toks = useQuery({ queryKey: ['palette', 'tokens', query], queryFn: () => get<{ results: { token: TokenView; mentions24h: number }[] }>(`/tokens/search?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
   useEffect(() => { if (toks.data) primeTokens(qc, Object.fromEntries(toks.data.results.map((r) => [r.token.mint, r.token]))); }, [toks.data, qc]);
   const comms = useQuery({ queryKey: ['palette', 'communities', query], queryFn: () => get<{ communities: CommunitySummary[] }>(`/communities?q=${encodeURIComponent(query)}`), enabled: open && searching, staleTime: 30_000 });
 
-  const close = () => paletteOpen.set(false);
+  const close = () => { enterPending.current = false; paletteOpen.set(false); };
   const go = (to: string) => () => { close(); nav(to); };
   const items: Item[] = [];
   if (mint) items.push({ id: `token-${mint}`, group: 'Token', icon: <TokenIcon mint={mint} />, title: <TokenTitle mint={mint} />, meta: <span className="mono">{abbreviateMint(mint, 6, 6)}</span>, run: () => { close(); openToken(mint, null); } });
@@ -101,10 +105,21 @@ export function CommandPalette() {
 
   const current = Math.min(active, Math.max(0, items.length - 1));
   const pending = searching && (people.isFetching || comms.isFetching || toks.isFetching) && items.every((i) => i.group === 'Go to');
+  const settled = !(searching && (people.isFetching || comms.isFetching || toks.isFetching));
+  useEffect(() => {
+    if (!enterPending.current || query !== live || !settled) return;
+    enterPending.current = false;
+    items[0]?.run();
+  });
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((current + 1) % Math.max(1, items.length)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((current - 1 + items.length) % Math.max(1, items.length)); }
-    else if (e.key === 'Enter' && items[current]) { e.preventDefault(); items[current].run(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Typed faster than the 150 ms debounce: search now and act on those results, not the ones on screen.
+      if (!mint && live !== query) { setQuery(live); setActive(0); enterPending.current = true; }
+      else items[current]?.run();
+    }
   };
   useEffect(() => { document.getElementById(`${listId}-${current}`)?.scrollIntoView?.({ block: 'nearest' }); }, [current, listId]);
 
