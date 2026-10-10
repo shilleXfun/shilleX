@@ -6,6 +6,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { Composer } from './Composer';
 import { FeedList } from './FeedList';
 import { NewPostsPill } from './NewPostsPill';
+import { LiveStrip } from './LiveStrip';
 
 const TABS = [{ id: 'following', label: 'Following' }, { id: 'discover', label: 'Discover' }];
 
@@ -14,6 +15,7 @@ export function HomePage() {
   const tab = params.get('tab') === 'discover' ? 'discover' : 'following';
   return (
     <section aria-labelledby="home-title">
+      <LiveStrip />
       <PageHeader title="Home" titleId="home-title" hideTitle below={
         <Tabs label="Feed" idPrefix="home" value={tab} tabs={TABS}
           onChange={(id) => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', id); return n; })} />
