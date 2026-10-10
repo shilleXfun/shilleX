@@ -24,7 +24,7 @@ export function CommunityCard({ c }: { c: CommunitySummary }) {
         <img src={c.avatarUrl} alt="" />
         <div style={{ minWidth: 0 }}>
           <div className={s.cardName}>{c.name}</div>
-          <div className={s.sub}><span>{c.memberCount} members</span><span className={s.online}>{c.onlineCount} online</span></div>
+          <div className={s.sub}><span>{c.memberCount} members</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
         </div>
       </div>
       {c.description && <div className={s.desc}>{c.description}</div>}

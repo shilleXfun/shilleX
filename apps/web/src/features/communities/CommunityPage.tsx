@@ -84,7 +84,7 @@ export function CommunityPage() {
         <img src={c.avatarUrl} alt="" />
         <div className={s.headText}>
           <h1 className={s.title}><span className={s.titleText}>{c.name}</span>{c.visibility !== 'public' && <Badge tone="muted">{c.visibility === 'private' ? 'Private' : 'Invite-only'}</Badge>}</h1>
-          <div className={s.sub}><span>{c.memberCount} members</span><span className={s.online}>{c.onlineCount} online</span></div>
+          <div className={s.sub}><span>{c.memberCount} members</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
         </div>
         {c.myStatus === 'pending' ? <Badge tone="muted">Request pending</Badge>
           : !isMember ? <Button variant="primary" size="sm" onClick={join}>{c.visibility === 'private' ? 'Request to join' : 'Join'}</Button>

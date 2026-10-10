@@ -70,11 +70,13 @@ export function startSimulator(app: FastifyInstance, opts: { minMs?: number; max
     await createPost(deps, author, { body: fill(pick(r, POST_LINES), { mint: tok.mint, symbol: tok.symbol, user: pick(r, personas).username }) });
   }
 
+  const loadPersonas = () => db.select().from(users).where(and(eq(users.isDemo, true), ne(users.username, 'demo')));
+
   /** One simulated action. A no-op once stop() has been called (checked again after every await). */
   async function tick() {
     if (stopped) return;
     try {
-      const personas = await db.select().from(users).where(and(eq(users.isDemo, true), ne(users.username, 'demo')));
+      const personas = await loadPersonas();
       if (stopped || !personas.length) return;
       if (chance(r, 0.15)) rotatePresence(personas);
       const roll = r();
@@ -94,7 +96,10 @@ export function startSimulator(app: FastifyInstance, opts: { minMs?: number; max
     timer.unref?.();
   };
   schedule();
+  // Put a first crowd online right away; otherwise every room reads "0 online" until a tick happens to rotate presence.
+  const ready = loadPersonas().then((p) => rotatePresence(p), (e) => { app.log?.warn?.({ err: e }, 'simulator warmup failed'); });
   return {
+    ready,
     tick,
     stop() {
       stopped = true;
