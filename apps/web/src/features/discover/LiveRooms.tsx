@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { fadeUp, spring } from '../../lib/motion';
-import { relativeTime, type LiveRoomView } from '@shillex/shared';
+import { plural, relativeTime, type LiveRoomView } from '@shillex/shared';
 import s from './discover.module.css';
 
 const MotionLink = motion.create(Link);
@@ -30,7 +30,7 @@ export function LiveRooms({ rooms }: { rooms: LiveRoomView[] }) {
           <img src={r.community.avatarUrl} alt="" />
           <span style={{ minWidth: 0 }}>
             <span className={s.roomName} style={{ display: 'block' }}>{r.community.name} <span className={s.channel}>#{r.channel.name}</span></span>
-            <span className={s.roomMeta}>{r.messagesLast15m > 0 ? `${r.messagesLast15m} messages in 15m${r.onlineCount ? `, ${r.onlineCount} online` : ''}` : `last active ${relativeTime(r.lastActivityAt)} ago`}</span>
+            <span className={s.roomMeta}>{r.messagesLast15m > 0 ? `${plural(r.messagesLast15m, 'message')} in 15m${r.onlineCount ? `, ${r.onlineCount} online` : ''}` : `last active ${relativeTime(r.lastActivityAt)} ago`}</span>
           </span>
           <Meter rate={r.messagesLast15m} />
         </MotionLink>

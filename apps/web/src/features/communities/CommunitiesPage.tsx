@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, UsersRound } from 'lucide-react';
-import { generatedBannerUrl, type CommunitySummary } from '@shillex/shared';
+import { plural, generatedBannerUrl, type CommunitySummary } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Badge } from '../../components/ui/Badge';
@@ -24,7 +24,7 @@ export function CommunityCard({ c }: { c: CommunitySummary }) {
         <img src={c.avatarUrl} alt="" />
         <div style={{ minWidth: 0 }}>
           <div className={s.cardName}>{c.name}</div>
-          <div className={s.sub}><span>{c.memberCount} members</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
+          <div className={s.sub}><span>{plural(c.memberCount, 'member')}</span>{c.onlineCount > 0 && <span className={s.online}>{c.onlineCount} online</span>}</div>
         </div>
       </div>
       {c.description && <div className={s.desc}>{c.description}</div>}
