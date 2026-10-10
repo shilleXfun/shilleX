@@ -100,7 +100,11 @@ export function CommunityPage() {
               {detail.channels.map((ch) => (
                 <NavLink key={ch.id} to={`/c/${slug}/${ch.id}`} className={s.chan}>
                   {ch.id === channelId && pill}
-                  <Hash size={15} aria-hidden="true" /><span className={`${s.chanName} ${ch.unread ? s.chanUnread : ''}`}>{ch.name}</span>
+                  <Hash size={15} aria-hidden="true" />
+                  <span className={s.chanText}>
+                    <span className={`${s.chanName} ${ch.unread ? s.chanUnread : ''}`}>{ch.name}</span>
+                    {ch.topic && <span className={s.chanTopic}>{ch.topic}</span>}
+                  </span>
                   {ch.unread > 0 && ch.id !== channelId && <span className={s.unread} aria-label={`${ch.unread} unread`}>{ch.unread > 99 ? '99+' : ch.unread}</span>}
                 </NavLink>
               ))}

@@ -120,3 +120,10 @@
   .page:not([data-channel='true']) .header[data-banner] { min-height: 128px; align-items: flex-end; padding-bottom: 14px; }
   .page:not([data-channel='true']) .header[data-banner]::before { background: linear-gradient(0deg, rgba(9, 10, 24, 0.9) 8%, rgba(9, 10, 24, 0.2) 55%, transparent), var(--banner) center 70% / cover no-repeat; }
 }
+/* Channel topics: hidden in the narrow desktop rail, a second line on the roomy mobile channel index. */
+.chanText { display: grid; min-width: 0; }
+.chanTopic { display: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); font-weight: 400; }
+@media (max-width: 767px) {
+  .body[data-index='true'] .chan:has(.chanTopic) { height: auto; min-height: 54px; padding-block: 7px; }
+  .body[data-index='true'] .chanTopic { display: block; }
+}
