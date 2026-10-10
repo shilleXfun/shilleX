@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidSolanaAddress, extractMintCandidates, uniqueMints, abbreviateMint } from '../src/mint.ts';
+import { isValidSolanaAddress, extractMintCandidates, uniqueMints, abbreviateMint, abbreviateMintsIn } from '../src/mint.ts';
 
 const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 const WSOL = 'So11111111111111111111111111111111111111112';
@@ -54,5 +54,14 @@ describe('abbreviateMint', () => {
   it('keeps head and tail', () => {
     expect(abbreviateMint(BONK)).toBe('DezX…B263');
     expect(abbreviateMint(BONK, 6, 4)).toBe('DezXAZ…B263');
+  });
+});
+
+describe('abbreviateMintsIn', () => {
+  it('shortens every address and leaves other text, URLs and non-addresses alone', () => {
+    const a = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', b = 'So11111111111111111111111111111111111111112';
+    expect(abbreviateMintsIn(`ape ${a} and ${b}!`)).toBe('ape DezX…B263 and So11…1112!');
+    expect(abbreviateMintsIn(`see https://x.io/${a}`)).toBe(`see https://x.io/${a}`);
+    expect(abbreviateMintsIn('no address here')).toBe('no address here');
   });
 });
