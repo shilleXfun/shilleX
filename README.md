@@ -83,3 +83,7 @@ The Postgres path runs the same Drizzle migrations as PGlite, but the automated 
 - Public Solana RPC and Dexscreener are rate limited; set `SOLANA_RPC_URL` to a dedicated RPC for real use.
 - Presence and rate limits are in memory, so they are per process; a multi-instance deploy needs Redis.
 - Uploads live on local disk; use a volume or object storage on Railway.
+
+## Credits
+
+Emoji the operating system cannot draw fall back to [Twemoji](https://github.com/jdecked/twemoji) (graphics © Twitter, Inc. and other contributors, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), via the COLR font build in [`twemoji-colr-font`](https://github.com/mrdrogdrog/twemoji-color-font) (SIL OFL 1.1).

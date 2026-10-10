@@ -2,6 +2,15 @@
 @import '@fontsource-variable/geist-mono/wght.css';
 @import '@fontsource-variable/bricolage-grotesque/standard.css';
 
+/* Colour emoji fallback (COLR, which every engine renders). Only reached for glyphs the system emoji font lacks, and
+   the range keeps other scripts (CJK…) from ever pulling it in. */
+@font-face {
+  font-family: 'Twemoji';
+  src: url('twemoji-colr-font/twemoji.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+2600-27BF, U+2B00-2BFF, U+1F000-1FAFF;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {

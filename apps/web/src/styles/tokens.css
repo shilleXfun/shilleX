@@ -43,9 +43,12 @@
   --glow-accent: 0 0 24px rgba(139, 108, 255, 0.35);
   --glow-token: 0 0 24px rgba(39, 224, 192, 0.35);
 
-  --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-brand: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, sans-serif;
+  /* System emoji first; the bundled Twemoji (base.css) only fills glyphs the OS lacks, e.g. Unicode 13+ such as 🪖 on
+     Windows 10, which otherwise render as empty boxes. */
+  --font-emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Twemoji';
+  --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
+  --font-brand: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, var(--font-emoji), sans-serif;
 
   /* 11 / 12.5 / 14 (body) / 16 / 20 / 28 / 40 */
   --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px; --fs-3xl: 40px;
