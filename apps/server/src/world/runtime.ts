@@ -1,0 +1,169 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import type { FastifyInstance } from 'fastify';
+import { eq, sql } from 'drizzle-orm';
+import type { ContextItem, ToolCallRecord, TurnTrigger, TurnUsage } from '@shillex/shared';
+import { agentTurns, agents, users } from '../db/schema.ts';
+import { AgentActor } from './actor.ts';
+import { MODEL, priceOf, type AgentBrain } from './brain.ts';
+import type { Budget } from './budget.ts';
+import type { Chain } from './chain.ts';
+import { SnapshotCache, buildTurnRequest } from './context.ts';
+import type { WorldEvents } from './events.ts';
+import { PROMPT_VERSION } from './prompt.ts';
+import { finishTurn, startTurn } from './provenance.ts';
+import { runTool, type ToolContext } from './tools.ts';
+import { WakeRouter, type WorldBus } from './wakes.ts';
+
+export interface RuntimeDeps {
+  app: FastifyInstance; brain: AgentBrain; chain: Chain; budget: Budget; events: WorldEvents; bus: WorldBus | null; worldKey: Buffer;
+  now?: () => Date; random?: () => number; heartbeatMs?: number; cooldownMs?: number; concurrency?: number; maxRoundTrips?: number; autoStart?: boolean;
+}
+export interface Runtime { wake(agentId: string, trigger: TurnTrigger): void; heartbeat(): Promise<void>; idle(): Promise<void>; stop(): Promise<void>; stats(): { queued: number; running: number } }
+
+/** Wakes that skip the per-agent cooldown: something happened to this agent specifically. */
+const PRIORITY: TurnTrigger['type'][] = ['mention', 'reply', 'dm', 'money'];
+const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
+
+export function startRuntime(d: RuntimeDeps): Runtime {
+  const { app, brain, chain, budget, events } = d;
+  const db = app.deps.db;
+  const now = d.now ?? (() => new Date());
+  const random = d.random ?? Math.random;
+  const heartbeatMs = d.heartbeatMs ?? 60_000, cooldownMs = d.cooldownMs ?? 45_000, concurrency = d.concurrency ?? 3, maxRoundTrips = d.maxRoundTrips ?? 4;
+  const actor = new AgentActor(app);
+  const snapshots = new SnapshotCache(db, now);
+  const router = new WakeRouter(db, now, random);
+  const pending = new Map<string, TurnTrigger[]>();
+  const running = new Set<string>();
+  const lastTurnAt = new Map<string, number>();
+  const turnCount = new Map<string, number>();
+  let stopped = false, timer: NodeJS.Timeout | null = null, retryTimer: NodeJS.Timeout | null = null;
+  const idleWaiters: (() => void)[] = [];
+  const ready = (async () => {
+    await router.load();
+    for (const r of await db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int` }).from(agentTurns).groupBy(agentTurns.agentId)) turnCount.set(r.a, r.n);
+  })();
+
+  function settle() {
+    if (running.size === 0 && (pending.size === 0 || stopped)) while (idleWaiters.length) idleWaiters.shift()!();
+  }
+
+  function wake(agentId: string, trigger: TurnTrigger) {
+    if (stopped) return;
+    const level = budget.level();
+    if (level === 'stopped') return;
+    if (level === 'events' && (trigger.type === 'heartbeat' || trigger.type === 'first_turn')) return;
+    pending.set(agentId, [...(pending.get(agentId) ?? []), trigger]);
+    void pump();
+  }
+
+  async function pump() {
+    await ready;
+    if (stopped) return settle();
+    const t = now().getTime();
+    let waitMs = Infinity;
+    for (const [agentId, triggers] of [...pending]) {
+      if (running.size >= concurrency) break;
+      if (running.has(agentId)) continue;
+      const since = t - (lastTurnAt.get(agentId) ?? 0);
+      if (!triggers.some((x) => PRIORITY.includes(x.type)) && since < cooldownMs) { waitMs = Math.min(waitMs, cooldownMs - since); continue; }
+      pending.delete(agentId);
+      running.add(agentId);
+      void runTurn(agentId, triggers)
+        .catch((e) => console.error('[world] turn crashed', agentId, e))
+        .finally(() => { running.delete(agentId); lastTurnAt.set(agentId, now().getTime()); void pump(); });
+    }
+    if (waitMs !== Infinity && !retryTimer) { retryTimer = setTimeout(() => { retryTimer = null; void pump(); }, waitMs); retryTimer.unref?.(); }
+    settle();
+  }
+
+  async function runTurn(agentId: string, triggers: TurnTrigger[]) {
+    const [row] = await db.select({ u: users, status: agents.status }).from(users).innerJoin(agents, eq(agents.userId, users.id)).where(eq(users.id, agentId));
+    if (!row || row.status !== 'active') return;
+    const snapshot = await snapshots.get();
+    const { id: turnId } = await startTurn(db, { agentId, triggers, model: MODEL, effort: 'medium', promptVersion: PROMPT_VERSION, snapshotId: snapshot.id, now: now() });
+    turnCount.set(agentId, Math.floor(turnCount.get(agentId) ?? 0) + 1);
+    const usage: TurnUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    const toolCalls: ToolCallRecord[] = [];
+    let reasoning = '', status: 'acted' | 'quiet' | 'refused' | 'failed' = 'quiet', model = MODEL;
+    let context: ContextItem[] = [];
+    try {
+      const built = await buildTurnRequest({ db, chain, snapshot, agent: row.u, triggers });
+      context = built.context;
+      const messages: Anthropic.MessageParam[] = [...built.request.messages];
+      const ctx: ToolContext = { app, db, actor, chain, events, agent: row.u, turnId, worldKey: d.worldKey, now, publicUrl: app.deps.config.publicUrl };
+      for (let trip = 0; trip < maxRoundTrips; trip++) {
+        const res = await brain.decide({ ...built.request, messages });
+        model = res.model;
+        for (const k of Object.keys(usage) as (keyof TurnUsage)[]) usage[k] += res.usage[k];
+        for (const b of res.content) {
+          const thought = b.type === 'thinking' ? (b as { thinking?: string }).thinking : '';
+          if (thought) reasoning += `${reasoning ? '\n\n' : ''}${thought}`;
+        }
+        if (res.stopReason === 'refusal') { status = 'refused'; break; }
+        const uses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+        if (!uses.length || res.stopReason === 'max_tokens') break;
+        messages.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        let endTurn = false;
+        for (const u of uses) {
+          const out = await runTool(ctx, u.name, u.input);
+          toolCalls.push({ name: u.name, input: u.input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
+          if (out.ok && out.write) status = 'acted';
+          if (out.endTurn) endTurn = true;
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out.result ?? null).slice(0, 20_000), is_error: !out.ok });
+        }
+        messages.push({ role: 'user', content: results });
+        if (endTurn) break;
+      }
+    } catch (e) {
+      status = 'failed';
+      reasoning += `${reasoning ? '\n\n' : ''}[runtime] ${(e as Error).message ?? String(e)}`;
+      console.error('[world] turn failed', agentId, e);
+    }
+    const costUsd = priceOf(model, usage);
+    budget.add(costUsd);
+    await finishTurn(db, turnId, { status, context, reasoning, toolCalls, usage, costUsd, finishedAt: now() });
+  }
+
+  async function heartbeat() {
+    await ready;
+    if (stopped) return;
+    const rows = await db.select({ id: agents.userId }).from(agents).where(eq(agents.status, 'active'));
+    const ids = rows.map((r) => r.id).filter((id) => !running.has(id) && !pending.has(id));
+    if (!ids.length) return;
+    // Every agent gets its first turn (it is blank until then) before anyone is picked by activity.
+    const fresh = ids.filter((id) => !turnCount.get(id));
+    if (fresh.length) { const id = fresh[Math.floor(random() * fresh.length)]!; turnCount.set(id, 0.5); return wake(id, { type: 'first_turn' }); }
+    const weights = ids.map((id) => 1 + Math.min(10, turnCount.get(id) ?? 0) / 2);
+    let x = random() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < ids.length; i++) { x -= weights[i]!; if (x <= 0) return wake(ids[i]!, { type: 'heartbeat' }); }
+    wake(ids.at(-1)!, { type: 'heartbeat' });
+  }
+
+  const offWorld = events.on((e) => { void router.fromWorld(e).then((ws) => ws.forEach((x) => wake(x.agentId, x.trigger))).catch((err) => console.error('[world] wake routing failed', err)); });
+  const offBus = d.bus?.on((e) => { void router.fromBus(e).then((ws) => ws.forEach((x) => wake(x.agentId, x.trigger))).catch((err) => console.error('[world] wake routing failed', err)); });
+
+  function schedule() {
+    if (stopped) return;
+    const base = budget.level() === 'slow' ? heartbeatMs * 2 : heartbeatMs;
+    timer = setTimeout(() => { void heartbeat().finally(schedule); }, base * (2 / 3 + random() * 2 / 3));
+    timer.unref?.();
+  }
+  if (d.autoStart !== false) schedule();
+
+  return {
+    wake, heartbeat,
+    idle: () => new Promise<void>((resolve) => { idleWaiters.push(resolve); void ready.then(() => settle()); }),
+    async stop() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+      offWorld(); offBus?.();
+      pending.clear();
+      while (running.size) await new Promise((r) => setTimeout(r, 10));
+      settle();
+    },
+    stats: () => ({ queued: pending.size, running: running.size }),
+  };
+}
