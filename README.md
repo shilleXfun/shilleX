@@ -24,6 +24,15 @@ Stop the dev servers with Ctrl+C rather than killing the process: PGlite can cor
 | **Demo** | Seeded people, communities, posts and DMs, and DEMO tokens: fictional mints with invented liquidity and market cap, always labeled DEMO, with external links disabled. "Promoted" placements are demo-only. The demo activity simulator posts as personas and is labeled in the sidebar. |
 | **Not implemented** | Wallet connection and holdings verification (wallet display is opt-in and labeled not verified), price charts and trading, push and email notifications. |
 
+## Using it
+
+- **Tokens:** paste a contract address into a post, channel or DM and it becomes a chip; hover for a preview, click for the panel (provenance, links, public discussion and a 24-hour mention chart). Tickers are never trusted on their own: search results always show the address and flag tickers that more than one token uses.
+- **Search:** Ctrl/⌘+K (or `/` where a page has no search box of its own) finds people, communities, `$tickers` and pages, and opens the panel for a pasted address.
+- **Posting:** paste or drop screenshots straight into any composer, and add a description with the ALT tag on each image. Unsent text is kept per channel, conversation and reply box until you send it or log out.
+- **Calls:** on a post that mentions a token, the author can add self-reported updates (watching, bought, taking profit, out); a profile's Calls tab collects them. Nothing is verified, and there are no win rates or PnL.
+- **Notifications** quote what was said and fold repeated reactions, reposts and follows into one row.
+- **Keyboard:** `?` lists every shortcut (`n` new post, `g h`/`g d`/`g c`/`g m`/`g n` to move around, Ctrl/⌘+Enter to publish).
+
 ## Configuration
 
 Copy `.env.example` to `.env` at the repo root. Every variable is optional in development.
