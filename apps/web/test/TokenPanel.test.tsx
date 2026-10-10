@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { socket } from '../src/lib/socket';
+import { useLocation } from 'react-router';
 import { renderWithApp, mockFetch } from './utils';
 import { TokenPanel } from '../src/features/tokens/TokenPanel';
 import { TokenPanelHost } from '../src/features/tokens/TokenPanelHost';
@@ -65,6 +66,23 @@ describe('TokenPanel', () => {
     push(MINT);
     expect(await screen.findByRole('img', { name: /^2 mentions in the last 24 hours; busiest in the past hour, with 2/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Community chat/ })).toHaveTextContent('1');
+  });
+  it('warns when other tokens discussed here use the same ticker, and opens them to compare', async () => {
+    const COPY = 'So11111111111111111111111111111111111111112';
+    mockFetch({ ...demoRoutes, '/api/tokens/search': { results: [{ token, mentions24h: 3 }, { token: { ...token, mint: COPY, name: 'Grub Copy' }, mentions24h: 1 }] } });
+    const Where = () => <output data-testid="where">{useLocation().search}</output>;
+    renderWithApp(<><TokenPanel mint={MINT} onClose={() => {}} /><Where /></>);
+    const note = await screen.findByRole('note');
+    expect(note).toHaveTextContent('Another token discussed here also calls itself $GRUB. Tickers aren’t unique: this one is DezX…B263.');
+    fireEvent.click(within(note).getByRole('button', { name: 'Open $GRUB, Grub Copy, address So11…1112' }));
+    expect(screen.getByTestId('where')).toHaveTextContent(`?token=${COPY}`);
+  });
+  it('shows no copycat warning when the ticker is unique here', async () => {
+    mockFetch({ ...demoRoutes, '/api/tokens/search': { results: [{ token, mentions24h: 3 }] } });
+    renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
+    expect(await screen.findByRole('heading', { name: /Grubworm/ })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole('note')).toBeNull();
   });
   it('says plainly when nobody has mentioned it', async () => {
     mockFetch(demoRoutes);

@@ -79,3 +79,11 @@ a.link svg { color: var(--muted); }
 .heatAxis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font: 10px var(--font-mono); }
 .heatSpark { position: absolute; bottom: 100%; z-index: 1; color: var(--token); font: 700 11px / 1 var(--font-mono); text-shadow: 0 0 8px rgba(39, 224, 192, 0.7); pointer-events: none; }
 .heatFlash { filter: brightness(1.5); box-shadow: 0 0 18px rgba(39, 224, 192, 0.8); }
+/* Copycat warning: other tokens here with the same ticker. */
+.twins { margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, 0.3); font-size: var(--fs-sm); }
+.twinsText { display: flex; gap: 8px; align-items: flex-start; margin: 0; color: var(--text); }
+.twinsText svg { flex: none; margin-top: 2px; color: var(--warn); }
+.twinList { display: grid; gap: 4px; margin: 8px 0 0 23px; padding: 0; list-style: none; }
+.twin { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 0; border-radius: var(--radius-pill); background: rgba(8, 9, 20, 0.5); color: var(--text); font-size: var(--fs-sm); cursor: pointer; }
+.twin:hover { background: rgba(23, 26, 49, 0.9); }
+.twin .mono { color: var(--muted); font-size: var(--fs-xs); }

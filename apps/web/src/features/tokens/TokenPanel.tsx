@@ -26,6 +26,7 @@ import { TokenAvatar } from './TokenAvatar';
 import { copyAddress, provenance } from './TokenPreview';
 import { ChatMentionItem } from './ChatMentionItem';
 import { MentionHeat } from './MentionHeat';
+import { TickerTwins } from './TickerTwins';
 import s from './panel.module.css';
 
 interface Detail { token: TokenView; links: Ext[]; stats: TokenDiscussionStats }
@@ -110,6 +111,7 @@ export function TokenPanel({ mint, onClose, asSheet, onHandleDown }: { mint: str
           : (
             <>
               <p className={s.prov}><span className={demo ? s.provDemo : t!.status === 'resolved' ? s.provLive : s.provDot} aria-hidden="true" />{provenance(d.data.token)}</p>
+              <TickerTwins token={d.data.token} />
               {hasStats && (
                 <div className={s.stats}>
                   {/* Market cap is the headline number; age and liquidity sit beside it. */}
