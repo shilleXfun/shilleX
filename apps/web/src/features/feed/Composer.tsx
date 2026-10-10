@@ -13,6 +13,7 @@ import { Button, IconButton } from '../../components/ui/Button';
 import { useInDialog } from '../../components/ui/Dialog';
 import { toast } from '../../components/ui/Toaster';
 import { primeTokens } from '../tokens/tokenCache';
+import { pulseAtmosphere } from '../../components/atmosphere/Atmosphere';
 import { TokenMention } from '../tokens/TokenMention';
 import { QuoteEmbed } from './QuoteEmbed';
 import s from './Composer.module.css';
@@ -76,6 +77,9 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
       }
       void qc.invalidateQueries({ queryKey: ['userPosts', me.username] });
       setText(''); setUploads([]); setDone(true);
+      // Your post goes out to followers, not back to you, so the skyline answers here. Community posts already
+      // echo through the community room.
+      if (!communityId) pulseAtmosphere('accent');
       onPosted?.(r.post);
       if (mode !== 'post') toast(mode === 'reply' ? 'Reply posted' : 'Quote posted', { tone: 'success' });
     } catch (e) {
