@@ -60,6 +60,16 @@ describe('notifications', () => {
   });
 });
 
+describe('reaction notifications', () => {
+  it('carry the emoji, so the client can group several reactions into one row', async () => {
+    const p = (await ctx.as(a).post('/api/posts', { body: 'react to me' })).body.post;
+    expect((await ctx.as(b).put(`/api/posts/${p.id}/reactions/${encodeURIComponent('🔥')}`)).status).toBe(200);
+    const r = (await ctx.as(a).get('/api/notifications')).body.items.find((n: any) => n.type === 'reaction');
+    expect(r).toMatchObject({ emoji: '🔥', target: { type: 'post', id: p.id }, excerpt: 'react to me' });
+    expect((await ctx.as(a).get('/api/notifications')).body.items.filter((n: any) => n.type !== 'reaction').every((n: any) => n.emoji === null)).toBe(true);
+  });
+});
+
 describe('notification excerpts', () => {
   const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
   it('formats one line: addresses shortened, whitespace collapsed, long text cut on a character', () => {
