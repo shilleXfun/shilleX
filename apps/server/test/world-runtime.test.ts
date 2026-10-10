@@ -93,3 +93,26 @@ describe('runtime', () => {
     expect(await turnsOf(w.agents[6]!.id)).toHaveLength(0);
   });
 });
+
+describe('runtime resilience (review fixes)', () => {
+  it('a heartbeat that hits a database error resolves instead of rejecting', async () => {
+    const r = boot(new FakeBrain(() => fakeReply.end()));
+    await r.heartbeat(); // warm: first turn queued
+    await r.idle();
+    await r.stop();
+    const r2 = boot(new FakeBrain(() => fakeReply.end()));
+    await w.t.close(); // the database goes away under the runtime
+    await expect(r2.heartbeat()).resolves.toBeUndefined();
+    w = await worldTestCtx(); // afterEach closes again
+  });
+  it('priority wakes respect a shorter cooldown instead of none', async () => {
+    const r = boot(new FakeBrain(() => fakeReply.end()), { now: () => new Date(), cooldownMs: 60_000, priorityCooldownMs: 400 });
+    r.wake(w.agents[0]!.id, { type: 'heartbeat' });
+    await r.idle();
+    r.wake(w.agents[0]!.id, { type: 'mention', refId: 'p' });
+    await new Promise((res) => setTimeout(res, 150));
+    expect(await turnsOf(w.agents[0]!.id)).toHaveLength(1);
+    await r.idle();
+    expect(await turnsOf(w.agents[0]!.id)).toHaveLength(2);
+  });
+});

@@ -4,7 +4,7 @@ import { testDb } from './helpers.ts';
 import type { DbHandle } from '../src/db/client.ts';
 import { agentTurns, users } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
-import { abortRunningTurns, canonicalJson, chainHead, finishTurn, genesisHash, startTurn, verifyChain } from '../src/world/provenance.ts';
+import { abortRunningTurns, canonicalJson, chainHead, finishTurn, genesisHash, recordProgress, startTurn, verifyChain } from '../src/world/provenance.ts';
 
 let h: DbHandle; let agentId: string;
 const meta = (now: Date) => ({ agentId, triggers: [{ type: 'heartbeat' as const }], model: 'claude-opus-5-5', effort: 'medium', promptVersion: 'world-v1', snapshotId: null, now });
@@ -51,5 +51,42 @@ describe('turn chain', () => {
     expect(last.status).toBe('aborted');
     expect(last.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(await verifyChain(h.db, agentId)).toMatchObject({ ok: true, count: 3 });
+  });
+});
+
+describe('chain integrity under failures (review fixes)', () => {
+  it('refuses to chain a turn onto an unsealed predecessor instead of forking to the genesis', async () => {
+    const id = newId();
+    await h.db.insert(users).values({ id, username: 'agent_77', displayName: '', kind: 'agent', createdAt: new Date() });
+    const m = (now: Date) => ({ agentId: id, triggers: [{ type: 'heartbeat' as const }], model: 'm', effort: 'medium', promptVersion: 'v', snapshotId: null, now });
+    await startTurn(h.db, m(new Date('2026-10-10T12:00:00Z'))); // never finished
+    const t2 = await startTurn(h.db, m(new Date('2026-10-10T12:01:00Z')));
+    await expect(finishTurn(h.db, t2.id, done(new Date('2026-10-10T12:01:05Z')))).rejects.toThrow(/unsealed/);
+  });
+  it('reports a running turn in the middle of the chain as broken', async () => {
+    const id = newId();
+    await h.db.insert(users).values({ id, username: 'agent_78', displayName: '', kind: 'agent', createdAt: new Date() });
+    const m = (now: Date) => ({ agentId: id, triggers: [{ type: 'heartbeat' as const }], model: 'm', effort: 'medium', promptVersion: 'v', snapshotId: null, now });
+    await startTurn(h.db, m(new Date('2026-10-10T12:00:00Z')));
+    await startTurn(h.db, m(new Date('2026-10-10T12:01:00Z')));
+    expect(await verifyChain(h.db, id)).toMatchObject({ ok: false, brokenAtSeq: 1 });
+  });
+  it('stores tool results containing NUL characters', async () => {
+    const id = newId();
+    await h.db.insert(users).values({ id, username: 'agent_79', displayName: '', kind: 'agent', createdAt: new Date() });
+    const t = await startTurn(h.db, { agentId: id, triggers: [], model: 'm', effort: 'medium', promptVersion: 'v', snapshotId: null, now: new Date() });
+    const r = await finishTurn(h.db, t.id, { ...done(new Date()), reasoning: 'a\u0000b', toolCalls: [{ name: 'post', input: { body: 'x\u0000y' }, ok: true, result: 'z\u0000' }] });
+    expect(r.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect((await verifyChain(h.db, id)).ok).toBe(true);
+  });
+  it('keeps what a turn did when it is aborted at boot', async () => {
+    const id = newId();
+    await h.db.insert(users).values({ id, username: 'agent_80', displayName: '', kind: 'agent', createdAt: new Date() });
+    const t = await startTurn(h.db, { agentId: id, triggers: [], model: 'm', effort: 'medium', promptVersion: 'v', snapshotId: null, now: new Date() });
+    await recordProgress(h.db, t.id, { context: [{ kind: 'trigger', text: 'heartbeat' }], toolCalls: [{ name: 'post', input: { body: 'hi' }, ok: true, result: { post_id: 'p' } }] });
+    await abortRunningTurns(h.db, new Date());
+    const [row] = await h.db.select().from(agentTurns).where(eq(agentTurns.id, t.id));
+    expect(row).toMatchObject({ status: 'aborted', toolCalls: [{ name: 'post' }], context: [{ kind: 'trigger' }] });
+    expect((await verifyChain(h.db, id)).ok).toBe(true);
   });
 });

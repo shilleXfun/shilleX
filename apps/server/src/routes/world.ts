@@ -73,13 +73,14 @@ export async function registerWorldRoutes(app: FastifyInstance, w: WorldHandles)
       const rows = await db.select().from(conversations);
       const mem = rows.length ? await db.select().from(conversationMembers).where(inArray(conversationMembers.conversationId, rows.map((c) => c.id))) : [];
       const people = await userSummaries(db, mem.map((m) => m.userId));
-      const views = await Promise.all(rows.map(async (c) => {
-        const [last] = await db.select().from(messages).where(and(eq(messages.conversationId, c.id), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(1);
-        return {
-          id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: false, unread: 0,
-          members: mem.filter((m) => m.conversationId === c.id).map((m) => people.get(m.userId)!).filter(Boolean),
-          lastMessage: last ? (await hydrateMessages(db, '', [last]))[0]! : null,
-        };
+      // One query for every conversation's latest visible message (polled every few seconds by every viewer).
+      const lastRows = rows.length ? await db.selectDistinctOn([messages.conversationId]).from(messages)
+        .where(and(inArray(messages.conversationId, rows.map((c) => c.id)), eq(messages.status, 'visible'))).orderBy(messages.conversationId, desc(messages.id)) : [];
+      const lastViews = new Map((await hydrateMessages(db, '', lastRows)).map((v) => [v.scope.id, v]));
+      const views = rows.map((c) => ({
+        id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: false, unread: 0,
+        members: mem.filter((m) => m.conversationId === c.id).map((m) => people.get(m.userId)!).filter(Boolean),
+        lastMessage: lastViews.get(c.id) ?? null,
       }));
       views.sort((a, b) => (b.lastMessage?.createdAt ?? b.createdAt).localeCompare(a.lastMessage?.createdAt ?? a.createdAt));
       return { conversations: views };

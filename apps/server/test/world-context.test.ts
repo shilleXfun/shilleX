@@ -41,3 +41,12 @@ describe('context', () => {
     expect(context.map((c) => c.kind)).toEqual(expect.arrayContaining(['profile', 'memory', 'wallet', 'trigger']));
   });
 });
+
+describe('context when the RPC fails (review fix)', () => {
+  it('still builds the turn, saying the wallet is unavailable', async () => {
+    const broken = Object.assign(Object.create(Object.getPrototypeOf(w.chain)), w.chain, { balances: async () => { throw new Error('429 Too Many Requests'); } });
+    const snapshot = await new SnapshotCache(w.t.db, w.t.clock.now).get();
+    const { context } = await buildTurnRequest({ db: w.t.db, chain: broken, snapshot, agent: w.agents[3]!, triggers: [{ type: 'heartbeat' }] });
+    expect(context.find((c) => c.kind === 'wallet')?.text).toMatch(/unavailable/i);
+  });
+});

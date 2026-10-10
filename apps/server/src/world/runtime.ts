@@ -10,17 +10,17 @@ import type { Chain } from './chain.ts';
 import { SnapshotCache, buildTurnRequest } from './context.ts';
 import type { WorldEvents } from './events.ts';
 import { PROMPT_VERSION } from './prompt.ts';
-import { finishTurn, startTurn } from './provenance.ts';
+import { finishTurn, recordProgress, startTurn } from './provenance.ts';
 import { runTool, type ToolContext } from './tools.ts';
 import { WakeRouter, type WorldBus } from './wakes.ts';
 
 export interface RuntimeDeps {
   app: FastifyInstance; brain: AgentBrain; chain: Chain; budget: Budget; events: WorldEvents; bus: WorldBus | null; worldKey: Buffer;
-  now?: () => Date; random?: () => number; heartbeatMs?: number; cooldownMs?: number; concurrency?: number; maxRoundTrips?: number; autoStart?: boolean;
+  now?: () => Date; random?: () => number; heartbeatMs?: number; cooldownMs?: number; priorityCooldownMs?: number; concurrency?: number; maxRoundTrips?: number; autoStart?: boolean;
 }
 export interface Runtime { wake(agentId: string, trigger: TurnTrigger): void; heartbeat(): Promise<void>; idle(): Promise<void>; stop(): Promise<void>; stats(): { queued: number; running: number } }
 
-/** Wakes that skip the per-agent cooldown: something happened to this agent specifically. */
+/** Wakes about something that happened to this agent specifically: they wait out a shorter cooldown. */
 const PRIORITY: TurnTrigger['type'][] = ['mention', 'reply', 'dm', 'money'];
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 
@@ -29,7 +29,8 @@ export function startRuntime(d: RuntimeDeps): Runtime {
   const db = app.deps.db;
   const now = d.now ?? (() => new Date());
   const random = d.random ?? Math.random;
-  const heartbeatMs = d.heartbeatMs ?? 60_000, cooldownMs = d.cooldownMs ?? 45_000, concurrency = d.concurrency ?? 3, maxRoundTrips = d.maxRoundTrips ?? 4;
+  const heartbeatMs = d.heartbeatMs ?? 60_000, cooldownMs = d.cooldownMs ?? 45_000, priorityCooldownMs = Math.min(d.priorityCooldownMs ?? 15_000, cooldownMs);
+  const concurrency = d.concurrency ?? 3, maxRoundTrips = d.maxRoundTrips ?? 4;
   const actor = new AgentActor(app);
   const snapshots = new SnapshotCache(db, now);
   const router = new WakeRouter(db, now, random);
@@ -42,7 +43,7 @@ export function startRuntime(d: RuntimeDeps): Runtime {
   const ready = (async () => {
     await router.load();
     for (const r of await db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int` }).from(agentTurns).groupBy(agentTurns.agentId)) turnCount.set(r.a, r.n);
-  })();
+  })().catch((e) => console.error('[world] runtime warm-up failed', e));
 
   function settle() {
     if (running.size === 0 && (pending.size === 0 || stopped)) while (idleWaiters.length) idleWaiters.shift()!();
@@ -66,7 +67,8 @@ export function startRuntime(d: RuntimeDeps): Runtime {
       if (running.size >= concurrency) break;
       if (running.has(agentId)) continue;
       const since = t - (lastTurnAt.get(agentId) ?? 0);
-      if (!triggers.some((x) => PRIORITY.includes(x.type)) && since < cooldownMs) { waitMs = Math.min(waitMs, cooldownMs - since); continue; }
+      const wait = (triggers.some((x) => PRIORITY.includes(x.type)) ? priorityCooldownMs : cooldownMs) - since;
+      if (wait > 0) { waitMs = Math.min(waitMs, wait); continue; }
       pending.delete(agentId);
       running.add(agentId);
       void runTurn(agentId, triggers)
@@ -90,6 +92,7 @@ export function startRuntime(d: RuntimeDeps): Runtime {
     try {
       const built = await buildTurnRequest({ db, chain, snapshot, agent: row.u, triggers });
       context = built.context;
+      await recordProgress(db, turnId, { context });
       const messages: Anthropic.MessageParam[] = [...built.request.messages];
       const ctx: ToolContext = { app, db, actor, chain, events, agent: row.u, turnId, worldKey: d.worldKey, now, publicUrl: app.deps.config.publicUrl };
       for (let trip = 0; trip < maxRoundTrips; trip++) {
@@ -112,6 +115,7 @@ export function startRuntime(d: RuntimeDeps): Runtime {
           if (out.ok && out.write) status = 'acted';
           if (out.endTurn) endTurn = true;
           results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out.result ?? null).slice(0, 20_000), is_error: !out.ok });
+          await recordProgress(db, turnId, { toolCalls });
         }
         messages.push({ role: 'user', content: results });
         if (endTurn) break;
@@ -123,10 +127,22 @@ export function startRuntime(d: RuntimeDeps): Runtime {
     }
     const costUsd = priceOf(model, usage);
     budget.add(costUsd);
-    await finishTurn(db, turnId, { status, context, reasoning, toolCalls, usage, costUsd, finishedAt: now() });
+    const record = { status, context, reasoning, toolCalls, usage, costUsd, finishedAt: now() };
+    // An unsealed turn would block this agent's chain until the next boot, so retry once before giving up.
+    try { await finishTurn(db, turnId, record); }
+    catch (e) {
+      console.error('[world] sealing turn failed, retrying', turnId, e);
+      await new Promise((r) => setTimeout(r, 500));
+      await finishTurn(db, turnId, record).catch((err) => console.error('[world] turn left unsealed until restart', turnId, err));
+    }
   }
 
   async function heartbeat() {
+    try { await pickHeartbeat(); }
+    catch (e) { console.error('[world] heartbeat failed', e); }
+  }
+
+  async function pickHeartbeat() {
     await ready;
     if (stopped) return;
     const rows = await db.select({ id: agents.userId }).from(agents).where(eq(agents.status, 'active'));

@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -37,14 +37,30 @@ export class DevnetChain implements Chain {
     return deriveDbcPoolAddress(NATIVE_MINT, m, this.config);
   }
 
+  /**
+   * Signs and sends once, keeping the signature. A confirmation timeout does not mean the transaction failed, so before
+   * the one allowed resend we ask whether the first signature landed; resending blindly could spend twice.
+   */
   private async send(tx: Transaction, signers: Keypair[]): Promise<string> {
-    for (let attempt = 0; ; attempt++) {
-      try { return await sendAndConfirmTransaction(this.conn, tx, signers, { commitment: 'confirmed' }); }
-      catch (e) {
-        if (attempt === 0 && e instanceof TransactionExpiredBlockheightExceededError) { tx.recentBlockhash = undefined; continue; }
-        throw chainError(e);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let signature: string;
+      try {
+        const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash('confirmed');
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = signers[0]!.publicKey;
+        tx.sign(...signers);
+        signature = await this.conn.sendRawTransaction(tx.serialize(), { preflightCommitment: 'confirmed' });
+        const r = await this.conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+        if (r.value.err) throw new ChainError('TX_FAILED', `Transaction failed: ${JSON.stringify(r.value.err)}`);
+        return signature;
+      } catch (e) {
+        if (!(e instanceof TransactionExpiredBlockheightExceededError)) throw chainError(e);
+        const [status] = (await this.conn.getSignatureStatuses([e.signature], { searchTransactionHistory: true })).value;
+        if (status && !status.err) return e.signature;
+        if (status?.err) throw new ChainError('TX_FAILED', `Transaction failed: ${JSON.stringify(status.err)}`);
       }
     }
+    throw new ChainError('TX_EXPIRED', 'Transaction expired twice without landing; try again');
   }
 
   private async deltas(signature: string, owner: string, mint: string | null) {

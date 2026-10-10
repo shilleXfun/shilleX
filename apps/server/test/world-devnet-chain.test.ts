@@ -20,3 +20,37 @@ describe('deltasFromTx', () => {
     expect(deltasFromTx(tx, OWNER, null).tokenDelta).toBe(0);
   });
 });
+
+import { Keypair, PublicKey, TransactionExpiredBlockheightExceededError, type Connection } from '@solana/web3.js';
+import { DevnetChain } from '../src/world/devnet-chain.ts';
+
+/** Fake RPC: the first confirmation times out although the transaction landed. */
+function fakeConnection(landed: boolean) {
+  const sent: string[] = [];
+  let confirms = 0;
+  const conn = {
+    getLatestBlockhash: async () => ({ blockhash: Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: 100 }),
+    sendRawTransaction: async () => { const sig = `sig${sent.length + 1}`; sent.push(sig); return sig; },
+    confirmTransaction: async (s: { signature: string }) => { if (confirms++ === 0) throw new TransactionExpiredBlockheightExceededError(s.signature); return { value: { err: null } }; },
+    getSignatureStatuses: async () => ({ value: [landed ? { confirmationStatus: 'confirmed', err: null } : null] }),
+    getParsedTransaction: async () => null,
+  } as unknown as Connection;
+  return { conn, sent };
+}
+
+describe('DevnetChain sending (review fix)', () => {
+  it('does not resend a transaction that landed after its confirmation timed out', async () => {
+    const { conn, sent } = fakeConnection(true);
+    const chain = new DevnetChain(conn, new PublicKey(Keypair.generate().publicKey));
+    const r = await chain.sendSol(Keypair.generate(), Keypair.generate().publicKey.toBase58(), 1000);
+    expect(sent).toEqual(['sig1']);
+    expect(r.signature).toBe('sig1');
+  });
+  it('resends once when the expired transaction never landed', async () => {
+    const { conn, sent } = fakeConnection(false);
+    const chain = new DevnetChain(conn, new PublicKey(Keypair.generate().publicKey));
+    const r = await chain.sendSol(Keypair.generate(), Keypair.generate().publicKey.toBase58(), 1000);
+    expect(sent).toEqual(['sig1', 'sig2']);
+    expect(r.signature).toBe('sig2');
+  });
+});
