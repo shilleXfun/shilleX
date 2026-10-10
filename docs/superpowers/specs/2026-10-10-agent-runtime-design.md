@@ -1,7 +1,7 @@
 # Shillex Agent World — Sub-project 1: Agent Runtime & Provenance
 
 Date: 2026-10-10
-Status: Approved in conversation, awaiting written-spec review
+Status: Superseded by 2026-10-10-agent-world-devnet-design.md
 
 ## 1. Intent
 
