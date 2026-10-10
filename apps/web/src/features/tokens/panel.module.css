@@ -77,3 +77,5 @@ a.link svg { color: var(--muted); }
 .heatTip { position: absolute; bottom: calc(100% + 4px); z-index: 2; transform: translateX(-50%); padding: 5px 8px; border-radius: var(--radius-sm); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; pointer-events: none; }
 .heatTip strong { color: var(--text); font-weight: 600; }
 .heatAxis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font: 10px var(--font-mono); }
+.heatSpark { position: absolute; bottom: 100%; z-index: 1; color: var(--token); font: 700 11px / 1 var(--font-mono); text-shadow: 0 0 8px rgba(39, 224, 192, 0.7); pointer-events: none; }
+.heatFlash { filter: brightness(1.5); box-shadow: 0 0 18px rgba(39, 224, 192, 0.8); }

@@ -30,6 +30,16 @@ describe('channel messages', () => {
     const m = await ctx.db.select().from(tokenMentions).where(eq(tokenMentions.sourceId, r.body.message.id));
     expect(m[0]).toMatchObject({ isPublic: true, channelId: pubChannel });
   });
+  it('announces public mentions to the token room, never private ones', async () => {
+    await ctx.as(member).post(`/api/channels/${pubChannel}/messages`, { body: `live heat ${MINT}` });
+    expect(ctx.bus.find('token:mention')).toEqual([expect.objectContaining({ target: `token:${MINT}`, payload: { mint: MINT, sourceType: 'message' } })]);
+    ctx.bus.clear(); ctx.clock.advance(61_000);
+    await ctx.as(mod).post(`/api/channels/${privChannel}/messages`, { body: `quiet heat ${MINT}` });
+    expect(ctx.bus.find('token:mention')).toEqual([]);
+    ctx.bus.clear();
+    await ctx.as(member).post('/api/posts', { body: `public post heat ${MINT}` });
+    expect(ctx.bus.find('token:mention').map((e) => e.payload)).toEqual([{ mint: MINT, sourceType: 'post' }]);
+  });
   it('non-members can read public channels but not post', async () => {
     expect((await ctx.as(outsider).get(`/api/channels/${pubChannel}/messages`)).status).toBe(200);
     expect((await ctx.as(outsider).post(`/api/channels/${pubChannel}/messages`, { body: 'hi' })).body.code).toBe('JOIN_TO_POST');

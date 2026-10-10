@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
 import s from './panel.module.css';
@@ -14,6 +14,14 @@ const when = (i: number) => (i === 23 ? 'past hour' : `${23 - i}–${24 - i} h a
 export function MentionHeat({ hourly }: { hourly: number[] }) {
   const reduced = useReducedMotion();
   const [hover, setHover] = useState<number | null>(null);
+  // A live mention (TokenPanel patches hourly[23]) floats a "+1" off the past-hour bar.
+  const nowCount = hourly[hourly.length - 1] ?? 0;
+  const prevNow = useRef(nowCount);
+  const [sparks, setSparks] = useState<number[]>([]);
+  useEffect(() => {
+    if (nowCount > prevNow.current && !reduced) { const id = Date.now(); setSparks((x) => [...x, id]); setTimeout(() => setSparks((x) => x.filter((y) => y !== id)), 1400); }
+    prevNow.current = nowCount;
+  }, [nowCount, reduced]);
   const total = hourly.reduce((a, b) => a + b, 0);
   const peak = Math.max(0, ...hourly);
   const peakAt = hourly.lastIndexOf(peak);
@@ -30,8 +38,15 @@ export function MentionHeat({ hourly }: { hourly: number[] }) {
         {hourly.map((n, i) => (
           <span key={i} className={s.heatCol} onPointerEnter={() => setHover(i)}>
             {n > 0 && i === peakAt && <span className={s.heatPeak} aria-hidden="true">{peak}</span>}
+            {i === hourly.length - 1 && (
+              <AnimatePresence>
+                {sparks.map((id) => (
+                  <motion.span key={id} className={s.heatSpark} aria-hidden="true" initial={{ opacity: 0, y: 4 }} animate={{ opacity: [0, 1, 1, 0], y: -26 }} transition={{ duration: 1.3, ease: 'easeOut' }}>+1</motion.span>
+                ))}
+              </AnimatePresence>
+            )}
             <motion.span
-              className={cx(s.heatBar, !n && s.heatEmpty, i === 23 && n > 0 && s.heatNow, hover === i && s.heatHover)}
+              className={cx(s.heatBar, !n && s.heatEmpty, i === 23 && n > 0 && s.heatNow, hover === i && s.heatHover, i === 23 && sparks.length > 0 && s.heatFlash)}
               style={{ height: n ? `${Math.max(10, (n / peak) * 100)}%` : 2 }}
               initial={reduced ? false : { scaleY: 0 }} animate={{ scaleY: 1 }}
               transition={{ ...spring.soft, delay: i * 0.015 }} />

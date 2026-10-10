@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { socket } from '../src/lib/socket';
 import { renderWithApp, mockFetch } from './utils';
 import { TokenPanel } from '../src/features/tokens/TokenPanel';
 import { TokenPanelHost } from '../src/features/tokens/TokenPanelHost';
@@ -53,6 +54,17 @@ describe('TokenPanel', () => {
     mockFetch({ ...demoRoutes, [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 4, posts24h: 4, chat24h: 0, subscribed: false, hourly } } });
     renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
     expect(await screen.findByRole('img', { name: '4 mentions in the last 24 hours; busiest in the past hour, with 3.' })).toBeInTheDocument();
+  });
+  it('a live public mention bumps the counts and the past-hour bar while the panel is open', async () => {
+    const hourly = Array(24).fill(0); hourly[23] = 1;
+    mockFetch({ ...demoRoutes, [`/api/tokens/${MINT}`]: { token, links, stats: { mentions24h: 1, posts24h: 1, chat24h: 0, subscribed: false, hourly } } });
+    renderWithApp(<TokenPanel mint={MINT} onClose={() => {}} />);
+    expect(await screen.findByRole('img', { name: /^1 mention in the last 24 hours/ })).toBeInTheDocument();
+    const push = (mint: string) => act(() => { (socket as unknown as { emitEvent(a: unknown[]): void }).emitEvent(['token:mention', { mint, sourceType: 'message' }]); });
+    push('So11111111111111111111111111111111111111112'); // another token: ignored
+    push(MINT);
+    expect(await screen.findByRole('img', { name: /^2 mentions in the last 24 hours; busiest in the past hour, with 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Community chat/ })).toHaveTextContent('1');
   });
   it('says plainly when nobody has mentioned it', async () => {
     mockFetch(demoRoutes);

@@ -6,6 +6,7 @@ import { Bell, BellRing, Copy, ExternalLink, Send, X } from 'lucide-react';
 import { COPY, formatAge, formatUsd, type ExternalLink as Ext, type Page, type PostView, type PublicChatMention, type TokenDiscussionStats, type TokenView } from '@shillex/shared';
 import { del, errorMessage, get, put } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
+import { useRoom, useSocketEvent } from '../../lib/socket';
 import { useConversations } from '../../layout/LeftNav';
 import { Menu } from '../../components/ui/Menu';
 import { conversationName } from '../messages/conversationName';
@@ -46,6 +47,17 @@ export function TokenPanel({ mint, onClose, asSheet, onHandleDown }: { mint: str
     queryKey: ['tokenDetail', mint],
     queryFn: async () => { const r = await get<Detail>(`/tokens/${mint}`); qc.setQueryData(tokenKey(mint), r.token); return r; },
     refetchInterval: (q) => (q.state.data?.token.status === 'pending' ? 4000 : false),
+  });
+  // Live discussion heat: each new public mention bumps the counts and the past-hour bar, and refreshes the lists.
+  useRoom('token', mint);
+  useSocketEvent('token:mention', (e) => {
+    if (e.mint !== mint) return;
+    qc.setQueryData<Detail>(['tokenDetail', mint], (x) => x && { ...x, stats: {
+      ...x.stats, mentions24h: x.stats.mentions24h + 1,
+      posts24h: x.stats.posts24h + (e.sourceType === 'post' ? 1 : 0), chat24h: x.stats.chat24h + (e.sourceType === 'message' ? 1 : 0),
+      hourly: Array.isArray(x.stats.hourly) ? x.stats.hourly.map((n, i, a) => (i === a.length - 1 ? n + 1 : n)) : x.stats.hourly,
+    } });
+    void qc.invalidateQueries({ queryKey: [e.sourceType === 'post' ? 'tokenPosts' : 'tokenChat', mint] });
   });
   // The host keys the panel by mint, so opening another token starts fresh (tab, lists, focus).
   useEffect(() => { closeRef.current?.focus(); }, []);
