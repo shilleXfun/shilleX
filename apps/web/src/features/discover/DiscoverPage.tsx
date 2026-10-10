@@ -8,6 +8,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { CommunityCard } from '../communities/CommunitiesPage';
 import { TokenAvatar } from '../tokens/TokenAvatar';
 import { useTokenPanel } from '../tokens/useTokenPanel';
+import { useUnmutedCoins } from '../../lib/muted';
 import { LiveRooms } from './LiveRooms';
 import { PeopleList } from './PeopleList';
 import { PromotedCoins } from './NewCoinsList';
@@ -18,6 +19,7 @@ import cs from '../communities/communities.module.css';
 export function DiscoverPage() {
   const q = useQuery({ queryKey: ['discover'], queryFn: () => get<DiscoverView>('/discover'), refetchInterval: 60_000 });
   const { openToken } = useTokenPanel();
+  const newCoins = useUnmutedCoins(q.data?.newCoins ?? []);
   return (
     <section aria-labelledby="disc-title">
       <PageHeader title="Discover" titleId="disc-title" />
@@ -37,7 +39,7 @@ export function DiscoverPage() {
                 <caption className="sr-only">Tokens by most recent first public mention</caption>
                 <thead><tr><th scope="col">Token</th><th scope="col">First mentioned</th><th scope="col">Pair age</th><th scope="col">Liquidity</th><th scope="col">Market cap</th><th scope="col">Mentions 24h</th></tr></thead>
                 <tbody>
-                  {q.data.newCoins.map((c) => (
+                  {newCoins.map((c) => (
                     <tr key={c.token.mint}>
                       <td>
                         <button type="button" className={s.coin} style={{ padding: 0 }} onClick={(e) => openToken(c.token.mint, e.currentTarget)}>
