@@ -40,6 +40,12 @@ describe('channel messages', () => {
     const m = await ctx.db.select().from(tokenMentions).where(eq(tokenMentions.sourceId, r.body.message.id));
     expect(m[0]!.isPublic).toBe(false);
   });
+  it('reply previews shorten addresses before cutting, so one is never sliced in half', async () => {
+    const long = (await ctx.as(member).post(`/api/channels/${pubChannel}/messages`, { body: `${'a'.repeat(100)} ${MINT}` })).body.message;
+    ctx.clock.advance(61_000);
+    const r = await ctx.as(mod).post(`/api/channels/${pubChannel}/messages`, { body: 'which one', replyToId: long.id });
+    expect(r.body.message.replyTo.snippet).toBe(`${'a'.repeat(100)} DezX…B263`);
+  });
   it('replies must target the same scope and show a preview', async () => {
     const a = (await ctx.as(member).post(`/api/channels/${pubChannel}/messages`, { body: 'original take' })).body.message;
     ctx.clock.advance(61_000);

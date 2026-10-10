@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { REACTIONS, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
+import { REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
   users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers,
@@ -168,7 +168,7 @@ export async function hydrateMessages(db: Db, viewerId: string, rows: MessageRow
       body: deleted ? '' : r.body,
       replyTo: reply ? {
         id: reply.id, author: authors.get(reply.authorId)!, deleted: reply.status !== 'visible',
-        snippet: reply.status !== 'visible' ? '' : reply.body.slice(0, 120),
+        snippet: reply.status !== 'visible' ? '' : abbreviateMintsIn(reply.body).slice(0, 120),
       } : null,
       attachments: deleted ? [] : r.attachments,
       reactions: deleted ? [] : reacts,

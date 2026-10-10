@@ -51,3 +51,10 @@ export function abbreviateMint(mint: string, head = 4, tail = 4): string {
   if (mint.length <= head + tail + 1) return mint;
   return `${mint.slice(0, head)}…${mint.slice(-tail)}`;
 }
+
+/** Shortens every contract address in plain text (previews, snippets) so a 44-character address doesn't crowd out the words. */
+export function abbreviateMintsIn(text: string): string {
+  let out = text;
+  for (const c of extractMintCandidates(text).reverse()) out = out.slice(0, c.start) + abbreviateMint(c.mint) + out.slice(c.end);
+  return out;
+}

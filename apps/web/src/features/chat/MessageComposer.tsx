@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ImagePlus, Reply, SendHorizontal, Timer, X } from 'lucide-react';
-import { LIMITS, codePointLength, type MessageView, type ScopeRef, type UploadView } from '@shillex/shared';
+import { LIMITS, abbreviateMintsIn, codePointLength, type MessageView, type ScopeRef, type UploadView } from '@shillex/shared';
 import { errorMessage, retryAfterSec, uploadImage } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
@@ -74,7 +74,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
       <AnimatePresence initial={false}>
         {replyTo && (
           <motion.div key="reply" className={s.replyBar} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: dur.standard, ease: ease.out }}>
-            <span className={s.replyBarText}><Reply size={13} aria-hidden="true" />Replying to <strong>{replyTo.author.displayName}</strong><span className={s.replySnippet}>{replyTo.body.slice(0, 80)}</span></span>
+            <span className={s.replyBarText}><Reply size={13} aria-hidden="true" />Replying to <strong>{replyTo.author.displayName}</strong><span className={s.replySnippet}>{abbreviateMintsIn(replyTo.body).slice(0, 80)}</span></span>
             <IconButton label="Cancel reply" onClick={onCancelReply}><X size={14} /></IconButton>
           </motion.div>
         )}

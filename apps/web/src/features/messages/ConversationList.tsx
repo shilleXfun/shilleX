@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useSearchParams } from 'react-router';
 import { LayoutGroup, motion } from 'motion/react';
 import { BellOff, MessagesSquare, PenSquare, Search, Send } from 'lucide-react';
-import { relativeTime, type ConversationView } from '@shillex/shared';
+import { abbreviateMintsIn, relativeTime, type ConversationView } from '@shillex/shared';
 import { useRequiredMe } from '../../lib/useMe';
 import { spring } from '../../lib/motion';
 import { useConversations } from '../../layout/LeftNav';
@@ -51,7 +51,7 @@ function ConversationResults({ list, activeId, meId, share }: { list: Conversati
         const others = c.members.filter((m) => m.id !== meId);
         const name = conversationName(c, meId);
         const preview = c.lastMessage
-          ? `${c.lastMessage.author.id === meId ? 'You: ' : c.kind === 'group' ? `${c.lastMessage.author.displayName}: ` : ''}${c.lastMessage.body || (c.lastMessage.attachments.length ? 'Shared an attachment' : '')}`
+          ? `${c.lastMessage.author.id === meId ? 'You: ' : c.kind === 'group' ? `${c.lastMessage.author.displayName}: ` : ''}${abbreviateMintsIn(c.lastMessage.body) || (c.lastMessage.attachments.length ? 'Shared an attachment' : '')}`
           : 'No messages yet';
         const active = c.id === activeId;
         return (

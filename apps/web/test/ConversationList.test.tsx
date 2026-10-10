@@ -8,13 +8,13 @@ describe('ConversationList', () => {
   it('lists conversations with previews, unread counts and muted state', () => {
     renderWithApp(<ConversationList activeId={null} onNew={() => {}} />, {
       seed: (qc) => qc.setQueryData(['conversations'], [
-        { id: 'd1', kind: 'dm', name: null, members: [u('u1', 'You'), u('x', 'Jane')], unread: 2, muted: false, createdAt: '', lastMessage: { id: 'm', scope: { type: 'conversation', id: 'd1' }, author: u('x', 'Jane'), body: 'saw your thread', replyTo: null, attachments: [], reactions: [], status: 'visible', mints: [], createdAt: new Date().toISOString(), nonce: null } },
+        { id: 'd1', kind: 'dm', name: null, members: [u('u1', 'You'), u('x', 'Jane')], unread: 2, muted: false, createdAt: '', lastMessage: { id: 'm', scope: { type: 'conversation', id: 'd1' }, author: u('x', 'Jane'), body: 'saw your thread on DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', replyTo: null, attachments: [], reactions: [], status: 'visible', mints: [], createdAt: new Date().toISOString(), nonce: null } },
         { id: 'g1', kind: 'group', name: 'Desk', members: [u('u1', 'You'), u('a', 'A')], unread: 0, muted: true, createdAt: '', lastMessage: null },
       ]),
     });
     const jane = screen.getByRole('link', { name: /Jane/ });
     expect(jane).toHaveAttribute('href', '/messages/d1');
-    expect(jane).toHaveTextContent('saw your thread');
+    expect(jane).toHaveTextContent('saw your thread on DezX…B263');
     expect(screen.getByLabelText('2 unread')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Desk.*muted/i })).toBeInTheDocument();
   });

@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { abbreviateMint, extractMintCandidates, type NotificationType, type NotificationView } from '@shillex/shared';
+import { abbreviateMint, abbreviateMintsIn, type NotificationType, type NotificationView } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
 import { channels, messages, notifications, notificationPrefs, mutes, posts } from '../db/schema.ts';
@@ -33,9 +33,7 @@ const EXCERPT_MAX = 140;
 
 /** A single line of post or message text: contract addresses shortened, whitespace collapsed, cut at EXCERPT_MAX. */
 export function excerptOf(body: string): string | null {
-  let t = body;
-  for (const c of extractMintCandidates(body).reverse()) t = t.slice(0, c.start) + abbreviateMint(c.mint) + t.slice(c.end);
-  const chars = [...t.replace(/\s+/g, ' ').trim()];
+  const chars = [...abbreviateMintsIn(body).replace(/\s+/g, ' ').trim()];
   if (!chars.length) return null;
   return chars.length > EXCERPT_MAX ? `${chars.slice(0, EXCERPT_MAX - 1).join('').trimEnd()}…` : chars.join('');
 }
