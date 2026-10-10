@@ -15,6 +15,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { TabPanel, Tabs } from '../../components/ui/Tabs';
 import { toast } from '../../components/ui/Toaster';
 import { PageHeader } from '../../layout/PageHeader';
+import { groupNotifications } from './groupNotifications';
 import s from './notifications.module.css';
 
 const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag };
@@ -33,7 +34,8 @@ export function NotificationsPage() {
     getNextPageParam: (l) => l.nextCursor,
   });
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const arrival = useArrivals(items.map((n) => n.id));
+  const groups = groupNotifications(items);
+  const arrival = useArrivals(groups.map((g) => g.key));
   const unread = items.some((n) => !n.read);
   const markAll = async () => {
     try {
@@ -56,14 +58,16 @@ export function NotificationsPage() {
           : (
             <div role="list" className={s.list}>
               <AnimatePresence initial={false}>
-                {items.map((n, i) => {
+                {groups.map((n, i) => {
                   const Icon = ICON[n.type] ?? Bell;
                   return (
-                    <Arrival key={n.id} as={arrival(n.id, i)} glow={TONE[n.type] === s.toneToken ? 'token' : 'accent'}>
+                    <Arrival key={n.key} as={arrival(n.key, i)} glow={TONE[n.type] === s.toneToken ? 'token' : 'accent'}>
                       <div role="listitem">
                         <Link to={n.href} className={cx(s.row, !n.read && s.unread)}>
                           <span className={cx(s.icon, TONE[n.type])} aria-hidden="true"><Icon size={15} /></span>
-                          {n.actor ? <Avatar src={n.actor.avatarUrl} size={34} /> : <span />}
+                          {n.actors.length > 1
+                            ? <span className={s.stack} data-count={Math.min(3, n.actors.length)} aria-hidden="true">{n.actors.slice(0, 3).map((a) => <Avatar key={a.id} src={a.avatarUrl} size={n.actors.length > 2 ? 20 : 24} />)}</span>
+                            : n.actors[0] ? <Avatar src={n.actors[0].avatarUrl} size={34} /> : <span />}
                           <span className={s.text}>
                             <span>{n.text}{!n.read && <span className="sr-only"> (unread)</span>}</span>
                             {n.excerpt && <span className={s.excerpt}>{n.excerpt}</span>}

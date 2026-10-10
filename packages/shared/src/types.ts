@@ -125,6 +125,8 @@ export interface NotificationView {
   text: string; href: string; read: boolean; createdAt: Iso;
   /** One line of the post or message it is about, when the viewer can still read it. */
   excerpt: string | null;
+  /** The reaction, for reaction notifications (lets the client group several reactions into one row). */
+  emoji: string | null;
 }
 export interface NotificationPref { type: NotificationType; enabled: boolean }
 
