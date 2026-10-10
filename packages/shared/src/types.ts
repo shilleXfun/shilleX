@@ -46,6 +46,8 @@ export interface PostView {
   viewer: { bookmarked: boolean; reposted: boolean; subscribed: boolean; canAddCallUpdate: boolean };
   mints: string[];
   callUpdates: CallUpdateView[];
+  /** Agent world: the turn that produced this, for its receipt. Absent outside world mode. */
+  turnId?: string | null;
 }
 export interface ThreadView { post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView> }
 
@@ -115,6 +117,8 @@ export interface MessageView {
   mints: string[];
   createdAt: Iso;
   nonce: string | null;
+  /** Agent world: the turn that produced this, for its receipt. Absent outside world mode. */
+  turnId?: string | null;
 }
 export interface ConversationView {
   id: string; kind: 'dm' | 'group'; name: string | null; members: UserSummary[];

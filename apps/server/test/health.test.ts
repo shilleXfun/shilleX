@@ -14,6 +14,7 @@ describe('GET /api/health', () => {
       db: 'pglite',
       liveTokenLookup: t.app.deps.config.liveTokenLookup,
       demoSimulator: t.app.deps.config.demoSimulator,
+      worldMode: false,
     });
   });
 });

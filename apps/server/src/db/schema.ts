@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, boolean, integer, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import type { ChainTxKind, ContextItem, ToolCallRecord, TurnStatus, TurnTrigger } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -16,6 +17,7 @@ export const users = pgTable('users', {
   mutedWords: jsonb('muted_words').$type<string[]>().notNull().default([]),
   createdAt: ts('created_at').notNull(),
   isDemo: boolean('is_demo').notNull().default(false),
+  kind: text('kind').$type<'human' | 'agent'>().notNull().default('human'),
 }, (t) => [uniqueIndex('users_username_lower_idx').on(sql`lower(${t.username})`)]);
 
 export const sessions = pgTable('sessions', {
@@ -77,6 +79,7 @@ export const posts = pgTable('posts', {
   createdAt: ts('created_at').notNull(),
   deletedAt: ts('deleted_at'),
   isDemo: boolean('is_demo').notNull().default(false),
+  agentTurnId: text('agent_turn_id'),
 }, (t) => [
   index('posts_author_idx').on(t.authorId, t.id),
   index('posts_parent_idx').on(t.parentId),
@@ -191,6 +194,7 @@ export const messages = pgTable('messages', {
   status: text('status').$type<'visible' | 'held' | 'deleted'>().notNull().default('visible'),
   createdAt: ts('created_at').notNull(),
   isDemo: boolean('is_demo').notNull().default(false),
+  agentTurnId: text('agent_turn_id'),
 }, (t) => [
   index('messages_channel_idx').on(t.channelId, t.id),
   index('messages_conversation_idx').on(t.conversationId, t.id),
@@ -277,6 +281,98 @@ export const reports = pgTable('reports', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [index('reports_community_idx').on(t.communityId, t.status)]);
 
+// ── Agent world (WORLD_MODE=agents) ──
+export const agents = pgTable('agents', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').$type<'active' | 'paused'>().notNull().default('active'),
+  avatarEmoji: text('avatar_emoji'),
+  avatarColor: text('avatar_color'),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const agentMemory = pgTable('agent_memory', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  createdAt: ts('created_at').notNull(),
+  supersededAt: ts('superseded_at'),
+}, (t) => [index('agent_memory_agent_idx').on(t.agentId, t.id)]);
+
+export const agentTurns = pgTable('agent_turns', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  triggers: jsonb('triggers').$type<TurnTrigger[]>().notNull(),
+  status: text('status').$type<TurnStatus>().notNull(),
+  model: text('model').notNull(),
+  effort: text('effort').notNull(),
+  promptVersion: text('prompt_version').notNull(),
+  snapshotId: text('snapshot_id'),
+  context: jsonb('context').$type<ContextItem[]>().notNull().default([]),
+  reasoning: text('reasoning').notNull().default(''),
+  toolCalls: jsonb('tool_calls').$type<ToolCallRecord[]>().notNull().default([]),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+  cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  prevHash: text('prev_hash'),
+  hash: text('hash'),
+  startedAt: ts('started_at').notNull(),
+  finishedAt: ts('finished_at'),
+}, (t) => [uniqueIndex('agent_turns_seq_idx').on(t.agentId, t.seq), index('agent_turns_started_idx').on(t.startedAt)]);
+
+/** One keypair per agent plus the treasury (ownerId 'treasury'). The secret never leaves world/wallets.ts. */
+export const wallets = pgTable('wallets', {
+  ownerId: text('owner_id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  encryptedSecret: text('encrypted_secret').notNull(),
+  fundedAt: ts('funded_at'),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [uniqueIndex('wallets_public_key_idx').on(t.publicKey)]);
+
+/** Every transaction the world sends, from the point of view of `agentId` (lamports and raw token units, signed). */
+export const chainTxs = pgTable('chain_txs', {
+  id: text('id').primaryKey(),
+  signature: text('signature').notNull(),
+  agentId: text('agent_id').references(() => users.id, { onDelete: 'set null' }),
+  turnId: text('turn_id'),
+  kind: text('kind').$type<ChainTxKind>().notNull(),
+  mint: text('mint'),
+  counterparty: text('counterparty'),
+  lamportsDelta: bigint('lamports_delta', { mode: 'number' }).notNull(),
+  tokenDelta: bigint('token_delta', { mode: 'number' }).notNull().default(0),
+  feeLamports: bigint('fee_lamports', { mode: 'number' }).notNull().default(0),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('chain_txs_agent_idx').on(t.agentId, t.id), index('chain_txs_mint_idx').on(t.mint, t.id)]);
+
+export const worldCoins = pgTable('world_coins', {
+  mint: text('mint').primaryKey(),
+  pool: text('pool').notNull(),
+  creatorId: text('creator_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  symbol: text('symbol').notNull(),
+  description: text('description').notNull().default(''),
+  emoji: text('emoji').notNull().default('🪙'),
+  launchSignature: text('launch_signature').notNull(),
+  launchedAt: ts('launched_at').notNull(),
+  /** Indexer cache: lamports per whole token, curve progress 0..1. */
+  priceLamports: doublePrecision('price_lamports'),
+  curveProgress: doublePrecision('curve_progress').notNull().default(0),
+  graduatedAt: ts('graduated_at'),
+  refreshedAt: ts('refreshed_at'),
+});
+
+export const worldSettings = pgTable('world_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
+export type AgentRow = typeof agents.$inferSelect;
+export type AgentTurnRow = typeof agentTurns.$inferSelect;
+export type WalletRow = typeof wallets.$inferSelect;
+export type ChainTxRow = typeof chainTxs.$inferSelect;
+export type WorldCoinRow = typeof worldCoins.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type PostRow = typeof posts.$inferSelect;
 export type CommunityRow = typeof communities.$inferSelect;

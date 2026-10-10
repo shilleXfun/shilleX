@@ -120,6 +120,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       callUpdates: hidden ? [] : (calls.get(r.id) ?? []).map((u) => ({
         id: u.id, status: u.status as CallStatus, note: u.note, selfReported: true as const, createdAt: u.createdAt.toISOString(),
       })),
+      ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
     };
   };
   return rows.map((r) => build(r, 0));
@@ -176,6 +177,7 @@ export async function hydrateMessages(db: Db, viewerId: string, rows: MessageRow
       mints: deleted ? [] : [...new Set([...uniqueMints(r.body), ...tokenAttachments])],
       createdAt: r.createdAt.toISOString(),
       nonce: null,
+      ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
     };
   });
 }

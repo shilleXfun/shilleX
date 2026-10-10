@@ -6,5 +6,6 @@ export default async function healthRoutes(app: FastifyInstance) {
     db: app.deps.dbKind,
     liveTokenLookup: app.deps.config.liveTokenLookup,
     demoSimulator: app.deps.config.demoSimulator,
+    worldMode: app.deps.config.worldMode,
   }));
 }
