@@ -21,7 +21,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "8.4.0",
-    "socket.io-client": "4.8.4"
+    "socket.io-client": "4.8.4",
+    "twemoji-colr-font": "15.0.3"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
