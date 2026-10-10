@@ -6,6 +6,7 @@ import { LIMITS, codePointLength, uniqueMints, type PostView, type ThreadView, t
 import { ApiError, errorMessage, post as apiPost, uploadImage } from '../../lib/api';
 import { useImageDrop } from '../../lib/useImageDrop';
 import { useDraft } from '../../lib/drafts';
+import { AltTextButton } from '../../components/ui/AltTextButton';
 import { patchPost, prependToFeed } from '../../lib/cache';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
@@ -34,6 +35,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const draftKey = mode === 'post' && !inDialog ? `${me.id}:post:${communityId ?? 'home'}` : mode === 'reply' && parent ? `${me.id}:reply:${parent.id}` : null;
   const [text, setText] = useDraft(draftKey);
   const [uploads, setUploads] = useState<UploadView[]>([]);
+  const [alts, setAlts] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
     setBusy(true); setError(null);
     try {
       const r = await apiPost<{ post: PostView; tokens: Record<string, TokenView> }>('/posts', {
-        body: text, uploadIds: uploads.map((u) => u.id), parentId: parent?.id, quoteOfId: quote?.id, communityId,
+        body: text, uploadIds: uploads.map((u) => u.id), alts: uploads.map((u) => alts[u.id] ?? ''), parentId: parent?.id, quoteOfId: quote?.id, communityId,
       });
       primeTokens(qc, r.tokens);
       if (mode === 'reply' && parent) {
@@ -83,7 +85,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
         if (quote) patchPost(qc, quote.id, (p) => ({ ...p, counts: { ...p.counts, quotes: p.counts.quotes + 1 } }));
       }
       void qc.invalidateQueries({ queryKey: ['userPosts', me.username] });
-      setText(''); setUploads([]); setDone(true);
+      setText(''); setUploads([]); setAlts({}); setDone(true);
       // Your post goes out to followers, not back to you, so the skyline answers here. Community posts already
       // echo through the community room.
       if (!communityId) pulseAtmosphere('accent');
@@ -117,8 +119,9 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
         {(uploads.length > 0 || uploading > 0) && (
           <div className={s.uploads}>
             {uploads.map((u) => (
-              <motion.div key={u.id} className={s.thumb} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.bouncy}><img src={u.url} alt="" />
-                <IconButton label="Remove image" onClick={() => setUploads((x) => x.filter((y) => y.id !== u.id))}><X size={14} /></IconButton></motion.div>
+              <motion.div key={u.id} className={s.thumb} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.bouncy}><img src={u.url} alt={alts[u.id] ?? ''} />
+                <AltTextButton src={u.url} value={alts[u.id] ?? ''} onChange={(alt) => setAlts((a) => ({ ...a, [u.id]: alt }))} />
+                <IconButton label="Remove image" className={s.thumbRemove} onClick={() => setUploads((x) => x.filter((y) => y.id !== u.id))}><X size={14} /></IconButton></motion.div>
             ))}
             {uploading > 0 && <div className={cx(s.thumb, s.uploading)} role="status" aria-label="Uploading image" />}
           </div>
