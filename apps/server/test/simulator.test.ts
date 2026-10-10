@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { makeTestApp, type TestCtx } from './helpers.ts';
 import { seed } from '../src/seed/seed.ts';
 import { startSimulator } from '../src/seed/simulator.ts';
@@ -44,6 +44,26 @@ describe('demo simulator', () => {
     expect(replies).toHaveLength(0);
     const notes = await ctx.db.select().from(notifications).where(eq(notifications.userId, real.id));
     expect(notes).toHaveLength(0);
+  });
+
+  it('keeps channel chat fresh and answers earlier messages', async () => {
+    const start = (await ctx.db.select({ id: messages.id }).from(messages).orderBy(desc(messages.id)).limit(1))[0]!.id;
+    const sim = startSimulator(ctx.app, { seed: 21, minMs: 1_000_000, maxMs: 1_000_000 });
+    for (let i = 0; i < 120; i++) { ctx.clock.advance(61_000); await sim.tick(); }
+    sim.stop();
+    const rows = await ctx.db.select().from(messages).where(sql`${messages.channelId} is not null`).orderBy(messages.id);
+    const byChannel = new Map<string, typeof rows>();
+    for (const m of rows) byChannel.set(m.channelId!, [...(byChannel.get(m.channelId!) ?? []), m]);
+    let simulated = 0, replies = 0;
+    for (const list of byChannel.values()) list.forEach((m, i) => {
+      if (m.id <= start) return;
+      simulated++;
+      if (m.replyToId) replies++;
+      expect(list.slice(Math.max(0, i - 10), i).map((x) => x.body)).not.toContain(m.body);
+      if (i > 0 && list.length > 1) expect(m.authorId === list[i - 1]!.authorId && m.id > start && list[i - 1]!.id > start).toBe(false);
+    });
+    expect(simulated).toBeGreaterThan(20);
+    expect(replies).toBeGreaterThan(0);
   });
 
   it('puts some personas online as soon as it starts', async () => {
