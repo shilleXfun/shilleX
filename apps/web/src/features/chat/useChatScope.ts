@@ -10,7 +10,7 @@ import { activeScope } from './activeScope';
 import { clearUnread } from '../../layout/useRealtimeSync';
 
 export type SendAttachment = { type: 'image'; uploadId: string; alt?: string } | { type: 'token'; mint: string };
-export interface PendingMessage { nonce: string; body: string; replyTo: MessageView | null; createdAt: string; status: 'sending' | 'failed'; error?: string; attachments?: SendAttachment[] }
+export interface PendingMessage { nonce: string; body: string; replyTo: MessageView | null; createdAt: string; status: 'sending' | 'failed'; error?: string; attachments?: SendAttachment[]; confirmedId?: string }
 
 /**
  * Everything a chat screen needs for one channel or conversation: paged history (live-patched from the socket),
@@ -34,6 +34,13 @@ export function useChatScope(scope: ScopeRef) {
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [typing, setTyping] = useState<{ user: UserSummary; until: number }[]>([]);
   const messages = allMessages(query.data);
+  // A confirmed send keeps its pending row until the real message is in the list, so the swap happens in one render
+  // (query-cache updates reach React a tick after state updates).
+  const confirm = (nonce: string, id: string) => setPending((x) => x.map((y) => (y.nonce === nonce ? { ...y, confirmedId: id } : y)));
+  const ids = new Set(messages.map((m) => m.id));
+  const visiblePending = pending.filter((p) => !p.confirmedId || !ids.has(p.confirmedId));
+  const settled = pending.length !== visiblePending.length;
+  useEffect(() => { if (settled) setPending((x) => x.filter((p) => !p.confirmedId || !ids.has(p.confirmedId))); });
 
   useRoom(scope.type, scope.id);
   useEffect(() => { activeScope.set({ type: scope.type, id: scope.id }); return () => activeScope.set(null); }, [scope.type, scope.id]);
@@ -43,7 +50,7 @@ export function useChatScope(scope: ScopeRef) {
     if (!same(message)) return;
     primeTokens(qc, tokens);
     qc.setQueryData<MsgPages>(key, (d) => upsertMessage(d, message));
-    if (nonce) setPending((p) => p.filter((x) => x.nonce !== nonce));
+    if (nonce) confirm(nonce, message.id);
     setTyping((t) => t.filter((x) => x.user.id !== message.author.id));
   });
   useSocketEvent('message:update', ({ message }) => { if (same(message)) qc.setQueryData<MsgPages>(key, (d) => upsertMessage(d, message)); });
@@ -88,7 +95,7 @@ export function useChatScope(scope: ScopeRef) {
       const r = await post<{ message: MessageView; tokens: Record<string, TokenView> }>(`${base}/messages`, { body: p.body, replyToId: p.replyTo?.id, attachments: p.attachments, nonce: p.nonce });
       primeTokens(qc, r.tokens);
       qc.setQueryData<MsgPages>(['messages', scope.type, scope.id], (d) => upsertMessage(d, r.message));
-      setPending((x) => x.filter((y) => y.nonce !== p.nonce));
+      confirm(p.nonce, r.message.id);
       return true;
     } catch (e) {
       setPending((x) => x.map((y) => (y.nonce === p.nonce ? { ...y, status: 'failed', error: errorMessage(e) } : y)));
@@ -118,6 +125,6 @@ export function useChatScope(scope: ScopeRef) {
     socket.emit('typing', { scope: scope.type, id: scope.id });
   };
 
-  return { query, messages, pending, send, retry, discard, typingUsers: typing.map((t) => t.user), emitTyping };
+  return { query, messages, pending: visiblePending, send, retry, discard, typingUsers: typing.map((t) => t.user), emitTyping };
 }
 export type ChatScope = ReturnType<typeof useChatScope>;

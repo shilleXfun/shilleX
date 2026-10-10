@@ -141,10 +141,11 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
             </Arrival>
           );
         })}
-        <AnimatePresence initial={false}>
-          {pending.map((p: PendingMessage) => (
+        {/* No exit animation: useChatScope drops a pending row in the render where its confirmed message appears, so
+            fading the old row would show the message twice and make the list jump. */}
+        {pending.map((p: PendingMessage) => (
             <motion.div key={p.nonce} className={`${s.msg} ${s.grouped} ${p.status === 'sending' ? s.pending : ''}`}
-              initial={{ opacity: 0, y: 14 }} animate={{ opacity: p.status === 'sending' ? 0.6 : 1, y: 0 }} exit={{ opacity: 0, transition: { duration: dur.micro } }} transition={spring.soft}>
+              initial={{ opacity: 0, y: 14 }} animate={{ opacity: p.status === 'sending' ? 0.6 : 1, y: 0 }} transition={spring.soft}>
               <span />
               <div className={s.content}>
                 {p.replyTo && <div className={s.replyRef}>Replying to <strong>{p.replyTo.author.displayName}</strong></div>}
@@ -156,7 +157,6 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
               </div>
             </motion.div>
           ))}
-        </AnimatePresence>
         </div>
       </div>
       <AnimatePresence>

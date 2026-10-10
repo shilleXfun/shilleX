@@ -26,7 +26,8 @@ function focusShortcut(name: string, tries = 12) {
 const route = {
   hidden: { opacity: 0, y: 8 },
   show: { opacity: 1, y: 0, transition: { duration: dur.standard, ease: ease.out } },
-  exit: { opacity: 0, y: -4, transition: { duration: dur.micro } },
+  // The outgoing page ignores the pointer, so a quick tap can't land on the page being left.
+  exit: { opacity: 0, y: -4, pointerEvents: 'none', transition: { duration: dur.micro } },
 };
 
 export function AppShell() {
