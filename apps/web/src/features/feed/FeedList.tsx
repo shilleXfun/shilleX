@@ -12,7 +12,8 @@ import { PostSkeleton } from './PostSkeleton';
 import s from './PostCard.module.css';
 
 /** Generic infinite list of posts for any `Page<PostView>` endpoint (opaque `cursor` param). Primes token chips per page. */
-export function FeedList({ queryKey, path, empty }: { queryKey: QueryKey; path: string; empty: ReactNode }) {
+/** `after` renders below a fully loaded feed with its post count (e.g. more suggestions under a sparse one). */
+export function FeedList({ queryKey, path, empty, after }: { queryKey: QueryKey; path: string; empty: ReactNode; after?: (count: number) => ReactNode }) {
   const qc = useQueryClient();
   const me = useRequiredMe();
   const q = useInfiniteQuery({
@@ -53,6 +54,7 @@ export function FeedList({ queryKey, path, empty }: { queryKey: QueryKey; path: 
       {isFetchingNextPage && <div aria-label="Loading more" role="status"><PostSkeleton /><PostSkeleton lines={1} /></div>}
       {isFetchNextPageError && <ErrorState title="Couldn’t load more" error={q.error} onRetry={() => void fetchNextPage()} />}
       {!hasNextPage && items.length > 10 && <p className={s.endNote}>You’re all caught up.</p>}
+      {!hasNextPage && after?.(items.length)}
     </div>
   );
 }
