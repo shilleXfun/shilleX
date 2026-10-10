@@ -11,8 +11,8 @@
 .right { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--column-side); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
 .skip:focus { top: 8px; }
-@media (max-width: 1199px) { .shell, .shell[data-wide='true'] { grid-template-columns: var(--left-w) minmax(0, 1fr); } .right { display: none; } .center { border-right: 0; } .left { border-left: 0; } }
-@media (max-width: 1023px) { .shell, .shell[data-wide='true'] { grid-template-columns: 76px minmax(0, 1fr); } }
+@media (max-width: 1199px) { .shell { grid-template-columns: var(--left-w) minmax(0, var(--center-max)); } .shell[data-wide='true'] { grid-template-columns: var(--left-w) minmax(0, 1fr); } .right { display: none; } .shell[data-wide='true'] .center { border-right: 0; } }
+@media (max-width: 1023px) { .shell, .shell[data-wide='true'] { grid-template-columns: 76px minmax(0, 1fr); } .left { border-left: 0; } .center { border-right: 0; } }
 @media (max-width: 767px) {
   .shell, .shell[data-wide='true'] { grid-template-columns: minmax(0, 1fr); }
   .left { display: none; }
