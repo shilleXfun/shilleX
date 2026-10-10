@@ -39,6 +39,7 @@ export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuE
 
 export const COPY = {
   selfReported: 'self-reported',
+  callsNote: 'Calls are self-reported: the author says what they are doing with a token. Shillex does not verify trades or holdings.',
   demoTag: 'DEMO',
   promoted: 'Promoted',
   tokenPanelNote: 'Mentions measure discussion, not quality. Do your own research.',

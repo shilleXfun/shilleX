@@ -19,6 +19,14 @@ describe('ProfilePage', () => {
     expect(screen.queryByText(/Wallet/)).toBeNull();
     expect(screen.queryByText(/win rate|pnl|profit/i)).toBeNull();
   });
+  it('has a Calls tab that loads their calls under a not-verified note', async () => {
+    const f = route(profile);
+    renderWithApp(<Routes><Route path="/u/:username" element={<ProfilePage />} /></Routes>, { route: '/u/alpha_jane?tab=calls' });
+    expect(await screen.findByText(/Calls are self-reported/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Calls' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText('No calls yet')).toBeInTheDocument();
+    expect(f.mock.calls.some(([u]) => String(u).includes('/api/users/alpha_jane/posts?tab=calls'))).toBe(true);
+  });
   it('shows a shared wallet with the not-verified note', async () => {
     route({ ...profile, wallet: { address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', showHoldings: true, verified: false } });
     renderWithApp(<Routes><Route path="/u/:username" element={<ProfilePage />} /></Routes>, { route: '/u/alpha_jane' });
