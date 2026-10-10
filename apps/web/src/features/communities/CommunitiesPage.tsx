@@ -18,6 +18,8 @@ import s from './communities.module.css';
 export function CommunityCard({ c }: { c: CommunitySummary }) {
   return (
     <Link to={`/c/${c.slug}`} className={s.card}>
+      {/* The community's skyline banner (same generated art as its page header). */}
+      <span className={s.cardBanner} style={{ backgroundImage: `url(/media/banner/c${c.id}.svg)` }} aria-hidden="true" />
       <div className={s.cardTop}>
         <img src={c.avatarUrl} alt="" />
         <div style={{ minWidth: 0 }}>
