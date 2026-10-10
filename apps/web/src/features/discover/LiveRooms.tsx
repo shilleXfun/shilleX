@@ -1,7 +1,11 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
+import { AnimatePresence, motion } from 'motion/react';
+import { fadeUp, spring } from '../../lib/motion';
 import { relativeTime, type LiveRoomView } from '@shillex/shared';
 import s from './discover.module.css';
+
+const MotionLink = motion.create(Link);
 
 /** Bar heights follow the room's message rate (saturating around 15 in 15 minutes); the bars sway only while live. */
 function Meter({ rate }: { rate: number }) {
@@ -18,16 +22,20 @@ export function LiveRooms({ rooms }: { rooms: LiveRoomView[] }) {
   if (!rooms.length) return <p className={s.roomMeta}>It’s quiet right now.</p>;
   return (
     <div className={s.rooms}>
+      {/* Rooms glide to their new place when activity reorders them; a room that goes quiet fades out. */}
+      <AnimatePresence initial={false}>
       {rooms.map((r) => (
-        <Link key={r.channel.id} to={`/c/${r.community.slug}/${r.channel.id}`} className={s.room}>
+        <MotionLink key={r.channel.id} to={`/c/${r.community.slug}/${r.channel.id}`} className={s.room}
+          layout="position" variants={fadeUp} initial="hidden" animate="show" exit="exit" transition={spring.soft}>
           <img src={r.community.avatarUrl} alt="" />
           <span style={{ minWidth: 0 }}>
             <span className={s.roomName} style={{ display: 'block' }}>{r.community.name} <span className={s.channel}>#{r.channel.name}</span></span>
             <span className={s.roomMeta}>{r.messagesLast15m > 0 ? `${r.messagesLast15m} messages in 15m, ${r.onlineCount} online` : `last active ${relativeTime(r.lastActivityAt)} ago`}</span>
           </span>
           <Meter rate={r.messagesLast15m} />
-        </Link>
+        </MotionLink>
       ))}
+      </AnimatePresence>
     </div>
   );
 }

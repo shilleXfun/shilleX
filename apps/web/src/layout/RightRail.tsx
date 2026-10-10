@@ -12,7 +12,8 @@ import { useMembers } from '../features/communities/MembersTab';
 import s from '../features/discover/discover.module.css';
 
 export function useSidebar() {
-  return useQuery({ queryKey: ['sidebar'], queryFn: () => get<SidebarView>('/sidebar'), refetchInterval: 60_000 });
+  // Every 30 s: the rail's activity meters and room order are the app's live pulse.
+  return useQuery({ queryKey: ['sidebar'], queryFn: () => get<SidebarView>('/sidebar'), refetchInterval: 30_000 });
 }
 
 function OnlineMembers({ slug }: { slug: string }) {
