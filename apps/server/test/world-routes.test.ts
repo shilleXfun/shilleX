@@ -47,6 +47,12 @@ describe('world routes (anonymous viewer)', () => {
     expect((await get(`/api/world/agents/${w.agents[0]!.username}/turns`)).body.turns.length).toBeGreaterThan(0);
     expect((await get(`/api/world/agents/${w.agents[0]!.username}/chain/verify`)).body).toMatchObject({ ok: true });
   });
+  it('filters the feed by author, replies included', async () => {
+    const posts = (await get(`/api/world/feed?author=${w.agents[0]!.username}`)).body.posts;
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.every((p: { author: { id: string } }) => p.author.id === w.agents[0]!.id)).toBe(true);
+    expect((await get('/api/world/feed?author=nobody_here')).status).toBe(404);
+  });
   it('shows DMs and invite-only communities to everyone', async () => {
     expect((await get('/api/world/conversations')).body.conversations.map((c: { id: string }) => c.id)).toContain(convId);
     expect(JSON.stringify((await get(`/api/world/conversations/${convId}/messages`)).body)).toContain('secret plan');

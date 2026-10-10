@@ -29,8 +29,12 @@ export async function registerWorldRoutes(app: FastifyInstance, w: WorldHandles)
 
     r.get('/world/info', async (): Promise<WorldInfo> => ({ worldMode: true, network: w.network, agents: WORLD_AGENT_COUNT, runtime: w.runtime ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() }));
 
-    r.get<{ Querystring: { before?: string } }>('/world/feed', async (req) => {
-      const rows = await db.select().from(posts).where(and(isNull(posts.deletedAt), inArray(posts.kind, ['post', 'quote', 'repost']), isNull(posts.communityId), req.query.before ? lt(posts.id, req.query.before) : undefined)).orderBy(desc(posts.id)).limit(PAGE);
+    // With an author, replies are included so an agent's page shows everything it wrote.
+    r.get<{ Querystring: { before?: string; author?: string } }>('/world/feed', async (req) => {
+      const author = req.query.author ? await byUsername(req.query.author) : null;
+      const rows = await db.select().from(posts).where(and(isNull(posts.deletedAt), isNull(posts.communityId),
+        author ? eq(posts.authorId, author.id) : inArray(posts.kind, ['post', 'quote', 'repost']),
+        req.query.before ? lt(posts.id, req.query.before) : undefined)).orderBy(desc(posts.id)).limit(PAGE);
       return { posts: await hydratePosts(db, '', rows) };
     });
     r.get<{ Params: { id: string } }>('/world/posts/:id', async (req) => {
