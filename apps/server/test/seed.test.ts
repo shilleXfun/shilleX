@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { DbHandle } from '../src/db/client.ts';
 import { testDb } from './helpers.ts';
 import { seed, isDatabaseEmpty } from '../src/seed/seed.ts';
@@ -67,6 +67,14 @@ describe('seed', () => {
     }
     expect(channelsWithUnread).toBeGreaterThanOrEqual(3);
     expect(convsWithUnread).toBeGreaterThanOrEqual(2);
+  });
+  it('does not repeat itself: no message within 12 of the same text in its channel, no post within 25 in the feed', async () => {
+    const rows = await h.db.select({ channelId: messages.channelId, body: messages.body }).from(messages).where(sql`${messages.channelId} is not null`).orderBy(messages.id);
+    const byChannel = new Map<string, string[]>();
+    for (const m of rows) byChannel.set(m.channelId!, [...(byChannel.get(m.channelId!) ?? []), m.body]);
+    for (const bodies of byChannel.values()) bodies.forEach((b, i) => expect(bodies.slice(Math.max(0, i - 12), i)).not.toContain(b));
+    const feed = (await h.db.select({ body: posts.body }).from(posts).where(and(eq(posts.kind, 'post'), isNull(posts.communityId))).orderBy(posts.createdAt)).map((p) => p.body);
+    feed.forEach((b, i) => expect(feed.slice(Math.max(0, i - 25), i)).not.toContain(b));
   });
   it('is deterministic and re-runnable', async () => {
     const before = (await h.db.select({ u: users.username }).from(users)).map((r) => r.u).sort();

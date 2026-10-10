@@ -10,7 +10,7 @@ import { markRead } from '../services/unread.ts';
 import { mulberry32, pick, int, chance, shuffle } from './rng.ts';
 import { PERSONAS, type Style } from './personas.ts';
 import { COMMUNITIES, DEMO_TOKENS, PRIVATE_ONLY_SYMBOLS, tokenBySymbol, type CommunityDef } from './world.ts';
-import { POST_LINES, CHAT_LINES, REPLY_LINES, DM_LINES, CALL_NOTES, fill } from './lines.ts';
+import { POST_LINES, CHAT_REPLIES, REPLY_LINES, DM_LINES, CALL_NOTES, fill, lineDrawer, chatPool } from './lines.ts';
 
 export interface SeedSummary { users: number; communities: number; posts: number; messages: number; tokens: number }
 
@@ -154,7 +154,12 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
 
   // 5. channel messages (40–120 per channel over the last 48h, denser in the last 2h)
   const allMsgs: MsgDraft[] = [];
-  const CHAT_TOKEN = CHAT_LINES.filter(hasToken), CHAT_PLAIN = CHAT_LINES.filter((l) => !hasToken(l));
+  /** Per-channel line drawers: topic lines when the room has them, general chatter otherwise, never a line used in the last few messages. */
+  const chatDrawers = (slug: string, channelName: string) => {
+    const pool = chatPool(slug, channelName);
+    const tok = lineDrawer(r, pool.filter(hasToken), 15), plain = lineDrawer(r, pool.filter((l) => !hasToken(l)), 15);
+    return { line: (withToken: boolean) => (withToken ? tok() : plain()), reply: lineDrawer(r, CHAT_REPLIES, 15) };
+  };
   const reactionsFor = (pool: string[], authorId: string) => {
     const out: { userId: string; emoji: string }[] = [];
     for (let i = int(r, 1, 3); i > 0; i--) {
@@ -170,16 +175,17 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
     for (const ch of c.channels) {
       const n = int(r, 40, 120);
       const times = Array.from({ length: n }, () => (chance(r, 0.4) ? now - r() * 2 * H : now - 2 * H - r() * 46 * H)).sort((a, b) => a - b);
+      const lines = chatDrawers(c.def.slug, ch.name);
       for (const t of times) {
         let authorId = pick(r, ids);
         if (authorId === demo.id && (t > now - 3 * H || chance(r, 0.6))) authorId = pick(r, personaIds);
         const sym = c.def.tokenFocus.length && chance(r, 0.35) ? pick(r, c.def.tokenFocus) : null;
         const tok = tokenBySymbol(sym ?? pick(r, c.def.tokenFocus));
-        const line = sym ? pick(r, CHAT_TOKEN) : pick(r, CHAT_PLAIN);
+        const recent = ch.drafts.slice(-8).filter((m) => m.authorId !== authorId);
+        const replyTo = recent.length && chance(r, 0.15) ? pick(r, recent) : null;
+        const line = replyTo ? lines.reply() : lines.line(sym !== null);
         const others = ids.filter((id) => id !== authorId);
         const body = fill(line, { mint: tok.mint, symbol: tok.symbol, user: nameOf(pick(r, others)) });
-        const recent = ch.drafts.slice(-8);
-        const replyTo = recent.length && chance(r, 0.15) ? pick(r, recent) : null;
         const d: MsgDraft = { id: '', channelId: ch.id, conversationId: null, communityId: c.id, isPublic, authorId, body, replyTo, attachments: [], t, reacts: [] };
         if (chance(r, 0.25)) d.reacts = reactionsFor(ids, authorId);
         ch.drafts.push(d);
@@ -218,12 +224,13 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
     times[times.length - 1] = end;
     const conv: ConvBuilt = { id: newId(), kind: spec.kind, name: spec.name, createdBy: pick(r, memberIds), createdAt, memberIds, drafts: [], unread };
     let authorId = pick(r, memberIds);
+    const chat = chatDrawers('', ''), dmTok = lineDrawer(r, DM_TOKEN, 8), dmPlain = lineDrawer(r, DM_PLAIN, 8);
     times.forEach((t, i) => {
       if (i > 0 && chance(r, 0.6)) authorId = pick(r, memberIds.filter((id) => id !== authorId));
       if (authorId === demo.id && (t > now - 2 * H || i >= n - unread)) authorId = pick(r, others);
       const tok = tokenBySymbol(pick(r, spec.tokens));
-      const pool = spec.kind === 'group' && chance(r, 0.5) ? (chance(r, 0.35) ? CHAT_TOKEN : CHAT_PLAIN) : (chance(r, 0.35) ? DM_TOKEN : DM_PLAIN);
-      const body = fill(pick(r, pool), { mint: tok.mint, symbol: tok.symbol, user: nameOf(pick(r, memberIds.filter((id) => id !== authorId))) });
+      const line = spec.kind === 'group' && chance(r, 0.5) ? chat.line(chance(r, 0.35)) : (chance(r, 0.35) ? dmTok() : dmPlain());
+      const body = fill(line, { mint: tok.mint, symbol: tok.symbol, user: nameOf(pick(r, memberIds.filter((id) => id !== authorId))) });
       const recent = conv.drafts.slice(-5);
       const replyTo = spec.kind === 'group' && recent.length && chance(r, 0.15) ? pick(r, recent) : null;
       const d: MsgDraft = { id: '', channelId: null, conversationId: conv.id, communityId: null, isPublic: computeMentionVisibility({ kind: 'conversation_message' }),
@@ -279,7 +286,8 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
 
   // 7. posts
   const allPosts: PostDraft[] = [];
-  const POST_TOKEN = POST_LINES.filter(hasToken), POST_PLAIN = POST_LINES.filter((l) => !hasToken(l));
+  const postTokenLine = lineDrawer(r, POST_LINES.filter(hasToken), 30), postPlainLine = lineDrawer(r, POST_LINES.filter((l) => !hasToken(l)), 30);
+  const replyLine = lineDrawer(r, REPLY_LINES, 30);
   const newPost = (p: Partial<PostDraft> & Pick<PostDraft, 'authorId' | 'kind' | 'body' | 't'>): PostDraft => {
     const d: PostDraft = { id: '', parent: null, quoteOf: null, repostOf: null, communityId: null, communityVisibility: null, art: false, depth: 0, reacts: [], ...p };
     allPosts.push(d);
@@ -288,7 +296,7 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
   const postBody = (authorId: string, symbols: readonly string[], pTok: number, mentionPool: string[]) => {
     const withToken = chance(r, pTok);
     const tok = tokenBySymbol(pick(r, symbols));
-    const line = pick(r, withToken ? POST_TOKEN : POST_PLAIN);
+    const line = withToken ? postTokenLine() : postPlainLine();
     let body = fill(line, { mint: tok.mint, symbol: tok.symbol, user: nameOf(pick(r, mentionPool.filter((id) => id !== authorId))) });
     if (withToken && !line.includes('{TOKEN}')) body += `\n\nCA: ${tok.mint}`;
     return body;
@@ -296,25 +304,29 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
   const personaIds = personas.map((p) => p.id);
   const replyTime = (after: number) => Math.min(after + int(r, 2, 360) * M, now - M);
   const topLevel: PostDraft[] = [];
-  for (let i = 0; i < 180; i++) {
+  // Bodies are drawn in time order (newest first) so a line never reappears within the next few dozen posts of the feed.
+  const postTimes = Array.from({ length: 180 }, () => now - 72 * H * r() ** 1.3).sort((a, b) => b - a);
+  // one post per public demo token, spread through the timeline, so discovery (incl. both promoted tokens) is never empty
+  const coverage = new Map(shuffle(r, postTimes.map((_, i) => i)).slice(0, publicSymbols.length).map((i, k) => [i, publicSymbols[k]!]));
+  postTimes.forEach((t, i) => {
     const authorId = pick(r, personaIds);
-    // the first posts cover every public demo token once, so discovery (incl. both promoted tokens) is never empty
-    const body = i < publicSymbols.length ? postBody(authorId, [publicSymbols[i]!], 1, personaIds) : postBody(authorId, postSymbols, 0.55, personaIds);
-    topLevel.push(newPost({ authorId, kind: 'post', body, t: now - 72 * H * r() ** 1.3 }));
-  }
+    const sym = coverage.get(i);
+    const body = sym ? postBody(authorId, [sym], 1, personaIds) : postBody(authorId, postSymbols, 0.55, personaIds);
+    topLevel.push(newPost({ authorId, kind: 'post', body, t }));
+  });
   const memers = new Set(personas.filter((p) => p.style === 'memer').map((p) => p.id));
   for (const p of shuffle(r, topLevel.filter((x) => memers.has(x.authorId))).slice(0, 6)) p.art = true;
   const replyable: PostDraft[] = [...topLevel];
   for (let i = 0; i < 70; i++) {
     const parent = pick(r, replyable);
     const authorId = pick(r, personaIds.filter((id) => id !== parent.authorId));
-    const reply = newPost({ authorId, kind: 'reply', body: pick(r, REPLY_LINES), parent, t: replyTime(parent.t), depth: parent.depth + 1 });
+    const reply = newPost({ authorId, kind: 'reply', body: replyLine(), parent, t: replyTime(parent.t), depth: parent.depth + 1 });
     if (reply.depth < 3) replyable.push(reply);
   }
   for (let i = 0; i < 20; i++) {
     const quoteOf = pick(r, topLevel);
     const authorId = pick(r, personaIds.filter((id) => id !== quoteOf.authorId));
-    const body = chance(r, 0.5) ? pick(r, REPLY_LINES) : postBody(authorId, postSymbols, 0.4, personaIds);
+    const body = chance(r, 0.5) ? replyLine() : postBody(authorId, postSymbols, 0.4, personaIds);
     newPost({ authorId, kind: 'quote', body, quoteOf, t: replyTime(quoteOf.t) });
   }
   const reposters = new Map<PostDraft, Set<string>>();
@@ -337,7 +349,7 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
         communityVisibility: c.def.visibility, t: now - r() * 6 * D });
       threads.push(thread);
       for (let j = int(r, 0, 3); j > 0; j--) {
-        newPost({ authorId: pick(r, ids.filter((id) => id !== authorId)), kind: 'reply', body: pick(r, REPLY_LINES), parent: thread,
+        newPost({ authorId: pick(r, ids.filter((id) => id !== authorId)), kind: 'reply', body: replyLine(), parent: thread,
           communityId: c.id, communityVisibility: c.def.visibility, t: replyTime(thread.t), depth: 1 });
       }
     }
@@ -352,7 +364,7 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
     newPost({ authorId: demo.id, kind: 'post', t: now - 20 * H, body: 'which community here has the best memes? asking for research purposes 😂' }),
     newPost({ authorId: demo.id, kind: 'post', t: now - 6 * H, body: 'learning to read holder maps. Due Diligence Desk has been super helpful, thanks all.' }),
   ];
-  const demoReplies = demoPosts.map((p) => newPost({ authorId: pick(r, personaIds), kind: 'reply', body: pick(r, REPLY_LINES), parent: p, t: replyTime(p.t), depth: 1 }));
+  const demoReplies = demoPosts.map((p) => newPost({ authorId: pick(r, personaIds), kind: 'reply', body: replyLine(), parent: p, t: replyTime(p.t), depth: 1 }));
   const demoQuote = newPost({ authorId: persona('moonmeadow').id, kind: 'quote', body: 'Mascot Club, obviously. come say hi', quoteOf: demoPosts[1]!, t: demoPosts[1]!.t + 25 * M });
   const demoMention = newPost({ authorId: persona('fresh_fern').id, kind: 'post', t: now - 3 * H, body: 'shoutout to @demo for asking the same beginner questions as me. we learn together 🫡' });
   for (const p of demoPosts) p.reacts = reactionsFor(personaIds, demo.id);
