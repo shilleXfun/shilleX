@@ -43,3 +43,6 @@
 .switch a { color: var(--accent-hover); font-weight: 600; }
 .switch a:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 480px) { .card { padding: 26px 20px 20px; } .riverCol { width: 150px; } }
+.hint { display: inline-flex; align-items: center; gap: 5px; margin-top: -2px; color: var(--muted); font-size: var(--fs-xs); font-weight: 450; transition: color .15s; }
+.hint[data-state='ok'] { color: var(--token); }
+.hint[data-state='bad'] { color: var(--down); }
