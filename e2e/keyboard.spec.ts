@@ -26,3 +26,14 @@ test('n from a community page lands in the Home composer, not on a composer that
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('textbox', { name: /What’s happening/ })).toBeFocused();
 });
+test('Ctrl+K search: type a name, Enter opens the profile', async ({ page }) => {
+  await enterDemo(page);
+  await page.keyboard.press('Control+k');
+  const box = page.getByRole('combobox', { name: /Search people, communities/ });
+  await expect(box).toBeFocused();
+  await box.fill('alpha_jane');
+  await expect(page.getByRole('option', { name: /Jane/ })).toBeVisible();
+  await box.press('Enter');
+  await expect(page).toHaveURL(/\/u\/alpha_jane$/);
+  await expect(box).toBeHidden();
+});

@@ -1,0 +1,29 @@
+/* Command palette: a glass sheet near the top, its results grouped, the active row lit in accent. */
+.palette { width: min(580px, calc(100vw - 24px)); max-height: min(560px, calc(100dvh - 24px)); margin: 12vh auto auto; padding: 0; border: 0; border-radius: var(--radius-pop); background: rgba(15, 17, 34, 0.94); color: var(--text); box-shadow: var(--shadow-pop), 0 0 60px rgba(139, 108, 255, 0.18); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); overflow: hidden; }
+.palette[open] { animation: paletteIn .22s cubic-bezier(.16, 1, .3, 1); }
+.palette::backdrop { background: rgba(4, 5, 14, 0.55); backdrop-filter: blur(2px); }
+@keyframes paletteIn { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .palette[open] { animation: none; } }
+@media (max-width: 767px) { .palette { margin-top: 10px; } }
+.inner { display: flex; flex-direction: column; max-height: inherit; }
+.field { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.searchIcon { flex: none; color: var(--accent-hover); }
+.input { flex: 1; min-width: 0; height: 54px; border: 0; background: none; color: var(--text); font-size: var(--fs-lg); outline: none; }
+.input::placeholder { color: var(--muted); }
+.kbd { flex: none; padding: 2px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font: 11px var(--font-mono); }
+.list { overflow-y: auto; padding: 6px; overscroll-behavior: contain; }
+.groupLabel { padding: 10px 10px 4px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; }
+.option { display: flex; align-items: center; gap: 11px; min-height: 44px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.text { display: grid; flex: 1; min-width: 0; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.title strong { color: var(--token); font-weight: 650; }
+.meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); }
+.enter { flex: none; color: var(--accent-hover); }
+.commIcon { flex: none; width: 28px; height: 28px; border-radius: 8px; image-rendering: pixelated; }
+.pageIcon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--raised); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.status { margin: 0; padding: 0 16px; color: var(--muted); font-size: var(--fs-sm); }
+.status:not(:empty) { padding-block: 4px 12px; }
+/* The input always has focus here, so the whole field carries the focus cue instead of the input's own glow. */
+.input:focus-visible { outline: none; box-shadow: none; }
+.field:focus-within { box-shadow: inset 0 -1px 0 var(--accent-line); }

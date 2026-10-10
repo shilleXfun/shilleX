@@ -1,7 +1,9 @@
 import { NavLink, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { Bell, Bookmark, CircleUser, Compass, House, LogOut, MessagesSquare, Plus, Settings, UsersRound } from 'lucide-react';
+import { Bell, Bookmark, CircleUser, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, UsersRound } from 'lucide-react';
+import { openPalette } from './CommandPalette';
+import { modKey } from '../lib/platform';
 import type { CommunitySummary, ConversationView } from '@shillex/shared';
 import { errorMessage, get, post } from '../lib/api';
 import { useRequiredMe } from '../lib/useMe';
@@ -68,6 +70,11 @@ export function LeftNav() {
           </MotionNavLink>
         </motion.div>
       ))}
+      <motion.div variants={fadeUp}>
+        <motion.button type="button" className={`${s.navItem} ${s.navSearch}`} title={`Search (${modKey} K)`} onClick={openPalette} {...press}>
+          <Search size={20} aria-hidden="true" /><span className={s.navLabel}>Search</span><kbd className={s.navKbd} aria-hidden="true">{modKey} K</kbd>
+        </motion.button>
+      </motion.div>
       <motion.div variants={fadeUp} className={s.sectionLabel} id="joined-label">Your communities</motion.div>
       <motion.ul variants={fadeUp} aria-labelledby="joined-label" className={s.communityList}>
         {(joined ?? []).map((c) => (
