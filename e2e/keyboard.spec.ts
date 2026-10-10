@@ -1,0 +1,20 @@
+import { test, expect, enterDemo } from './fixtures';
+test('keyboard-only: compose with n, publish with Ctrl+Enter, open a chip with Enter, close with Esc', async ({ page }) => {
+  await enterDemo(page);
+  await page.locator('body').press('n');
+  await expect(page.getByRole('textbox', { name: /What’s happening/ })).toBeFocused();
+  await page.keyboard.type('keyboard e2e');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByRole('article').filter({ hasText: 'keyboard e2e' })).toBeVisible();
+  const chip = page.getByRole('button', { name: /Token \$/ }).first();
+  await chip.focus();
+  const outline = await chip.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('complementary', { name: /./ }).last()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(chip).toBeFocused();
+  await page.locator('body').press('g');
+  await page.locator('body').press('m');
+  await expect(page).toHaveURL(/\/messages$/);
+});

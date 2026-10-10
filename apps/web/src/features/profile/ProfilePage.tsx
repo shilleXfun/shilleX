@@ -66,8 +66,8 @@ export function ProfilePage() {
           <span><CalendarDays size={13} aria-hidden="true" />Joined {new Date(p.createdAt).toLocaleDateString([], { month: 'long', year: 'numeric' })}</span>
         </div>
         <div className={s.counts}>
-          <span className={s.count}><span className={s.countValue}><CountUp value={p.following} format={whole} /></span><span className={s.countLabel}>following</span></span>
-          <span className={s.count}><span className={s.countValue}><CountUp value={p.followers} format={whole} /></span><span className={s.countLabel}>followers</span></span>
+          <span className={s.count}><strong className={s.countValue}><CountUp value={p.following} format={whole} /></strong><span className={s.countLabel}>following</span></span>
+          <span className={s.count}><strong className={s.countValue}><CountUp value={p.followers} format={whole} /></strong><span className={s.countLabel}>followers</span></span>
         </div>
         {p.wallet && (
           <div className={s.wallet}>
