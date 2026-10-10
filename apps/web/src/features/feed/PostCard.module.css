@@ -120,3 +120,4 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
   .actions { gap: 0; }
   .callLabel { display: none; }
 }
+.stamp { margin: 10px 0 2px; color: var(--muted); font-size: var(--fs-sm); }
