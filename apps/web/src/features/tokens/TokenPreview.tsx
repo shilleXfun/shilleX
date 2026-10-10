@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Copy, PanelRightOpen, RotateCw } from 'lucide-react';
+import { Copy, PanelRightOpen, RotateCw, TriangleAlert } from 'lucide-react';
 import { COPY, abbreviateMint, formatAge, formatUsd, relativeTime, type TokenView } from '@shillex/shared';
 import { errorMessage } from '../../lib/api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { toast } from '../../components/ui/Toaster';
 import { retryToken } from './tokenCache';
 import { TokenAvatar } from './TokenAvatar';
+import { useTickerTwins } from './TickerTwins';
 import s from './tokens.module.css';
 
 /** One honest line saying where the token data came from and how fresh it is. */
@@ -31,6 +32,13 @@ export async function copyAddress(mint: string) {
   catch { toast('Couldn’t copy — select the address instead', { tone: 'error' }); }
 }
 
+/** One line in the hover preview when other tokens here share this ticker; the panel lists them. */
+function TwinLine({ token }: { token: TokenView }) {
+  const twins = useTickerTwins(token);
+  if (!twins.length) return null;
+  return <div className={s.pvTwins}><TriangleAlert size={12} aria-hidden="true" />{twins.length === 1 ? 'Another token' : `${twins.length} other tokens`} here also use{twins.length === 1 ? 's' : ''} ${token.symbol}. Check the address.</div>;
+}
+
 export function TokenPreview({ token, onOpen }: { token: TokenView; onOpen: () => void }) {
   const qc = useQueryClient();
   const [retrying, setRetrying] = useState(false);
@@ -51,6 +59,7 @@ export function TokenPreview({ token, onOpen }: { token: TokenView; onOpen: () =
             {token.promoted && <Badge tone="promoted" title="Paid placement">{COPY.promoted}</Badge>}
           </div>
           <div className={s.pvSub}>{provenance(token)}</div>
+          <TwinLine token={token} />
         </div>
       </div>
       {(token.status === 'resolved' || token.status === 'unindexed') && (

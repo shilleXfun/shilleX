@@ -35,3 +35,5 @@
 .pvAddr { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 2px 2px 2px 10px; border-radius: var(--radius-sm); background: var(--bg); font: 400 11.5px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
 .pvActions { display: flex; gap: 6px; }
 .pvActions > :first-child { flex: 1; }
+.pvTwins { display: flex; gap: 5px; align-items: center; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); font-weight: 550; }
+.pvTwins svg { flex: none; }
