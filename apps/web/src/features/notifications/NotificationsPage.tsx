@@ -64,7 +64,10 @@ export function NotificationsPage() {
                         <Link to={n.href} className={cx(s.row, !n.read && s.unread)}>
                           <span className={cx(s.icon, TONE[n.type])} aria-hidden="true"><Icon size={15} /></span>
                           {n.actor ? <Avatar src={n.actor.avatarUrl} size={34} /> : <span />}
-                          <span className={s.text}>{n.text}{!n.read && <span className="sr-only"> (unread)</span>}</span>
+                          <span className={s.text}>
+                            <span>{n.text}{!n.read && <span className="sr-only"> (unread)</span>}</span>
+                            {n.excerpt && <span className={s.excerpt}>{n.excerpt}</span>}
+                          </span>
                           <span className={s.side}>
                             <time className={s.time} dateTime={n.createdAt}>{relativeTime(n.createdAt)}</time>
                             <AnimatePresence>{!n.read && <motion.span key="dot" className={s.dot} aria-hidden="true" exit={{ scale: 0, opacity: 0, transition: { duration: dur.standard } }} />}</AnimatePresence>

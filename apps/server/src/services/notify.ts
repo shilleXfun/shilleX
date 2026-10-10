@@ -1,10 +1,10 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { abbreviateMint, type NotificationType, type NotificationView } from '@shillex/shared';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { abbreviateMint, extractMintCandidates, type NotificationType, type NotificationView } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
-import { notifications, notificationPrefs, mutes } from '../db/schema.ts';
+import { channels, messages, notifications, notificationPrefs, mutes, posts } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
-import { isBlockedEitherWay } from './visibility.ts';
+import { getCommunityAccess, isBlockedEitherWay } from './visibility.ts';
 import { userSummaries } from './hydrate.ts';
 
 export interface NotifyInput {
@@ -29,13 +29,58 @@ export function describeNotification(type: NotificationType, actor: string, d: R
   }
 }
 
+const EXCERPT_MAX = 140;
+
+/** A single line of post or message text: contract addresses shortened, whitespace collapsed, cut at EXCERPT_MAX. */
+export function excerptOf(body: string): string | null {
+  let t = body;
+  for (const c of extractMintCandidates(body).reverse()) t = t.slice(0, c.start) + abbreviateMint(c.mint) + t.slice(c.end);
+  const chars = [...t.replace(/\s+/g, ' ').trim()];
+  if (!chars.length) return null;
+  return chars.length > EXCERPT_MAX ? `${chars.slice(0, EXCERPT_MAX - 1).join('').trimEnd()}…` : chars.join('');
+}
+
+/**
+ * Excerpts keyed `post:id` / `message:id`. Re-checked at read time: deleted or held content and communities the
+ * viewer can no longer read (left, banned, went private) yield nothing, even though the notification itself stays.
+ */
+async function excerpts(db: Db, viewerId: string, rows: (typeof notifications.$inferSelect)[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = (type: string) => [...new Set(rows.filter((r) => r.targetType === type).map((r) => r.targetId))];
+  const postIds = ids('post'), messageIds = ids('message');
+  const readable = new Map<string, boolean>();
+  const canRead = async (communityId: string | null) => {
+    if (!communityId) return true;
+    if (!readable.has(communityId)) readable.set(communityId, !!(await getCommunityAccess(db, communityId, viewerId))?.canRead);
+    return readable.get(communityId)!;
+  };
+  const add = (key: string, body: string) => { const e = excerptOf(body); if (e) out.set(key, e); };
+  if (postIds.length) {
+    const found = await db.select({ id: posts.id, body: posts.body, communityId: posts.communityId }).from(posts)
+      .where(and(inArray(posts.id, postIds), isNull(posts.deletedAt)));
+    for (const p of found) if (await canRead(p.communityId)) add(`post:${p.id}`, p.body);
+  }
+  if (messageIds.length) {
+    // Message notifications are channel mentions; conversation messages never get an excerpt here.
+    const found = await db.select({ id: messages.id, body: messages.body, communityId: channels.communityId }).from(messages)
+      .innerJoin(channels, eq(channels.id, messages.channelId))
+      .where(and(inArray(messages.id, messageIds), eq(messages.status, 'visible')));
+    for (const m of found) if (await canRead(m.communityId)) add(`message:${m.id}`, m.body);
+  }
+  return out;
+}
+
 export async function toNotificationViews(db: Db, rows: (typeof notifications.$inferSelect)[]): Promise<NotificationView[]> {
-  const actors = await userSummaries(db, rows.map((r) => r.actorId).filter((x): x is string => !!x));
+  if (!rows.length) return [];
+  const [actors, excerpt] = await Promise.all([
+    userSummaries(db, rows.map((r) => r.actorId).filter((x): x is string => !!x)),
+    excerpts(db, rows[0]!.userId, rows),
+  ]);
   return rows.map((r) => {
     const actor = r.actorId ? actors.get(r.actorId) ?? null : null;
     const { text, href } = describeNotification(r.type as NotificationType, actor?.displayName ?? 'Someone', r.data);
     return { id: r.id, type: r.type as NotificationType, actor, target: { type: r.targetType as NotificationView['target']['type'], id: r.targetId },
-      text, href, read: !!r.readAt, createdAt: r.createdAt.toISOString() };
+      text, href, read: !!r.readAt, createdAt: r.createdAt.toISOString(), excerpt: excerpt.get(`${r.targetType}:${r.targetId}`) ?? null };
   });
 }
 

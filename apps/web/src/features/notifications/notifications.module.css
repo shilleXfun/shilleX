@@ -5,8 +5,10 @@ a.row:hover { background: rgba(29, 33, 64, 0.38); }
 .icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-hover); }
 .toneToken { background: var(--token-soft); color: var(--token); }
 .toneWarn { background: var(--warn-soft); color: var(--warn); }
-.text { min-width: 0; line-height: 1.45; }
+.text { display: grid; gap: 3px; min-width: 0; line-height: 1.45; }
 .unread .text { font-weight: 550; }
+/* What was said, quoted under the headline: two lines at most, never bold. */
+.excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--muted); font-size: var(--fs-sm); font-weight: 400; }
 .side { display: grid; justify-items: end; gap: 6px; }
 .time { color: var(--muted); font: 11px var(--font-mono); white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: var(--glow-accent); }
