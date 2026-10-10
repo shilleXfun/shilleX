@@ -1,6 +1,8 @@
 /* Posts are rows in one continuous column: hairline separators and a full-row hover wash, no boxes or shadows. */
 .card { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
-.card:hover, .card:focus-within { background: rgba(29, 33, 64, 0.38); }
+/* Hover washes only where a real pointer hovers; on touch they would stick after a tap. */
+.card:focus-within { background: rgba(29, 33, 64, 0.38); }
+@media (hover: hover) { .card:hover { background: rgba(29, 33, 64, 0.38); } }
 .focused { cursor: default; padding-top: 16px; background: rgba(139, 108, 255, 0.045); }
 .focused:hover, .focused:focus-within { background: rgba(139, 108, 255, 0.045); }
 .focused .body { font-size: var(--fs-lg); line-height: 1.55; }
@@ -29,7 +31,7 @@
 
 .actions { display: flex; align-items: center; gap: 4px; margin: 8px 0 0 -9px; color: var(--muted); }
 .action { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-width: 32px; justify-content: center; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 12.5px var(--font-mono); white-space: nowrap; transition: background .12s, color .12s; }
-.action:hover { background: var(--accent-soft); color: var(--accent-hover); }
+@media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
 .actionIcon { display: inline-grid; place-items: center; }
 .action[aria-pressed='true'] { color: var(--accent-hover); }
