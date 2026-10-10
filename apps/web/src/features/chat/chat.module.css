@@ -15,7 +15,9 @@
 
 /* Messages: dense rows, grouped by author; a full-row hover wash, a floating action pill. */
 .msg { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 6px 18px 4px; transition: background .12s; }
-.msg:hover, .msg:focus-within { background: rgba(29, 33, 64, 0.38); }
+/* Hover only where a real pointer hovers; on touch a tap focuses the row (tabIndex -1), which shows the same actions. */
+.msg:focus-within { background: rgba(29, 33, 64, 0.38); }
+@media (hover: hover) { .msg:hover { background: rgba(29, 33, 64, 0.38); } .msg:hover .gutterTime { visibility: visible; } .msg:hover .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; } }
 .grouped { padding-top: 1px; padding-bottom: 1px; }
 .highlight { background: var(--accent-soft) !important; box-shadow: inset 2px 0 0 var(--accent); }
 .heldMsg { box-shadow: inset 2px 0 0 var(--warn); }
@@ -28,7 +30,6 @@
 .time { color: var(--muted); font: 11px var(--font-mono); }
 .body { line-height: 1.5; }
 .gutterTime { visibility: hidden; color: var(--muted); font: 10px/22px var(--font-mono); text-align: right; white-space: nowrap; }
-.msg:hover .gutterTime { visibility: visible; }
 .replyRef { display: flex; align-items: center; gap: 6px; max-width: 100%; margin: 1px 0 3px; padding: 0; border: 0; background: none; color: var(--muted); font-size: var(--fs-sm); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.replyRef:hover { color: var(--text); }
 .replyRef svg { flex: none; color: var(--accent-hover); }
@@ -37,7 +38,7 @@ button.replyRef:hover { color: var(--text); }
 .toolbar { position: absolute; z-index: 2; top: -16px; right: 18px; display: flex; gap: 1px; padding: 3px; border-radius: var(--radius-pill); background: rgba(23, 26, 49, 0.94); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop);
   opacity: 0; visibility: hidden; translate: 0 4px; scale: .94; transition: opacity .12s, translate .2s cubic-bezier(.16, 1, .3, 1), scale .2s cubic-bezier(.16, 1, .3, 1), visibility .12s; }
 .toolbar button { width: 30px; height: 30px; min-width: 0; padding: 0; border-radius: 50%; }
-.msg:hover .toolbar, .msg:focus-within .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; }
+.msg:focus-within .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; }
 .held { display: inline-flex; gap: 8px; align-items: center; margin-top: 4px; color: var(--warn); font-size: var(--fs-sm); font-weight: 550; }
 .deleted { color: var(--muted); font-style: italic; font-size: var(--fs-sm); padding: 2px 0; }
 .pending .body { color: var(--muted); }

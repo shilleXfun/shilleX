@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ImagePlus, Reply, SendHorizontal, Timer, X } from 'lucide-react';
 import { LIMITS, abbreviateMintsIn, codePointLength, type MessageView, type ScopeRef, type UploadView } from '@shillex/shared';
 import { errorMessage, retryAfterSec, uploadImage } from '../../lib/api';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
 import { IconButton } from '../../components/ui/Button';
@@ -21,6 +22,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
   tokenCard?: string | null; onClearTokenCard?: () => void;
 }) {
   const [text, setText] = useState('');
+  const touch = useMediaQuery('(pointer: coarse)');
   const [uploads, setUploads] = useState<UploadView[]>([]);
   // Slow mode counts down to a deadline (not chained one-second timeouts), so it stays right in a throttled tab.
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -58,7 +60,8 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
     }
   }
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
+    // Touch keyboards: Enter is a newline and the send button sends, as in other mobile chat apps.
+    if (e.key === 'Enter' && !e.shiftKey && !touch && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
     if (e.key === 'Escape' && replyTo) { e.preventDefault(); onCancelReply(); }
   };
   async function addFiles(files: FileList | null) {
@@ -93,7 +96,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
       <div className={cx(s.inputRow, blocked && s.inputBlocked)}>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ''; }} />
         <IconButton label="Attach images" onClick={() => file.current?.click()} disabled={uploads.length >= LIMITS.maxImages}><ImagePlus size={18} /></IconButton>
-        <textarea ref={area} className={s.input} rows={1} value={text} aria-label={placeholder} placeholder={placeholder}
+        <textarea ref={area} className={s.input} rows={1} value={text} aria-label={placeholder} placeholder={placeholder} enterKeyHint={touch ? 'enter' : 'send'}
           onChange={(e) => { setText(e.target.value); onTyping(); }} onKeyDown={onKey} />
         <IconButton label="Send" className={cx(s.send, can && s.sendReady)} disabled={!can} onClick={() => void submit()}><SendHorizontal size={17} /></IconButton>
         {blocked && cooldownFrom > 0 && (
@@ -104,7 +107,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
       <div className={s.meta}>
         <span className={blocked ? s.slow : undefined} aria-live="polite">
           {blocked ? <><Timer size={12} aria-hidden="true" />Slow mode · {cooldown}s</>
-            : slowModeSeconds > 0 ? `Slow mode: one message every ${slowModeSeconds}s${isMod ? ' (mods exempt)' : ''}` : 'Enter to send · Shift+Enter for a new line'}
+            : slowModeSeconds > 0 ? `Slow mode: one message every ${slowModeSeconds}s${isMod ? ' (mods exempt)' : ''}` : touch ? null : 'Enter to send · Shift+Enter for a new line'}
         </span>
         {near && <span className={cx(s.count, len > LIMITS.messageMax && s.over)}>{LIMITS.messageMax - len}</span>}
       </div>

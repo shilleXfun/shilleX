@@ -10,6 +10,14 @@ test('mobile: bottom tabs, immersive conversation screen, token sheet', async ({
   await expect(page).toHaveURL(/\/c\/trenches$/);
   await page.getByRole('link', { name: /^general/ }).click(); // the name carries its unread count
   await expect(tabs).toBeHidden();
+  // Touch keyboard: Enter is a newline; the send button sends.
+  const box = page.getByRole('textbox', { name: 'Message #general' });
+  await box.fill('gm from a phone');
+  await box.press('Enter');
+  await expect(box).toHaveValue('gm from a phone\n');
+  await page.getByRole('button', { name: 'Send' }).tap();
+  await expect(page.getByText('gm from a phone')).toBeVisible();
+  await expect(page.getByText(/Enter to send/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Back to community' }).click();
   await expect(page).toHaveURL(/\/c\/trenches$/);
   await page.goto('/');
