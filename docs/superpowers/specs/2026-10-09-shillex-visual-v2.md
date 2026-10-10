@@ -26,7 +26,7 @@ A trading floor after midnight, lit by screens. Deep ink-violet space with layer
 | `--muted` | `#8A8FB8` | Secondary text (≥ 4.5:1 on `--panel`) |
 | `--accent` | `#8B6CFF` | Ultraviolet: primary actions, focus ring, active nav, own stuff |
 | `--accent-hover` | `#A28BFF` | |
-| `--accent-ink` | `#FFFFFF` | Text on accent |
+| `--accent-ink` | `#080914` | Text on accent (midnight ink; white on ultraviolet is only 3.7:1, below AA) |
 | `--token` | `#27E0C0` | Signal teal: CA chips, token panel, token links |
 | `--up` | `#2BE38A` | |
 | `--down` | `#FF4F7B` | |

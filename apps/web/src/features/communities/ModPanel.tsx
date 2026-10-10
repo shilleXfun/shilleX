@@ -6,6 +6,7 @@ import { errorMessage, get, patch, post } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { toast } from '../../components/ui/Toaster';
 import s from './communities.module.css';
 
@@ -34,6 +35,7 @@ export function ModPanel({ detail }: { detail: CommunityDetail }) {
       <section className={s.section} aria-labelledby="mod-req">
         <h2 id="mod-req" className={s.sectionTitle}>Join requests</h2>
         {requests.isPending ? <Skeleton h={34} r={10} />
+          : requests.isError ? <ErrorState error={requests.error} onRetry={() => void requests.refetch()} />
           : requests.data?.length ? requests.data.map((m) => (
             <div key={m.user.id} className={s.row}>
               <Avatar src={m.user.avatarUrl} size={30} />
@@ -48,6 +50,7 @@ export function ModPanel({ detail }: { detail: CommunityDetail }) {
       <section className={s.section} aria-labelledby="mod-rep">
         <h2 id="mod-rep" className={s.sectionTitle}>Reports</h2>
         {reports.isPending ? <Skeleton h={60} r={10} />
+          : reports.isError ? <ErrorState error={reports.error} onRetry={() => void reports.refetch()} />
           : reports.data?.length ? reports.data.map((r) => (
             <div key={r.id} className={s.report}>
               <div className={s.muted} style={{ fontSize: 'var(--fs-sm)' }}>{r.reporter.displayName} reported a {r.targetType}: <strong style={{ color: 'var(--text)' }}>{r.reason}</strong></div>

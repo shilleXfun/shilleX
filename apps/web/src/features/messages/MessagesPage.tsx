@@ -16,7 +16,7 @@ export function MessagesPage() {
   return (
     <div className={s.layout} data-pane={!!id}>
       <ConversationList activeId={id ?? null} onNew={() => setCreating(true)} />
-      <section className={s.pane} aria-label="Conversation">
+      <section className={s.pane} aria-label="Conversation" data-empty={!id}>
         {id ? <ConversationPane id={id} />
           : <EmptyState icon={<Lock size={26} />} title="Your messages" body="DMs and private groups. Nothing here ever appears in public discovery or token discussion."
             action={<Button variant="primary" onClick={() => setCreating(true)}>New message</Button>} />}

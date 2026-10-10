@@ -56,7 +56,7 @@ export function CommunityPage() {
       </div>
     );
   }
-  if (q.isError) return q.error instanceof ApiError && q.error.status === 404 ? <EmptyState icon={<Users size={26} />} title="Community not found" body="It may be invite-only, or it no longer exists." /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  if (q.isError) return q.error instanceof ApiError && q.error.status === 404 ? <EmptyState icon={<Users size={26} />} title="Community not found" body="It may be invite-only, or it no longer exists." action={<Link to="/communities" style={{ color: 'var(--accent-hover)', fontWeight: 600 }}>Browse communities</Link>} /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
 
   const detail = d!;
   const c = detail.community;

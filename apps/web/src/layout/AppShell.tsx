@@ -1,4 +1,5 @@
-import { ScrollRestoration, useLocation, useMatch, useOutlet } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollRestoration, useLocation, useMatch, useNavigate, useOutlet } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { dur, ease } from '../lib/motion';
 import { LeftNav } from './LeftNav';
@@ -11,7 +12,16 @@ import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import { useRealtimeSync } from './useRealtimeSync';
 import { RightRail } from './RightRail';
 import { useAtmospherePulse } from '../components/atmosphere/Atmosphere';
+import { useHotkeys } from '../lib/hotkeys';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import s from './layout.module.css';
+
+/** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
+function focusShortcut(name: string, tries = 12) {
+  const el = document.querySelector<HTMLElement>('[data-shortcut="' + name + '"]');
+  if (el) el.focus();
+  else if (tries > 0) setTimeout(() => focusShortcut(name, tries - 1), 60);
+}
 
 const route = {
   hidden: { opacity: 0, y: 8 },
@@ -32,12 +42,24 @@ export function AppShell() {
   // Conversation screens are immersive on mobile: no tab bar or global header (they render their own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
+  const nav = useNavigate();
+  const [help, setHelp] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+  const first = useRef(true);
+  // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
+  useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
+  useHotkeys({
+    '/': () => { if (!document.querySelector('[data-shortcut="search"]')) nav('/communities'); focusShortcut('search'); },
+    n: () => { if (pathname !== '/') nav('/'); focusShortcut('compose'); },
+    'g h': () => nav('/'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
+    '?': () => setHelp(true),
+  });
   return (
     <div className={s.shell} data-immersive={!!(inChannel || inDm)} data-wide={parts[1] === 'c' || parts[1] === 'messages'}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <ReconnectBanner />
       <aside className={s.left} aria-label="Primary"><LeftNav /></aside>
-      <main id="main" className={s.center} tabIndex={-1}>
+      <main id="main" ref={mainRef} className={s.center} tabIndex={-1}>
         <MobileHeader />
         {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
         <AnimatePresence mode="wait" initial={false}>
@@ -48,6 +70,7 @@ export function AppShell() {
       <TokenPanelHost />
       <MobileTabBar />
       <Toaster />
+      <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
       <ScrollRestoration />
     </div>
   );

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { MessageSearchHit } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { ErrorState } from '../../components/ui/ErrorState';
 import s from './messages.module.css';
 
 /** The match in context: up to 40 characters before, the hit marked, 60 after. */
@@ -24,6 +25,7 @@ export function MessageSearch({ q, conversationId }: { q: string; conversationId
     <section aria-label="Message search results">
       <div className={s.sectionLabel}>Messages</div>
       {r.isPending ? <div className={s.hit} aria-busy="true" aria-label="Searching"><Skeleton w="40%" h={11} /><Skeleton w="85%" h={11} /></div>
+        : r.isError ? <ErrorState title="Search failed" error={r.error} onRetry={() => void r.refetch()} />
         : r.data?.length ? r.data.map((h) => (
           <Link key={h.message.id} to={`/messages/${h.conversation.id}?m=${h.message.id}`} className={s.hit}>
             {/* A DM is named after the other person, so naming them twice adds nothing. */}
