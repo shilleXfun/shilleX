@@ -30,6 +30,11 @@ export interface PostCardProps {
   onReply?: (p: PostView) => void;
 }
 
+const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+/** "2:14 PM · Oct 8, 2026" in the reader's locale and time zone. */
+const exactTime = (iso: string) => `${clock.format(new Date(iso))} · ${day.format(new Date(iso))}`;
+
 export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
   const me = useRequiredMe();
   const nav = useNavigate();
@@ -80,6 +85,8 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
             {p.body && <PostBody text={p.body} className={s.body} />}
             <MediaGrid media={p.media} />
             {p.quoted && <QuoteEmbed post={p.quoted} />}
+            {/* The focal post of a thread shows its exact time: "when did they say it" matters for a call. */}
+            {focused && <p className={s.stamp}><time dateTime={p.createdAt}>{exactTime(p.createdAt)}</time></p>}
             <CallUpdates post={p} />
             <ReactionPills reactions={p.reactions} onToggle={a.react} scope={p.id} />
             <div className={s.actions} role="group" aria-label="Post actions">

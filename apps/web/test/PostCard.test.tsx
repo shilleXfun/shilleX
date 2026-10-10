@@ -22,6 +22,15 @@ describe('PostCard', () => {
     expect(screen.getByText('Bought')).toBeInTheDocument();
     expect(screen.getByText('self-reported')).toBeInTheDocument();
   });
+  it('the focal post of a thread shows its exact time; feed cards do not', () => {
+    const at = { ...post, createdAt: '2026-10-08T14:05:00Z' };
+    const { unmount } = renderWithApp(<PostCard post={at} focused />);
+    const stamp = document.querySelector('p time[datetime="2026-10-08T14:05:00Z"]');
+    expect(stamp?.textContent).toMatch(/2:05.*PM · Oct 8, 2026|14:05 · .*2026/);
+    unmount();
+    renderWithApp(<PostCard post={at} />);
+    expect(document.querySelector('p time')).toBeNull();
+  });
   it('shows repost attribution and a tombstone for deleted posts', () => {
     renderWithApp(<PostCard post={{ ...post, id: 'r1', kind: 'repost', body: '', author: { ...author, displayName: 'Dan', username: 'dex_dan' }, reposted: { ...post, deleted: true, body: '' } }} />);
     expect(screen.getByText(/Dan reposted/)).toBeInTheDocument();
