@@ -27,6 +27,19 @@ describe('profiles and follows', () => {
     expect((await ctx.as(a).get('/api/users/based_bob/posts?tab=posts')).body.items.map((x: any) => x.body)).toEqual(['top']);
     expect((await ctx.as(a).get('/api/users/based_bob/posts?tab=replies')).body.items.map((x: any) => x.body)).toEqual(['a reply']);
   });
+  it('lists calls: their own posts with call updates, newest first, never other people’s', async () => {
+    const plain = (await ctx.as(b).post('/api/posts', { body: 'just vibes' })).body.post;
+    const c1 = (await ctx.as(b).post('/api/posts', { body: 'first call DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263' })).body.post;
+    ctx.clock.advance(61_000);
+    const c2 = (await ctx.as(b).post('/api/posts', { body: 'second call DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263' })).body.post;
+    expect((await ctx.as(b).post(`/api/posts/${c1.id}/call-updates`, { status: 'watching' })).status).toBe(201);
+    expect((await ctx.as(b).post(`/api/posts/${c2.id}/call-updates`, { status: 'bought' })).status).toBe(201);
+    const calls = (await ctx.as(a).get('/api/users/based_bob/posts?tab=calls')).body.items;
+    expect(calls.map((x: any) => x.body)).toEqual(['second call DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', 'first call DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263']);
+    expect(calls[0].callUpdates.map((u: any) => u.status)).toEqual(['bought']);
+    expect(calls.some((x: any) => x.id === plain.id)).toBe(false);
+    expect((await ctx.as(a).get('/api/users/anon_ape/posts?tab=calls')).body.items).toEqual([]);
+  });
   it('searches users', async () => {
     const r = await ctx.as(a).get('/api/users?q=bob');
     expect(r.body.users.map((u: any) => u.username)).toEqual(['based_bob']);

@@ -23,7 +23,12 @@ import { copyAddress } from '../tokens/TokenPreview';
 import s from './profile.module.css';
 import cs from '../communities/communities.module.css';
 
-const TABS = [{ id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'communities', label: 'Communities' }] as const;
+const TABS = [{ id: 'posts', label: 'Posts' }, { id: 'calls', label: 'Calls' }, { id: 'replies', label: 'Replies' }, { id: 'communities', label: 'Communities' }] as const;
+const EMPTY: Record<'posts' | 'calls' | 'replies', { title: string; self: string }> = {
+  posts: { title: 'No posts yet', self: 'Your posts will show up here.' },
+  calls: { title: 'No calls yet', self: 'Mention a token in a post, then use Update call on it to log watching, bought, taking profit or out.' },
+  replies: { title: 'No replies yet', self: 'Your replies will show up here.' },
+};
 type Tab = (typeof TABS)[number]['id'];
 const whole = (n: number | null) => (n === null ? '—' : Math.round(n).toLocaleString());
 
@@ -82,8 +87,11 @@ export function ProfilePage() {
       </div>
       <TabPanel id="prof-panel" aria-labelledby={`prof-${tab}`} value={tab} order={TABS.map((t) => t.id)}>
         {tab === 'communities' ? <UserCommunities username={p.username} />
-          : <FeedList key={tab} queryKey={['userPosts', p.username, tab]} path={`/users/${p.username}/posts?tab=${tab}`}
-            empty={<EmptyState title={tab === 'posts' ? 'No posts yet' : 'No replies yet'} body={p.isSelf ? 'Your posts and replies will show up here.' : undefined} />} />}
+          : <>
+            {tab === 'calls' && <p className={s.callsNote}>{COPY.callsNote}</p>}
+            <FeedList key={tab} queryKey={['userPosts', p.username, tab]} path={`/users/${p.username}/posts?tab=${tab}`}
+              empty={<EmptyState title={EMPTY[tab].title} body={p.isSelf ? EMPTY[tab].self : undefined} />} />
+          </>}
       </TabPanel>
     </section>
   );

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
 import { generatedBannerUrl, type Page, type PostView, type UserProfile, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { users, follows, mutes, blocks, posts, walletLinks, type UserRow } from '../db/schema.ts';
+import { users, follows, mutes, blocks, posts, walletLinks, callUpdates, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
@@ -63,11 +63,13 @@ export default async function usersRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const u = await loadUserByUsername(db, req.params.username);
     if (u.id !== me.id && (await isBlockedEitherWay(db, me.id, u.id))) throw errors.forbidden('BLOCKED', 'You can’t view this account’s posts');
-    const tab = req.query.tab === 'replies' ? 'replies' : 'posts';
+    const tab = req.query.tab === 'replies' || req.query.tab === 'calls' ? req.query.tab : 'posts';
+    // Calls: their own public posts that carry at least one (self-reported) call update.
+    const calls = db.select({ id: callUpdates.postId }).from(callUpdates).where(eq(callUpdates.authorId, u.id));
     const limit = clampLimit(req.query.limit, 20, 50);
     const rows = await db.select().from(posts).where(and(
       eq(posts.authorId, u.id), isNull(posts.communityId), isNull(posts.deletedAt),
-      tab === 'replies' ? eq(posts.kind, 'reply') : inArray(posts.kind, ['post', 'quote', 'repost']),
+      tab === 'replies' ? eq(posts.kind, 'reply') : tab === 'calls' ? and(inArray(posts.kind, ['post', 'quote']), inArray(posts.id, calls)) : inArray(posts.kind, ['post', 'quote', 'repost']),
       req.query.cursor ? lt(posts.id, req.query.cursor) : undefined,
     )).orderBy(desc(posts.id)).limit(limit + 1);
     const items = await hydratePosts(db, me.id, rows.slice(0, limit));
