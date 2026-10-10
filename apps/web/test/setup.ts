@@ -6,7 +6,7 @@ import { MotionGlobalConfig } from 'motion/react';
 
 // Motion: finish every animation instantly so exit transitions don't keep removed elements in the DOM.
 MotionGlobalConfig.skipAnimations = true;
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); }); // drafts persist in localStorage
 // jsdom lacks <dialog> modal APIs
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true; };
 HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false; this.dispatchEvent(new Event('close')); };

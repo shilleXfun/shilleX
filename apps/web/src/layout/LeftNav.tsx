@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Bell, Bookmark, CircleUser, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, UsersRound } from 'lucide-react';
 import { openPalette } from './CommandPalette';
 import { modKey } from '../lib/platform';
+import { clearDrafts } from '../lib/drafts';
 import type { CommunitySummary, ConversationView } from '@shillex/shared';
 import { errorMessage, get, post } from '../lib/api';
 import { useRequiredMe } from '../lib/useMe';
@@ -48,7 +49,7 @@ export function LeftNav() {
   const logout = async () => {
     try { await post('/auth/logout'); }
     catch (e) { toast(errorMessage(e), { tone: 'error' }); return; }
-    socket.disconnect(); qc.clear(); nav('/login');
+    socket.disconnect(); qc.clear(); clearDrafts(); nav('/login');
   };
   // The session's one load moment: the wordmark letters land, then nav rows follow 35 ms apart.
   return (

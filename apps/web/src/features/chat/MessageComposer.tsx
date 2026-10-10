@@ -5,6 +5,8 @@ import { LIMITS, abbreviateMintsIn, codePointLength, type MessageView, type Scop
 import { errorMessage, retryAfterSec, uploadImage } from '../../lib/api';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { useImageDrop } from '../../lib/useImageDrop';
+import { useDraft } from '../../lib/drafts';
+import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
 import { IconButton } from '../../components/ui/Button';
@@ -22,7 +24,9 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
   disabledReason?: ReactNode; slowModeSeconds: number; isMod: boolean; replyTo: MessageView | null; onCancelReply: () => void; onTyping: () => void; placeholder: string;
   tokenCard?: string | null; onClearTokenCard?: () => void;
 }) {
-  const [text, setText] = useState('');
+  const me = useRequiredMe();
+  // Each conversation or channel keeps its own unsent text, per account.
+  const [text, setText] = useDraft(`${me.id}:chat:${scope.type}:${scope.id}`);
   const touch = useMediaQuery('(pointer: coarse)');
   const [uploads, setUploads] = useState<UploadView[]>([]);
   // Slow mode counts down to a deadline (not chained one-second timeouts), so it stays right in a throttled tab.
@@ -40,7 +44,7 @@ export function MessageComposer({ scope, onSend, disabledReason, slowModeSeconds
   }, [cooldownUntil]);
   useEffect(() => { if (replyTo) area.current?.focus(); }, [replyTo]);
   useEffect(() => { const el = area.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }, [text]);
-  useEffect(() => { setText(''); setUploads([]); }, [scope.type, scope.id]);
+  useEffect(() => { setUploads([]); }, [scope.type, scope.id]);
 
   const len = codePointLength(text);
   const blocked = cooldown > 0 && !isMod;
