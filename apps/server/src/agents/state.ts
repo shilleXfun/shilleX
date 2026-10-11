@@ -36,13 +36,23 @@ export async function loadState(db: Db, agentId: string, now: Date): Promise<Sta
   return toState(fresh, now);
 }
 
+/**
+ * Saves energy, mood, cooldowns, recent lines and the broke/ghost marks. Never writes traits over an existing row: the
+ * traits in `s` were read at perceive time and may be stale (drift can land mid-action). Only setTraits changes them.
+ */
 export async function saveState(db: Db, agentId: string, s: State, now: Date): Promise<void> {
-  const row = {
-    agentId, energy: clamp(s.energy, 0, 1), mood: clamp(s.mood, -1, 1), traits: s.traits, cooldowns: s.cooldowns,
+  const set = {
+    energy: clamp(s.energy, 0, 1), mood: clamp(s.mood, -1, 1), cooldowns: s.cooldowns,
     recentLines: s.recentLines.slice(-30), brokeSince: s.brokeSince ? new Date(s.brokeSince) : null,
     ghostSince: s.ghostSince ? new Date(s.ghostSince) : null, updatedAt: now,
   };
-  await db.insert(agentState).values(row).onConflictDoUpdate({ target: agentState.agentId, set: row });
+  await db.insert(agentState).values({ agentId, traits: s.traits, ...set }).onConflictDoUpdate({ target: agentState.agentId, set });
+}
+
+/** The one way traits change once an agent exists: drift (depth/drift.ts) and the agent's first phrasebook. Touches nothing else. */
+export async function setTraits(db: Db, agentId: string, traits: Traits, now: Date): Promise<void> {
+  await loadState(db, agentId, now); // creates the row on first use
+  await db.update(agentState).set({ traits }).where(eq(agentState.agentId, agentId));
 }
 
 export async function adjustAffinity(db: Db, agentId: string, otherId: string, delta: number, now: Date): Promise<number> {

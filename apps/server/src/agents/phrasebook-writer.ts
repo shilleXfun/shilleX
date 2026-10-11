@@ -6,7 +6,7 @@ import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { HAIKU, type ModelBudget } from './haiku.ts';
 import { ALLOWED_SLOTS, FALLBACK_SITUATIONS } from './phrasebook.ts';
-import { TRAITS, loadState, recentEvents, saveState } from './state.ts';
+import { TRAITS, recentEvents, setTraits } from './state.ts';
 import type { Phrasebook, Situation, Traits } from './types.ts';
 
 export const PHRASEBOOK_PROMPT_VERSION = 'phrasebook-v1';
@@ -146,8 +146,9 @@ export async function writePhrasebook(d: { db: Db; brain: AgentBrain; budget: Mo
       const version = (prev?.version ?? 0) + 1;
       await db.insert(phrasebooks).values({ agentId, version, book, model: HAIKU, writtenAt: d.now() })
         .onConflictDoUpdate({ target: phrasebooks.agentId, set: { version, book, model: HAIKU, writtenAt: d.now() } });
-      const s = await loadState(db, agentId, d.now());
-      await saveState(db, agentId, { ...s, traits: book.traits }, d.now());
+      // The blank agent defines itself once, in its first book; after that only drift (lived experience) moves its traits,
+      // so a refresh's traits are ignored.
+      if (version === 1) await setTraits(db, agentId, book.traits, d.now());
       status = 'acted';
       note = `wrote phrasebook v${version}`;
     }

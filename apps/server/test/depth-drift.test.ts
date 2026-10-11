@@ -98,4 +98,18 @@ describe('trait drift', () => {
     expect(ha.pettiness - hb.pettiness).toBeCloseTo(Math.min(0.03, 1 - hb.pettiness), 6);
     expect(ha.loyalty - hb.loyalty).toBeCloseTo(-Math.min(0.01, hb.loyalty), 6);
   });
+  it('drift applied between an agent\'s perceive and its state save survives the save', async () => {
+    ctx = await depthTestCtx();
+    const a = ctx.agents[8]!;
+    const { perceive } = await import('../src/agents/perceive.ts');
+    const { act } = await import('../src/agents/act.ts');
+    const v = await perceive(ctx.d, a.id);
+    // Another agent's afterAct (or an onEvent hook) drifts this agent while its own action is in flight.
+    const drifted = await applyDrift(ctx.t.db, a.id, { pettiness: 0.03 }, ctx.t.clock.now());
+    expect(drifted.pettiness).not.toBe(v.state.traits.pettiness);
+    await act(ctx.d, v, { kind: 'idle', score: 1, reason: 'resting' });
+    const after = await loadState(ctx.t.db, a.id, ctx.t.clock.now());
+    expect(after.traits).toEqual(drifted);
+    expect(after.cooldowns.idle).toBeTruthy(); // the ordinary save still happened
+  });
 });
