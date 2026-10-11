@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { makeTestApp } from './helpers.ts';
 import { imageInfo } from '../src/lib/image-size.ts';
 import { renderSvg } from '../src/agents/cards.ts';
-import { OpenAIImageGen, IMAGE_PRICE_USD, WORST_IMAGE_USD } from '../src/agents/openai-images.ts';
+import { OpenAIImageGen, IMAGE_PRICE_USD, MAX_PROMPT_CHARS, WORST_IMAGE_USD } from '../src/agents/openai-images.ts';
 import { canGenerate, recordImageSpend } from '../src/agents/image-budget.ts';
 import { captionMeme, generateTemplate, templateBriefPrompt } from '../src/agents/memes.ts';
 import { MAX_BLOB_BYTES, type ImageGen } from '../src/agents/images.ts';
@@ -34,7 +34,25 @@ describe('OpenAI image generator', () => {
     expect((seen[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer sk-test');
     expect(JSON.parse(String(seen[0]!.init.body))).toEqual({ model: 'gpt-image-1', prompt: 'a raccoon', size: '1024x1024', n: 1, quality: 'low' });
     expect(r.png.equals(base)).toBe(true);
-    expect(r.usd).toBe(IMAGE_PRICE_USD['1024x1024']);
+    // Recorded above the bare image price: the prompt's text tokens are billed too.
+    expect(r.usd).toBeGreaterThan(IMAGE_PRICE_USD['1024x1024']);
+    expect(r.usd).toBeLessThanOrEqual(WORST_IMAGE_USD);
+  });
+  it('records the response token usage when it costs more than the table price', async () => {
+    const usage = { input_tokens: 50, output_tokens: 400, input_tokens_details: { text_tokens: 50, image_tokens: 0 } };
+    const fetchFn = (async () => new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }], usage }), { status: 200 })) as unknown as typeof fetch;
+    const r = await new OpenAIImageGen('sk-test', 'gpt-image-1', fetchFn).generate('a raccoon', '1024x1024');
+    expect(r.usd).toBeCloseTo(50 * 5e-6 + 400 * 40e-6, 9);
+  });
+  it('cuts a very long prompt so a call never costs more than the worst case', async () => {
+    const seen: string[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      seen.push(String(init.body));
+      return new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const r = await new OpenAIImageGen('sk-test', 'gpt-image-1', fetchFn).generate('z'.repeat(5000), '1536x1024');
+    expect(JSON.parse(seen[0]!).prompt).toHaveLength(MAX_PROMPT_CHARS);
+    expect(r.usd).toBeCloseTo(WORST_IMAGE_USD, 9);
   });
   it('turns an API error into a short error without the key', async () => {
     const fetchFn = (async () => new Response(JSON.stringify({ error: { message: 'billing hard limit' } }), { status: 400 })) as unknown as typeof fetch;
@@ -45,8 +63,8 @@ describe('OpenAI image generator', () => {
   it('charges the highest known price for a model it has no price for', async () => {
     const fetchFn = (async () => new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }] }), { status: 200 })) as unknown as typeof fetch;
     const r = await new OpenAIImageGen('sk-test', 'some-future-model', fetchFn).generate('x', '1024x1024');
-    expect(r.usd).toBe(WORST_IMAGE_USD);
-    expect(WORST_IMAGE_USD).toBe(Math.max(...Object.values(IMAGE_PRICE_USD)));
+    expect(r.usd).toBeGreaterThan(Math.max(...Object.values(IMAGE_PRICE_USD)));
+    expect(r.usd).toBeLessThanOrEqual(WORST_IMAGE_USD);
   });
 });
 
@@ -93,6 +111,26 @@ describe('image budget and templates', () => {
     expect(result).toBeNull();
     expect(logged).toBe(1);
     expect(await canGenerate(t.db, { usd: 0.0001, max: 1 }, d.now())).toBe(true);
+  });
+  it('a call that may have been billed (timeout, empty 200) counts at the worst-case price', async () => {
+    const u = await t.createUser('timedout');
+    const now = () => new Date('2026-12-09T10:00:00Z');
+    const aborting = (async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); }) as unknown as typeof fetch;
+    const timedOut = await quietly(() => generateTemplate({ db: t.db, gen: new OpenAIImageGen('sk-test', 'gpt-image-1', aborting), limits: { usd: 1, max: 15 }, now }, { brief: 'x', tags: [], authorId: u.id }));
+    expect(timedOut.result).toBeNull();
+    expect(await spentOn('2026-12-09')).toMatchObject({ usd: WORST_IMAGE_USD, count: 1 });
+
+    const aborted = (async () => { throw new DOMException('This operation was aborted', 'AbortError'); }) as unknown as typeof fetch;
+    expect((await quietly(() => generateTemplate({ db: t.db, gen: new OpenAIImageGen('sk-test', 'gpt-image-1', aborted), limits: { usd: 1, max: 15 }, now }, { brief: 'x', tags: [], authorId: u.id }))).result).toBeNull();
+    expect((await spentOn('2026-12-09'))!.count).toBe(2);
+
+    const empty = (async () => new Response('not json', { status: 200 })) as unknown as typeof fetch;
+    expect((await quietly(() => generateTemplate({ db: t.db, gen: new OpenAIImageGen('sk-test', 'gpt-image-1', empty), limits: { usd: 1, max: 15 }, now }, { brief: 'x', tags: [], authorId: u.id }))).result).toBeNull();
+    expect((await spentOn('2026-12-09'))!.count).toBe(3);
+
+    const refused = (async () => new Response(JSON.stringify({ error: { message: 'rate limited' } }), { status: 429 })) as unknown as typeof fetch;
+    expect((await quietly(() => generateTemplate({ db: t.db, gen: new OpenAIImageGen('sk-test', 'gpt-image-1', refused), limits: { usd: 1, max: 15 }, now }, { brief: 'x', tags: [], authorId: u.id }))).result).toBeNull();
+    expect((await spentOn('2026-12-09'))!.count).toBe(3); // an error status is not billed
   });
   it('a paid image that cannot be stored (too large, not a PNG) returns null, charged exactly once', async () => {
     const u = await t.createUser('hugeimage');

@@ -4,7 +4,7 @@ import { newId } from '../lib/ids.ts';
 import { FONT_FAMILY, escapeXml, plain, renderSvg } from './cards.ts';
 import { canGenerate, recordImageSpend } from './image-budget.ts';
 import { storeBlob, type ImageGen } from './images.ts';
-import { WORST_IMAGE_USD } from './openai-images.ts';
+import { WORST_IMAGE_USD, isUnbilledImageError } from './openai-images.ts';
 
 /** Captioned memes are rendered at most this wide, so a render stays far below the 2 MB blob cap. */
 export const MEME_MAX_WIDTH = 768;
@@ -16,18 +16,26 @@ export const templateBriefPrompt = (brief: string) =>
 /**
  * A base image without text, generated once from a brief, for the engine to caption many times.
  * Returns the template id, or null when there is no generator, the budget can't cover the call's worst-case price,
- * or anything fails (logged, never thrown). A paid image is recorded exactly once, even when it then can't be stored.
+ * or anything fails (logged, never thrown). A paid image is recorded exactly once, even when it then can't be stored;
+ * a failed call that may have been billed is recorded at the worst-case price.
  */
 export async function generateTemplate(
   d: { db: Db; gen: ImageGen | null; limits: { usd: number; max: number }; now: () => Date },
   t: { brief: string; tags: string[]; authorId: string },
 ): Promise<string | null> {
   if (!d.gen) return null;
-  let png: Buffer, usd: number;
   try {
     if (!(await canGenerate(d.db, d.limits, d.now(), WORST_IMAGE_USD))) return null;
+  } catch (e) { console.error('[agents] could not read the image budget', (e as Error).message); return null; }
+  let png: Buffer, usd: number;
+  try {
     ({ png, usd } = await d.gen.generate(templateBriefPrompt(t.brief), '1024x1024'));
-  } catch (e) { console.error('[agents] meme template generation failed', (e as Error).message); return null; }
+  } catch (e) {
+    console.error('[agents] meme template generation failed', (e as Error).message);
+    // Only an error status from OpenAI is surely unbilled; a timeout, a dropped connection or an empty 200 may have been charged.
+    if (!isUnbilledImageError(e)) await recordImageSpend(d.db, WORST_IMAGE_USD, d.now()).catch((err: Error) => console.error('[agents] could not record image spend', err.message));
+    return null;
+  }
   try {
     await recordImageSpend(d.db, usd, d.now());
     const blob = await storeBlob(d.db, png, 'image/png', d.now());
