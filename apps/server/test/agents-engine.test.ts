@@ -18,7 +18,7 @@ const run = async (n: number) => { for (let i = 0; i < n; i++) { await e!.tick()
 describe('engine', () => {
   it('runs agents with no phrasebook on the fallback voice, without asking for the model (Review Focus 1)', async () => {
     const asked: Moment[] = [];
-    e = startEngine({ ...deps({ moments: { enqueue: (m) => { asked.push(m); return false; }, size: () => 0, drain: async () => {}, halted: () => null } }), tickMs: [1000, 1000], autoStart: false });
+    e = startEngine({ ...deps({ moments: { enqueue: (m) => { asked.push(m); return false; }, size: () => 0, drain: async () => {}, halted: () => null, stop: async () => {} } }), tickMs: [1000, 1000], autoStart: false });
     await run(60);
     expect(e.stats().ticks).toBe(60);
     expect((await w.t.db.select({ n: sql<number>`count(*)::int` }).from(posts).where(sql`${posts.agentTurnId} is not null`))[0]!.n).toBeGreaterThan(0);
