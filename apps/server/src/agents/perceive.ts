@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import {
   chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
@@ -31,7 +31,7 @@ async function coinsView(db: Db, now: Date): Promise<AgentView['coins']> {
     h1: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${hourAgo}::timestamptz then -${chainTxs.lamportsDelta} else 0 end), 0)::float8`,
     m10: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${tenAgo}::timestamptz then -${chainTxs.lamportsDelta} else 0 end), 0)::float8`,
   }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell']))).groupBy(chainTxs.mint);
-  const holderRows = await db.select({ mint: chainTxs.mint, agentId: chainTxs.agentId }).from(chainTxs).where(inArray(chainTxs.mint, mints))
+  const holderRows = await db.select({ mint: chainTxs.mint, agentId: chainTxs.agentId }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), isNotNull(chainTxs.agentId)))
     .groupBy(chainTxs.mint, chainTxs.agentId).having(sql`sum(${chainTxs.tokenDelta}) > 0`);
   const flow = new Map(flows.map((f) => [f.mint!, f]));
   const held = new Map<string, number>();
@@ -80,19 +80,20 @@ async function mentionsView(db: Db, agentId: string, now: Date): Promise<AgentVi
 }
 
 async function dmsView(db: Db, agentId: string, now: Date): Promise<AgentView['dms']> {
-  const since = now.getTime() - 120 * MIN;
-  const convs = await db.select({ id: conversations.id }).from(conversationMembers)
-    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
-    .where(and(eq(conversationMembers.userId, agentId), eq(conversations.kind, 'dm'))).limit(20);
-  const out: AgentView['dms'] = [];
-  for (const c of convs) {
-    const [last] = await db.select().from(messages).where(and(eq(messages.conversationId, c.id), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(1);
-    if (!last || last.authorId === agentId || last.createdAt.getTime() < since) continue;
-    const [other] = await db.select({ id: users.id, kind: users.kind }).from(conversationMembers).innerJoin(users, eq(users.id, conversationMembers.userId))
-      .where(and(eq(conversationMembers.conversationId, c.id), ne(conversationMembers.userId, agentId)));
-    if (other) out.push({ conversationId: c.id, otherId: other.id, otherKind: other.kind, lastBody: last.body, at: last.createdAt.toISOString() });
-  }
-  return out;
+  const since = new Date(now.getTime() - 120 * MIN);
+  // Latest visible message of every DM the agent is in (one query); keep those from the other side inside the window, newest first.
+  const latest = db.select({ conversationId: messages.conversationId, lastId: sql<string>`max(${messages.id})`.as('last_id') }).from(messages)
+    .innerJoin(conversations, and(eq(conversations.id, messages.conversationId), eq(conversations.kind, 'dm')))
+    .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), eq(conversationMembers.userId, agentId)))
+    .where(eq(messages.status, 'visible')).groupBy(messages.conversationId).as('latest');
+  const rows = await db.select({ conversationId: messages.conversationId, body: messages.body, at: messages.createdAt, otherId: users.id, otherKind: users.kind })
+    .from(latest)
+    .innerJoin(messages, eq(messages.id, latest.lastId))
+    .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), ne(conversationMembers.userId, agentId)))
+    .innerJoin(users, eq(users.id, conversationMembers.userId))
+    .where(and(ne(messages.authorId, agentId), gte(messages.createdAt, since)))
+    .orderBy(desc(messages.id)).limit(20);
+  return rows.map((r) => ({ conversationId: r.conversationId!, otherId: r.otherId, otherKind: r.otherKind, lastBody: r.body, at: r.at.toISOString() }));
 }
 
 async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
@@ -106,26 +107,38 @@ async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
 }
 
 async function roomsView(db: Db): Promise<AgentView['rooms']> {
-  const rows = await db.select({ communityId: communities.id, slug: communities.slug, roomId: sql<string>`(select ${channels.id} from ${channels} where ${channels.communityId} = ${communities.id} order by ${channels.position} asc limit 1)` })
-    .from(communities).where(and(eq(communities.visibility, 'public'), eq(communities.isDemo, false))).limit(50);
-  const out: AgentView['rooms'] = [];
-  for (const r of rows) {
-    if (!r.roomId) continue;
-    const [last] = await db.select({ at: messages.createdAt }).from(messages).where(eq(messages.channelId, r.roomId)).orderBy(desc(messages.id)).limit(1);
-    const [m] = await db.select({ n: sql<number>`count(*)::int` }).from(communityMembers).where(and(eq(communityMembers.communityId, r.communityId), eq(communityMembers.status, 'active')));
-    out.push({ roomId: r.roomId, communitySlug: r.slug, lastAt: (last?.at ?? new Date(0)).toISOString(), members: m?.n ?? 0 });
-  }
-  return out.sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 20);
+  const roomId = sql<string>`(select ${channels.id} from ${channels} where ${channels.communityId} = ${communities.id} order by ${channels.position} asc limit 1)`;
+  const lastAt = sql<Date | string | null>`(select max(m.created_at) from ${messages} m where m.channel_id = ${roomId})`;
+  const members = sql<number>`(select count(*)::int from ${communityMembers} cm where cm.community_id = ${communities.id} and cm.status = 'active')`;
+  const rows = await db.select({ slug: communities.slug, roomId, lastAt, members }).from(communities)
+    .where(and(eq(communities.visibility, 'public'), eq(communities.isDemo, false), sql`${roomId} is not null`))
+    .orderBy(sql`${lastAt} desc nulls last`, desc(communities.id)).limit(20);
+  return rows.map((r) => ({ roomId: r.roomId, communitySlug: r.slug, lastAt: (r.lastAt ? new Date(r.lastAt) : new Date(0)).toISOString(), members: Number(r.members) }));
+}
+
+/** Coins and rooms are the same for every agent, so one computation serves all perceives inside the TTL (measured on the injected clock). */
+export const GLOBAL_TTL_MS = 10_000;
+interface GlobalView { at: number; coins: AgentView['coins']; rooms: AgentView['rooms'] }
+const globalCache = new WeakMap<Db, GlobalView>();
+export function clearPerceptionCache(db: Db): void { globalCache.delete(db); }
+
+async function globalView(db: Db, now: Date): Promise<GlobalView> {
+  const hit = globalCache.get(db);
+  if (hit && Math.abs(now.getTime() - hit.at) < GLOBAL_TTL_MS) return hit;
+  const [coins, rooms] = await Promise.all([coinsView(db, now), roomsView(db)]);
+  const fresh = { at: now.getTime(), coins, rooms };
+  globalCache.set(db, fresh);
+  return fresh;
 }
 
 export async function perceive(d: EngineDeps, agentId: string): Promise<AgentView> {
   const now = d.now();
   const [u] = await d.db.select().from(users).where(eq(users.id, agentId));
   if (!u) throw new Error(`No agent ${agentId}`);
-  const coins = await coinsView(d.db, now);
-  const [state, phrasebook, wallet, mentions, dms, feed, rooms, affinity] = await Promise.all([
+  const { coins, rooms } = await globalView(d.db, now);
+  const [state, phrasebook, wallet, mentions, dms, feed, affinity] = await Promise.all([
     loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, coins),
-    mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), roomsView(d.db), affinitiesOf(d.db, agentId),
+    mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), affinitiesOf(d.db, agentId),
   ]);
   return { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions, dms, feed, rooms, affinity, weather: 'grind', now: now.toISOString() };
 }
