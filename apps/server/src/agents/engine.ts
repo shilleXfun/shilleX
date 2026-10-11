@@ -5,7 +5,7 @@ import { agentState, agents, notifications } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
 import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
-import { candidates, choose } from './decide.ts';
+import { candidates, choose, ready } from './decide.ts';
 import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
@@ -48,7 +48,7 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
       if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
       const v = await perceive(d, id);
       const base = candidates(v, d.rng);
-      const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng)]) : base;
+      const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
       const c = choose(cs, d.rng);
       const r = await act(d, v, c);
       // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick.

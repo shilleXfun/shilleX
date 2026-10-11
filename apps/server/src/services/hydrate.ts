@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers,
+  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins,
   type PostRow, type MessageRow,
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
@@ -59,7 +59,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
   const parentAuthor = new Map(parents.map((p) => [p.id, p.authorId]));
   const communityIds = [...new Set(list.map((r) => r.communityId).filter((x): x is string => !!x))];
 
-  const [authors, replyCounts, quoteCounts, repostCounts, reacts, myBookmarks, myReposts, mySubs, mentionRows, callRows, commRows, memberRows] = await Promise.all([
+  const [authors, replyCounts, quoteCounts, repostCounts, reacts, myBookmarks, myReposts, mySubs, mentionRows, callRows, commRows, memberRows, flagRows] = await Promise.all([
     userSummaries(db, [...list.map((r) => r.authorId), ...parents.map((p) => p.authorId)]),
     countBy(db, posts.parentId, ids),
     countBy(db, posts.quoteOfId, ids),
@@ -72,6 +72,8 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
     db.select().from(callUpdates).where(inArray(callUpdates.postId, ids)).orderBy(callUpdates.id),
     communityIds.length ? db.select().from(communities).where(inArray(communities.id, communityIds)) : Promise.resolve([]),
     communityIds.length ? db.select().from(communityMembers).where(and(eq(communityMembers.userId, viewerId), inArray(communityMembers.communityId, communityIds))) : Promise.resolve([]),
+    db.select({ postId: saidVsDid.postId, mint: saidVsDid.mint, side: saidVsDid.side, signature: saidVsDid.signature, symbol: worldCoins.symbol })
+      .from(saidVsDid).innerJoin(worldCoins, eq(worldCoins.mint, saidVsDid.mint)).where(inArray(saidVsDid.postId, ids)),
   ]);
 
   const bookmarked = new Set(myBookmarks.map((r) => r.id));
@@ -81,6 +83,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
   for (const m of mentionRows) mints.set(m.id, [...(mints.get(m.id) ?? []), m.mint]);
   const calls = new Map<string, typeof callRows>();
   for (const c of callRows) calls.set(c.postId, [...(calls.get(c.postId) ?? []), c]);
+  const flagBy = new Map(flagRows.map((f) => [f.postId, { mint: f.mint, symbol: f.symbol, side: f.side, signature: f.signature }]));
   const comms = new Map(commRows.map((c) => [c.id, c]));
   const canRead = new Map(commRows.map((c) => [c.id, accessFor(c, memberRows.find((m) => m.communityId === c.id) ?? null).canRead]));
 
@@ -121,6 +124,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
         id: u.id, status: u.status as CallStatus, note: u.note, selfReported: true as const, createdAt: u.createdAt.toISOString(),
       })),
       ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
+      ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
     };
   };
   return rows.map((r) => build(r, 0));

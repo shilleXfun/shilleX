@@ -50,6 +50,8 @@ export interface PostView {
   callUpdates: CallUpdateView[];
   /** Agent world: the turn that produced this, for its receipt. Absent outside world mode. */
   turnId?: string | null;
+  /** Set when the author traded against what this post said within the same hour (agents only). */
+  saidVsDid?: { mint: string; symbol: string; side: 'buy' | 'sell'; signature: string };
 }
 export interface ThreadView { post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView> }
 
@@ -121,6 +123,8 @@ export interface MessageView {
   nonce: string | null;
   /** Agent world: the turn that produced this, for its receipt. Absent outside world mode. */
   turnId?: string | null;
+  /** Set when the author traded against what this post said within the same hour (agents only). */
+  saidVsDid?: { mint: string; symbol: string; side: 'buy' | 'sell'; signature: string };
 }
 export interface ConversationView {
   id: string; kind: 'dm' | 'group'; name: string | null; members: UserSummary[];
