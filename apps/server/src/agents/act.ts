@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { communities, channels, posts, users } from '../db/schema.ts';
+import { agentTurns, communities, channels, posts, users } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
@@ -51,7 +51,15 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
   const { db } = d;
   const agentId = v.agent.id;
   const now = d.now();
-  const { id: turnId } = await startTurn(db, { agentId, triggers: [{ type: 'heartbeat', note: c.kind }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now });
+  let turnId: string;
+  try {
+    // An unsealed turn blocks the agent's hash chain: do not stack a second one on it.
+    const [last] = await db.select({ status: agentTurns.status }).from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(desc(agentTurns.seq)).limit(1);
+    if (last?.status === 'running') return { ok: false, turnId: '', error: 'previous turn still running' };
+    turnId = (await startTurn(db, { agentId, triggers: [{ type: 'heartbeat', note: c.kind }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now })).id;
+  } catch (e) {
+    return { ok: false, turnId: '', error: `could not open a turn: ${(e as Error).message ?? String(e)}` };
+  }
   const toolCalls: ToolCallRecord[] = [];
   const state = { ...v.state, cooldowns: { ...v.state.cooldowns, [c.kind]: now.toISOString() }, energy: v.state.energy - ENERGY_COST[c.kind] };
   // Typed through the initializer: the closures below set it, which TypeScript's narrowing would not see.
@@ -72,7 +80,7 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
       const out = await runTool(ctx, name, input);
       toolCalls.push(privateCall ? { name, input: { private: true }, ok: out.ok, result: { private: true } } : { name, input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
       if (out.ok && out.write) status = 'acted';
-      if (!out.ok) throw Object.assign(new Error(String((out.result as { error?: string })?.error ?? 'tool failed')), { code: (out.result as { code?: string })?.code });
+      if (!out.ok) throw Object.assign(new Error(String((out.result as { error?: string })?.error ?? 'tool failed')), { code: (out.result as { code?: string })?.code, fromTool: true });
       return out;
     };
     const line = (situation: Situation, extra: Partial<Candidate> = {}) => {
@@ -86,7 +94,8 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
     const postLine = async (situation: Situation, extra: Partial<Candidate> = {}) => {
       const text = line(situation, extra);
       if (!text) return null;
-      const img = c.kind === 'post' ? await d.images?.maybeAttach(v, c, text) : null;
+      // A broken image policy must not cost the post: fall back to text.
+      const img = c.kind === 'post' ? await Promise.resolve(d.images?.maybeAttach(v, c, text)).catch(() => null) : null;
       if (img) {
         const r = await ctx.actor.call(agentId, 'POST', '/api/posts', { body: text, uploadIds: [img.uploadId], alts: [img.alt] });
         toolCalls.push({ name: 'post', input: { body: text, image: true }, ok: r.status < 400, result: truncate(r.body) });
@@ -131,8 +140,8 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
         const send = () => call('chat', { channel_id: c.target!.roomId, conversation_id: null, body: text, reply_to_id: null });
         try { await send(); }
         catch (e) {
-          if ((e as { code?: string }).code === 'NOT_MEMBER' || /member|join/i.test((e as Error).message)) {
-            toolCalls.pop();
+          const code = (e as { code?: string }).code;
+          if (code === 'JOIN_TO_POST' || code === 'NOT_MEMBER') {
             const [room] = await db.select({ slug: communities.slug }).from(channels).innerJoin(communities, eq(communities.id, channels.communityId)).where(eq(channels.id, c.target!.roomId!));
             await call('join_community', { slug: room!.slug, invite_code: null });
             await send();
@@ -156,7 +165,7 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
       }
       case 'sell': {
         const pos = v.wallet.positions.find((p) => p.mint === c.target!.mint);
-        const all = !c.raw || (pos && c.raw >= pos.raw);
+        const all = Boolean(!c.raw || (pos && c.raw >= pos.raw));
         await call('sell', { mint: c.target!.mint, tokens: all ? null : c.raw! / RAW_PER_TOKEN, all, slippage_pct: 10 });
         const pnl = pos && pos.costLamports > 0 ? pos.valueLamports / pos.costLamports - 1 : 0;
         state.mood += clamp(pnl * 0.5, -0.3, 0.3);
@@ -205,11 +214,16 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
         note = `${c.kind} is not available yet`;
     }
   } catch (e) {
-    status = 'failed';
-    note = `failed: ${(e as Error).message ?? String(e)}`;
-    state.mood -= 0.05;
+    const msg = (e as Error).message ?? String(e);
+    if (status === 'acted' && !(e as { fromTool?: boolean }).fromTool) note = `error after the action: ${msg}`; // the write stands
+    else { status = 'failed'; note = `failed: ${msg}`; state.mood -= 0.05; }
   }
-  try { await saveState(db, agentId, state, d.now()); } catch (e) { status = 'failed'; note = `failed: ${(e as Error).message ?? String(e)}`; }
+  try { await saveState(db, agentId, state, d.now()); } catch (e) {
+    const msg = (e as Error).message ?? String(e);
+    if (status === 'acted') note = note ? `${note}; state not saved: ${msg}` : `state not saved: ${msg}`;
+    else { status = 'failed'; note = `failed: ${msg}`; }
+  }
+  const outcome = { postId, ...(used.first && !privateCall ? { text: used.first.text, line: used.first.line } : {}) };
   try {
     await finishTurn(db, turnId, {
       status, context: [], reasoning: note ? `${c.reason}; ${note}` : c.reason, toolCalls,
@@ -217,7 +231,7 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
     });
   } catch (e) {
     // The receipt could not be sealed (for example an earlier turn was left unsealed): report it, never throw.
-    return { ok: false, turnId, error: `receipt not sealed: ${(e as Error).message ?? String(e)}` };
+    return { ok: status === 'acted', turnId, ...outcome, error: `receipt not sealed: ${(e as Error).message ?? String(e)}` };
   }
-  return { ok: status === 'acted', turnId, postId, error: status === 'failed' ? note : undefined, ...(used.first && !privateCall ? { text: used.first.text, line: used.first.line } : {}) };
+  return { ok: status === 'acted', turnId, error: status === 'failed' ? note : undefined, ...outcome };
 }

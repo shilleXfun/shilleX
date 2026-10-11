@@ -118,4 +118,81 @@ describe('act', () => {
     expect(r.ok).toBe(false);
     expect(await turn(r.turnId)).toMatchObject({ status: 'quiet', reasoning: 'felt like posting (gm); nothing fresh to say' });
   });
+
+  it('returns ok:false without throwing when a turn cannot be opened', async () => {
+    const v = await perceive(d, w.agents[11]!.id);
+    const r = await act(d, { ...v, agent: { ...v.agent, id: 'no-such-agent' } }, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    expect(r).toMatchObject({ ok: false, turnId: '' });
+    expect(r.error).toBeTruthy();
+  });
+  it('skips quietly while the agent has an unsealed running turn, and opens no second one', async () => {
+    const a = w.agents[12]!;
+    await w.ctxFor(a); // leaves a running turn
+    const count = async () => (await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id))).length;
+    const before = await count();
+    const v = await perceive(d, a.id);
+    const r = await act(d, v, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    expect(r).toEqual({ ok: false, turnId: '', error: 'previous turn still running' });
+    expect(await count()).toBe(before);
+    expect((await perceive(d, a.id)).state.cooldowns.post).toBeUndefined();
+  });
+  it('joins a community on JOIN_TO_POST and keeps every attempt in the receipt', async () => {
+    const a = w.agents[13]!;
+    const owner = await w.t.createUser('room_owner');
+    const made = await w.t.as(owner).post('/api/communities', { name: 'Open Room', slug: 'open-room', description: 'x', visibility: 'public' });
+    const channelId = made.body.community.channels[0].id as string;
+    const v = await perceive(d, a.id);
+    const r = await act(d, v, { kind: 'chat', score: 1, situation: 'idle', target: { roomId: channelId }, reason: 'chat in a new room' });
+    expect(r.ok).toBe(true);
+    const t = await turn(r.turnId);
+    expect((t.toolCalls as { name: string; ok: boolean }[]).map((x) => [x.name, x.ok])).toEqual([['chat', false], ['join_community', true], ['chat', true]]);
+  });
+  it('falls back to a text post when the image policy throws', async () => {
+    const a = w.agents[14]!;
+    const v = await perceive(d, a.id);
+    const r = await act({ ...d, images: { maybeAttach: async () => { throw new Error('image service down'); } } }, v, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    expect(r.ok).toBe(true);
+    expect(r.postId).toBeTruthy();
+  });
+  it('a sell moves mood, remembers a big win, and cools the creator toward the seller', async () => {
+    const [, , , , , , creator, seller] = w.agents;
+    const l = await runTool(await sealed(creator!), 'launch_coin', { name: 'Win', symbol: 'WINN', description: '', emoji: '🏆', initial_buy_sol: 0.005 });
+    const mint = (l.result as { mint: string }).mint;
+    await runTool(await sealed(seller!), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, seller!.id);
+    const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const rigged = { ...v, wallet: { ...v.wallet, positions: v.wallet.positions.map((p) => (p.mint === mint ? { ...p, costLamports: 1_000_000, valueLamports: 3_000_000 } : p)) } };
+    const r = await act(d, rigged, { kind: 'sell', score: 1, raw: pos.raw, situation: 'sold', target: { mint, userId: creator!.id }, reason: 'selling WINN' });
+    expect(r.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, creator!.id))[seller!.id]).toBeCloseTo(-0.08);
+    expect((await recentEvents(w.t.db, seller!.id))[0]).toMatchObject({ kind: 'big_win', data: { mint, symbol: 'WINN', pct: 200 } });
+    expect((await perceive(d, seller!.id)).state.mood).toBeCloseTo(0.3, 1);
+  });
+  it('a big loss is remembered', async () => {
+    const [, , , , , , , , , , , , , , , loser, creator] = w.agents;
+    const l = await runTool(await sealed(creator!), 'launch_coin', { name: 'Lose', symbol: 'LOSE', description: '', emoji: '📉', initial_buy_sol: 0.005 });
+    const mint = (l.result as { mint: string }).mint;
+    await runTool(await sealed(loser!), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, loser!.id);
+    const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const rigged = { ...v, wallet: { ...v.wallet, positions: v.wallet.positions.map((p) => (p.mint === mint ? { ...p, costLamports: 3_000_000, valueLamports: 1_000_000 } : p)) } };
+    const r = await act(d, rigged, { kind: 'sell', score: 1, raw: pos.raw, situation: 'sold', target: { mint, userId: creator!.id }, reason: 'cutting LOSE' });
+    expect(r.ok).toBe(true);
+    expect((await recentEvents(w.t.db, loser!.id))[0]).toMatchObject({ kind: 'big_loss', data: { mint, symbol: 'LOSE', pct: -67 } });
+  });
+  it('reply_agree warms the author toward the replier and roast cools it', async () => {
+    const [replier, author] = [w.agents[17]!, await w.t.createUser('reply_author')];
+    const p = await w.t.as(author).post('/api/posts', { body: 'a take worth answering' });
+    const postId = p.body.post.id as string;
+    const v = await perceive(d, replier.id);
+    const agree = await act(d, v, { kind: 'reply', score: 1, situation: 'reply_agree', target: { postId, userId: author.id }, reason: 'agree' });
+    expect(agree.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(0.05);
+    const v2 = await perceive(d, replier.id);
+    const roast = await act(d, v2, { kind: 'reply', score: 1, situation: 'roast', target: { postId, userId: author.id }, reason: 'roast' });
+    expect(roast.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.1);
+  });
 });
