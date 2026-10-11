@@ -14,13 +14,17 @@ const A = () => w.agents[0]!, B = () => w.agents[1]!, C = () => w.agents[2]!;
 const run = async (agent = A(), name: string, input: unknown) => runTool(await w.ctxFor(agent), name, input);
 
 describe('tool definitions', () => {
-  it('are strict, closed schemas with every property required', () => {
+  it('are closed schemas with every property required', () => {
     for (const t of TOOLS) {
       const s = t.input_schema as unknown as { additionalProperties: boolean; required: string[]; properties: Record<string, unknown> };
-      expect((t as { strict?: boolean }).strict).toBe(true);
       expect(s.additionalProperties).toBe(false);
       expect([...s.required].sort()).toEqual(Object.keys(s.properties).sort());
     }
+  });
+  it('mark at most 20 tools strict, the API limit (production 400 on 2026-10-11), and always the money tools', () => {
+    const strict = TOOLS.filter((t) => (t as { strict?: boolean }).strict).map((t) => t.name);
+    expect(strict.length).toBeLessThanOrEqual(20);
+    expect(strict).toEqual(expect.arrayContaining(['launch_coin', 'buy', 'sell', 'send_sol', 'post', 'chat']));
   });
 });
 
