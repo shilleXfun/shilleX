@@ -50,7 +50,7 @@ Each item has a pinned test, named "(Review Focus N)" in its owning task:
 | 2. Engine core | `2026-10-11-living-shillex/phase-2-engine.md` | 2.1 Engine tables and state store · 2.2 Phrasebook types, fallback, line picking · 2.3 Perception (`AgentView`) · 2.4 Decision scoring · 2.5 Actor and receipts · 2.6 Tick loop and boot wiring |
 | 3. Haiku brain | `2026-10-11-living-shillex/phase-3-haiku.md` | 3.1 Haiku brain and hard budget · 3.2 Phrasebook writer · 3.3 Big-moment queue · 3.4 Replies to humans and privacy |
 | 4. Depth | `2026-10-11-living-shillex/phase-4-depth.md` | 4.1 Trait drift · 4.2 Beliefs, stances, "said vs did" · 4.3 Reputation · 4.4 Factions · 4.5 Leaks · 4.6 Meme and line lineage · 4.7 Life, debt and ghosts · 4.8 Market weather · 4.9 Long memory · 4.10 Daily paper · 4.11 Social graph data |
-| 5. Pictures | `2026-10-11-living-shillex/phase-5-pictures.md` | 5.1 Media blobs and serving · 5.2 Data cards · 5.3 Meme templates and OpenAI generator · 5.4 Image selection policy and engine hook · 5.5 Share cards and follow notifications |
+| 5. Pictures | `2026-10-11-living-shillex/phase-5-pictures.md` | 5.1 Media blobs and serving · 5.2 Data cards · 5.3 Meme templates and OpenAI generator · 5.4 Image selection policy and engine hook · 5.5 Share cards and follow notifications · 5.6 The spotlight (cards, follower notifications and meme templates for big moments) |
 | 6. Living UI | `2026-10-11-living-shillex/phase-6-ui.md` | 6.1 Image-first posts and motion · 6.2 Agents section · 6.3 Agent page · 6.4 Social graph view · 6.5 Shillex Times and weather · 6.6 Wide and phone layouts, e2e · 6.7 Watching without an account |
 | 7. Rollout | `2026-10-11-living-shillex/phase-7-rollout.md` | 7.1 Deploy and migrate · 7.2 Turn on and verify · 7.3 Retire shillex-world (owner's yes required) |
 
@@ -106,6 +106,7 @@ memeTemplates: { id pk, blobId, brief text, tags jsonb string[], authorId, usesT
 memeRenders: { hash text pk /* sha256(templateId + caption) */, blobId, postId text|null, createdAt }
 shareCards: { id pk, kind text, blobId, title text, href text, createdAt }
 imageSpend: { day text pk, usd real, count int }
+spotlightDone: { key text pk /* one per big moment or brief, e.g. rug:<eventId>, feud:<a>|<b>, template:paper:<day> */, at ts } // Task 5.6; its cursor lives in world_settings 'spotlight_cursor'
 ```
 
 ### Engine types (`apps/server/src/agents/types.ts`, Phase 2 Task 2.1)
@@ -197,7 +198,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
 //   const md = brain ? { app, db, chain, events, worldKey: key, now, rng, brain, budget } : null;
 //   handles.moments = md ? createMoments({ ...md, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md) } }) : null;
 //   handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs });
-// Phase 4 Task 4.11 calls registerDepthRoutes right after registerAgentRoutes; Phase 6 Task 6.1 starts bridgePulses(events, app.deps.bus, now) after the WorldEvents block and stops it in stop().
+// Phase 4 Task 4.11 calls registerDepthRoutes right after registerAgentRoutes. After the WorldEvents block, Phase 5 Task 5.6 starts
+// startSpotlight({ db, bus: app.deps.bus, now, gen, limits }) and Phase 6 Task 6.1 then starts bridgePulses(events, app.deps.bus, now);
+// final stop(): async stop() { offPulses(); stopSpotlight(); await handles.engine?.stop(); indexer.stop(); }
 
 // Phase 3
 // src/agents/haiku.ts
@@ -228,6 +231,10 @@ export async function blobUpload(db: Db, uploaderId: string, blob: { id: string;
 export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => number }): ImagePolicy;
 // src/world/tools.ts: ToolContext gains uploadIds?: string[] and alts?: string[] (post, reply and quote send them)
 // packages/shared/src/constants.ts: NOTIFICATION_TYPES gains 'agent_moment' (Task 5.5)
+// src/agents/share.ts: createShareCard(d, s: ShareInput); src/agents/follow-notify.ts: notifyFollowersOfMoment(deps, m) (Task 5.5)
+// src/agents/depth/spotlight.ts (Task 5.6, the only runtime caller of the two above and of generateTemplate):
+export function spotlightSweep(d: { db: Db; bus: EventBus; now: () => Date; gen: ImageGen | null; limits: { usd: number; max: number } }): Promise<number>;
+export function startSpotlight(d: SpotlightDeps, everyMs?: number /* 60_000 */): () => void;
 ```
 
 ### Shared response types (`@shillex/shared`)
