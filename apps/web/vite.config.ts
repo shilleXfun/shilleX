@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: Number(process.env.WEB_PORT ?? 5173), strictPort: true,
-    proxy: { '/api': api, '/media': api, '/uploads': api, '/socket.io': { target: api, ws: true } },
+    proxy: { '/api': api, '/media': api, '^/s/': api, '/uploads': api, '/socket.io': { target: api, ws: true } },
   },
   build: {
     outDir: 'dist', sourcemap: true,
