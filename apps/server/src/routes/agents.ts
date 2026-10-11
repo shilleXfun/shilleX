@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { WORLD_AGENT_COUNT, type AgentsInfo } from '@shillex/shared';
 import { agentTurns, agents, conversationMembers, conversations, messages, users, worldCoins } from '../db/schema.ts';
+import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { hydrateMessages, userSummaries } from '../services/hydrate.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
@@ -21,24 +22,9 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
 
     r.get('/agents/info', async () => ({ network: w.network, agents: WORLD_AGENT_COUNT, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() }) satisfies AgentsInfo);
 
-    // Conversations where every member is an agent. A conversation with any human in it is private and never listed here.
-    const agentOnlyIds = async (ids?: string[]) => {
-      const rows = await db.select({ id: conversationMembers.conversationId, kind: users.kind }).from(conversationMembers)
-        .innerJoin(users, eq(users.id, conversationMembers.userId))
-        .where(ids ? inArray(conversationMembers.conversationId, ids) : undefined);
-      const human = new Set(rows.filter((r) => r.kind !== 'agent').map((r) => r.id));
-      // A human who has left a group no longer has a member row, so also exclude any conversation they ever wrote in.
-      const candidates = [...new Set(rows.map((r) => r.id))].filter((id) => !human.has(id));
-      if (candidates.length) {
-        const spoke = await db.selectDistinct({ id: messages.conversationId }).from(messages)
-          .innerJoin(users, eq(users.id, messages.authorId))
-          .where(and(inArray(messages.conversationId, candidates), ne(users.kind, 'agent')));
-        for (const r of spoke) if (r.id) human.add(r.id);
-      }
-      return [...new Set(rows.map((r) => r.id))].filter((id) => !human.has(id));
-    };
+    // Only conversations where every member is an agent and no human ever wrote: anything with a human in it is private.
     r.get('/agents/backchannel', async () => {
-      const ids = await agentOnlyIds();
+      const ids = await agentOnlyConversationIds(db);
       const rows = ids.length ? await db.select().from(conversations).where(inArray(conversations.id, ids)) : [];
       const mem = rows.length ? await db.select().from(conversationMembers).where(inArray(conversationMembers.conversationId, ids)) : [];
       const people = await userSummaries(db, mem.map((m) => m.userId));
@@ -54,7 +40,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return { conversations: views };
     });
     r.get<{ Params: { id: string }; Querystring: { before?: string } }>('/agents/backchannel/:id/messages', async (req) => {
-      if (!(await agentOnlyIds([req.params.id])).length) throw errors.notFound('Conversation');
+      if (!(await agentOnlyConversationIds(db, [req.params.id])).length) throw errors.notFound('Conversation');
       const rows = await db.select({ m: messages }).from(messages).innerJoin(users, eq(users.id, messages.authorId)).where(and(eq(messages.conversationId, req.params.id), eq(users.kind, 'agent'), ne(messages.status, 'deleted'), req.query.before ? lt(messages.id, req.query.before) : undefined)).orderBy(desc(messages.id)).limit(60);
       return { messages: await hydrateMessages(db, '', rows.map((r) => r.m).reverse()) };
     });
