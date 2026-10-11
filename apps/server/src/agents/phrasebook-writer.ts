@@ -3,7 +3,6 @@ import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentEvents, agentTurns, phrasebooks, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
-import { liveNotes } from '../world/memory.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { HAIKU, type ModelBudget } from './haiku.ts';
 import { ALLOWED_SLOTS, FALLBACK_SITUATIONS } from './phrasebook.ts';
@@ -30,9 +29,28 @@ export const PHRASEBOOK_SCHEMA: Record<string, unknown> = {
   },
 };
 
-const text = (s: unknown, max: number) => (typeof s === 'string' ? s.trim().slice(0, max) : '');
-const slotsOk = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].every((m) => ALLOWED_SLOTS.has(m[1]!));
-const list = (v: unknown, max: number, keep: number) => (Array.isArray(v) ? v.map((x) => text(x, max)).filter((x) => x && slotsOk(x)).slice(0, keep) : []);
+const HOSTILE = /@|https?:\/\/|www\.|<|>|`/i;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const BRACES = /[{}]/g;
+const HAS_BRACE = /[{}]/;
+const SLOT = /\{(\w+)\}/g;
+/** Model output is hostile: one cleaned string, or null when it must be dropped. Slots are checked on the full text, the cut happens by code points afterwards, and a cut that leaves a broken slot drops the string. */
+function clean(s: unknown, max: number, mode: 'slots' | 'plain' | 'free'): string | null {
+  if (typeof s !== 'string') return null;
+  const t = s.replace(/[\t\r\n]+/g, ' ').trim();
+  if (!t || CONTROL.test(t) || HOSTILE.test(t)) return null;
+  if (mode !== 'free') {
+    const slots = [...t.matchAll(SLOT)];
+    if (mode === 'plain' && (slots.length || HAS_BRACE.test(t))) return null;
+    if (slots.some((m) => !ALLOWED_SLOTS.has(m[1]!))) return null;
+  }
+  const cut = [...t].slice(0, max).join('').trim();
+  if (mode === 'slots' && (cut.match(BRACES)?.length ?? 0) !== [...cut.matchAll(SLOT)].length * 2) return null;
+  return cut || null;
+}
+const list = (v: unknown, max: number, keep: number, mode: 'slots' | 'plain') =>
+  Array.isArray(v) ? [...new Set(v.map((x) => clean(x, max, mode)).filter((x): x is string => x !== null))].slice(0, keep) : [];
+const escapeWorld = (s: string) => s.replace(/</g, '&lt;');
 
 export function validatePhrasebook(raw: unknown): Phrasebook | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -43,21 +61,19 @@ export function validatePhrasebook(raw: unknown): Phrasebook | null {
     if (typeof r.traits?.[t] !== 'number' || !Number.isFinite(n)) return null;
     traits[t] = Math.min(1, Math.max(0, n));
   }
-  const voice = text(r.voice, 400);
+  const voice = clean(r.voice, 400, 'free');
   if (!voice) return null;
   const lines: Partial<Record<Situation, string[]>> = {};
-  let full = 0;
   for (const s of FALLBACK_SITUATIONS) {
-    const l = list(r.lines?.[s], 280, 12);
-    if (l.length) lines[s] = l;
-    if (l.length >= 4) full++;
+    const l = list(r.lines?.[s], 280, 12, 'slots');
+    if (l.length < 4) return null; // every situation needs at least 4 distinct usable lines
+    lines[s] = l;
   }
-  if (full < 12) return null;
   const memeCaptions = Array.isArray(r.memeCaptions) ? r.memeCaptions.flatMap((c: any) => {
-    const top = text(c?.top, 80), bottom = text(c?.bottom, 80);
-    return FALLBACK_SITUATIONS.includes(c?.situation) && (top || bottom) && slotsOk(top) && slotsOk(bottom) ? [{ situation: c.situation as Situation, top, bottom }] : [];
+    const top = c?.top === '' ? '' : clean(c?.top, 80, 'slots'), bottom = c?.bottom === '' ? '' : clean(c?.bottom, 80, 'slots');
+    return FALLBACK_SITUATIONS.includes(c?.situation) && top !== null && bottom !== null && (top || bottom) ? [{ situation: c.situation as Situation, top, bottom }] : [];
   }).slice(0, 30) : [];
-  return { voice, traits, lines, openers: list(r.openers, 60, 12), closers: list(r.closers, 60, 12), memeCaptions, interests: list(r.interests, 40, 12) };
+  return { voice, traits, lines, openers: list(r.openers, 60, 12, 'plain'), closers: list(r.closers, 60, 12, 'plain'), memeCaptions, interests: list(r.interests, 40, 12, 'plain') };
 }
 
 export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promise<boolean> {
@@ -78,14 +94,13 @@ export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promi
 async function material(db: Db, agentId: string) {
   const [u] = await db.select().from(users).where(eq(users.id, agentId));
   const own = await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), isNull(posts.deletedAt), eq(posts.visibility, 'public'))).orderBy(desc(posts.id)).limit(20);
-  const notes = await liveNotes(db, agentId, 20);
+  // Deliberately no memory notes: they are private free text and could quote a DM.
   const events = await recentEvents(db, agentId, 20);
-  return [
-    `Username: @${u!.username}`, `Display name: ${u!.displayName}`, `Bio: ${u!.bio || '(empty)'}`,
-    `Its memory notes:\n${notes.map((n) => `- ${n.body}`).join('\n') || '- none'}`,
+  return escapeWorld([
+    `Username: ${u!.username}`, `Display name: ${u!.displayName}`, `Bio: ${u!.bio || '(empty)'}`,
     `Its recent posts:\n${own.map((p) => `- ${p.body}`).join('\n') || '- none yet'}`,
     `What happened to it lately:\n${events.map((e) => `- ${e.kind} ${JSON.stringify(e.data)}`).join('\n') || '- nothing notable'}`,
-  ].join('\n\n');
+  ].join('\n\n'));
 }
 
 export async function writePhrasebook(d: { db: Db; brain: AgentBrain; budget: ModelBudget; now: () => Date }, agentId: string): Promise<'written' | 'skipped' | 'failed'> {
