@@ -9,7 +9,7 @@ import { finishTurn, startTurn } from '../world/provenance.ts';
 import { runTool, type ToolContext, type ToolOutcome } from '../world/tools.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
-import { adjustAffinity, rememberEvent, saveState } from './state.ts';
+import { adjustAffinity, handoverState, rememberEvent, saveState } from './state.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const actors = new WeakMap<FastifyInstance, AgentActor>();
@@ -125,6 +125,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     };
     // A follow-up line is a bonus: if it fails, the action it follows still stands.
     const followUp = async (situation: Situation) => { try { await postLine(situation); } catch { /* the failed tool call is already on the receipt */ } };
+    // A model run for this message already cost money and wrote nothing: it is answered from the phrasebook, never handed over again.
+    const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
     const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
 
     switch (c.kind) {
@@ -137,7 +139,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'reply': {
         if (c.situation === 'reply_human' && human && d.moments) {
           const ref = c.target!.postId!;
-          if (d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, postId: ref }, at: now })) {
+          if (!(await fallbackRef(ref)) && d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, postId: ref }, at: now })) {
             await rememberEvent(db, agentId, 'reply_queued', { ref }, now);
             note = 'handed to a written reply';
             break;
@@ -177,7 +179,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'dm': {
         if (c.situation === 'reply_human' && human && d.moments) {
           const ref = c.target!.conversationId!;
-          if (d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, conversationId: ref }, at: now })) {
+          if (!(await fallbackRef(ref)) && d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, conversationId: ref }, at: now })) {
             await rememberEvent(db, agentId, 'reply_queued', { ref }, now);
             note = 'handed to a written reply';
             break;

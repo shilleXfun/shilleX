@@ -7,7 +7,7 @@ import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { walletOf } from '../world/wallets.ts';
 import type { EngineDeps } from './engine.ts';
 import { phrasebookOf } from './phrasebook.ts';
-import { affinitiesOf, handedOverRefs, loadState } from './state.ts';
+import { affinitiesOf, handoverState, loadState } from './state.ts';
 import type { AgentView } from './types.ts';
 
 export const V_SOL_LAMPORTS = 1_000_000_000;
@@ -142,7 +142,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   ]);
   // Mentions and DMs already handed to a written reply are hidden, so the engine does not answer twice.
   const cutoff = now.getTime() - 30 * MIN;
-  const queuedRefs = await handedOverRefs(d.db, agentId, new Date(cutoff));
+  const queuedRefs = (await handoverState(d.db, agentId, new Date(cutoff), d.bootAt)).hidden;
   // Every coin this agent holds or made must be visible, even if older than the 60 newest.
   // Merged into a new array: the shared cached array is never touched.
   const have = new Set(globalCoins.map((c) => c.mint));

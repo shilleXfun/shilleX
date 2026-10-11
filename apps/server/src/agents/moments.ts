@@ -22,6 +22,8 @@ const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
 const HUMAN_PURPOSE = 'reply to a human';
+/** Trips a human reply may use; the daily share reserves all of them up front. */
+const HUMAN_TRIPS = 2;
 /** Human replies may use at most this share of the daily model budget. */
 export const HUMAN_REPLY_BUDGET_SHARE = 0.5;
 const WRONG_TARGET = 'Refused: you may only answer in the conversation or post you were given';
@@ -134,7 +136,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   })();
   let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
-  let bounced = false;
+  let bounced = false, runningHuman = 0;
   const affordable = (usd: number) => d.budget.canSpend() && d.budget.canAfford(usd);
   const NONE = { ok: false, turnId: '', text: '' };
 
@@ -236,7 +238,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         if (!p || p.deletedAt) return;
         // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
         const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
-        await r(m.agentId, { purpose: HUMAN_PURPOSE, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
+        await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
           prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
@@ -244,7 +246,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
       const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
-      await r(m.agentId, { purpose: HUMAN_PURPOSE, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
+      await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
     async phrasebook(m) {
@@ -255,11 +257,11 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       });
     },
   };
-  /** Hands a human's message back to the engine (it answers from its phrasebook) and returns the per-human slot. */
-  async function release(m: Moment, giveSlotBack: boolean) {
+  /** Hands a human's message back to the engine (it answers from its phrasebook). The per-human slot comes back only when no model call was made; `fallback` also tells the engine never to hand this message over again. */
+  async function release(m: Moment, giveSlotBack: boolean, fallback = false) {
     const ref = String(m.data.postId ?? m.data.conversationId ?? '');
     if (giveSlotBack) { const l = perHuman.get(String(m.data.humanId)); l?.pop(); if (l && !l.length) perHuman.delete(String(m.data.humanId)); }
-    try { await rememberEvent(d.db, m.agentId, 'reply_released', { ref }, d.now()); } catch (e) { console.error('[agents] could not release a human reply', e); }
+    try { await rememberEvent(d.db, m.agentId, 'reply_released', fallback ? { ref, fallback: true } : { ref }, d.now()); } catch (e) { console.error('[agents] could not release a human reply', e); }
   }
   const handlerOf = (k: MomentKind) => d.handlers?.[k] ?? builtIn[k];
   const open = () => !halted && !stopped && affordable(MOMENT_WORST);
@@ -281,20 +283,25 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const h = handlerOf(m.kind);
       if (!h) continue;
       bounced = false;
-      let answered = false, threw = false;
-      const track: ModelTurnRunner = async (a, o) => { const x = await run(a, o); if (x.ok) answered = true; return x; };
-      try { await h(m, m.kind === 'human_reply' ? track : run); }
+      let answered = false, threw = false, paid = false;
+      const track: ModelTurnRunner = async (a, o) => {
+        // A turn id means a model call was made (and billed), whatever it wrote.
+        try { const x = await run(a, o); if (x.ok) answered = true; if (x.turnId) paid = true; return x; } catch (e) { paid = true; throw e; }
+      };
+      const isHuman = m.kind === 'human_reply';
+      if (isHuman) runningHuman++;
+      try { await h(m, isHuman ? track : run); }
       catch (e) {
         threw = true;
         const p = accountProblem(e);
         if (p) { halted = p; console.error(`[agents] model calls halted: ${p}`); }
         else console.error('[agents] moment failed', m.kind, e);
-      }
+      } finally { if (isHuman) runningHuman--; }
       // The agent was mid-turn in the engine: try once more on the next drain rather than lose the moment.
       const requeue = bounced && !retried.has(m) && !answered && !threw;
       if (requeue) { retried.add(m); later.push(m); }
       // Dropped or finished: the engine may answer from the phrasebook again; a conversation is not muted after it was answered.
-      else if (m.kind === 'human_reply') await release(m, !answered);
+      else if (isHuman) await release(m, !paid, paid && !answered);
     }
     if (!open()) { await dropAll(later); return; }
     for (const m of later) {
@@ -310,9 +317,9 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       if (keys.has(keyOf(m))) return false;
       if (m.kind === 'human_reply') {
         rollHuman();
-        const queuedHuman = queue.filter((x) => x.kind === 'human_reply').length;
-        // Worst case for everything already queued plus this one, against half the day's budget.
-        if (humanSpent + (queuedHuman + 1) * MOMENT_WORST > humanCap()) return false;
+        const queuedHuman = queue.filter((x) => x.kind === 'human_reply').length + runningHuman;
+        // Every trip's worst case for everything queued or running plus this one, against half the day's budget.
+        if (humanSpent + (queuedHuman + 1) * HUMAN_TRIPS * MOMENT_WORST > humanCap()) return false;
         const human = String(m.data.humanId), t = d.now().getTime();
         for (const [h, xs] of perHuman) { const keep = xs.filter((x) => t - x < 3_600_000); if (keep.length) perHuman.set(h, keep); else perHuman.delete(h); }
         const recent = (perHuman.get(human) ?? []).filter((x) => t - x < 3_600_000);
