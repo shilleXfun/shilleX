@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { worldTestCtx } from './world-helpers.ts';
 import { runTool } from '../src/world/tools.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { flowChange, perceive } from '../src/agents/perceive.ts';
+import { clearPerceptionCache, flowChange, perceive } from '../src/agents/perceive.ts';
 import { adjustAffinity } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
 
@@ -17,6 +17,7 @@ beforeAll(async () => {
   mint = (launched.result as { mint: string }).mint;
   await runTool(await w.ctxFor(a!), 'buy', { mint, sol: 0.02, slippage_pct: null });
 });
+beforeEach(() => clearPerceptionCache(w.t.db));
 afterAll(() => w.t.close());
 
 describe('flowChange', () => {
@@ -64,5 +65,73 @@ describe('perceive', () => {
     const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} gm` });
     await runTool(await w.ctxFor(a), 'reply', { post_id: p.body.post.id, body: 'gm to you' });
     expect((await perceive(d, a.id)).mentions).toEqual([]);
+  });
+});
+
+describe('perceive details', () => {
+  const MIN = 60_000;
+  it('counts holders exactly and leaves out a holder who sold everything', async () => {
+    const c = w.agents[5]!;
+    await runTool(await w.ctxFor(c), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    expect((await perceive(d, w.agents[0]!.id)).coins.find((x) => x.mint === mint)!.holders).toBe(3);
+    await runTool(await w.ctxFor(c), 'sell', { mint, tokens: null, all: true, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    expect((await perceive(d, w.agents[0]!.id)).coins.find((x) => x.mint === mint)!.holders).toBe(2);
+  });
+  it('reuses the global coins and rooms inside the TTL and refreshes after clearing', async () => {
+    const first = await perceive(d, w.agents[0]!.id);
+    const again = await perceive(d, w.agents[1]!.id);
+    expect(again.coins).toBe(first.coins);
+    expect(again.rooms).toBe(first.rooms);
+    clearPerceptionCache(w.t.db);
+    expect((await perceive(d, w.agents[0]!.id)).coins).not.toBe(first.coins);
+  });
+  it('shows at most 20 rooms, newest activity first', async () => {
+    const rooms = (await perceive(d, w.agents[0]!.id)).rooms;
+    expect(rooms.length).toBeLessThanOrEqual(20);
+    const times = rooms.map((r) => r.lastAt);
+    expect(times).toEqual([...times].sort().reverse());
+  });
+  it('drops a mention after 30 minutes', async () => {
+    const a = w.agents[6]!;
+    const human = await w.t.createUser('watcher_3');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} still there?` });
+    w.t.clock.advance(29 * MIN);
+    expect((await perceive(d, a.id)).mentions.map((m) => m.postId)).toEqual([p.body.post.id]);
+    w.t.clock.advance(2 * MIN);
+    expect((await perceive(d, a.id)).mentions).toEqual([]);
+  });
+  it('drops a DM after 120 minutes', async () => {
+    const a = w.agents[7]!;
+    const human = await w.t.createUser('watcher_4');
+    const conv = await w.t.as(human).post('/api/conversations', { kind: 'dm', username: a.username });
+    await w.t.as(human).post(`/api/conversations/${conv.body.conversation.id}/messages`, { body: 'hello?' });
+    w.t.clock.advance(119 * MIN);
+    expect((await perceive(d, a.id)).dms).toHaveLength(1);
+    w.t.clock.advance(2 * MIN);
+    expect((await perceive(d, a.id)).dms).toEqual([]);
+  });
+  it('drops a DM the agent has answered', async () => {
+    const a = w.agents[8]!;
+    const human = await w.t.createUser('watcher_5');
+    const conv = await w.t.as(human).post('/api/conversations', { kind: 'dm', username: a.username });
+    const id = conv.body.conversation.id as string;
+    await w.t.as(human).post(`/api/conversations/${id}/messages`, { body: 'ping' });
+    expect((await perceive(d, a.id)).dms).toHaveLength(1);
+    const r = await w.actor.call(a.id, 'POST', `/api/conversations/${id}/messages`, { body: 'pong' });
+    expect(r.status).toBe(201);
+    expect((await perceive(d, a.id)).dms).toEqual([]);
+  });
+  it('keeps the most recent unanswered DMs when more than 20 exist', async () => {
+    const a = w.agents[9]!;
+    for (let i = 0; i < 22; i++) {
+      const human = await w.t.createUser(`dm_sender_${i}`);
+      const conv = await w.t.as(human).post('/api/conversations', { kind: 'dm', username: a.username });
+      await w.t.as(human).post(`/api/conversations/${conv.body.conversation.id}/messages`, { body: `dm ${i}` });
+    }
+    const dms = (await perceive(d, a.id)).dms;
+    expect(dms).toHaveLength(20);
+    expect(dms[0]!.lastBody).toBe('dm 21');
+    expect(dms[19]!.lastBody).toBe('dm 2');
   });
 });
