@@ -1,10 +1,10 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
-import { DynamicBondingCurveClient, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { DynamicBondingCurveClient, SwapMode, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
-import { ChainError, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
+import { ChainError, GRADUATED_MESSAGE, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
 import { DBC_CONFIG, getSetting } from './launchpad.ts';
 
 /** SOL and token change for `owner` in a confirmed transaction (fees included in the SOL change). */
@@ -18,12 +18,23 @@ export function deltasFromTx(tx: ParsedTransactionWithMeta, owner: string, mint:
   return { lamportsDelta, tokenDelta: mint ? sum(meta.postTokenBalances) - sum(meta.preTokenBalances) : 0, feeLamports: meta.fee };
 }
 
-const chainError = (e: unknown): ChainError => {
+const sol = (lamports: string) => Number(lamports) / LAMPORTS_PER_SOL;
+
+/** Turns RPC and program failures into short messages an agent can act on; simulation log dumps never reach the agent. */
+export const toChainError = (e: unknown): ChainError => {
   if (e instanceof ChainError) return e;
   const msg = (e as Error)?.message ?? String(e);
-  if (/insufficient (funds|lamports)/i.test(msg)) return new ChainError('INSUFFICIENT_FUNDS', msg);
-  if (/slippage|ExceededSlippage|0x1771/i.test(msg)) return new ChainError('SLIPPAGE', msg);
-  return new ChainError('TX_FAILED', msg.slice(0, 500));
+  const lamports = /insufficient lamports (\d+), need (\d+)/.exec(msg);
+  if (lamports) return new ChainError('INSUFFICIENT_FUNDS', `Not enough SOL: the wallet has ${sol(lamports[1]!)} SOL and this needs ${sol(lamports[2]!)} SOL plus fees`);
+  if (/no record of a prior credit/i.test(msg)) return new ChainError('INSUFFICIENT_FUNDS', 'Not enough SOL to pay the transaction fee');
+  if (/insufficient funds for rent/i.test(msg)) return new ChainError('INSUFFICIENT_FUNDS', 'Not enough SOL: this would leave the wallet below the rent minimum');
+  if (/Program log: Error: insufficient funds/i.test(msg)) return new ChainError('INSUFFICIENT_TOKENS', 'Not enough tokens: the wallet holds fewer than this sale needs');
+  if (/PoolIsCompleted/.test(msg)) return new ChainError('GRADUATED', GRADUATED_MESSAGE);
+  if (/ExceededSlippage|slippage/i.test(msg)) return new ChainError('SLIPPAGE', 'The price moved past your slippage limit; nothing was traded');
+  if (/Insufficient Liquidity|InsufficientLiquidity/i.test(msg)) return new ChainError('CURVE_FULL', 'The curve cannot fill this trade; try a smaller amount');
+  const anchor = /Error Message: (.+?)["\n]/.exec(msg)?.[1];
+  const first = msg.replace(/^Simulation failed\.\s*/, '').split(/\n|\. ?Logs:/)[0]!.replace(/^Message: /, '').trim();
+  return new ChainError('TX_FAILED', `Transaction failed: ${(anchor ?? first).slice(0, 300)}`);
 };
 
 export class DevnetChain implements Chain {
@@ -54,7 +65,7 @@ export class DevnetChain implements Chain {
         if (r.value.err) throw new ChainError('TX_FAILED', `Transaction failed: ${JSON.stringify(r.value.err)}`);
         return signature;
       } catch (e) {
-        if (!(e instanceof TransactionExpiredBlockheightExceededError)) throw chainError(e);
+        if (!(e instanceof TransactionExpiredBlockheightExceededError)) throw toChainError(e);
         const [status] = (await this.conn.getSignatureStatuses([e.signature], { searchTransactionHistory: true })).value;
         if (status && !status.err) return e.signature;
         if (status?.err) throw new ChainError('TX_FAILED', `Transaction failed: ${JSON.stringify(status.err)}`);
@@ -93,11 +104,17 @@ export class DevnetChain implements Chain {
     const pool = this.poolOf(mint);
     const virtualPool = await this.client.state.getPool(pool);
     if (!virtualPool) throw new ChainError('UNKNOWN_MINT', `No bonding-curve pool for mint ${mint}`);
-    if (Number(virtualPool.poolState.isMigrated) !== 0) throw new ChainError('GRADUATED', 'This coin graduated; its curve is closed');
     const config = (await this.client.state.getPoolConfig(virtualPool.poolState.config))!;
+    // A curve that reached its threshold refuses swaps until it migrates, so it counts as graduated already.
+    if (Number(virtualPool.poolState.isMigrated) !== 0 || virtualPool.poolState.quoteReserve.gte(config.migrationQuoteThreshold)) throw new ChainError('GRADUATED', GRADUATED_MESSAGE);
     const currentPoint = await getCurrentPoint(this.conn, config.activationType);
-    const quote = this.client.pool.swapQuote({ virtualPool, config, swapBaseForQuote, amountIn: new BN(amountIn), slippageBps, hasReferral: false, eligibleForFirstSwapWithMinFee: false, currentPoint });
-    const tx = await this.client.pool.swap({ owner: signer.publicKey, pool, amountIn: new BN(amountIn), minimumAmountOut: quote.minimumAmountOut, swapBaseForQuote, referralTokenAccount: null });
+    // Buys fill partially: the buy that completes a curve takes what is left and gets the rest back, instead of failing.
+    const swapMode = swapBaseForQuote ? SwapMode.ExactIn : SwapMode.PartialFill;
+    let minimumAmountOut: BN;
+    try {
+      minimumAmountOut = this.client.pool.swapQuote2({ virtualPool, config, swapBaseForQuote, swapMode, amountIn: new BN(amountIn), slippageBps, hasReferral: false, eligibleForFirstSwapWithMinFee: false, currentPoint }).minimumAmountOut!;
+    } catch (e) { throw toChainError(e); }
+    const tx = await this.client.pool.swap2({ owner: signer.publicKey, pool, swapBaseForQuote, swapMode, amountIn: new BN(amountIn), minimumAmountOut, referralTokenAccount: null });
     const signature = await this.send(tx, [signer]);
     return { signature, ...(await this.deltas(signature, signer.publicKey.toBase58(), mint)) };
   }
@@ -117,10 +134,10 @@ export class DevnetChain implements Chain {
     const vp = await this.client.state.getPool(pool);
     if (!vp) return null;
     const priceSol = Number(getPriceFromSqrtPrice(vp.poolState.sqrtPrice, TokenDecimal.SIX, 9).toString());
+    const curveProgress = await this.client.state.getPoolQuoteTokenCurveProgress(pool);
     return {
-      mint, pool: pool.toBase58(), priceLamports: priceSol * 1e9,
-      curveProgress: await this.client.state.getPoolQuoteTokenCurveProgress(pool),
-      graduated: Number(vp.poolState.isMigrated) !== 0, quoteReserveLamports: Number(vp.poolState.quoteReserve.toString()),
+      mint, pool: pool.toBase58(), priceLamports: priceSol * 1e9, curveProgress,
+      graduated: Number(vp.poolState.isMigrated) !== 0 || curveProgress >= 1, quoteReserveLamports: Number(vp.poolState.quoteReserve.toString()),
     };
   }
 }

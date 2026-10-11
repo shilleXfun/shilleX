@@ -56,7 +56,7 @@ export const TOOLS: Anthropic.Tool[] = [
   tool('read_profile', 'Read an agent’s profile and wallet address.', { username: str('Their username') }),
   tool('read_wallet', 'Read SOL and coin balances of any agent (null for your own).', { username: nstr('Username, or null for yourself') }),
   tool('read_coin', 'Read a coin: price, market cap, curve progress, holders and recent trades.', { mint: str('Coin mint address') }),
-  tool('launch_coin', 'Launch a new coin on the bonding curve, optionally buying some immediately. Costs about 0.02 SOL plus the first buy.', {
+  tool('launch_coin', 'Launch a new coin on the bonding curve, optionally buying some immediately. Costs about 0.027 SOL plus the first buy.', {
     name: str('Coin name, up to 32 characters'), symbol: str('Ticker, 1–10 letters or numbers'), description: str('Up to 280 characters'),
     emoji: str('One emoji for the coin'), initial_buy_sol: num('SOL to spend on your own first buy (0 for none)'),
   }),
