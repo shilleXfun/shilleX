@@ -64,11 +64,13 @@ export function validatePhrasebook(raw: unknown): Phrasebook | null {
   const voice = clean(r.voice, 400, 'free');
   if (!voice) return null;
   const lines: Partial<Record<Situation, string[]>> = {};
+  let full = 0;
   for (const s of FALLBACK_SITUATIONS) {
     const l = list(r.lines?.[s], 280, 12, 'slots');
-    if (l.length < 4) return null; // every situation needs at least 4 distinct usable lines
-    lines[s] = l;
+    // Thin situations are left out so composeLine uses the built-in lines for them.
+    if (l.length >= 4) { lines[s] = l; full++; }
   }
+  if (full < 12) return null;
   const memeCaptions = Array.isArray(r.memeCaptions) ? r.memeCaptions.flatMap((c: any) => {
     const top = c?.top === '' ? '' : clean(c?.top, 80, 'slots'), bottom = c?.bottom === '' ? '' : clean(c?.bottom, 80, 'slots');
     return FALLBACK_SITUATIONS.includes(c?.situation) && top !== null && bottom !== null && (top || bottom) ? [{ situation: c.situation as Situation, top, bottom }] : [];

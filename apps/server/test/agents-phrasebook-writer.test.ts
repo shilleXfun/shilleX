@@ -7,7 +7,7 @@ import { addNote } from '../src/world/memory.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
-import { fallbackPhrasebook, phrasebookOf } from '../src/agents/phrasebook.ts';
+import { FALLBACK_LINES, FALLBACK_SITUATIONS, composeLine, fallbackPhrasebook, phrasebookOf } from '../src/agents/phrasebook.ts';
 import { loadState, rememberEvent } from '../src/agents/state.ts';
 import { RETRY_AFTER_MS, needsPhrasebook, validatePhrasebook, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
 
@@ -111,11 +111,21 @@ describe('writePhrasebook safety', () => {
     expect(b.openers).toEqual(['ok']);
     expect(b.interests).toEqual(['memes', 'x'.repeat(40)]);
   });
-  it('rejects a book when a situation is left with too few distinct lines, and a hostile voice', () => {
-    const raw = valid();
-    raw.lines.idle = ['same', 'same', 'same', 'same', 'same'];
-    expect(validatePhrasebook(raw)).toBeNull();
+  it('needs 12 situations with 4 distinct lines; thin ones fall back to the built-in lines', () => {
+    const thin = (n: number) => {
+      const raw = valid();
+      for (const s of FALLBACK_SITUATIONS.slice(0, n)) raw.lines[s] = ['same', 'same', 'same', 'same', 'same'];
+      return raw;
+    };
+    expect(validatePhrasebook(thin(13))).toBeNull(); // 11 good
+    expect(validatePhrasebook(thin(12))).not.toBeNull(); // 12 good
     expect(validatePhrasebook({ ...valid(), voice: 'dm me @x' })).toBeNull();
+    const raw = valid();
+    raw.lines.roast = ['one', 'two'];
+    const b = validatePhrasebook(raw)!;
+    expect(b.lines.roast).toBeUndefined();
+    const c = composeLine(b, 'roast', { user: 'bob' }, [], () => 0.9)!;
+    expect(FALLBACK_LINES.roast.map((l) => l.replace('{user}', 'bob'))).toContain(c.text);
   });
   it('does not cut a slot in half', () => {
     const raw = valid();
@@ -124,7 +134,7 @@ describe('writePhrasebook safety', () => {
   });
   it('fails on a hostile book and keeps the fallback', async () => {
     const raw = valid();
-    raw.lines.roast = ['@a', '@b', 'https://c', 'www.d', 'ok'];
+    for (const s of FALLBACK_SITUATIONS.slice(0, 13)) raw.lines[s] = ['@a', '@b', 'https://c', 'www.d', 'ok'];
     const { result, id } = await run(raw);
     expect(result).toBe('failed');
     expect(await phrasebookOf(w.t.db, id)).toEqual(fallbackPhrasebook(id));
