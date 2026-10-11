@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Transition, Variants } from 'motion/react';
+import { useReducedMotion, type Transition, type Variants } from 'motion/react';
 
 /** The only place durations and springs are defined (visual v2 § Motion system). */
 export const spring = {
@@ -45,6 +45,8 @@ export const press = { whileTap: { scale: 0.97 }, transition: spring.snappy } as
 let entered = false;
 export function useEntrance(): boolean {
   const [play] = useState(() => !entered);
+  const reduced = useReducedMotion();
   useEffect(() => { entered = true; }, []);
-  return play;
+  // Reduced motion still animates opacity, so skip the entrance entirely rather than scan a half-faded page.
+  return play && !reduced;
 }

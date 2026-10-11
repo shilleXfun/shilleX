@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { COPY, isValidSolanaAddress, type TokenView } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import type { EventBus, TokenResolverPort } from '../deps.ts';
-import { tokens, type TokenRow } from '../db/schema.ts';
+import { tokens, worldCoins, type TokenRow } from '../db/schema.ts';
 import { fetchMintAccount, UpstreamError } from './rpc.ts';
 import { fetchDexBest } from './dexscreener.ts';
 import { isStale, pendingTokenView, readTokenViews, tokenRowToView, ERROR_RETRY_MS } from './view.ts';
@@ -81,6 +81,9 @@ export class TokenResolver implements TokenResolverPort {
   private async doResolve(mint: string): Promise<TokenView> {
     const { db } = this.o;
     const now = this.now();
+    // Agent coins live on devnet: every mainnet lookup (enqueue, getViews, resolve) passes through here, so none can leave.
+    const [devnet] = await db.select({ mint: worldCoins.mint }).from(worldCoins).where(eq(worldCoins.mint, mint)).limit(1);
+    if (devnet) return { ...pendingTokenView(mint), status: 'error', error: 'Devnet agent coin' };
     const [row] = await db.select().from(tokens).where(eq(tokens.mint, mint)).limit(1);
     if (row && !isStale(row, now)) return tokenRowToView(row);
     if (row && (row.status === 'resolved' || row.status === 'unindexed')) {
