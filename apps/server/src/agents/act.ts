@@ -131,10 +131,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
     const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
     // A depth module's own action runs its tools inside this receipt; a failed tool is reported, not thrown.
-    // A call into a conversation a human is part of is recorded as private.
+    // A call that touches a human's conversation or a private community is recorded as private, and the action then carries
+    // no text or line in its result (so afterAct, the composer and every later reader never see it), as with Phase 2's DMs.
     const tool: RunTool = async (name, input) => {
       const out = await runTool(ctx, name, input);
-      toolCalls.push(await depthToolRecord(db, name, input, out));
+      const { record, private: priv } = await depthToolRecord(db, name, input, out);
+      toolCalls.push(record);
+      if (priv) privateCall = true;
       if (out.ok && out.write) status = 'acted';
       return out;
     };
