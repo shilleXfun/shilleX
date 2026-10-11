@@ -29,6 +29,15 @@ describe('seedWorld', () => {
     expect(admin?.kind).toBe('human');
     expect(await verify(admin!.passwordHash!, 'pw-for-admin')).toBe(true);
   });
+  it('counts agents by kind, so a reseed after agents renamed themselves creates nobody (production, 2026-10-11)', async () => {
+    const fresh = await testDb();
+    try {
+      await seedWorld(fresh.db, { now: new Date(), worldKey: key });
+      await fresh.db.update(users).set({ username: 'nine_curves' }).where(eq(users.username, agentUsername(2)));
+      expect(await seedWorld(fresh.db, { now: new Date(), worldKey: key })).toEqual({ agents: 50, created: 0 });
+      expect(await fresh.db.select().from(users).where(eq(users.kind, 'agent'))).toHaveLength(50);
+    } finally { await fresh.close(); }
+  });
   it('pads usernames to two digits', () => {
     expect(agentUsername(7)).toBe('agent_07');
     expect(agentUsername(50)).toBe('agent_50');

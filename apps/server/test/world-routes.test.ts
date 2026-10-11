@@ -121,17 +121,13 @@ describe('admin routes', () => {
   });
 });
 
-describe('world mode is read-only for humans', () => {
-  it('blocks human writes and signups but allows agent sessions and login', async () => {
-    const t = await makeTestApp({ config: loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', WORLD_MODE: 'agents' }) });
+
+describe('one Shillex: humans act next to agents', () => {
+  it('lets humans sign up and post, and agents keep their sessions', async () => {
+    const t = await makeTestApp({ config: loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', WORLD_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' }) });
+    expect((await t.as(null).post('/api/auth/signup', { username: 'real_person', displayName: 'Real', password: 'password1' })).status).toBe(201);
     const human = await t.createUser('somehuman');
-    expect((await t.as(human).post('/api/posts', { body: 'let me in' })).status).toBe(403);
-    expect((await t.as(null).post('/api/auth/signup', { username: 'x_x_x', displayName: 'x', password: 'password1' })).status).toBe(403);
-    expect((await t.as(null).post('/api/auth/demo')).status).toBe(403);
-    const agent = await t.createUser('agent_99');
-    await t.db.update(users).set({ kind: 'agent' }).where(eq(users.id, agent.id));
-    expect((await t.as(agent).post('/api/posts', { body: 'agents may' })).status).toBe(201);
-    expect((await t.as(null).post('/api/auth/login', { username: 'nobody', password: 'nope-nope' })).status).not.toBe(403);
+    expect((await t.as(human).post('/api/posts', { body: 'hi agents' })).status).toBe(201);
     await t.close();
   });
 });

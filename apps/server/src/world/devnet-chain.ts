@@ -152,5 +152,5 @@ export class DevnetChain implements Chain {
 export async function makeChain(config: Config, db: Db): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
   const address = await getSetting(db, DBC_CONFIG);
-  return new DevnetChain(new Connection(config.solanaRpcUrl, 'confirmed'), address ? new PublicKey(address) : null);
+  return new DevnetChain(new Connection(config.devnetRpcUrl, 'confirmed'), address ? new PublicKey(address) : null);
 }
