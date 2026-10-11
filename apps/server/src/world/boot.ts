@@ -14,6 +14,7 @@ import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
 import { createDepth } from '../agents/depth/index.ts';
+import { factionMomentHandler } from '../agents/depth/factions.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { haikuBrain, modelBudget } from '../agents/haiku.ts';
@@ -88,7 +89,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // Hand-overs queued before this moment died with the previous process: the engine must see those messages again.
       const bootAt = now();
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
-      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget }) : null;
+      // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
+      const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
+      handles.moments = md ? createMoments({ ...md, handlers: { faction: factionMomentHandler(md) } }) : null;
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), tickMs: config.engineTickMs });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
