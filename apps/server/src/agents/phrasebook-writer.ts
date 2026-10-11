@@ -14,7 +14,8 @@ export const NOTABLE_EVENTS = ['got_rugged', 'rugged', 'graduated', 'big_win', '
 export const REFRESHES_PER_DAY = 10;
 export const RETRY_AFTER_MS = 6 * 3_600_000;
 const DAY = 86_400_000;
-const MAX_TOKENS = 16000;
+export const PHRASEBOOK_MAX_TOKENS = 16000;
+const MAX_TOKENS = PHRASEBOOK_MAX_TOKENS;
 const strings = { type: 'array', items: { type: 'string' } };
 export const PHRASEBOOK_SCHEMA: Record<string, unknown> = {
   type: 'object', additionalProperties: false,
@@ -34,6 +35,20 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 const BRACES = /[{}]/g;
 const HAS_BRACE = /[{}]/;
 const SLOT = /\{(\w+)\}/g;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The same hostile-output filter, for model text the world shows publicly: newlines collapsed; no links, `<` `>`, backticks
+ * or control characters; and no `@` except the exact `@mention` given (the one user being replied to). Cut to `max` code points.
+ */
+export function cleanModelText(s: unknown, max: number, mention?: string): string | null {
+  if (typeof s !== 'string') return null;
+  const t = s.replace(/[\t\r\n]+/g, ' ').trim();
+  const rest = mention ? t.replace(new RegExp(`@${escapeRe(mention)}(?!\\w)`, 'gi'), '') : t;
+  if (!t || CONTROL.test(t) || HOSTILE.test(rest)) return null;
+  return [...t].slice(0, max).join('').trim() || null;
+}
+
 /** Model output is hostile: one cleaned string, or null when it must be dropped. Slots are checked on the full text, the cut happens by code points afterwards, and a cut that leaves a broken slot drops the string. */
 function clean(s: unknown, max: number, mode: 'slots' | 'plain' | 'free'): string | null {
   if (typeof s !== 'string') return null;

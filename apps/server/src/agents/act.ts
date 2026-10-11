@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { desc, eq, inArray } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { agentTurns, communities, channels, posts, users } from '../db/schema.ts';
+import { agentTurns, communities, channels, posts, users, worldCoins } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
@@ -158,6 +158,12 @@ export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<Ac
       }
       case 'buy': {
         await call('buy', { mint: c.target!.mint, sol: c.lamports! / LAMPORTS_PER_SOL, slippage_pct: 10 });
+        // refreshCoinPrice stamps graduatedAt with the trade's time the first time a curve reads as graduated: this buy completed it.
+        const [after] = await db.select({ graduatedAt: worldCoins.graduatedAt, symbol: worldCoins.symbol, creatorId: worldCoins.creatorId }).from(worldCoins).where(eq(worldCoins.mint, c.target!.mint!));
+        if (after?.graduatedAt && after.graduatedAt.getTime() >= now.getTime()) {
+          await rememberEvent(db, after.creatorId, 'graduated', { mint: c.target!.mint, symbol: after.symbol }, now);
+          d.moments?.enqueue({ kind: 'graduation', agentId: after.creatorId, data: { mint: c.target!.mint, symbol: after.symbol }, at: now });
+        }
         state.mood += 0.05;
         if (c.target?.userId) await adjustAffinity(db, c.target.userId, agentId, 0.1, now);
         if (chatty()) await followUp('bought');
