@@ -23,7 +23,7 @@ const get = async (url: string, cookie?: string) => { const r = await w.t.app.in
 
 beforeAll(async () => {
   w = await worldTestCtx();
-  const handles = { indexer: new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }), budget: new Budget(w.t.db, 20, w.t.clock.now), chain: w.chain, key: w.key, runtime: null, engine: null, network: 'memory' as const, startAgents: () => { agentStarts++; return 'AGENTS is off'; } };
+  const handles = { indexer: new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }), budget: new Budget(w.t.db, 20, w.t.clock.now), chain: w.chain, key: w.key, engine: null, moments: null, network: 'memory' as const, startAgents: () => { agentStarts++; return 'AGENTS is off'; } };
   await registerAgentRoutes(w.t.app, handles);
   await registerAdminRoutes(w.t.app, handles);
   const A = w.agents[0]!, B = w.agents[1]!;
