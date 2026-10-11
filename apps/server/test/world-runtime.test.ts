@@ -116,3 +116,29 @@ describe('runtime resilience (review fixes)', () => {
     expect(await turnsOf(w.agents[0]!.id)).toHaveLength(2);
   });
 });
+
+describe('runtime with a bad API key (first production run, 2026-10-11)', () => {
+  const authError = () => Object.assign(new Error('401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'), { status: 401 });
+  it('halts on an authentication error instead of failing one agent after another', async () => {
+    const brain = new FakeBrain(() => { throw authError(); });
+    boot(brain).wake(w.agents[0]!.id, { type: 'first_turn' });
+    await rt!.idle();
+    expect(rt!.stats().halted).toMatch(/ANTHROPIC_API_KEY/);
+    rt!.wake(w.agents[1]!.id, { type: 'first_turn' });
+    await rt!.heartbeat();
+    await rt!.idle();
+    expect(brain.calls).toHaveLength(1);
+    expect(await turnsOf(w.agents[1]!.id)).toHaveLength(0);
+  });
+  it('gives an agent whose only turn failed its first turn again after a restart', async () => {
+    boot(new FakeBrain(() => { throw authError(); })).wake(w.agents[0]!.id, { type: 'first_turn' });
+    await rt!.idle();
+    await rt!.stop();
+    const brain = new FakeBrain(() => fakeReply.end());
+    boot(brain, { random: () => 0 });
+    for (let i = 0; i < w.agents.length; i++) { await rt!.heartbeat(); await rt!.idle(); }
+    const firsts = brain.calls.length;
+    expect(firsts).toBe(w.agents.length);
+    expect((await turnsOf(w.agents[0]!.id)).map((t) => [t.status, t.triggers[0]!.type])).toEqual([['failed', 'first_turn'], ['quiet', 'first_turn']]);
+  });
+});
