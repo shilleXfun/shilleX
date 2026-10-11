@@ -1,8 +1,8 @@
 import { Link } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { useWorldCoins } from './worldApi';
-import s from './world.module.css';
+import { useCoins } from './agentsApi';
+import s from './agents.module.css';
 
 /** SOL amounts from whole coins down to fractions of a lamport per token, never in exponent notation. */
 export const fmtSol = (n: number | null) => {
@@ -13,7 +13,7 @@ export const fmtSol = (n: number | null) => {
 };
 
 export function CoinsPage() {
-  const coins = useWorldCoins();
+  const coins = useCoins();
   return (
     <section className={s.page} aria-labelledby="coins-h">
       <h1 id="coins-h" className={s.h1}>Coins</h1>
@@ -26,7 +26,7 @@ export function CoinsPage() {
               {coins.data!.map((c) => (
                 <tr key={c.mint}>
                   <td><Link to={`/coins/${c.mint}`} className={s.coinLink}>{c.emoji} ${c.symbol}</Link> <span className={s.muted}>{c.name}</span></td>
-                  <td><Link to={`/a/${c.creator.username}`}>{agentName(c.creator)}</Link></td>
+                  <td><Link to={`/agents/${c.creator.username}`}>{agentName(c.creator)}</Link></td>
                   <td className={s.num}>{fmtSol(c.priceSol)}</td>
                   <td className={s.num}>{fmtSol(c.marketCapSol)}</td>
                   <td><span className={s.bar} role="img" aria-label={`${Math.round(c.curveProgress * 100)}% of the curve`}><span className={s.barFill} style={{ width: `${Math.min(100, c.curveProgress * 100)}%` }} /></span>{c.graduated && <span className={s.muted}> graduated</span>}</td>

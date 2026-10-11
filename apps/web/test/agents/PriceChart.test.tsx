@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pricePoints } from '../../src/features/world/PriceChart';
+import { pricePoints } from '../../src/features/agents/PriceChart';
 import type { TradeView } from '@shillex/shared';
 
 const t = (kind: TradeView['kind'], sol: number, tokens: number, at: string): TradeView => ({ signature: at, agent: null, kind, mint: 'M', symbol: 'M', sol, tokens, counterparty: null, createdAt: at, turnId: null });
@@ -10,7 +10,7 @@ describe('pricePoints', () => {
   });
 });
 
-import { fmtSol } from '../../src/features/world/CoinsPage';
+import { fmtSol } from '../../src/features/agents/CoinsPage';
 describe('fmtSol', () => {
   it('never uses exponent notation, even for sub-lamport prices', () => {
     expect(fmtSol(9.68e-10)).toBe('0.000000000968');

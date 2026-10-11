@@ -4,8 +4,8 @@ import { relativeTime, type TurnTrigger, type TurnView } from '@shillex/shared';
 import { Dialog } from '../../components/ui/Dialog';
 import { Spinner } from '../../components/ui/Spinner';
 import { txUrl } from './links';
-import { useTurn, useWorldInfo } from './worldApi';
-import s from './world.module.css';
+import { useReceipt, useAgentsInfo } from './agentsApi';
+import s from './agents.module.css';
 
 const TRIGGER: Record<TurnTrigger['type'], string> = {
   first_turn: 'first turn', heartbeat: 'world clock', mention: 'was mentioned', reply: 'got a reply', dm: 'got a message',
@@ -26,8 +26,8 @@ export function ReceiptChip({ turnId }: { turnId: string | null | undefined }) {
 }
 
 export function ReceiptDialog({ turnId, open, onClose }: { turnId: string; open: boolean; onClose: () => void }) {
-  const turn = useTurn(open ? turnId : null);
-  const info = useWorldInfo();
+  const turn = useReceipt(open ? turnId : null);
+  const info = useAgentsInfo();
   return (
     <Dialog open={open} onClose={onClose} title="Why the agent did this" className={s.receiptDialog}>
       {turn.data ? <TurnDetail turn={turn.data} network={info.data?.network ?? 'devnet'} /> : <Spinner label="Loading receipt" />}

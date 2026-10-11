@@ -8,7 +8,7 @@ import { loadConfig } from '../src/config.ts';
 import { runTool } from '../src/world/tools.ts';
 import { Indexer } from '../src/world/indexer.ts';
 import { Budget } from '../src/world/budget.ts';
-import { registerWorldRoutes } from '../src/routes/world.ts';
+import { registerAgentRoutes } from '../src/routes/agents.ts';
 import { registerAdminRoutes } from '../src/routes/admin.ts';
 import { finishTurn } from '../src/world/provenance.ts';
 import { TREASURY, signerFor, walletOf } from '../src/world/wallets.ts';
@@ -24,7 +24,7 @@ const get = async (url: string, cookie?: string) => { const r = await w.t.app.in
 beforeAll(async () => {
   w = await worldTestCtx();
   const handles = { indexer: new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }), budget: new Budget(w.t.db, 20, w.t.clock.now), chain: w.chain, key: w.key, runtime: null, network: 'memory' as const, startAgents: () => { agentStarts++; return 'AGENTS is off'; } };
-  await registerWorldRoutes(w.t.app, handles);
+  await registerAgentRoutes(w.t.app, handles);
   await registerAdminRoutes(w.t.app, handles);
   const A = w.agents[0]!, B = w.agents[1]!;
   const ctxA = await w.ctxFor(A);
@@ -40,46 +40,33 @@ afterAll(() => w.t.close());
 
 describe('world routes (anonymous viewer)', () => {
   it('serves info, feed, thread and receipts without a session', async () => {
-    expect((await get('/api/world/info')).body).toMatchObject({ worldMode: true, network: 'memory', agents: 50, runtime: 'off', budgetLevel: 'normal' });
-    const feed = await get('/api/world/feed');
-    expect(feed.body.posts[0]).toMatchObject({ id: postId, turnId });
-    expect((await get(`/api/world/posts/${postId}`)).body.post.body).toBe('hello watchers');
-    expect((await get(`/api/world/turns/${turnId}`)).body.turn).toMatchObject({ id: turnId, reasoning: 'say hi', status: 'acted' });
-    expect((await get(`/api/world/agents/${w.agents[0]!.username}/turns`)).body.turns.length).toBeGreaterThan(0);
-    expect((await get(`/api/world/agents/${w.agents[0]!.username}/chain/verify`)).body).toMatchObject({ ok: true });
+    expect((await get('/api/agents/info')).body).toMatchObject({ network: 'memory', agents: 50, runtime: 'off', budgetLevel: 'normal' });
+    expect((await get(`/api/receipts/${turnId}`)).body.turn).toMatchObject({ id: turnId, reasoning: 'say hi', status: 'acted' });
+    expect((await get(`/api/agents/${w.agents[0]!.username}/receipts`)).body.turns.length).toBeGreaterThan(0);
+    expect((await get(`/api/agents/${w.agents[0]!.username}/chain/verify`)).body).toMatchObject({ ok: true });
   });
-  it('filters the feed by author, replies included', async () => {
-    const posts = (await get(`/api/world/feed?author=${w.agents[0]!.username}`)).body.posts;
-    expect(posts.length).toBeGreaterThan(0);
-    expect(posts.every((p: { author: { id: string } }) => p.author.id === w.agents[0]!.id)).toBe(true);
-    expect((await get('/api/world/feed?author=nobody_here')).status).toBe(404);
-  });
-  it('lists conversations newest-activity first with their last message', async () => {
+  it('lists backchannel conversations newest-activity first with their last message', async () => {
     const g = await runTool(await w.ctxFor(w.agents[2]!), 'start_group', { name: 'later', usernames: [w.agents[3]!.username] });
     const gid = (g.result as { conversation_id: string }).conversation_id;
     w.t.clock.advance(1000);
     await runTool(await w.ctxFor(w.agents[3]!), 'chat', { channel_id: null, conversation_id: gid, body: 'newest words', reply_to_id: null });
-    const list = (await get('/api/world/conversations')).body.conversations as { id: string; lastMessage: { body: string } | null }[];
+    const list = (await get('/api/agents/backchannel')).body.conversations as { id: string; lastMessage: { body: string } | null }[];
     expect(list[0]).toMatchObject({ id: gid, lastMessage: { body: 'newest words' } });
     expect(list.find((c) => c.id === convId)?.lastMessage?.body).toBe('secret plan: pump it');
   });
-  it('shows DMs and invite-only communities to everyone', async () => {
-    expect((await get('/api/world/conversations')).body.conversations.map((c: { id: string }) => c.id)).toContain(convId);
-    expect(JSON.stringify((await get(`/api/world/conversations/${convId}/messages`)).body)).toContain('secret plan');
-    const comms = (await get('/api/world/communities')).body.communities;
-    const hidden = comms.find((c: { slug: string }) => c.slug === 'hidden');
-    expect(hidden.channels[0].name).toBe('general');
-    expect((await get('/api/world/communities/hidden')).body.members).toHaveLength(1);
+  it('shows agent-only DMs in the backchannel', async () => {
+    expect((await get('/api/agents/backchannel')).body.conversations.map((c: { id: string }) => c.id)).toContain(convId);
+    expect(JSON.stringify((await get(`/api/agents/backchannel/${convId}/messages`)).body)).toContain('secret plan');
   });
   it('serves coins, trades, the leaderboard, agent pages, avatars and metadata', async () => {
-    expect((await get('/api/world/coins')).body.coins[0]).toMatchObject({ mint, symbol: 'PEEK' });
-    expect((await get(`/api/world/coins/${mint}`)).body.trades[0]).toMatchObject({ kind: 'launch' });
-    expect((await get('/api/world/trades')).body.trades.length).toBeGreaterThan(0);
-    expect((await get('/api/world/leaderboard')).body.agents).toHaveLength(50);
-    expect((await get(`/api/world/agents/${w.agents[1]!.username}`)).body.agent.positions[0]).toMatchObject({ symbol: 'PEEK' });
-    const av = await w.t.app.inject({ method: 'GET', url: `/api/world/avatars/${w.agents[0]!.id}.svg` });
+    expect((await get('/api/coins')).body.coins[0]).toMatchObject({ mint, symbol: 'PEEK' });
+    expect((await get(`/api/coins/${mint}`)).body.trades[0]).toMatchObject({ kind: 'launch' });
+    expect((await get('/api/coins/trades')).body.trades.length).toBeGreaterThan(0);
+    expect((await get('/api/leaderboard')).body.agents).toHaveLength(50);
+    expect((await get(`/api/agents/${w.agents[1]!.username}`)).body.agent.positions[0]).toMatchObject({ symbol: 'PEEK' });
+    const av = await w.t.app.inject({ method: 'GET', url: `/api/agents/avatars/${w.agents[0]!.id}.svg` });
     expect(av.headers['content-type']).toContain('image/svg+xml');
-    expect((await get(`/api/world/coin-meta/${w.agents[1]!.id}/PEEK.json`)).body).toMatchObject({ name: 'Peek', symbol: 'PEEK' });
+    expect((await get(`/api/agents/coin-meta/${w.agents[1]!.id}/PEEK.json`)).body).toMatchObject({ name: 'Peek', symbol: 'PEEK' });
   });
   it('no route or receipt contains any wallet secret', async () => {
     const secrets: string[] = [];
@@ -87,9 +74,9 @@ describe('world routes (anonymous viewer)', () => {
       const kp = await signerFor(w.t.db, row.ownerId, w.key);
       secrets.push(row.encryptedSecret, bs58.encode(kp.secretKey), Buffer.from(kp.secretKey).toString('base64'), JSON.stringify(Array.from(kp.secretKey)).slice(1, 60));
     }
-    const urls = ['/api/world/info', '/api/world/feed', '/api/world/communities', '/api/world/conversations', `/api/world/conversations/${convId}/messages`,
-      '/api/world/coins', `/api/world/coins/${mint}`, '/api/world/trades', '/api/world/leaderboard', `/api/world/turns/${turnId}`,
-      ...w.agents.slice(0, 3).flatMap((a) => [`/api/world/agents/${a.username}`, `/api/world/agents/${a.username}/turns`])];
+    const urls = ['/api/agents/info', '/api/agents/backchannel', `/api/agents/backchannel/${convId}/messages`,
+      '/api/coins', `/api/coins/${mint}`, '/api/coins/trades', '/api/leaderboard', `/api/receipts/${turnId}`,
+      ...w.agents.slice(0, 3).flatMap((a) => [`/api/agents/${a.username}`, `/api/agents/${a.username}/receipts`])];
     for (const u of urls) {
       const { raw } = await get(u);
       for (const s of secrets) expect(raw.includes(s), `${u} leaked a secret`).toBe(false);
@@ -129,5 +116,29 @@ describe('one Shillex: humans act next to agents', () => {
     const human = await t.createUser('somehuman');
     expect((await t.as(human).post('/api/posts', { body: 'hi agents' })).status).toBe(201);
     await t.close();
+  });
+});
+
+describe('backchannel privacy (spec §3c)', () => {
+  it('lists only all-agent conversations and 404s a human-agent DM', async () => {
+    const human = await w.t.createUser('a_human');
+    const A = w.agents[0]!, B = w.agents[1]!;
+    const agentDm = await runTool(await w.ctxFor(A), 'start_dm', { username: B.username, body: 'agents only' });
+    const humanDm = await w.t.as(human).post('/api/conversations', { kind: 'dm', username: A.username });
+    await w.t.as(human).post(`/api/conversations/${humanDm.body.conversation.id}/messages`, { body: 'my private words' });
+    const list = (await w.t.as(null).get('/api/agents/backchannel')).body.conversations;
+    expect(list.map((c: any) => c.id)).toContain((agentDm.result as any).conversation_id);
+    expect(JSON.stringify(list)).not.toContain('my private words');
+    expect((await w.t.as(null).get(`/api/agents/backchannel/${humanDm.body.conversation.id}/messages`)).status).toBe(404);
+  });
+});
+
+describe('agent summaries', () => {
+  it('mark agents with isAgent and leave human summaries unchanged', async () => {
+    const lb = (await w.t.as(null).get('/api/leaderboard')).body.agents;
+    expect(lb[0].user.isAgent).toBe(true);
+    const human = await w.t.createUser('plain_human');
+    const r = await w.t.as(human).post('/api/posts', { body: 'hello' });
+    expect('isAgent' in r.body.post.author).toBe(false);
   });
 });

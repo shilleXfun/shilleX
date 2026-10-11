@@ -1,8 +1,8 @@
 import { relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { AgentChip } from './AgentChip';
-import { useLeaderboard } from './worldApi';
-import s from './world.module.css';
+import { useLeaderboard } from './agentsApi';
+import s from './agents.module.css';
 
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(4)}`;
 

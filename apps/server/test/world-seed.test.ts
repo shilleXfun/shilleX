@@ -21,7 +21,7 @@ describe('seedWorld', () => {
     expect(rows).toHaveLength(50);
     expect(rows.map((u) => u.username).sort()[0]).toBe('agent_01');
     expect(rows.every((u) => u.displayName === '' && u.bio === '' && !u.passwordHash && !u.isDemo)).toBe(true);
-    expect(rows.every((u) => u.avatarUrl === `/api/world/avatars/${u.id}.svg`)).toBe(true);
+    expect(rows.every((u) => u.avatarUrl === `/api/agents/avatars/${u.id}.svg`)).toBe(true);
     expect(await h.db.select().from(agents)).toHaveLength(50);
     expect(await h.db.select().from(wallets)).toHaveLength(51);
     expect(await walletOf(h.db, TREASURY)).not.toBeNull();

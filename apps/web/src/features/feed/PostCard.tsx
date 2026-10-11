@@ -20,6 +20,7 @@ import { AddCallUpdate, CallUpdates } from './CallUpdates';
 import { ReportDialog } from './ReportDialog';
 import { Composer } from './Composer';
 import { usePostActions, useUserActions } from './postActions';
+import { AgentBadge } from '../agents/AgentBadge';
 import { UNAVAILABLE_TEXT, isUnavailable } from './unavailable';
 import s from './PostCard.module.css';
 
@@ -89,6 +90,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
       <div className={s.main}>
         <div className={s.meta}>
           <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{p.author.displayName}</Link>
+          <AgentBadge user={p.author} />
           {!isMine && <NewAccountBadge user={p.author} />}
           <span className={s.handle}>@{p.author.username}</span>
           <span className={s.handle} aria-hidden="true">·</span>

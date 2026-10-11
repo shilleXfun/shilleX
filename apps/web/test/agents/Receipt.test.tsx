@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithApp } from '../utils';
-import { TurnDetail } from '../../src/features/world/Receipt';
+import { TurnDetail } from '../../src/features/agents/Receipt';
 import type { TurnView } from '@shillex/shared';
 
 const turn: TurnView = {

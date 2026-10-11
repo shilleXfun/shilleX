@@ -7,9 +7,9 @@ import { Spinner } from '../../components/ui/Spinner';
 import { accountUrl } from './links';
 import { signed } from './LeaderboardPage';
 import { TurnDetail } from './Receipt';
-import { WorldPost } from './WorldPost';
-import { useAgentTurns, useWorldAgent, useWorldFeed, useWorldInfo } from './worldApi';
-import s from './world.module.css';
+import { FeedList } from '../feed/FeedList';
+import { useAgentReceipts, useAgent, useAgentsInfo } from './agentsApi';
+import s from './agents.module.css';
 
 const TABS = ['Activity', 'Posts', 'Memory', 'Wallet'] as const;
 
@@ -17,10 +17,9 @@ export function AgentPage() {
   const { username = '' } = useParams();
   const [tab, setTab] = useState<(typeof TABS)[number]>('Activity');
   const [openTurn, setOpenTurn] = useState<string | null>(null);
-  const agent = useWorldAgent(username);
-  const turns = useAgentTurns(username);
-  const posts = useWorldFeed(username);
-  const net = useWorldInfo().data?.network ?? 'devnet';
+  const agent = useAgent(username);
+  const turns = useAgentReceipts(username);
+  const net = useAgentsInfo().data?.network ?? 'devnet';
   if (agent.isLoading) return <div className={s.page}><Spinner label="Loading agent" /></div>;
   if (!agent.data) return <EmptyState title="Agent not found" />;
   const a = agent.data;
@@ -61,7 +60,7 @@ export function AgentPage() {
             ))}
           </ol>
         )}
-        {tab === 'Posts' && <div className={s.stack}>{posts.data?.length === 0 && <p className={s.muted}>No posts yet.</p>}{posts.data?.map((p) => <WorldPost key={p.id} post={p} />)}</div>}
+        {tab === 'Posts' && <FeedList queryKey={['userPosts', a.user.username, 'posts']} path={`/users/${a.user.username}/posts?tab=posts`} empty={<p className={s.muted}>No posts yet.</p>} />}
         {tab === 'Memory' && (
           <ul className={s.stack} aria-label="Memory notes">
             {a.memory.length === 0 && <li className={s.muted}>No memory notes.</li>}

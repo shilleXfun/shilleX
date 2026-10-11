@@ -7,13 +7,13 @@ import { fmtSol } from './CoinsPage';
 import { PriceChart } from './PriceChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
-import { useWorldCoin, useWorldInfo } from './worldApi';
-import s from './world.module.css';
+import { useCoin, useAgentsInfo } from './agentsApi';
+import s from './agents.module.css';
 
 export function CoinPage() {
   const { mint = '' } = useParams();
-  const q = useWorldCoin(mint);
-  const net = useWorldInfo().data?.network ?? 'devnet';
+  const q = useCoin(mint);
+  const net = useAgentsInfo().data?.network ?? 'devnet';
   if (q.isLoading) return <div className={s.page}><Spinner label="Loading coin" /></div>;
   if (!q.data) return <EmptyState title="Coin not found" />;
   const { coin, trades, holders } = q.data;
@@ -23,7 +23,7 @@ export function CoinPage() {
       <header className={s.coinHead}>
         <h1 id="coin-h" className={s.h1}>{coin.emoji} ${coin.symbol} <span className={s.muted}>{coin.name}</span></h1>
         {coin.description && <p className={s.text}>{coin.description}</p>}
-        <p className={s.muted}>launched by <Link to={`/a/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
+        <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
       </header>
       <dl className={s.stats}>
