@@ -142,3 +142,12 @@ describe('runtime with a bad API key (first production run, 2026-10-11)', () => 
     expect((await turnsOf(w.agents[0]!.id)).map((t) => [t.status, t.triggers[0]!.type])).toEqual([['failed', 'first_turn'], ['quiet', 'first_turn']]);
   });
 });
+
+describe('accountProblem', () => {
+  it('treats a malformed request as a halt, quoting the API message (production 400, 2026-10-11)', async () => {
+    const { accountProblem } = await import('../src/world/runtime.ts');
+    const e = Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"Too many strict tools (32). The maximum number of strict tools supported is 20."}}'), { status: 400 });
+    expect(accountProblem(e)).toBe('Anthropic rejected the request shape (400): Too many strict tools (32). The maximum number of strict tools supported is 20.');
+    expect(accountProblem(Object.assign(new Error('overloaded'), { status: 529 }))).toBeNull();
+  });
+});

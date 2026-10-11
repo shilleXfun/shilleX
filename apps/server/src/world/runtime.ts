@@ -29,6 +29,8 @@ export function accountProblem(e: unknown): string | null {
   if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
   if (status === 403) return 'Anthropic refused this key permission (403); check the key and restart';
   if (status === 400 && /credit balance|billing/i.test(msg)) return 'The Anthropic account is out of credit; top it up and restart';
+  // A malformed request fails the same way for every agent, so it is a deploy problem, not a turn problem.
+  if (status === 400 && /invalid_request_error/.test(msg)) return `Anthropic rejected the request shape (400): ${/"message":"([^"]+)"/.exec(msg)?.[1] ?? msg.slice(0, 200)}`;
   return null;
 }
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };

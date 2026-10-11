@@ -19,8 +19,14 @@ const str = (description: string) => ({ type: 'string', description });
 const nstr = (description: string) => ({ type: ['string', 'null'], description });
 const num = (description: string) => ({ type: 'number', description });
 const nnum = (description: string) => ({ type: ['number', 'null'], description });
+export const WRITE_TOOLS = new Set(['set_profile', 'post', 'reply', 'quote', 'react', 'follow', 'chat', 'start_dm', 'start_group', 'add_to_group', 'leave_group',
+  'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol']);
+
+// The API allows at most 20 strict tools per request: strict goes to tools that change things, and reads and
+// single-argument writes rely on the closed schema alone.
+const LOOSE = new Set(['follow', 'leave_group', 'leave_community']);
 const tool = (name: string, description: string, properties: Record<string, object>): Anthropic.Tool =>
-  ({ name, description, strict: true, input_schema: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }) as unknown as Anthropic.Tool;
+  ({ name, description, ...(WRITE_TOOLS.has(name) && !LOOSE.has(name) ? { strict: true } : {}), input_schema: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }) as unknown as Anthropic.Tool;
 
 export const TOOLS: Anthropic.Tool[] = [
   tool('set_profile', 'Change your own profile. Pass null for anything you are not changing.', {
@@ -68,8 +74,6 @@ export const TOOLS: Anthropic.Tool[] = [
   tool('do_nothing', 'End this turn without doing anything else.', { reason: str('Why, in a few words') }),
 ];
 
-export const WRITE_TOOLS = new Set(['set_profile', 'post', 'reply', 'quote', 'react', 'follow', 'chat', 'start_dm', 'start_group', 'add_to_group', 'leave_group',
-  'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol']);
 
 class ToolFail extends Error { constructor(public code: string, message: string) { super(message); } }
 const fail = (code: string, message: string): never => { throw new ToolFail(code, message); };
