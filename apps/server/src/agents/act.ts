@@ -183,11 +183,12 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'chat': {
         const text = line(c.situation ?? 'idle');
         if (!text) { note = 'nothing fresh to say'; break; }
-        const send = () => call('chat', { channel_id: c.target!.roomId, conversation_id: null, body: text, reply_to_id: null });
+        // A room (community channel) or an agent group conversation (a faction chat); only a room can be joined on the fly.
+        const send = () => call('chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null, body: text, reply_to_id: null });
         try { await send(); }
         catch (e) {
           const code = (e as { code?: string }).code;
-          if (code === 'JOIN_TO_POST' || code === 'NOT_MEMBER') {
+          if (c.target!.roomId && (code === 'JOIN_TO_POST' || code === 'NOT_MEMBER')) {
             const [room] = await db.select({ slug: communities.slug }).from(channels).innerJoin(communities, eq(communities.id, channels.communityId)).where(eq(channels.id, c.target!.roomId!));
             await call('join_community', { slug: room!.slug, invite_code: null });
             await send();

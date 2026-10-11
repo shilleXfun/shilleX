@@ -75,7 +75,8 @@ export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'
 
 /** A call's worst case: every max token billed as Haiku output. The hard daily cap must hold even then. */
 const worstCase = (maxTokens: number) => priceOf(HAIKU, { input: 0, output: maxTokens, cacheRead: 0, cacheWrite: 0 });
-const MOMENT_WORST = worstCase(MOMENT_MAX_TOKENS);
+/** The worst case of one moment call (MOMENT_MAX_TOKENS); a Phase 4 handler making its own call gates on it too. */
+export const MOMENT_WORST = worstCase(MOMENT_MAX_TOKENS);
 const worstOf = (k: MomentKind) => (k === 'phrasebook' ? worstCase(PHRASEBOOK_MAX_TOKENS) : MOMENT_WORST);
 const keyOf = (m: Moment) => `${m.kind}:${m.agentId}:${String(m.data.postId ?? m.data.conversationId ?? m.data.mint ?? m.data.key ?? '')}`;
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
