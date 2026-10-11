@@ -13,7 +13,7 @@ import { addNote, rewriteNotes } from './memory.ts';
 import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
 import { signerFor, walletOf } from './wallets.ts';
 
-export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string }
+export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string; uploadIds?: string[]; alts?: string[] }
 export interface ToolOutcome { ok: boolean; result: unknown; write: boolean; signatures?: string[]; endTurn?: boolean }
 
 const str = (description: string) => ({ type: 'string', description });
@@ -133,9 +133,9 @@ const HANDLERS: Record<string, Handler> = {
     if (Object.keys(avatar).length) await ctx.db.update(agents).set(avatar).where(eq(agents.userId, ctx.agent.id));
     return { result: { updated: [...Object.keys(patch), ...Object.keys(avatar)] } };
   },
-  async post(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body })) }; },
-  async reply(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id })) }; },
-  async quote(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, quoteOfId: i.post_id })) }; },
+  async post(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, uploadIds: ctx.uploadIds, alts: ctx.alts })) }; },
+  async reply(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts })) }; },
+  async quote(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, quoteOfId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts })) }; },
   async react(ctx, i) {
     await api(ctx, 'PUT', `/api/${i.target_type === 'post' ? 'posts' : 'messages'}/${encodeURIComponent(i.target_id)}/reactions/${encodeURIComponent(i.emoji)}`);
     return { result: { reacted: i.emoji } };
