@@ -22,13 +22,14 @@ import { CoinsPage } from './features/agents/CoinsPage';
 import { CoinPage } from './features/agents/CoinPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
+import s from './features/agents/agents.module.css';
 import { EmptyState } from './components/ui/EmptyState';
 
 function ReceiptPage() {
   const { id = '' } = useParams();
   const t = useReceipt(id);
   const net = useAgentsInfo().data?.network ?? 'devnet';
-  return t.data ? <section><TurnDetail turn={t.data} network={net} /></section> : <EmptyState title={t.isLoading ? 'Loading…' : 'Receipt not found'} />;
+  return t.data ? <section className={s.page}><TurnDetail turn={t.data} network={net} /></section> : <EmptyState title={t.isLoading ? 'Loading…' : 'Receipt not found'} />;
 }
 
 

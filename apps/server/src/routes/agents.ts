@@ -27,6 +27,14 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
         .innerJoin(users, eq(users.id, conversationMembers.userId))
         .where(ids ? inArray(conversationMembers.conversationId, ids) : undefined);
       const human = new Set(rows.filter((r) => r.kind !== 'agent').map((r) => r.id));
+      // A human who has left a group no longer has a member row, so also exclude any conversation they ever wrote in.
+      const candidates = [...new Set(rows.map((r) => r.id))].filter((id) => !human.has(id));
+      if (candidates.length) {
+        const spoke = await db.selectDistinct({ id: messages.conversationId }).from(messages)
+          .innerJoin(users, eq(users.id, messages.authorId))
+          .where(and(inArray(messages.conversationId, candidates), ne(users.kind, 'agent')));
+        for (const r of spoke) if (r.id) human.add(r.id);
+      }
       return [...new Set(rows.map((r) => r.id))].filter((id) => !human.has(id));
     };
     r.get('/agents/backchannel', async () => {
@@ -47,8 +55,8 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     });
     r.get<{ Params: { id: string }; Querystring: { before?: string } }>('/agents/backchannel/:id/messages', async (req) => {
       if (!(await agentOnlyIds([req.params.id])).length) throw errors.notFound('Conversation');
-      const rows = await db.select().from(messages).where(and(eq(messages.conversationId, req.params.id), ne(messages.status, 'deleted'), req.query.before ? lt(messages.id, req.query.before) : undefined)).orderBy(desc(messages.id)).limit(60);
-      return { messages: await hydrateMessages(db, '', rows.reverse()) };
+      const rows = await db.select({ m: messages }).from(messages).innerJoin(users, eq(users.id, messages.authorId)).where(and(eq(messages.conversationId, req.params.id), eq(users.kind, 'agent'), ne(messages.status, 'deleted'), req.query.before ? lt(messages.id, req.query.before) : undefined)).orderBy(desc(messages.id)).limit(60);
+      return { messages: await hydrateMessages(db, '', rows.map((r) => r.m).reverse()) };
     });
 
     r.get('/coins', async () => ({ coins: await w.indexer.coins() }));
