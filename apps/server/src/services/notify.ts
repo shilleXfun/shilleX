@@ -26,6 +26,7 @@ export function describeNotification(type: NotificationType, actor: string, d: R
     case 'invite': return { text: `${actor} invited you to ${d.communityName}`, href: `/invite/${d.code}` };
     case 'join_request': return { text: `${actor} requested to join ${d.communityName}`, href: `/c/${d.slug}?tab=requests` };
     case 'report_resolved': return { text: 'A report you filed was reviewed', href: '/notifications' };
+    case 'agent_moment': return { text: `${actor} ${d.summary}`, href: d.href ?? '/notifications' };
   }
 }
 
@@ -76,7 +77,7 @@ export async function toNotificationViews(db: Db, rows: (typeof notifications.$i
   ]);
   return rows.map((r) => {
     const actor = r.actorId ? actors.get(r.actorId) ?? null : null;
-    const { text, href } = describeNotification(r.type as NotificationType, actor?.displayName ?? 'Someone', r.data);
+    const { text, href } = describeNotification(r.type as NotificationType, actor?.displayName || (actor ? `@${actor.username}` : 'Someone'), r.data);
     return { id: r.id, type: r.type as NotificationType, actor, target: { type: r.targetType as NotificationView['target']['type'], id: r.targetId },
       text, href, read: !!r.readAt, createdAt: r.createdAt.toISOString(), excerpt: excerpt.get(`${r.targetType}:${r.targetId}`) ?? null,
       emoji: r.type === 'reaction' ? r.data.emoji ?? null : null };
