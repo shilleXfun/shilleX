@@ -1,4 +1,7 @@
+import { RAW_PER_TOKEN } from '../world/chain.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
+
+const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
 
 export const SOL = 1_000_000_000;
 export const RESERVE = 10_000_000;
@@ -20,7 +23,9 @@ const sol = (l: number) => (l / SOL).toFixed(3);
 
 export function ready(v: AgentView, kind: ActionKind): boolean {
   const last = v.state.cooldowns[kind];
-  return !last || Date.parse(v.now) - Date.parse(last) >= COOLDOWN_MS[kind];
+  if (!last) return true;
+  const since = Date.parse(v.now) - Date.parse(last);
+  return Number.isNaN(since) || since >= COOLDOWN_MS[kind];
 }
 
 function pickWeighted<T>(items: [T, number][], rng: () => number): T | null {
@@ -57,7 +62,7 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   for (const m of v.mentions) {
     const human = m.authorKind === 'human';
     const situation: Situation = human ? 'reply_human' : aff(m.authorId) >= 0 ? 'reply_agree' : t.pettiness > 0.5 ? 'roast' : 'reply_disagree';
-    add({ kind: 'reply', score: 1.2 + 0.3 * t.chattiness, situation, target: { postId: m.postId, userId: m.authorId }, reason: `${human ? 'a human' : 'an agent'} mentioned me (affinity ${f2(aff(m.authorId))})` });
+    add({ kind: 'reply', score: (human ? 1.2 : 0.4) + 0.3 * t.chattiness, situation, target: { postId: m.postId, userId: m.authorId }, reason: `${human ? 'a human' : 'an agent'} mentioned me (affinity ${f2(aff(m.authorId))})` });
   }
   for (const dm of v.dms) {
     const human = dm.otherKind === 'human';
@@ -119,8 +124,10 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     }
   }
   for (const p of v.wallet.positions) {
-    const c = coin(p.mint);
-    if (!c || c.graduated) continue;
+    // A position whose coin is not in the view is treated as flat rather than skipped.
+    const c = coin(p.mint) ?? { mint: p.mint, symbol: p.symbol, creatorId: p.creatorId, priceLamports: 0, change10m: 0, change1h: 0, holders: 0, graduated: false, launchedAt: v.now };
+    if (c.graduated) continue;
+    if (v.wallet.lamports < MIN_FEE || p.raw < RAW_PER_TOKEN) continue; // cannot pay the fee, or dust
     const pnl = pnlOf(p);
     if (p.createdByMe) {
       if (pnl > 0.2) {
@@ -133,13 +140,16 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     }
     const score = t.greed * Math.max(0, pnl) * 1.5 + (pnl < -0.3 ? 0.4 * (1 - t.loyalty) : 0) + (c.change10m < -0.15 ? 0.5 * (1 - t.risk) : 0) + 0.6 * Math.max(0, -aff(p.creatorId));
     const all = pnl < -0.3 || rng() < 0.4;
-    add({ kind: 'sell', score, raw: all ? p.raw : Math.floor(p.raw / 2), situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
+    const sellRaw = all ? p.raw : Math.floor(p.raw / 2);
+    if (sellRaw < RAW_PER_TOKEN) continue;
+    add({ kind: 'sell', score, raw: sellRaw, situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
       reason: `sold ${all ? 'all' : 'half'} of $${p.symbol}: P&L ${pct(pnl)}, 10-min move ${pct(c.change10m)}, greed ${f2(t.greed)}` });
   }
   const liveOwn = v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && Date.parse(v.now) - Date.parse(c.launchedAt) < 24 * HOUR);
   if (!broke && v.wallet.lamports >= LAUNCH_MIN && !liveOwn) {
     const initial = Math.max(0, Math.floor((v.wallet.lamports - RESERVE - LAUNCH_COST) * 0.3 * t.risk));
-    add({ kind: 'launch', score: 0.15 + 0.3 * t.risk + 0.2 * t.curiosity + (mood > 0.3 ? 0.1 : 0) + WEATHER_RISK[v.weather], lamports: initial, situation: 'launching',
+    const recent = v.coins.filter((c) => Date.parse(v.now) - Date.parse(c.launchedAt) < HOUR).length;
+    add({ kind: 'launch', score: (0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent), lamports: initial, situation: 'launching',
       reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, risk ${f2(t.risk)}, curiosity ${f2(t.curiosity)}` });
   }
   const ally = Object.entries(v.affinity).filter(([, s]) => s > 0.7).sort((a, b) => b[1] - a[1])[0];
