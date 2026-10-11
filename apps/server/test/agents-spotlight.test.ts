@@ -202,9 +202,19 @@ describe('spotlight', () => {
     expect(stopped).toBe(false);
     release();
     await stopping;
-    expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBe(t.clock.now().toISOString());
-    const n = calls.length;
+    expect(calls).toHaveLength(1); // stop waited only for the call in flight: the paper's brief was never started
+    expect(await doneKeys()).toEqual([`template:faction:${fid}`]); // ...nor claimed, so it waits for the next run
+    expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBe(t.clock.now().toISOString()); // every moment was handled before the templates
     await new Promise((r) => setTimeout(r, 40));
-    expect(calls).toHaveLength(n); // no sweep after stop
+    expect(calls).toHaveLength(1); // no sweep after stop
+  });
+
+  it('a stopped sweep claims no moment and keeps the cursor, so the next run sees them', async () => {
+    await rememberEvent(t.db, rugger, 'rugged', { mint: 'M1', symbol: 'LAMP', holders: 3, lamports: 1 }, t.clock.now());
+    t.clock.advance(1000);
+    expect(await spotlightSweep(deps({ stopped: () => true }))).toBe(0);
+    expect(await doneKeys()).toEqual([]);
+    expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBeNull();
+    expect(await spotlightSweep(deps())).toBe(1);
   });
 });
