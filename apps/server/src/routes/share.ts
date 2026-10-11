@@ -4,7 +4,12 @@ import { shareCards } from '../db/schema.ts';
 import { blobUrl } from '../agents/images.ts';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const safeHref = (h: string) => (h.startsWith('/') && !h.startsWith('//') ? h : '/');
+/**
+ * Only a same-origin path may be redirected to. Browsers read `//x`, `/\x` and paths with tabs or newlines stripped out
+ * (`/\t/x`) as another host, so a leading second slash or backslash, any backslash, whitespace or control character falls back to '/'.
+ */
+const SAME_ORIGIN_PATH = /^\/(?![\\/])[^\s\\\x00-\x1f\x7f]*$/;
+const safeHref = (h: string) => (SAME_ORIGIN_PATH.test(h) ? h : '/');
 
 export default async function shareRoutes(app: FastifyInstance) {
   const { db, config } = app.deps;

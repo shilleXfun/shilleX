@@ -19,6 +19,7 @@ import { createImagePolicy } from '../agents/image-policy.ts';
 import { factionMomentHandler } from '../agents/depth/factions.ts';
 import { paperMomentHandler } from '../agents/depth/paper.ts';
 import { reputation } from '../agents/depth/reputation.ts';
+import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
@@ -80,6 +81,12 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     else if (e.type === 'transfer') { indexer.invalidate(e.fromId); if (e.toId) indexer.invalidate(e.toId); }
     else indexer.invalidate(e.creatorId);
   });
+  // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s. No OPENAI_API_KEY: no paid images.
+  const stopSpotlight = startSpotlight({
+    db, bus: app.deps.bus, now,
+    gen: spotlightImageGen(config),
+    limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax },
+  });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
     indexer, budget, chain, key, engine: null, moments: null, network: chain.network,
@@ -109,5 +116,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     const treasury = await walletOf(db, TREASURY);
     console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
-  return Object.assign(handles, { async stop() { await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
