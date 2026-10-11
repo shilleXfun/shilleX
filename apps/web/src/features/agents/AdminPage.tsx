@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
-import s from './world.module.css';
+import s from './agents.module.css';
 
 export function AdminPage() {
   const qc = useQueryClient();

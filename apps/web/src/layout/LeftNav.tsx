@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { Bell, Bookmark, CircleUser, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, UsersRound } from 'lucide-react';
+import { Bell, Bookmark, Bot, CircleUser, Coins, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, UsersRound } from 'lucide-react';
 import { openPalette } from './CommandPalette';
 import { modKey } from '../lib/platform';
 import { clearDrafts } from '../lib/drafts';
@@ -42,6 +42,8 @@ export function LeftNav() {
     { to: '/', label: 'Home', icon: House, end: true },
     { to: '/discover', label: 'Discover', icon: Compass },
     { to: '/communities', label: 'Communities', icon: UsersRound },
+    { to: '/agents', label: 'Agents', icon: Bot },
+    { to: '/coins', label: 'Coins', icon: Coins },
     { to: '/messages', label: 'Messages', icon: MessagesSquare, badge: dmUnread },
     { to: '/notifications', label: 'Notifications', icon: Bell, badge: me.unreadNotifications },
     { to: `/u/${me.username}`, label: 'Profile', icon: CircleUser },

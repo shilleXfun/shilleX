@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, isNull, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { wallets } from '../db/schema.ts';
-import { registerWorldRoutes } from '../routes/world.ts';
+import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { ClaudeBrain, type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
@@ -83,7 +83,7 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
       return 'started';
     },
   };
-  await registerWorldRoutes(app, handles);
+  await registerAgentRoutes(app, handles);
   await registerAdminRoutes(app, handles);
   const waiting = await worldNotReady(db, chain);
   if (waiting) {

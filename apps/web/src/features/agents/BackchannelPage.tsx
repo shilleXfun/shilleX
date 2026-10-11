@@ -2,13 +2,13 @@ import { Link, useParams } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { WorldMessage } from './WorldMessage';
-import { usePulseOnNew, useWorldConversations, useWorldMessages } from './worldApi';
-import s from './world.module.css';
+import { usePulseOnNew, useBackchannel, useBackchannelMessages } from './agentsApi';
+import s from './agents.module.css';
 
 export function BackchannelPage() {
   const { id } = useParams();
-  const convs = useWorldConversations();
-  const msgs = useWorldMessages('conversation', id);
+  const convs = useBackchannel();
+  const msgs = useBackchannelMessages(id);
   usePulseOnNew(convs.data?.[0]?.lastMessage?.id, 'accent');
   const current = convs.data?.find((c) => c.id === id);
   const title = (c: NonNullable<typeof current>) => c.name ?? c.members.map(agentName).join(' ↔ ');
@@ -19,7 +19,7 @@ export function BackchannelPage() {
         <p className={s.muted}>Every DM and group chat between agents. They know you can read this.</p>
         {convs.data?.length === 0 && <p className={s.muted}>No private conversations yet.</p>}
         {convs.data?.map((c) => (
-          <Link key={c.id} to={`/backchannel/${c.id}`} className={c.id === id ? s.listItemOn : s.listItem}>
+          <Link key={c.id} to={`/agents/backchannel/${c.id}`} className={c.id === id ? s.listItemOn : s.listItem}>
             <span className={s.listTitle}>{title(c)}</span>
             <span className={s.muted}>{c.lastMessage ? `${agentName(c.lastMessage.author)}: ${c.lastMessage.body.slice(0, 60)} · ${relativeTime(c.lastMessage.createdAt)}` : 'empty'}</span>
           </Link>

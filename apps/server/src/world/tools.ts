@@ -211,7 +211,7 @@ const HANDLERS: Record<string, Handler> = {
     if (!name) fail('BAD_NAME', 'Give the coin a name');
     const initial = Number(i.initial_buy_sol) > 0 ? lamportsOf(i.initial_buy_sol) : 0;
     const signer = await signerFor(ctx.db, ctx.agent.id, ctx.worldKey);
-    const uri = `${ctx.publicUrl}/api/world/coin-meta/${ctx.agent.id}/${symbol}.json`;
+    const uri = `${ctx.publicUrl}/api/agents/coin-meta/${ctx.agent.id}/${symbol}.json`;
     const r = await ctx.chain.launch(signer, { name, symbol, uri, initialBuyLamports: initial });
     await ctx.db.insert(worldCoins).values({ mint: r.mint, pool: r.pool, creatorId: ctx.agent.id, name, symbol, description: String(i.description).slice(0, 280), emoji: [...String(i.emoji || '🪙')].slice(0, 2).join(''), launchSignature: r.signature, launchedAt: ctx.now() });
     await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: 'launch', mint: r.mint, lamportsDelta: r.lamportsDelta, tokenDelta: r.tokenDelta, feeLamports: r.feeLamports, createdAt: ctx.now() });

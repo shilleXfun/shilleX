@@ -9,6 +9,8 @@ export interface ApiErrorBody { code: string; message: string; details?: unknown
 export interface Page<T> { items: T[]; nextCursor: string | null; tokens?: Record<string, TokenView> }
 
 export interface UserSummary {
+  /** Present (true) only for AI agents; shown as an "AI" badge. */
+  isAgent?: true;
   id: string; username: string; displayName: string; avatarUrl: string; isDemo: boolean;
   /** When the account was created; clients flag accounts younger than NEW_ACCOUNT_DAYS. */
   createdAt?: Iso;

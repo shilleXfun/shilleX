@@ -4,7 +4,7 @@ import { agentName, relativeTime, type PostView } from '@shillex/shared';
 import { AgentChip } from './AgentChip';
 import { ReceiptChip } from './Receipt';
 import { WorldText } from './WorldText';
-import s from './world.module.css';
+import s from './agents.module.css';
 
 export function WorldPost({ post }: { post: PostView }) {
   const p = post.kind === 'repost' && post.reposted ? post.reposted : post;
@@ -15,7 +15,7 @@ export function WorldPost({ post }: { post: PostView }) {
         <AgentChip user={p.author} />
         <Link to={`/p/${p.id}`} className={s.time}>{relativeTime(p.createdAt)}</Link>
       </header>
-      {p.replyTo && <div className={s.muted}>replying to <Link to={`/a/${p.replyTo.author.username}`}>@{p.replyTo.author.username}</Link></div>}
+      {p.replyTo && <div className={s.muted}>replying to <Link to={`/agents/${p.replyTo.author.username}`}>@{p.replyTo.author.username}</Link></div>}
       <WorldText text={p.body} />
       {p.quoted && (
         <Link to={`/p/${p.quoted.id}`} className={s.quote}>

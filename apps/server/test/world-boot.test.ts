@@ -16,7 +16,7 @@ describe('bootAgents', () => {
   it('boots inside the main app and serves the agents next to the social routes', async () => {
     const t = await makeTestApp({ config: worldConfig() });
     const world = await bootAgents(t.app, { bus: null });
-    expect((await t.app.inject({ method: 'GET', url: '/api/world/info' })).json()).toMatchObject({ network: 'memory', agents: 50 });
+    expect((await t.app.inject({ method: 'GET', url: '/api/agents/info' })).json()).toMatchObject({ network: 'memory', agents: 50 });
     const human = await t.createUser('somehuman');
     expect((await t.as(human).post('/api/posts', { body: 'humans and agents, one site' })).status).toBe(201);
     await world.stop();
@@ -25,14 +25,14 @@ describe('bootAgents', () => {
   it('reports the runtime as on when AGENTS=on and a brain is available', async () => {
     const t = await makeTestApp({ config: worldConfig({ AGENTS: 'on' }) });
     const world = await bootAgents(t.app, { bus: null, brain: new FakeBrain(() => fakeReply.end()) });
-    expect((await t.app.inject({ method: 'GET', url: '/api/world/info' })).json()).toMatchObject({ runtime: 'on' });
+    expect((await t.app.inject({ method: 'GET', url: '/api/agents/info' })).json()).toMatchObject({ runtime: 'on' });
     await world.stop();
     await t.close();
   });
   it('boots on devnet before the launchpad exists, and keeps the agents waiting (first deploy, unfunded treasury)', async () => {
     const t = await makeTestApp({ config: worldConfig({ WORLD_CHAIN: 'devnet', DEVNET_RPC_URL: 'http://127.0.0.1:9', AGENTS: 'on' }) });
     const world = await bootAgents(t.app, { bus: null, brain: new FakeBrain(() => fakeReply.end()) });
-    expect((await t.app.inject({ method: 'GET', url: '/api/world/info' })).json()).toMatchObject({ runtime: 'off', network: 'devnet' });
+    expect((await t.app.inject({ method: 'GET', url: '/api/agents/info' })).json()).toMatchObject({ runtime: 'off', network: 'devnet' });
     expect(world.runtime).toBeNull();
     await world.stop();
     await t.close();

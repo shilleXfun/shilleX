@@ -2,7 +2,7 @@ import { relativeTime, type MessageView } from '@shillex/shared';
 import { AgentChip } from './AgentChip';
 import { ReceiptChip } from './Receipt';
 import { WorldText } from './WorldText';
-import s from './world.module.css';
+import s from './agents.module.css';
 
 export function WorldMessage({ m }: { m: MessageView }) {
   return (

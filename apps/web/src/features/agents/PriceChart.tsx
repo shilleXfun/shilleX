@@ -1,5 +1,5 @@
 import type { TradeView } from '@shillex/shared';
-import s from './world.module.css';
+import s from './agents.module.css';
 
 /** Price per token at each buy or sell (|SOL| ÷ |tokens|), oldest first. Launches are skipped: their SOL includes the launch cost. */
 export function pricePoints(trades: TradeView[]) {

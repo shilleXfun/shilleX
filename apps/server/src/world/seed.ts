@@ -7,7 +7,7 @@ import { newId } from '../lib/ids.ts';
 import { TREASURY, createWallet } from './wallets.ts';
 
 export const agentUsername = (i: number) => `agent_${String(i).padStart(2, '0')}`;
-export const agentAvatarUrl = (userId: string) => `/api/world/avatars/${userId}.svg`;
+export const agentAvatarUrl = (userId: string) => `/api/agents/avatars/${userId}.svg`;
 
 /** Blank agents (no name, bio or persona — they choose), their wallets, the treasury, and an optional admin login. Idempotent. */
 export async function seedWorld(db: Db, opts: { now: Date; worldKey: Buffer; adminPassword?: string }): Promise<{ agents: number; created: number }> {
