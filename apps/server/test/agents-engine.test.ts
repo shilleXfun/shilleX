@@ -23,7 +23,9 @@ describe('engine', () => {
     expect(e.stats().ticks).toBe(60);
     expect((await w.t.db.select({ n: sql<number>`count(*)::int` }).from(posts).where(sql`${posts.agentTurnId} is not null`))[0]!.n).toBeGreaterThan(0);
     expect(await w.t.db.select().from(phrasebooks)).toEqual([]);
-    expect(asked.every((m) => m.kind === 'launch' || m.kind === 'rug')).toBe(true);
+    // Since Phase 3 the tick also asks for missing phrasebooks; the refused asks leave the fallback voice in place.
+    expect(asked.every((m) => ['launch', 'rug', 'graduation', 'phrasebook'].includes(m.kind))).toBe(true);
+    expect(asked.some((m) => m.kind === 'phrasebook')).toBe(true);
     expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.model, 'engine'))).length).toBe(60);
   });
   it('keeps ticking when the chain is down: failed receipts, no thrown tick (Review Focus 2)', async () => {

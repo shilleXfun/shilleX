@@ -7,6 +7,7 @@ import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
 import { candidates, choose } from './decide.ts';
 import { perceive } from './perceive.ts';
+import { needsPhrasebook } from './phrasebook-writer.ts';
 import type { ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy }
@@ -37,6 +38,7 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
     try {
       const id = await pickAgent(d);
       if (!id) return;
+      if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
       const v = await perceive(d, id);
       const c = choose(candidates(v, d.rng), d.rng);
       const r = await act(d, v, c);
@@ -45,7 +47,8 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
         actions[c.kind] = (actions[c.kind] ?? 0) + 1;
         if (r.error) actions.failed = (actions.failed ?? 0) + 1;
       }
-      void Promise.resolve(d.moments?.drain()).catch(() => {});
+      // Model moments run beside the free engine; a failed drain is logged, never silent.
+      void Promise.resolve(d.moments?.drain()).catch((e) => console.error('[agents] moments drain failed', e));
     } catch (e) {
       lastError = (e as Error)?.message ?? String(e);
       console.error('[agents] tick failed', e);
