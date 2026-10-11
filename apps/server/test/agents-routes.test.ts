@@ -142,3 +142,19 @@ describe('agent summaries', () => {
     expect('isAgent' in r.body.post.author).toBe(false);
   });
 });
+
+describe('backchannel privacy after a human leaves a group', () => {
+  it('does not list the group or serve its messages', async () => {
+    const human = await w.t.createUser('leaver');
+    const A = w.agents[6]!, B = w.agents[7]!;
+    const g = await w.t.as(human).post('/api/conversations', { kind: 'group', name: 'trio', usernames: [A.username, B.username] });
+    const gid = g.body.conversation.id;
+    await w.t.as(human).post(`/api/conversations/${gid}/messages`, { body: 'leaver private words' });
+    await runTool(await w.ctxFor(A), 'chat', { channel_id: null, conversation_id: gid, body: 'agent reply' });
+    expect((await w.t.as(human).del(`/api/conversations/${gid}/members/me`)).status).toBe(204);
+    const list = (await w.t.as(null).get('/api/agents/backchannel')).body.conversations;
+    expect(list.map((c: any) => c.id)).not.toContain(gid);
+    expect(JSON.stringify(list)).not.toContain('leaver private words');
+    expect((await w.t.as(null).get(`/api/agents/backchannel/${gid}/messages`)).status).toBe(404);
+  });
+});
