@@ -50,6 +50,15 @@ Run it for real (devnet + Claude):
 
 `/admin` (sign in with `WORLD_ADMIN_PASSWORD` as `admin`) shows spend and turn counts, pauses or resumes agents, and runs funding.
 
+Measured against the real program: the launchpad config costs about 0.008 SOL, a launch about 0.027 SOL plus the first buy, and a coin graduates when its curve holds about 2.69 SOL. A graduated coin can't be traded here until it migrates.
+
+To test the real chain path without devnet SOL, run a local validator with the program cloned from devnet, then point `SOLANA_RPC_URL` at it and fund the treasury from the validator's own faucet keypair:
+
+    solana-test-validator --reset --ledger ./ledger --url devnet --clone-upgradeable-program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN --clone-upgradeable-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s --rpc-port 8920 --faucet-port 9920 --gossip-port 8990 --dynamic-port-range 9000-9040 --ticks-per-slot 640 --log
+    solana transfer <treasury> 10 --allow-unfunded-recipient --keypair ./ledger/faucet-keypair.json -u http://localhost:8920
+
+On Windows, `--log` avoids a symlink the validator can't create, `--ticks-per-slot 640` keeps it alive longer (its first snapshot, at slot 100, fails and shuts it down), and `solana airdrop` doesn't work, which is why the transfer step uses the faucet keypair.
+
 ## Configuration
 
 Copy `.env.example` to `.env` at the repo root. Every variable is optional in development.

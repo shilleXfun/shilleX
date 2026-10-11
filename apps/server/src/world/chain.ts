@@ -20,12 +20,13 @@ export class ChainError extends Error {
 }
 
 export const RAW_PER_TOKEN = 1_000_000;
+export const GRADUATED_MESSAGE = 'This coin graduated: its curve is complete and it can no longer be traded here';
 const SOL = 1_000_000_000;
 const TX_FEE = 5000;
-const LAUNCH_COST = 20_000_000; // rent + creation, close to the devnet spike's measurement
+const LAUNCH_COST = 26_500_000; // rent + creation, as measured against the real program on a local validator
 const TRADE_FEE_BPS = 100;
 // Scaled to a 5 SOL economy (50 wallets × 0.1 SOL) so a few agents can visibly pump or rug a coin; tuned to match the devnet launchpad.
-const V_SOL = 1 * SOL, V_TOKENS = 1_073_000_000 * RAW_PER_TOKEN, CURVE_TOKENS = 793_100_000 * RAW_PER_TOKEN, GRADUATE_AT = 3 * SOL;
+const V_SOL = 1 * SOL, V_TOKENS = 1_073_000_000 * RAW_PER_TOKEN, CURVE_TOKENS = 793_100_000 * RAW_PER_TOKEN, GRADUATE_AT = 2_688_110_852; // the launchpad config's migration quote threshold
 
 interface Pool { mint: string; pool: string; sol: number; sold: number; graduated: boolean }
 interface Account { lamports: number; tokens: Map<string, number> }
@@ -40,14 +41,14 @@ export class MemoryChain implements Chain {
   airdrop(publicKey: string, lamports: number) { this.acct(publicKey).lamports += lamports; }
   private acct(pk: string) { let a = this.accounts.get(pk); if (!a) { a = { lamports: 0, tokens: new Map() }; this.accounts.set(pk, a); } return a; }
   private sig() { return `mem${++this.n}`.padEnd(64, 'x'); }
-  private spend(a: Account, lamports: number) {
-    if (a.lamports < lamports) throw new ChainError('INSUFFICIENT_FUNDS', `Insufficient SOL: has ${a.lamports} lamports, needs ${lamports}`);
-    a.lamports -= lamports;
+  private need(a: Account, lamports: number) {
+    if (a.lamports < lamports) throw new ChainError('INSUFFICIENT_FUNDS', `Not enough SOL: the wallet has ${a.lamports / SOL} SOL and this needs ${lamports / SOL} SOL`);
   }
+  private spend(a: Account, lamports: number) { this.need(a, lamports); a.lamports -= lamports; }
   private pool(mint: string) {
     const p = this.pools.get(mint);
     if (!p) throw new ChainError('UNKNOWN_MINT', `No bonding-curve pool for mint ${mint}`);
-    if (p.graduated) throw new ChainError('GRADUATED', 'This coin graduated; its curve is closed');
+    if (p.graduated) throw new ChainError('GRADUATED', GRADUATED_MESSAGE);
     return p;
   }
   private price(p: Pool) { return ((V_SOL + p.sol) / (V_TOKENS - p.sold)) * RAW_PER_TOKEN; }
@@ -59,32 +60,35 @@ export class MemoryChain implements Chain {
 
   async launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult> {
     const a = this.acct(signer.publicKey.toBase58());
-    this.spend(a, LAUNCH_COST + TX_FEE + input.initialBuyLamports);
-    a.lamports += input.initialBuyLamports; // the first buy below re-spends it through the curve
+    this.need(a, LAUNCH_COST + TX_FEE + input.initialBuyLamports);
+    this.spend(a, LAUNCH_COST + TX_FEE);
     const mint = `M${this.n + 1}${input.symbol}`.padEnd(44, '1').slice(0, 44);
     this.pools.set(mint, { mint, pool: `P${mint.slice(1)}`, sol: 0, sold: 0, graduated: false });
     const signature = this.sig();
-    let tokenDelta = 0;
-    if (input.initialBuyLamports > 0) tokenDelta = this.swapIn(a, this.pools.get(mint)!, input.initialBuyLamports);
-    return { mint, pool: this.pools.get(mint)!.pool, signature, lamportsDelta: -(LAUNCH_COST + TX_FEE + input.initialBuyLamports), tokenDelta, feeLamports: TX_FEE };
+    const first = input.initialBuyLamports > 0 ? this.swapIn(a, this.pools.get(mint)!, input.initialBuyLamports) : { out: 0, spent: 0 };
+    return { mint, pool: this.pools.get(mint)!.pool, signature, lamportsDelta: -(LAUNCH_COST + TX_FEE + first.spent), tokenDelta: first.out, feeLamports: TX_FEE };
   }
 
-  private swapIn(a: Account, p: Pool, lamportsIn: number): number {
-    this.spend(a, lamportsIn);
-    const net = Math.floor(lamportsIn * (1 - TRADE_FEE_BPS / 10_000));
+  /** Partial fill, like the real program: a buy past the threshold takes only what completes the curve. */
+  private swapIn(a: Account, p: Pool, lamportsIn: number): { out: number; spent: number } {
+    const keep = 1 - TRADE_FEE_BPS / 10_000;
+    const spent = Math.min(lamportsIn, Math.ceil((GRADUATE_AT - p.sol) / keep));
+    this.spend(a, spent);
+    const net = Math.min(Math.floor(spent * keep), GRADUATE_AT - p.sol);
     const k = (V_SOL + p.sol) * (V_TOKENS - p.sold);
     const out = Math.min(Math.floor(V_TOKENS - p.sold - k / (V_SOL + p.sol + net)), CURVE_TOKENS - p.sold);
     p.sol += net; p.sold += out;
     if (p.sol >= GRADUATE_AT || p.sold >= CURVE_TOKENS) p.graduated = true;
     a.tokens.set(p.mint, (a.tokens.get(p.mint) ?? 0) + out);
-    return out;
+    return { out, spent };
   }
 
   async buy(signer: Keypair, mint: string, lamportsIn: number, _slippageBps?: number): Promise<TradeResult> {
     const p = this.pool(mint), a = this.acct(signer.publicKey.toBase58());
-    this.spend(a, TX_FEE + lamportsIn); a.lamports += lamportsIn;
-    const tokenDelta = this.swapIn(a, p, lamportsIn);
-    return { signature: this.sig(), lamportsDelta: -(lamportsIn + TX_FEE), tokenDelta, feeLamports: TX_FEE };
+    this.need(a, TX_FEE + lamportsIn);
+    this.spend(a, TX_FEE);
+    const { out, spent } = this.swapIn(a, p, lamportsIn);
+    return { signature: this.sig(), lamportsDelta: -(spent + TX_FEE), tokenDelta: out, feeLamports: TX_FEE };
   }
 
   async sell(signer: Keypair, mint: string, rawTokensIn: number, _slippageBps?: number): Promise<TradeResult> {

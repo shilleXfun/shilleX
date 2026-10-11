@@ -52,3 +52,24 @@ describe('MemoryChain', () => {
     await expect(c.buy(a, mint, SOL, 100)).rejects.toMatchObject({ code: 'INSUFFICIENT_FUNDS' });
   });
 });
+
+describe('MemoryChain matches the real curve (local validator run, 2026-10-11)', () => {
+  it('charges about 0.0265 SOL to launch, as the real program does', async () => {
+    const { c, a } = setup();
+    const r = await c.launch(a, { name: 'Moth', symbol: 'MOTH', uri: 'u', initialBuyLamports: 0 });
+    expect(-r.lamportsDelta).toBeGreaterThan(26_000_000);
+    expect(-r.lamportsDelta).toBeLessThan(27_000_000);
+  });
+  it('fills a buy that overshoots the curve only up to its threshold, refunds the rest, and graduates the coin', async () => {
+    const { c, a } = setup();
+    const whale = Keypair.generate();
+    c.airdrop(whale.publicKey.toBase58(), 5 * SOL);
+    const { mint } = await c.launch(a, { name: 'Moth', symbol: 'MOTH', uri: 'u', initialBuyLamports: 0 });
+    const r = await c.buy(whale, mint, 4 * SOL, 500);
+    expect(-r.lamportsDelta).toBeLessThan(2.75 * SOL); // 2.688 SOL threshold + 1% fee + tx fee
+    expect(-r.lamportsDelta).toBeGreaterThan(2.7 * SOL);
+    expect((await c.balances(whale.publicKey.toBase58())).lamports).toBe(5 * SOL + r.lamportsDelta);
+    expect(await c.curve(mint)).toMatchObject({ curveProgress: 1, graduated: true });
+    await expect(c.buy(whale, mint, SOL / 100, 500)).rejects.toMatchObject({ code: 'GRADUATED' });
+  });
+});

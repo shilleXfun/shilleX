@@ -54,3 +54,39 @@ describe('DevnetChain sending (review fix)', () => {
     expect(r.signature).toBe('sig2');
   });
 });
+
+import { toChainError } from '../src/world/devnet-chain.ts';
+
+// Messages as the local validator returned them (2026-10-11 run against the cloned DBC program).
+const simFail = (logs: string[]) => `Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1. \nLogs: \n${JSON.stringify(logs, null, 2)}. \nCatch the \`SendTransactionError\` and call \`getLogs()\` on it for full details.`;
+
+describe('toChainError (local validator findings)', () => {
+  it('says how much SOL the wallet has and needs, without the log dump', () => {
+    const e = toChainError(new Error(simFail(['Program 11111111111111111111111111111111 invoke [1]', 'Transfer: insufficient lamports 89990000, need 5000000000', 'Program 11111111111111111111111111111111 failed: custom program error: 0x1'])));
+    expect(e.code).toBe('INSUFFICIENT_FUNDS');
+    expect(e.message).toBe('Not enough SOL: the wallet has 0.08999 SOL and this needs 5 SOL plus fees');
+  });
+  it('reports selling more tokens than the wallet holds as INSUFFICIENT_TOKENS', () => {
+    const e = toChainError(new Error(simFail(['Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN invoke [1]', 'Program log: Instruction: Swap', 'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]', 'Program log: Error: insufficient funds', 'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed: custom program error: 0x1'])));
+    expect(e.code).toBe('INSUFFICIENT_TOKENS');
+    expect(e.message).toBe('Not enough tokens: the wallet holds fewer than this sale needs');
+  });
+  it('treats a wallet that cannot pay the fee as out of SOL', () => {
+    const e = toChainError(new Error('Simulation failed. \nMessage: Transaction simulation failed: Attempt to debit an account but found no record of a prior credit.. \nLogs: \n[]. '));
+    expect(e).toMatchObject({ code: 'INSUFFICIENT_FUNDS', message: 'Not enough SOL to pay the transaction fee' });
+  });
+  it('keeps an Anchor error message and drops the logs', () => {
+    const e = toChainError(new Error(simFail(['Program log: AnchorError occurred. Error Code: PoolIsCompleted. Error Number: 6029. Error Message: Pool is completed.'])));
+    expect(e).toMatchObject({ code: 'GRADUATED', message: 'This coin graduated: its curve is complete and it can no longer be traded here' });
+  });
+  it('maps an exceeded slippage limit to SLIPPAGE with a short message', () => {
+    const e = toChainError(new Error(simFail(['Program log: AnchorError occurred. Error Code: ExceededSlippage. Error Number: 6003. Error Message: Exceeded slippage tolerance.'])));
+    expect(e).toMatchObject({ code: 'SLIPPAGE', message: 'The price moved past your slippage limit; nothing was traded' });
+  });
+  it('shortens anything else to the first line, with no logs', () => {
+    const e = toChainError(new Error(simFail(['Program log: AnchorError occurred. Error Code: MathOverflow. Error Number: 6000. Error Message: Math operation overflow.'])));
+    expect(e.code).toBe('TX_FAILED');
+    expect(e.message).toBe('Transaction failed: Math operation overflow.');
+    expect(toChainError(new Error('socket hang up')).message).toBe('Transaction failed: socket hang up');
+  });
+});
