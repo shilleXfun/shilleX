@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { FastifyInstance } from 'fastify';
-import { eq, sql } from 'drizzle-orm';
+import { eq, notInArray, sql } from 'drizzle-orm';
 import type { ContextItem, ToolCallRecord, TurnTrigger, TurnUsage } from '@shillex/shared';
 import { agentTurns, agents, users } from '../db/schema.ts';
 import { AgentActor } from './actor.ts';
@@ -18,10 +18,19 @@ export interface RuntimeDeps {
   app: FastifyInstance; brain: AgentBrain; chain: Chain; budget: Budget; events: WorldEvents; bus: WorldBus | null; worldKey: Buffer;
   now?: () => Date; random?: () => number; heartbeatMs?: number; cooldownMs?: number; priorityCooldownMs?: number; concurrency?: number; maxRoundTrips?: number; autoStart?: boolean;
 }
-export interface Runtime { wake(agentId: string, trigger: TurnTrigger): void; heartbeat(): Promise<void>; idle(): Promise<void>; stop(): Promise<void>; stats(): { queued: number; running: number } }
+export interface Runtime { wake(agentId: string, trigger: TurnTrigger): void; heartbeat(): Promise<void>; idle(): Promise<void>; stop(): Promise<void>; stats(): { queued: number; running: number; halted: string | null } }
 
 /** Wakes about something that happened to this agent specifically: they wait out a shorter cooldown. */
 const PRIORITY: TurnTrigger['type'][] = ['mention', 'reply', 'dm', 'money'];
+/** Errors that will fail every turn until a human fixes the account, so the runtime halts instead of burning turns. */
+export function accountProblem(e: unknown): string | null {
+  const status = (e as { status?: number })?.status;
+  const msg = (e as Error)?.message ?? '';
+  if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
+  if (status === 403) return 'Anthropic refused this key permission (403); check the key and restart';
+  if (status === 400 && /credit balance|billing/i.test(msg)) return 'The Anthropic account is out of credit; top it up and restart';
+  return null;
+}
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 
 export function startRuntime(d: RuntimeDeps): Runtime {
@@ -38,11 +47,12 @@ export function startRuntime(d: RuntimeDeps): Runtime {
   const running = new Set<string>();
   const lastTurnAt = new Map<string, number>();
   const turnCount = new Map<string, number>();
-  let stopped = false, timer: NodeJS.Timeout | null = null, retryTimer: NodeJS.Timeout | null = null;
+  let stopped = false, halted: string | null = null, timer: NodeJS.Timeout | null = null, retryTimer: NodeJS.Timeout | null = null;
   const idleWaiters: (() => void)[] = [];
+  // Failed and aborted turns don't count: an agent whose first turn never ran gets it again.
   const ready = (async () => {
     await router.load();
-    for (const r of await db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int` }).from(agentTurns).groupBy(agentTurns.agentId)) turnCount.set(r.a, r.n);
+    for (const r of await db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int` }).from(agentTurns).where(notInArray(agentTurns.status, ['failed', 'aborted'])).groupBy(agentTurns.agentId)) turnCount.set(r.a, r.n);
   })().catch((e) => console.error('[world] runtime warm-up failed', e));
 
   function settle() {
@@ -50,7 +60,7 @@ export function startRuntime(d: RuntimeDeps): Runtime {
   }
 
   function wake(agentId: string, trigger: TurnTrigger) {
-    if (stopped) return;
+    if (stopped || halted) return;
     const level = budget.level();
     if (level === 'stopped') return;
     if (level === 'events' && (trigger.type === 'heartbeat' || trigger.type === 'first_turn')) return;
@@ -60,7 +70,8 @@ export function startRuntime(d: RuntimeDeps): Runtime {
 
   async function pump() {
     await ready;
-    if (stopped) return settle();
+    if (halted) pending.clear();
+    if (stopped || halted) return settle();
     const t = now().getTime();
     let waitMs = Infinity;
     for (const [agentId, triggers] of [...pending]) {
@@ -124,6 +135,8 @@ export function startRuntime(d: RuntimeDeps): Runtime {
       status = 'failed';
       reasoning += `${reasoning ? '\n\n' : ''}[runtime] ${(e as Error).message ?? String(e)}`;
       console.error('[world] turn failed', agentId, e);
+      const problem = accountProblem(e);
+      if (problem && !halted) { halted = problem; console.error(`[world] runtime halted: ${problem}`); }
     }
     const costUsd = priceOf(model, usage);
     budget.add(costUsd);
@@ -144,7 +157,7 @@ export function startRuntime(d: RuntimeDeps): Runtime {
 
   async function pickHeartbeat() {
     await ready;
-    if (stopped) return;
+    if (stopped || halted) return;
     const rows = await db.select({ id: agents.userId }).from(agents).where(eq(agents.status, 'active'));
     const ids = rows.map((r) => r.id).filter((id) => !running.has(id) && !pending.has(id));
     if (!ids.length) return;
@@ -180,6 +193,6 @@ export function startRuntime(d: RuntimeDeps): Runtime {
       while (running.size) await new Promise((r) => setTimeout(r, 10));
       settle();
     },
-    stats: () => ({ queued: pending.size, running: running.size }),
+    stats: () => ({ queued: pending.size, running: running.size, halted }),
   };
 }
