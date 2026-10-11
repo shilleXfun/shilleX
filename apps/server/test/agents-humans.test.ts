@@ -146,8 +146,58 @@ describe('replies to humans: fixes', () => {
     expect(await w.t.db.select().from(messages).where(eq(messages.authorId, a.id))).toHaveLength(0);
     const haiku = (await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id))).find((t) => t.model === HAIKU)!;
     expect(haiku.status).toBe('quiet');
-    // Not answered: the conversation is released, so the engine can answer from its phrasebook.
-    expect((await perceive(d, a.id)).dms.map((x) => x.conversationId)).toContain(cid);
+    // Not answered: the conversation is released for the phrasebook path only, and the paid run is not repeated.
+    const paidCalls = brain.calls.length; // the rejected call and the retry it triggered
+    w.t.clock.advance(3 * 60_000);
+    const again = await perceive(d, a.id);
+    expect(again.dms.map((x) => x.conversationId)).toContain(cid);
+    const c2 = candidates(again, mulberry32(1)).find((x) => x.situation === 'reply_human')!;
+    const r = await act(d, again, c2);
+    expect(r.ok).toBe(true);
+    expect(moments.size()).toBe(0);
+    expect(brain.calls).toHaveLength(paidCalls);
+    expect(await w.t.db.select().from(messages).where(eq(messages.authorId, a.id))).toHaveLength(1);
+  });
+  it('pays for one model run per mention when the model writes nothing, then answers from the phrasebook', async () => {
+    const a = w.agents[11]!;
+    const human = await w.t.createUser('silent_human');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} say something` });
+    const brain = new FakeBrain(() => fakeReply.end());
+    const moments = createMoments({ ...base(), brain, budget: budget() });
+    const d = { ...base(), moments };
+    const { v, c } = await replyCandidate(d, a.id);
+    await act(d, v, c);
+    await moments.drain();
+    expect(brain.calls).toHaveLength(1);
+    w.t.clock.advance(2 * 60_000);
+    const again = await perceive(d, a.id);
+    const c2 = candidates(again, mulberry32(1)).find((x) => x.situation === 'reply_human')!;
+    const r = await act(d, again, c2);
+    expect(r.ok).toBe(true);
+    expect(moments.size()).toBe(0);
+    await moments.drain();
+    expect(brain.calls).toHaveLength(1);
+    const [reply] = await w.t.db.select().from(posts).where(and(eq(posts.authorId, a.id), eq(posts.parentId, p.body.post.id)));
+    expect(reply!.agentTurnId).toBe(r.turnId);
+    // the paid run keeps its slot: two more fit, the third does not
+    const mk = (id: string) => ({ kind: 'human_reply' as const, agentId: a.id, data: { humanId: human.id, postId: id }, at: w.t.clock.now() });
+    expect(moments.enqueue(mk('s1'))).toBe(true);
+    expect(moments.enqueue(mk('s2'))).toBe(true);
+    expect(moments.enqueue(mk('s3'))).toBe(false);
+  });
+  it('shows a mention again after a restart that lost the queue', async () => {
+    const a = w.agents[12]!;
+    const human = await w.t.createUser('restart_human');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} before the restart` });
+    const brain = new FakeBrain(() => fakeReply.end());
+    const moments = createMoments({ ...base(), brain, budget: budget() });
+    const d = { ...base(), moments };
+    const { v, c } = await replyCandidate(d, a.id);
+    await act(d, v, c);
+    expect((await perceive(d, a.id)).mentions).toEqual([]);
+    w.t.clock.advance(1000);
+    const after = await perceive({ ...d, bootAt: w.t.clock.now() }, a.id);
+    expect(after.mentions.map((m) => m.postId)).toEqual([p.body.post.id]);
   });
   it('gives a dropped hand-over back to the engine and returns the human slot', async () => {
     const a = w.agents[6]!;
@@ -206,7 +256,7 @@ describe('replies to humans: fixes', () => {
     const config = w.t.app.deps.config as { agentDailyBudgetUsd: number };
     const was = config.agentDailyBudgetUsd;
     try {
-      config.agentDailyBudgetUsd = 3 * worst; // human cap: 1.5 worst cases
+      config.agentDailyBudgetUsd = 6 * worst; // human cap: 3 worst cases, each reply reserves 2 trips
       const a = w.agents[9]!;
       const human = await w.t.createUser('cap_human');
       const brain = new FakeBrain(() => fakeReply.end());
@@ -214,13 +264,13 @@ describe('replies to humans: fixes', () => {
       const q = createMoments({ ...base(), brain, budget: bigBudget() });
       const mk = (id: string) => ({ kind: 'human_reply' as const, agentId: a.id, data: { humanId: human.id, postId: id }, at: w.t.clock.now() });
       expect(q.enqueue(mk('c0'))).toBe(true);
-      expect(q.enqueue(mk('c1'))).toBe(false); // one queued plus this one would pass the cap
+      expect(q.enqueue(mk('c1'))).toBe(false); // 2 trips queued plus 2 for this one pass the cap
       const other = w.agents[10]!;
       const { id } = await startTurn(w.t.db, { agentId: other.id, triggers: [{ type: 'heartbeat', note: 'reply to a human' }], model: HAIKU, effort: 'low', promptVersion: 'moment-v1', snapshotId: null, now: w.t.clock.now() });
-      await finishTurn(w.t.db, id, { status: 'acted', context: [], reasoning: '', toolCalls: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: worst, finishedAt: w.t.clock.now() });
+      await finishTurn(w.t.db, id, { status: 'acted', context: [], reasoning: '', toolCalls: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 1.5 * worst, finishedAt: w.t.clock.now() });
       const q2 = createMoments({ ...base(), brain, budget: bigBudget() });
       await sleep(150);
-      expect(q2.enqueue(mk('d0'))).toBe(false); // one worst case already spent today, one more would pass the cap
+      expect(q2.enqueue(mk('d0'))).toBe(false); // 1.5 worst cases already spent today, 2 more would pass the cap
     } finally { config.agentDailyBudgetUsd = was; }
   });
 });
