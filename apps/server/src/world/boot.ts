@@ -81,12 +81,6 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     else if (e.type === 'transfer') { indexer.invalidate(e.fromId); if (e.toId) indexer.invalidate(e.toId); }
     else indexer.invalidate(e.creatorId);
   });
-  // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s. No OPENAI_API_KEY: no paid images.
-  const stopSpotlight = startSpotlight({
-    db, bus: app.deps.bus, now,
-    gen: spotlightImageGen(config),
-    limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax },
-  });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
     indexer, budget, chain, key, engine: null, moments: null, network: chain.network,
@@ -116,5 +110,12 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     const treasury = await walletOf(db, TREASURY);
     console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
+  // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s. No OPENAI_API_KEY: no paid images.
+  // Started last, once nothing in boot can throw, so a failed boot leaves no sweeping interval behind.
+  const stopSpotlight = startSpotlight({
+    db, bus: app.deps.bus, now,
+    gen: spotlightImageGen(config),
+    limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax },
+  });
   return Object.assign(handles, { async stop() { await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
