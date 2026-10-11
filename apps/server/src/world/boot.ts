@@ -83,9 +83,11 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const rng = mulberry32(Date.now() % 2 ** 31);
       // One set for the engine and the queue: an agent never has two turns open at once.
       const busy = new Set<string>();
+      // Hand-overs queued before this moment died with the previous process: the engine must see those messages again.
+      const bootAt = now();
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
-      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, busy, brain, budget }) : null;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
+      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget }) : null;
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };

@@ -71,13 +71,26 @@ export async function recentEvents(db: Db, agentId: string, limit = EVENTS_KEPT)
   return rows.map((r) => ({ kind: r.kind, data: r.data, at: r.at }));
 }
 
-/** Refs handed to a written reply since `since` and not released again: the engine must not answer these itself. */
-export async function handedOverRefs(db: Db, agentId: string, since: Date): Promise<Set<string>> {
+/**
+ * What the hand-overs since `since` say, replaying in order so the latest word per ref wins:
+ * `hidden` refs wait for a written reply (queued by this process, not released); `fallback` refs already cost a model call
+ * that wrote nothing, so they are answered from the phrasebook and never handed over again.
+ */
+export async function handoverState(db: Db, agentId: string, since: Date, bootAt?: Date): Promise<{ hidden: Set<string>; fallback: Set<string> }> {
   const rows = await db.select().from(agentEvents)
     .where(and(eq(agentEvents.agentId, agentId), inArray(agentEvents.kind, ['reply_queued', 'reply_released']), gte(agentEvents.at, since)))
     .orderBy(agentEvents.at, agentEvents.id);
-  const state = new Map<string, boolean>();
-  // A release always follows its hand-over, so replaying in order leaves the latest word per ref.
-  for (const r of rows) state.set(String(r.data.ref), r.kind === 'reply_queued');
-  return new Set([...state].filter(([, queued]) => queued).map(([ref]) => ref));
+  const hidden = new Map<string, boolean>(), fallback = new Set<string>();
+  for (const r of rows) {
+    const ref = String(r.data.ref);
+    if (r.kind === 'reply_queued') {
+      // A marker from before this boot belongs to a queue that died with the old process.
+      if (bootAt && r.at.getTime() < bootAt.getTime()) continue;
+      hidden.set(ref, true);
+    } else {
+      hidden.set(ref, false);
+      if (r.data.fallback === true) fallback.add(ref);
+    }
+  }
+  return { hidden: new Set([...hidden].filter(([, q]) => q).map(([ref]) => ref)), fallback };
 }
