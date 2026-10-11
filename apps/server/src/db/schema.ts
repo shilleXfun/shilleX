@@ -408,6 +408,89 @@ export const phrasebooks = pgTable('phrasebooks', {
   writtenAt: ts('written_at').notNull(),
 });
 
+// ── Agent depth (Phase 4) ──
+export const agentBeliefs = pgTable('agent_beliefs', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mint: text('mint').notNull(),
+  expect: doublePrecision('expect').notNull().default(0),
+  trustCreator: doublePrecision('trust_creator').notNull().default(0.5),
+  stance: doublePrecision('stance'),
+  stanceAt: ts('stance_at'),
+}, (t) => [primaryKey({ columns: [t.agentId, t.mint] })]);
+
+export const factions = pgTable('factions', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  banner: text('banner').notNull().default(''),
+  colour: text('colour').notNull(),
+  communityId: text('community_id'),
+  conversationId: text('conversation_id'),
+  coinMint: text('coin_mint'),
+  formedAt: ts('formed_at').notNull(),
+  splitAt: ts('split_at'),
+});
+
+export const factionMembers = pgTable('faction_members', {
+  factionId: text('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  joinedAt: ts('joined_at').notNull(),
+  leftAt: ts('left_at'),
+}, (t) => [primaryKey({ columns: [t.factionId, t.agentId] }), index('faction_members_agent_idx').on(t.agentId)]);
+
+export const debts = pgTable('debts', {
+  id: text('id').primaryKey(),
+  lenderId: text('lender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  borrowerId: text('borrower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  signature: text('signature').notNull(),
+  createdAt: ts('created_at').notNull(),
+  repaidAt: ts('repaid_at'),
+  defaultedAt: ts('defaulted_at'),
+}, (t) => [index('debts_borrower_idx').on(t.borrowerId), index('debts_lender_idx').on(t.lenderId)]);
+
+export const lineage = pgTable('lineage', {
+  id: text('id').primaryKey(),
+  text: text('text').notNull(),
+  inventorId: text('inventor_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<'line' | 'caption'>().notNull(),
+  situation: text('situation').notNull(),
+  createdAt: ts('created_at').notNull(),
+  uses: integer('uses').notNull().default(0),
+  adopters: jsonb('adopters').$type<string[]>().notNull().default([]),
+});
+
+export const weather = pgTable('weather', {
+  id: text('id').primaryKey(),
+  regime: text('regime').$type<'euphoria' | 'grind' | 'fear' | 'chaos'>().notNull(),
+  startedAt: ts('started_at').notNull(),
+  endsAt: ts('ends_at').notNull(),
+}, (t) => [index('weather_ends_idx').on(t.endsAt)]);
+
+export const papers = pgTable('papers', {
+  day: text('day').primaryKey(),
+  headline: text('headline').notNull(),
+  body: jsonb('body').$type<{ stories: { title: string; body: string }[]; memeBrief: string | null; source: 'model' | 'local' }>().notNull(),
+  memeBlobId: text('meme_blob_id'),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const traitHistory = pgTable('trait_history', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),
+  traits: jsonb('traits').$type<Record<string, number>>().notNull(),
+  drift: jsonb('drift').$type<Record<string, number>>().notNull().default({}),
+}, (t) => [primaryKey({ columns: [t.agentId, t.day] })]);
+
+export const saidVsDid = pgTable('said_vs_did', {
+  postId: text('post_id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mint: text('mint').notNull(),
+  stance: doublePrecision('stance').notNull(),
+  signature: text('signature').notNull(),
+  side: text('side').$type<'buy' | 'sell'>().notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('said_vs_did_agent_idx').on(t.agentId)]);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentStateRow = typeof agentState.$inferSelect;
 export type PhrasebookRow = typeof phrasebooks.$inferSelect;

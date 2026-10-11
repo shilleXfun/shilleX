@@ -6,6 +6,7 @@ import type { Chain } from '../world/chain.ts';
 import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
 import { candidates, choose } from './decide.ts';
+import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
 import type { ImagePolicy, Moments } from './types.ts';
@@ -14,7 +15,9 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
   busy?: Set<string>;
   /** When this process started: hand-over markers older than this belong to a queue that no longer exists. */
-  bootAt?: Date }
+  bootAt?: Date;
+  /** Phase 4 depth systems (beliefs, factions, drift…); absent means the plain Phase 2 engine. */
+  depth?: DepthRegistry }
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
@@ -44,7 +47,9 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
       if (!id) return;
       if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
       const v = await perceive(d, id);
-      const c = choose(candidates(v, d.rng), d.rng);
+      const base = candidates(v, d.rng);
+      const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng)]) : base;
+      const c = choose(cs, d.rng);
       const r = await act(d, v, c);
       // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick.
       if (r.ok || r.turnId) {
@@ -73,9 +78,20 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
   }
   if (d.autoStart !== false) schedule();
 
+  const offDepth = d.depth ? d.events.on((e) => { if (!stopped) void d.depth!.onEvent(d, e); }) : () => {};
+  // Sweeps queue with the ticks: never two at once, and never beside a tick writing the same agent's state.
+  let sweepPending = false;
+  const sweepTimer = d.depth ? setInterval(() => {
+    if (stopped || sweepPending) return; // a slow sweep is not stacked on
+    sweepPending = true;
+    const next = queue.then(() => (stopped ? undefined : d.depth!.sweep(d))).finally(() => { sweepPending = false; });
+    queue = next.catch((e) => console.error('[depth] sweep failed', e));
+  }, SWEEP_MS) : null;
+  sweepTimer?.unref?.();
+
   return {
     tick,
-    async stop() { stopped = true; if (timer) clearTimeout(timer); await queue; },
+    async stop() { stopped = true; if (timer) clearTimeout(timer); offDepth(); if (sweepTimer) clearInterval(sweepTimer); await queue; },
     stats: () => ({ ticks, actions: { ...actions }, lastError }),
   };
 }

@@ -7,6 +7,8 @@ import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { runTool, type ToolContext, type ToolOutcome } from '../world/tools.ts';
+import { depthToolRecord } from './depth/receipt.ts';
+import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
 import { adjustAffinity, handoverState, rememberEvent, saveState } from './state.ts';
@@ -128,8 +130,22 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // A model run for this message already cost money and wrote nothing: it is answered from the phrasebook, never handed over again.
     const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
     const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
-
-    switch (c.kind) {
+    // A depth module's own action runs its tools inside this receipt; a failed tool is reported, not thrown.
+    // A call into a conversation a human is part of is recorded as private.
+    const tool: RunTool = async (name, input) => {
+      const out = await runTool(ctx, name, input);
+      toolCalls.push(await depthToolRecord(db, name, input, out));
+      if (out.ok && out.write) status = 'acted';
+      return out;
+    };
+    const custom = await d.depth?.execute(d, v, c, tool);
+    if (custom) {
+      if (custom.ok) status = 'acted';
+      else if (status === 'acted') note = `error after the action: ${custom.error ?? 'depth action failed'}`; // the write stands
+      else { status = 'failed'; note = `failed: ${custom.error ?? 'depth action failed'}`; state.mood -= 0.05; }
+      postId = custom.postId;
+      if (custom.text && custom.line) used.first = { text: custom.text, line: custom.line };
+    } else switch (c.kind) {
       case 'idle': break;
       case 'post': {
         postId = (await postLine(c.situation ?? 'idle')) ?? undefined;
@@ -265,14 +281,18 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     else { status = 'failed'; note = `failed: ${msg}`; }
   }
   const outcome = { postId, ...(used.first && !privateCall ? { text: used.first.text, line: used.first.line } : {}) };
+  let done: ActResult;
   try {
     await finishTurn(db, turnId, {
       status, context: [], reasoning: note ? `${c.reason}; ${note}` : c.reason, toolCalls,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now(),
     });
+    done = { ok: status === 'acted', turnId, error: status === 'failed' ? note : undefined, ...outcome };
   } catch (e) {
     // The receipt could not be sealed (for example an earlier turn was left unsealed): report it, never throw.
-    return { ok: status === 'acted', turnId, ...outcome, error: `receipt not sealed: ${(e as Error).message ?? String(e)}` };
+    done = { ok: status === 'acted', turnId, ...outcome, error: `receipt not sealed: ${(e as Error).message ?? String(e)}` };
   }
-  return { ok: status === 'acted', turnId, error: status === 'failed' ? note : undefined, ...outcome };
+  // After the receipt is sealed and the state saved; still inside this agent's turn lock. The registry never throws.
+  await d.depth?.afterAct(d, v, c, done);
+  return done;
 }
