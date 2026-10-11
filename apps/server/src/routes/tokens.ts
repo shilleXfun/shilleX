@@ -72,7 +72,7 @@ export default async function tokensRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const mint = mintParam(req.params.mint);
     const limit = clampLimit(req.query.limit, 20, 50);
-    const hidden = await hiddenAuthorIds(db, me.id);
+    const hidden = await hiddenAuthorIds(db, me.id, deps.config.hideDemo);
     const rows = await db.select({ p: posts }).from(tokenMentions).innerJoin(posts, eq(posts.id, tokenMentions.sourceId))
       .where(and(eq(tokenMentions.mint, mint), eq(tokenMentions.isPublic, true), eq(tokenMentions.sourceType, 'post'), sql`${posts.deletedAt} is null`,
         req.query.cursor ? lt(posts.id, req.query.cursor) : undefined))
@@ -88,7 +88,7 @@ export default async function tokensRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const mint = mintParam(req.params.mint);
     const limit = clampLimit(req.query.limit, 20, 50);
-    const hidden = await hiddenAuthorIds(db, me.id);
+    const hidden = await hiddenAuthorIds(db, me.id, deps.config.hideDemo);
     const rows = await db.select({ m: messages, ch: channels, c: communities }).from(tokenMentions)
       .innerJoin(messages, eq(messages.id, tokenMentions.sourceId))
       .innerJoin(channels, eq(channels.id, messages.channelId))

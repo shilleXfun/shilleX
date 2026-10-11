@@ -30,7 +30,7 @@ export default async function usersRoutes(app: FastifyInstance) {
     const q = (req.query.q ?? '').trim();
     if (!q) return { users: [] };
     const pattern = `%${escapeLike(q)}%`;
-    const hidden = await hiddenAuthorIds(db, me.id);
+    const hidden = await hiddenAuthorIds(db, me.id, deps.config.hideDemo);
     const rows = await db.select().from(users).where(and(
       or(ilike(users.username, pattern), ilike(users.displayName, pattern)), ne(users.id, me.id),
       hidden.length ? notInArray(users.id, hidden) : undefined,
