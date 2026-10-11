@@ -39,12 +39,13 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * The same hostile-output filter, for model text the world shows publicly: newlines collapsed; no links, `<` `>`, backticks
- * or control characters; and no `@` except the exact `@mention` given (the one user being replied to). Cut to `max` code points.
+ * or control characters; and no `@` except the exact `@mention`s given (the users the text may name). Cut to `max` code points.
  */
-export function cleanModelText(s: unknown, max: number, mention?: string): string | null {
+export function cleanModelText(s: unknown, max: number, mention?: string | readonly string[]): string | null {
   if (typeof s !== 'string') return null;
   const t = s.replace(/[\t\r\n]+/g, ' ').trim();
-  const rest = mention ? t.replace(new RegExp(`@${escapeRe(mention)}(?!\\w)`, 'gi'), '') : t;
+  const allowed = (typeof mention === 'string' ? [mention] : mention ?? []).filter(Boolean);
+  const rest = allowed.reduce((x, m) => x.replace(new RegExp(`@${escapeRe(m)}(?!\\w)`, 'gi'), ''), t);
   if (!t || CONTROL.test(t) || HOSTILE.test(rest)) return null;
   return [...t].slice(0, max).join('').trim() || null;
 }

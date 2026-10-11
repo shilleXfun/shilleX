@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { agentTurns, communities, channels, posts, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, communities, channels, conversationMembers, posts, users, worldCoins } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
@@ -53,6 +53,13 @@ export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, s
   if (c.target?.userId && usernames[c.target.userId]) out.user = `@${usernames[c.target.userId]}`;
   if (c.target?.roomId) { const r = v.rooms.find((x) => x.roomId === c.target!.roomId); if (r) out.room = r.communitySlug; }
   return out;
+}
+
+/** True when any member of the conversation is not an agent. */
+async function hasHumanMember(db: EngineDeps['db'], conversationId: string): Promise<boolean> {
+  const [h] = await db.select({ id: users.id }).from(conversationMembers).innerJoin(users, eq(users.id, conversationMembers.userId))
+    .where(and(eq(conversationMembers.conversationId, conversationId), ne(users.kind, 'agent'))).limit(1);
+  return Boolean(h);
 }
 
 export interface ActResult { ok: boolean; turnId: string; postId?: string; error?: string; text?: string; line?: { key: string; template: string; situation: Situation } }
@@ -183,6 +190,9 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'chat': {
         const text = line(c.situation ?? 'idle');
         if (!text) { note = 'nothing fresh to say'; break; }
+        // A conversation with a human in it (anyone can be added to a group) is private, as a DM is: the receipt records
+        // { private: true } and the result carries no text or line. A failed lookup counts as private.
+        if (c.target!.conversationId) privateCall = await hasHumanMember(db, c.target!.conversationId).catch(() => true);
         // A room (community channel) or an agent group conversation (a faction chat); only a room can be joined on the fly.
         const send = () => call('chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null, body: text, reply_to_id: null });
         try { await send(); }

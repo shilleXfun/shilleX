@@ -10,6 +10,7 @@ import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { agentTurns, conversationMembers, factionMembers, factions, posts } from '../src/db/schema.ts';
 import { act } from '../src/agents/act.ts';
+import { ONE_SHOT_MAX_TEXT, oneShotTool } from '../src/agents/depth/system.ts';
 import type { Moment } from '../src/agents/types.ts';
 
 let ctx: Awaited<ReturnType<typeof depthTestCtx>> | undefined;
@@ -159,5 +160,35 @@ describe('the faction moment', () => {
     const r = await act(c.d, v, { kind: 'chat', score: 1, situation: 'faction_cheer', target: { conversationId: f.conversationId! }, reason: 'checking in' });
     expect(r.error).toBeUndefined();
     expect(r.ok).toBe(true);
+  });
+  it('keeps a faction chat private once a human is in the conversation', async () => {
+    const { c, f, lead } = await setup();
+    const human = await c.t.createUser('nosy_human');
+    await c.t.db.insert(conversationMembers).values({ conversationId: f.conversationId!, userId: human.id, joinedAt: c.t.clock.now() });
+    clearPerceptionCache(c.t.db);
+    const v = await perceive(c.d, lead);
+    const r = await act(c.d, v, { kind: 'chat', score: 1, situation: 'faction_cheer', target: { conversationId: f.conversationId! }, reason: 'checking in' });
+    expect(r.ok).toBe(true);
+    expect([r.text, r.line]).toEqual([undefined, undefined]);
+    const [t] = await c.t.db.select().from(agentTurns).where(eq(agentTurns.id, r.turnId));
+    expect(t!.toolCalls).toEqual([{ name: 'chat', input: { private: true }, ok: true, result: { private: true } }]);
+  });
+});
+
+describe('oneShotTool', () => {
+  it('cleans each field to the caller\'s length and allows only the given mentions', async () => {
+    ctx = await depthTestCtx();
+    const a = ctx.agents[0]!;
+    const brain = new FakeBrain(() => fakeReply.tools({ name: 'publish_paper', input: {
+      headline: 'x'.repeat(100), meme: 'y'.repeat(600),
+      stories: [{ title: 'hi @alice', body: 'ask @bob' }, { title: 'fine', body: 'see https://scam.example' }],
+    } }));
+    const out = await oneShotTool({ ...ctx.d, brain, budget: new Budget(ctx.t.db, 1, ctx.t.clock.now, { hardStop: true }) }, a.id, 'writing a paper',
+      { system: [], tools: [], messages: [{ role: 'user', content: 'facts' }] }, 'publish_paper', { fields: { headline: 80, title: 10 }, mentions: ['alice'] });
+    expect(brain.calls[0]!.maxTokens).toBe(MOMENT_MAX_TOKENS);
+    expect(out).toEqual({
+      headline: 'x'.repeat(80), meme: 'y'.repeat(ONE_SHOT_MAX_TEXT),
+      stories: [{ title: 'hi @alice', body: null }, { title: 'fine', body: null }],
+    });
   });
 });

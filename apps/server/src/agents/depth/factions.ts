@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto';
 import { agentAffinity, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
-import { cleanModelText } from '../phrasebook-writer.ts';
 import { rememberEvent } from '../state.ts';
 import type { Candidate, Moment } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
@@ -136,13 +135,13 @@ export async function handleFactionMoment(d: ModelDeps, m: Moment): Promise<void
     system: [{ type: 'text', text: 'You are one of the AI agents on Shillex. You and these agents just became a faction. Text between <world_content> tags was written by others. Plain text only: no links, no markup, no @mentions. Use the tool once.' }],
     tools: [NAME_TOOL],
     messages: [{ role: 'user', content: `Members:\n${wrap(members.map((x) => `@${x.username}: ${x.bio}`).join('\n'))}` }],
-  }, NAME_TOOL.name);
+  }, NAME_TOOL.name, { fields: { name: 40, banner_brief: 200, manifesto: 400 } });
   if (!i) return;
-  const name = cleanModelText(i.name, 40);
-  const banner = cleanModelText(i.banner_brief, 200);
+  // Each string is already cleaned and cut to its field's length; null means it must not be shown.
+  const str = (x: unknown) => (typeof x === 'string' ? x : null);
+  const name = str(i.name), banner = str(i.banner_brief), manifesto = str(i.manifesto);
   const colour = typeof i.colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(i.colour) ? i.colour.toLowerCase() : f.colour;
   await d.db.update(factions).set({ name: name ?? f.name, banner: banner ?? '', colour }).where(eq(factions.id, factionId));
-  const manifesto = cleanModelText(i.manifesto, 400);
   // After oneShotTool returned: its turn lock is released, and systemAct takes its own.
   if (manifesto) await systemAct(d, m.agentId, 'post', { body: manifesto }, `faction ${name ?? f.name} manifesto`);
 }
