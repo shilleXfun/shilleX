@@ -1,10 +1,15 @@
+import type Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
+import type { TurnUsage } from '@shillex/shared';
 import { users } from '../../db/schema.ts';
+import { priceOf, type AgentBrain, type BrainRequest } from '../../world/brain.ts';
 import { finishTurn, startTurn } from '../../world/provenance.ts';
 import { runTool, type ToolOutcome } from '../../world/tools.ts';
 import { actorFor } from '../act.ts';
 import type { EngineDeps } from '../engine.ts';
-import { exclusiveTurn } from '../moments.ts';
+import { HAIKU, type ModelBudget } from '../haiku.ts';
+import { MOMENT_MAX_TOKENS, MOMENT_PROMPT_VERSION, MOMENT_WORST, exclusiveTurn } from '../moments.ts';
+import { cleanModelText } from '../phrasebook-writer.ts';
 import { depthToolRecord } from './receipt.ts';
 
 const refused = (code: string, error: string): ToolOutcome => ({ ok: false, write: false, result: { code, error } });
@@ -37,4 +42,48 @@ export async function systemAct(d: EngineDeps, agentId: string, tool: string, in
   return r.reason === 'busy' ? refused('AGENT_BUSY', 'agent is mid-turn')
     : r.reason === 'inactive' ? refused('AGENT_INACTIVE', 'agent is not active')
     : refused('AGENT_RUNNING', 'agent has an unsealed turn');
+}
+
+/** A sealed receipt for a model call made outside Phase 3's moment runner, so its cost is persisted and Budget.load() counts it after a restart. */
+export async function modelReceipt(d: EngineDeps, agentId: string, purpose: string, usage: TurnUsage, costUsd: number): Promise<void> {
+  const { id } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
+  await finishTurn(d.db, id, { status: 'quiet', context: [{ kind: 'moment', text: purpose }], reasoning: purpose, toolCalls: [], usage, costUsd, finishedAt: d.now() });
+}
+
+/** Deps of a Phase 4 handler that makes its own model call (a moment handler: faction naming, the daily paper). */
+export type ModelDeps = EngineDeps & { brain: AgentBrain; budget: ModelBudget };
+/** What a one-shot call sends; the effort ('low') and the token cap (MOMENT_MAX_TOKENS) are fixed by oneShotTool. */
+export type OneShotRequest = Pick<BrainRequest, 'system' | 'tools' | 'messages'>;
+/** The longest string oneShotTool passes back; callers cut each field to its own length with cleanModelText. */
+export const ONE_SHOT_MAX_TEXT = 500;
+
+/** Every string run through cleanModelText: one that must not be published becomes null, so callers fall back field by field. */
+function cleanStrings(v: unknown): unknown {
+  if (typeof v === 'string') return cleanModelText(v, ONE_SHOT_MAX_TEXT);
+  if (Array.isArray(v)) return v.map(cleanStrings);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cleanStrings(x)]));
+  return v;
+}
+
+/**
+ * One Haiku call offering one structured tool, for an agent, under the daily cap: gated on the call's worst case, capped at
+ * MOMENT_MAX_TOKENS, run inside exclusiveTurn (with its sealed receipt, so the cost survives a restart) and billed to the budget.
+ * Returns the tool's input with every string cleaned (null where it must not be published), or null when no call could be
+ * made (no budget, the agent busy, paused or mid-turn) or the model did not use `toolName`: the caller then uses its local
+ * fallback. Never publishes anything itself; call systemAct after it returns (the lock is released by then). A failed call throws.
+ */
+export async function oneShotTool(d: ModelDeps, agentId: string, purpose: string, req: OneShotRequest, toolName: string): Promise<Record<string, unknown> | null> {
+  const r = await exclusiveTurn(d, agentId, async () => {
+    if (!d.budget.canSpend() || !d.budget.canAfford(MOMENT_WORST)) return null;
+    const res = await d.brain.decide({ ...req, effort: 'low', maxTokens: MOMENT_MAX_TOKENS });
+    const cost = priceOf(HAIKU, res.usage);
+    d.budget.add(cost);
+    await modelReceipt(d, agentId, purpose, res.usage, cost);
+    // A cut-off tool call is not trusted, and a refusal has none.
+    if (res.stopReason === 'max_tokens' || res.stopReason === 'refusal') return null;
+    const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === toolName);
+    const input = use ? cleanStrings(use.input) : null;
+    return input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : null;
+  });
+  return r.ran ? r.value : null;
 }
