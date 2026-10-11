@@ -8,7 +8,7 @@ import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
 import { FALLBACK_LINES, FALLBACK_SITUATIONS, composeLine, fallbackPhrasebook, phrasebookOf } from '../src/agents/phrasebook.ts';
-import { loadState, rememberEvent } from '../src/agents/state.ts';
+import { loadState, rememberEvent, setTraits } from '../src/agents/state.ts';
 import { RETRY_AFTER_MS, needsPhrasebook, validatePhrasebook, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
@@ -53,6 +53,22 @@ describe('writePhrasebook', () => {
     expect(turn).toMatchObject({ model: HAIKU, promptVersion: 'phrasebook-v1', status: 'acted' });
     expect(turn!.costUsd).toBeGreaterThan(0);
     expect(budget.spentToday()).toBeCloseTo(turn!.costUsd, 9);
+  });
+  it('adopts the model\'s traits only on the first book: a refresh keeps the drifted traits', async () => {
+    const a = w.agents[2]!;
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify(valid())));
+    expect(await writePhrasebook(deps(brain), a.id)).toBe('written');
+    const first = (await loadState(w.t.db, a.id, w.t.clock.now())).traits;
+    expect(first.pettiness).toBe(0.95);
+    // Experience moved it since: drift is the only thing that changes traits after the first book.
+    const drifted = { ...first, pettiness: 0.5, risk: 0.42 };
+    await setTraits(w.t.db, a.id, drifted, w.t.clock.now());
+    const brain2 = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid('louder now'), traits: { ...valid().traits, pettiness: 0.1, risk: 0.1 } })));
+    expect(await writePhrasebook(deps(brain2), a.id)).toBe('written');
+    const [row] = await w.t.db.select().from(phrasebooks).where(eq(phrasebooks.agentId, a.id));
+    expect(row!.version).toBe(2);
+    expect((await phrasebookOf(w.t.db, a.id)).voice).toBe('louder now');
+    expect((await loadState(w.t.db, a.id, w.t.clock.now())).traits).toEqual(drifted);
   });
   it('keeps the fallback on invalid output and does not retry for 6 hours (Review Focus 1)', async () => {
     const a = w.agents[1]!;

@@ -1,8 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { agentState, agents, traitHistory } from '../../db/schema.ts';
+import { agents, traitHistory } from '../../db/schema.ts';
 import { holdersOf } from '../../world/market.ts';
-import { loadState } from '../state.ts';
+import { loadState, setTraits } from '../state.ts';
 import type { Trait, Traits } from '../types.ts';
 import type { DepthModule } from './registry.ts';
 
@@ -47,7 +47,7 @@ export async function applyDrift(db: Db, agentId: string, deltas: Partial<Record
     used[t] = u + (next - traits[t]);
     traits[t] = next;
   }
-  await db.update(agentState).set({ traits }).where(eq(agentState.agentId, agentId));
+  await setTraits(db, agentId, traits, now);
   await db.insert(traitHistory).values({ agentId, day, traits, drift: used })
     .onConflictDoUpdate({ target: [traitHistory.agentId, traitHistory.day], set: { traits, drift: used } });
   return traits;

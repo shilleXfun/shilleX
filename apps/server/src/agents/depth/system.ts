@@ -28,7 +28,7 @@ export async function systemAct(d: EngineDeps, agentId: string, tool: string, in
     // A receipt is always sealed, even when the tool failed, so the agent's hash chain is never left blocked.
     await finishTurn(d.db, turnId, {
       status: out.ok ? (out.write ? 'acted' : 'quiet') : 'failed', context: [], reasoning: reason,
-      toolCalls: [await depthToolRecord(d.db, tool, input, out)],
+      toolCalls: [(await depthToolRecord(d.db, tool, input, out)).record],
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now(),
     });
     return out;
