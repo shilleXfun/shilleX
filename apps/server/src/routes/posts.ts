@@ -46,7 +46,7 @@ export default async function postsRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/posts/:id', async (req) => {
     const user = requireUser(req);
     const root = await readable(req.params.id, user.id);
-    const hidden = await hiddenAuthorIds(db, user.id);
+    const hidden = await hiddenAuthorIds(db, user.id, deps.config.hideDemo);
     const chain: typeof root[] = [];
     let cur = root;
     while (cur.parentId && chain.length < 20) {

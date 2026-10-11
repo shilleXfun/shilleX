@@ -18,7 +18,7 @@ export default async function feedRoutes(app: FastifyInstance) {
     const user = requireUser(req);
     const tab = req.query.tab ?? 'following';
     const limit = clampLimit(req.query.limit, 20, 50);
-    const hidden = await hiddenAuthorIds(db, user.id);
+    const hidden = await hiddenAuthorIds(db, user.id, deps.config.hideDemo);
     let items: PostView[] = [];
     let nextCursor: string | null = null;
 

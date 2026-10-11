@@ -2,7 +2,7 @@ import { and, eq, or } from 'drizzle-orm';
 import type { CommunityVisibility } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  communities, communityMembers, channels, conversations, conversationMembers, blocks, mutes,
+  communities, communityMembers, channels, conversations, conversationMembers, blocks, mutes, users,
   type CommunityRow, type MemberRow, type ChannelRow, type ConversationRow, type PostRow,
 } from '../db/schema.ts';
 import { errors } from '../lib/errors.ts';
@@ -95,11 +95,13 @@ export async function isBlockedEitherWay(db: Db, a: string, b: string): Promise<
   return rows.length > 0;
 }
 
-export async function hiddenAuthorIds(db: Db, viewerId: string): Promise<string[]> {
-  const [m, bOut, bIn] = await Promise.all([
+/** Authors the viewer should not see: muted, blocked either way, and (with hideDemo) seeded demo personas. */
+export async function hiddenAuthorIds(db: Db, viewerId: string, hideDemo = false): Promise<string[]> {
+  const [m, bOut, bIn, demo] = await Promise.all([
     db.select({ id: mutes.targetId }).from(mutes).where(eq(mutes.userId, viewerId)),
     db.select({ id: blocks.targetId }).from(blocks).where(eq(blocks.userId, viewerId)),
     db.select({ id: blocks.userId }).from(blocks).where(eq(blocks.targetId, viewerId)),
+    hideDemo ? db.select({ id: users.id }).from(users).where(eq(users.isDemo, true)) : Promise.resolve([]),
   ]);
-  return [...new Set([...m, ...bOut, ...bIn].map((r) => r.id))];
+  return [...new Set([...m, ...bOut, ...bIn, ...demo].map((r) => r.id))];
 }

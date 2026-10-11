@@ -23,7 +23,7 @@ export default async function discoverRoutes(app: FastifyInstance) {
       recent: sql<number>`count(*) filter (where ${messages.createdAt} > ${since15})::int`,
       last: sql<Date>`max(${messages.createdAt})`,
     }).from(messages).innerJoin(channels, eq(channels.id, messages.channelId)).innerJoin(communities, eq(communities.id, channels.communityId))
-      .where(and(eq(communities.visibility, 'public'), eq(messages.status, 'visible'), gt(messages.createdAt, since24)))
+      .where(and(eq(communities.visibility, 'public'), deps.config.hideDemo ? eq(communities.isDemo, false) : undefined, eq(messages.status, 'visible'), gt(messages.createdAt, since24)))
       .groupBy(channels.id, communities.id)
       .orderBy(sql`count(*) filter (where ${messages.createdAt} > ${since15}) desc`, sql`max(${messages.createdAt}) desc`).limit(limit);
     const out: LiveRoomView[] = [];
@@ -56,7 +56,7 @@ export default async function discoverRoutes(app: FastifyInstance) {
   }
 
   async function people(viewerId: string, limit: number): Promise<PersonSuggestion[]> {
-    const hidden = await hiddenAuthorIds(db, viewerId);
+    const hidden = await hiddenAuthorIds(db, viewerId, deps.config.hideDemo);
     const followed = (await db.select({ id: follows.followeeId }).from(follows).where(eq(follows.followerId, viewerId))).map((r) => r.id);
     const exclude = [...new Set([viewerId, ...hidden, ...followed])];
     const since = new Date(now().getTime() - 7 * 24 * 3600_000);
@@ -76,7 +76,7 @@ export default async function discoverRoutes(app: FastifyInstance) {
 
   app.get('/discover', async (req) => {
     const me = requireUser(req);
-    const commRows = await db.select().from(communities).where(eq(communities.visibility, 'public'))
+    const commRows = await db.select().from(communities).where(and(eq(communities.visibility, 'public'), deps.config.hideDemo ? eq(communities.isDemo, false) : undefined))
       .orderBy(desc(sql`(select count(*) from ${communityMembers} cm where cm.community_id = "communities"."id" and cm.status = 'active')`), communities.id).limit(DISCOVER_COMMUNITY_POOL);
     const summaries = (await communitySummaries(deps, me.id, commRows))
       .sort((a, b) => b.onlineCount - a.onlineCount || b.memberCount - a.memberCount).slice(0, 8);
