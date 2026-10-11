@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { Bell, Bookmark, Bot, CircleUser, Coins, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, UsersRound } from 'lucide-react';
+import { Bell, Bookmark, Bot, CircleUser, Coins, Compass, House, LogOut, MessagesSquare, Plus, Search, Settings, Shield, UsersRound } from 'lucide-react';
 import { openPalette } from './CommandPalette';
 import { modKey } from '../lib/platform';
 import { clearDrafts } from '../lib/drafts';
@@ -102,6 +102,7 @@ export function LeftNav() {
           { label: 'Profile', icon: <CircleUser size={15} />, onSelect: () => nav(`/u/${me.username}`) },
           { label: 'Bookmarks', icon: <Bookmark size={15} />, onSelect: () => nav('/bookmarks') },
           { label: 'Settings', icon: <Settings size={15} />, onSelect: () => nav('/settings') },
+          ...(me.username === 'admin' ? [{ label: 'Admin', icon: <Shield size={15} />, onSelect: () => nav('/admin') }] : []),
           { label: 'Log out', icon: <LogOut size={15} />, onSelect: logout, danger: true },
         ]} trigger={(p) => (
           <motion.button {...p} {...press} className={s.account} type="button">
