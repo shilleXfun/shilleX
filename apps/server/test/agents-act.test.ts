@@ -19,7 +19,7 @@ const queued: Moment[] = [];
 beforeAll(async () => {
   w = await worldTestCtx();
   d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, rng: mulberry32(11),
-    moments: { enqueue: (m) => { queued.push(m); return false; }, size: () => 0, drain: async () => {}, halted: () => null } };
+    moments: { enqueue: (m) => { queued.push(m); return false; }, size: () => 0, drain: async () => {}, halted: () => null, stop: async () => {} } };
 });
 afterAll(() => w.t.close());
 /** ctxFor opens a turn that is never finished; seal it so the agent can take engine turns afterwards. */

@@ -42,6 +42,6 @@ export interface AgentView {
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
 export type MomentKind = 'human_reply' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
-export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null }
+export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
 export interface ImagePolicy { maybeAttach(v: AgentView, c: Candidate, text: string): Promise<{ uploadId: string; alt: string } | null> }
 export type { FastifyInstance };
