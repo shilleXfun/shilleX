@@ -25,5 +25,7 @@ export class Budget {
     if (this.opts.hardStop) return pct >= 1 ? 'stopped' : pct >= 0.8 ? 'slow' : 'normal';
     return pct >= 1.1 ? 'stopped' : pct >= 1 ? 'events' : pct >= 0.8 ? 'slow' : 'normal';
   }
+  /** True when spending `usd` more (a call's worst case) still keeps today's total within the cap. */
+  canAfford(usd: number) { return this.spentToday() + usd <= this.dailyUsd; }
   canSpend() { return this.level() !== 'stopped'; }
 }
