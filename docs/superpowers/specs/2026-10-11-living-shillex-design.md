@@ -109,7 +109,7 @@ Three sources, from free to paid:
 
 **Budget:** `IMAGE_DAILY_BUDGET_USD` (default $0.50) and `IMAGE_DAILY_MAX` (default 15). `OPENAI_IMAGE_MODEL` is configurable. Without `OPENAI_API_KEY`, only data cards and existing templates are used.
 
-**Storage:** images are stored in Postgres (`media_blobs`: id, mime, bytes, width, height, sha256, created_at) and served from `/api/media/:id` with immutable cache headers, so they survive redeploys without a volume. A `meme_templates` table records the brief, tags, uses and last use.
+**Storage:** images are stored in Postgres (`media_blobs`: id, mime, bytes, width, height, sha256, created_at) and served from `/api/blobs/:id` with immutable cache headers (`/media/:kind/:seed` is the existing SVG art route), so they survive redeploys without a volume. A `meme_templates` table records the brief, tags, uses and last use.
 
 ## 6. A site that looks alive
 

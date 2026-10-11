@@ -132,13 +132,13 @@ In `apps/server/src/realtime/socket.ts`, in the connection setup block right aft
         await socket.join('agents:live');
 ```
 
-In `apps/server/src/world/boot.ts` (`bootAgents`; import `bridgePulses` from `../agents/pulse.ts`), right after the `events.on((e) => { … indexer.invalidate … });` block that follows `const events = new WorldEvents();`:
+In `apps/server/src/world/boot.ts` (`bootAgents`; import `bridgePulses` from `../agents/pulse.ts`), right after the `const stopSpotlight = startSpotlight({ … });` statement that Phase 5 Task 5.6 placed after the `WorldEvents` block:
 
 ```ts
   const offPulses = bridgePulses(events, app.deps.bus, now);
 ```
 
-and change `stop()` (as Phase 3 Task 3.3 left it) to `async stop() { offPulses(); await handles.engine?.stop(); indexer.stop(); }`.
+and change `stop()` (as Phase 5 Task 5.6 left it) to `async stop() { offPulses(); stopSpotlight(); await handles.engine?.stop(); indexer.stop(); }`.
 
 - [ ] **Step 4: Run the server test**
 

@@ -4,7 +4,7 @@ Part of `docs/superpowers/plans/2026-10-11-living-shillex.md`. Read that file's 
 
 Run server tests from `apps/server` with `npx vitest run <file>`. Write any file that contains a regex or a backslash with the Write/Edit tools, never through a shell heredoc (Git Bash on this machine mangles backslashes).
 
-**Phase dependencies:** Task 5.4 edits `src/agents/act.ts` (Phase 2 Task 2.5) and uses `fillLine` (Phase 2 Task 2.2). Task 5.5 provides the share-card and follow-notification functions and tests them directly; who calls them (and `generateTemplate`) at runtime is an open decision noted at the end of Task 5.5 — Phases 3 and 4 do not call them. Config fields `openaiApiKey`, `openaiImageModel`, `imageDailyBudgetUsd`, `imageDailyMax` come from Phase 1 Task 1.1 (master plan, Config).
+**Phase dependencies:** Task 5.4 edits `src/agents/act.ts` (Phase 2 Task 2.5) and uses `fillLine` (Phase 2 Task 2.2). Task 5.5 provides the share-card and follow-notification functions; Task 5.6's spotlight (a 60-second sweep started from `bootAgents`) is their only runtime caller, and also the only caller of `generateTemplate` (Task 5.3). Phases 3 and 4 do not call them; the spotlight reads the events and rows they write (`rugged`, `got_rugged`, `graduated`, `faction_formed`, `faction_split`, `leaked`, `revived`, `world_coins`, `agent_affinity`, `factions.banner`, `papers.body.memeBrief`). Config fields `openaiApiKey`, `openaiImageModel`, `imageDailyBudgetUsd`, `imageDailyMax` come from Phase 1 Task 1.1 (master plan, Config).
 
 ---
 
@@ -13,7 +13,7 @@ Run server tests from `apps/server` with `npx vitest run <file>`. Write any file
 Images live in Postgres so they survive redeploys without a volume. Agents attach them through the normal `POST /api/posts` path: a blob gets an `uploads` row (owned by the posting agent) whose `url` is `/api/blobs/<id>`, and `resolveUploads` accepts it like any other upload.
 
 **Files:**
-- Modify: `apps/server/src/db/schema.ts` (add `bytea` custom type and the five Phase 5 tables)
+- Modify: `apps/server/src/db/schema.ts` (add `bytea` custom type and the six Phase 5 tables, including `spotlightDone`, which Task 5.6 uses)
 - Create: `apps/server/drizzle/0005_pictures.sql` (generated; 0003 is Phase 2's `agent_engine`, 0004 is Phase 4's `agent_depth`)
 - Create: `apps/server/src/agents/images.ts`
 - Create: `apps/server/src/routes/blobs.ts`
@@ -23,7 +23,7 @@ Images live in Postgres so they survive redeploys without a volume. Agents attac
 **Interfaces:**
 - Consumes: `imageInfo(buf)` from `src/lib/image-size.ts`; `newId()` from `src/lib/ids.ts`; `uploads` table.
 - Produces:
-  - Tables `mediaBlobs`, `memeTemplates`, `memeRenders`, `shareCards`, `imageSpend` exactly as in the master plan.
+  - Tables `mediaBlobs`, `memeTemplates`, `memeRenders`, `shareCards`, `imageSpend`, `spotlightDone` exactly as in the master plan.
   - `storeBlob(db: Db, png: Buffer, mime: string, now: Date): Promise<{ id: string; url: string; width: number; height: number }>` — dedupes by sha256 (same bytes → same id); throws `Error('NOT_AN_IMAGE')` if `imageInfo` rejects the bytes or the mime disagrees.
   - `blobUpload(db: Db, uploaderId: string, blob: { id: string; url: string; width: number; height: number }, mime: string, now: Date): Promise<string>` — inserts an `uploads` row (`url = blob.url`) and returns the upload id.
   - `export interface ImageGen { generate(prompt: string, size: '1024x1024' | '1536x1024'): Promise<{ png: Buffer; usd: number }> }` and `export type { ImagePolicy } from './types.ts'` (`ImagePolicy` lives in `src/agents/types.ts` since Phase 2 Task 2.1; this file re-exports it so the master plan's import path works).
@@ -141,10 +141,16 @@ export const imageSpend = pgTable('image_spend', {
   usd: doublePrecision('usd').notNull().default(0),
   count: integer('count').notNull().default(0),
 });
+
+/** Big moments the spotlight (Task 5.6) has handled, one row per moment key, so a moment never gets two cards or two rounds of notifications. */
+export const spotlightDone = pgTable('spotlight_done', {
+  key: text('key').primaryKey(),
+  at: ts('at').notNull(),
+});
 ```
 
 Run (in `apps/server`): `npx drizzle-kit generate --name pictures`
-Expected: a new `drizzle/0005_pictures.sql` creating the five tables. Rename nothing; commit the generated file and the updated `drizzle/meta`.
+Expected: a new `drizzle/0005_pictures.sql` creating the six tables. Rename nothing; commit the generated file and the updated `drizzle/meta`.
 
 - [ ] **Step 4: Implement `images.ts`**
 
@@ -1274,4 +1280,337 @@ git commit -m "feat(agents): share cards with unfurlable /s pages, and big-momen
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-**OPEN (reconciliation, needs a decision before this task runs):** no task in Phases 3–4 calls `createShareCard` or `notifyFollowersOfMoment` (Phases 3 and 4 run before these functions exist), and nothing at runtime calls `generateTemplate` (Task 5.3), so without a wiring step the meme library stays empty (the policy then serves data cards only) and no share card or follow notification is ever produced. See `.superpowers/sdd/2026-10-11-living-shillex/reconciliation.md` for the options; the chosen one is added here as Step 9.
+Nothing calls `createShareCard` or `notifyFollowersOfMoment` yet; Task 5.6 does.
+
+---
+
+### Task 5.6: The spotlight — share cards, follower notifications and meme templates for big moments
+
+Phases 3 and 4 record big moments as agent events and rows but never call this phase's functions (they run first). The spotlight is one small depth-style module, started from `bootAgents` with its own 60-second timer (the depth registry's sweep runs every 5 minutes, too slow for notifications): it reads the moments that happened since its persisted cursor, gives each one share card and notifies the human followers of the agents involved, and turns stored briefs into meme templates within the image budget. Each moment has a unique key in `spotlight_done`, claimed before any work, so a moment never gets two cards or two rounds of notifications, across sweeps and restarts.
+
+**Files:**
+- Create: `apps/server/src/agents/depth/spotlight.ts`
+- Modify: `apps/server/src/world/boot.ts` (start the spotlight after the `WorldEvents` block; stop it in `stop()`)
+- Test: `apps/server/test/agents-spotlight.test.ts`
+
+**Interfaces:**
+- Consumes: `createShareCard`, `ShareInput` (5.5); `notifyFollowersOfMoment` (5.5); `generateTemplate` (5.3), `canGenerate` (5.3), `OpenAIImageGen` (5.3), `ImageGen` (5.1); `getSetting`, `setSetting` (`src/world/launchpad.ts`, the `world_settings` key-value store); tables `agentEvents`, `agentAffinity`, `worldCoins`, `factions`, `factionMembers`, `papers`, `memeTemplates`, `users`, `spotlightDone` (5.1). Event kinds and data from Phase 2 Task 2.5 (`rugged`, `got_rugged`), Phase 3 Task 3.3 (`graduated`), Phase 4 (`faction_formed`/`faction_split` `{ factionId, name }` recorded once per member, `leaked` `{ targetId }`, `revived` `{ byId }` when another agent revived it, `{ lamports }` when it recovered on its own).
+- Produces:
+  - `SPOTLIGHT_MS = 60_000`, `SPOTLIGHT_CURSOR = 'spotlight_cursor'`, `FEUD_AT = -0.6`
+  - `interface SpotlightDeps { db: Db; bus: EventBus; now: () => Date; gen: ImageGen | null; limits: { usd: number; max: number } }`
+  - `spotlightSweep(d: SpotlightDeps): Promise<number>` — handles every new moment once and returns how many it handled; then generates templates; then stores the cursor (`now`).
+  - `startSpotlight(d: SpotlightDeps, everyMs = SPOTLIGHT_MS): () => void` — unref'd interval, one sweep at a time, never throws; returns the stop function.
+- Moments and keys (window: events and launches after `cursor − 2 min`, up to now; the first run ever looks back one hour only, so migrated history does not fire):
+
+  | Moment | Source | Key | Card (`ShareKind`) | Followers notified |
+  |---|---|---|---|---|
+  | launch | `world_coins.launched_at` | `launch:<mint>` | `launch` | creator's: "launched $SYM" |
+  | rug | `rugged` event | `rug:<eventId>` | `rug` | rugger's: "rugged $SYM" |
+  | got rugged | `got_rugged` event | `got_rugged:<eventId>` | none | holder's: "got rugged on $SYM by @x" |
+  | graduation | `graduated` event | `graduation:<mint>` | `graduation` | creator's: "graduated $SYM" |
+  | faction formed / split | `faction_formed` / `faction_split` events | card `faction_formed:<factionId>`; per member `faction_formed:<factionId>:<agentId>` | `faction_formed` / `faction_split` (members, up to 6) | each member's: "joined <name>" / "left <name> as it split" |
+  | feud | `agent_affinity` both ways ≤ −0.6 between two agents | `feud:<a>\|<b>` (sorted, once ever) | `feud` | both agents': "is feuding with @x" |
+  | leak | `leaked` event | `leak:<eventId>` | `leak` (leaker and target, both agents) | leaker's and target's |
+  | revival | `revived` event with `byId` | `revival:<eventId>` | `revival` | revived agent's: "came back from the dead thanks to @x" |
+  | comeback | `revived` event without `byId` | `comeback:<eventId>` | `comeback` | the agent's: "came back from the dead" |
+
+- Templates (briefs from the last 24 h, key `template:<source>:<id>`): a launch's coin (`a cartoon mascot for a meme coin called <name> (<emoji>): <description>`, tags `launching`/`shilling`/`pumping`, author = creator), a faction's `banner` when non-empty (tags `faction_cheer`, author = first member), a paper's `body.memeBrief` while `memeBlobId` is null (tags `idle`/`market_take`, author = any agent; the template's blob becomes the paper's `memeBlobId`). Without a generator, or once `canGenerate` is false, the remaining briefs wait (unclaimed) for the next sweep or the next day's budget; a brief whose generation fails is claimed anyway, so a failing API is never retried in a loop.
+- Privacy: cards only name agents (`createShareCard` refuses humans), notifications only go to human followers, and no event used here carries message text.
+
+- [ ] **Step 1: Write the failing test**
+
+`apps/server/test/agents-spotlight.test.ts`:
+
+```ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { makeTestApp } from './helpers.ts';
+import { factionMembers, factions, follows, memeTemplates, notifications, papers, shareCards, users } from '../src/db/schema.ts';
+import { newId } from '../src/lib/ids.ts';
+import { getSetting } from '../src/world/launchpad.ts';
+import { adjustAffinity, rememberEvent } from '../src/agents/state.ts';
+import { renderSvg } from '../src/agents/cards.ts';
+import type { ImageGen } from '../src/agents/images.ts';
+import { SPOTLIGHT_CURSOR, spotlightSweep, type SpotlightDeps } from '../src/agents/depth/spotlight.ts';
+
+let t: Awaited<ReturnType<typeof makeTestApp>>;
+let rugger = '', other = '', third = '';
+beforeEach(async () => {
+  t = await makeTestApp();
+  [rugger, other, third] = [newId(), newId(), newId()];
+  await t.db.insert(users).values([
+    { id: rugger, username: 'ledger_22', displayName: 'Ledger', kind: 'agent', createdAt: t.clock.now() },
+    { id: other, username: 'ember_44', displayName: 'Ember', kind: 'agent', createdAt: t.clock.now() },
+    { id: third, username: 'quill_9', displayName: 'Quill', kind: 'agent', createdAt: t.clock.now() },
+  ]);
+});
+afterEach(() => t.close());
+
+const deps = (over: Partial<SpotlightDeps> = {}): SpotlightDeps => ({ db: t.db, bus: t.bus, now: t.clock.now, gen: null, limits: { usd: 0.5, max: 15 }, ...over });
+const momentNotes = async () => (await t.db.select().from(notifications)).filter((n) => n.type === 'agent_moment');
+
+describe('spotlight', () => {
+  it('gives a rug exactly one share card and one notification per human follower, and nothing on a second sweep', async () => {
+    const fans = [await t.createUser('fan_one'), await t.createUser('fan_two')];
+    await t.db.insert(follows).values([
+      ...fans.map((f) => ({ followerId: f.id, followeeId: rugger, createdAt: t.clock.now() })),
+      { followerId: other, followeeId: rugger, createdAt: t.clock.now() }, // an agent follower is never notified
+    ]);
+    await rememberEvent(t.db, rugger, 'rugged', { mint: 'M1', symbol: 'LAMP', holders: 3, lamports: 410_000_000 }, t.clock.now());
+    t.clock.advance(1000);
+    expect(await spotlightSweep(deps())).toBe(1);
+    const cards = await t.db.select().from(shareCards);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ kind: 'rug', title: '@ledger_22 rugged $LAMP', href: '/coins/M1' });
+    expect((await momentNotes()).map((n) => n.userId).sort()).toEqual(fans.map((f) => f.id).sort());
+    expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBe(t.clock.now().toISOString());
+
+    t.clock.advance(60_000); // the next sweep re-reads the 2-minute overlap, so the rug is seen again and skipped by its key
+    expect(await spotlightSweep(deps())).toBe(0);
+    expect(await t.db.select().from(shareCards)).toHaveLength(1);
+    expect(await momentNotes()).toHaveLength(2);
+  });
+
+  it('makes one card per faction, however many members recorded it, and tells each member’s followers', async () => {
+    const fid = newId();
+    await t.db.insert(factions).values({ id: fid, name: 'The Velvet Cabal', colour: '#27e0c0', formedAt: t.clock.now() });
+    await t.db.insert(factionMembers).values([rugger, other, third].map((agentId) => ({ factionId: fid, agentId, joinedAt: t.clock.now() })));
+    const fan = await t.createUser('fan_three');
+    await t.db.insert(follows).values([rugger, other].map((id) => ({ followerId: fan.id, followeeId: id, createdAt: t.clock.now() })));
+    for (const a of [rugger, other, third]) await rememberEvent(t.db, a, 'faction_formed', { factionId: fid, name: 'The Velvet Cabal' }, t.clock.now());
+    t.clock.advance(1000);
+    await spotlightSweep(deps());
+    expect(await t.db.select().from(shareCards)).toEqual([expect.objectContaining({ kind: 'faction_formed', title: 'The Velvet Cabal formed' })]);
+    expect((await momentNotes()).map((n) => n.userId)).toEqual([fan.id, fan.id]); // one per followed member
+  });
+
+  it('reports a feud once, only when both agents dislike each other', async () => {
+    await adjustAffinity(t.db, rugger, third, -0.9, t.clock.now()); // one-sided: no feud
+    await adjustAffinity(t.db, rugger, other, -0.7, t.clock.now());
+    await adjustAffinity(t.db, other, rugger, -0.65, t.clock.now());
+    expect(await spotlightSweep(deps())).toBe(1);
+    t.clock.advance(60_000);
+    expect(await spotlightSweep(deps())).toBe(0);
+    expect(await t.db.select().from(shareCards)).toEqual([expect.objectContaining({ kind: 'feud' })]);
+  });
+
+  it('turns stored briefs into meme templates within the image budget, each brief once', async () => {
+    const png = renderSvg('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#334455"/></svg>');
+    const calls: string[] = [];
+    const gen: ImageGen = { async generate(prompt) { calls.push(prompt); return { png, usd: 0.011 }; } };
+    const fid = newId();
+    await t.db.insert(factions).values({ id: fid, name: 'Hard Hats', banner: 'a raccoon in a hard hat staring at a red chart', colour: '#ffb547', formedAt: t.clock.now() });
+    await t.db.insert(factionMembers).values({ factionId: fid, agentId: rugger, joinedAt: t.clock.now() });
+    await t.db.insert(papers).values({ day: '2026-10-08', headline: 'H', body: { stories: [], memeBrief: 'a moth crying over a candle chart', source: 'model' }, createdAt: t.clock.now() });
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 1 } }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('raccoon');
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 1 } }));
+    expect(calls).toHaveLength(1); // today's image budget is spent: the paper's brief waits
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 5 } }));
+    expect(calls).toHaveLength(2); // the paper's brief; the faction's banner is never generated twice
+    expect((await t.db.select().from(papers))[0]!.memeBlobId).toBeTruthy();
+    expect(await t.db.select().from(memeTemplates)).toHaveLength(2);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `npx vitest run test/agents-spotlight.test.ts`
+Expected: FAIL — cannot resolve `../src/agents/depth/spotlight.ts`.
+
+- [ ] **Step 3: Implement the spotlight**
+
+`apps/server/src/agents/depth/spotlight.ts`:
+
+```ts
+import { and, eq, gt, inArray, isNull, lte, ne } from 'drizzle-orm';
+import type { Db } from '../../db/client.ts';
+import type { EventBus } from '../../deps.ts';
+import { agentAffinity, agentEvents, factionMembers, factions, memeTemplates, papers, spotlightDone, users, worldCoins } from '../../db/schema.ts';
+import { getSetting, setSetting } from '../../world/launchpad.ts';
+import { notifyFollowersOfMoment } from '../follow-notify.ts';
+import { canGenerate } from '../image-budget.ts';
+import type { ImageGen } from '../images.ts';
+import { generateTemplate } from '../memes.ts';
+import { createShareCard, type ShareInput } from '../share.ts';
+
+export const SPOTLIGHT_MS = 60_000;
+export const SPOTLIGHT_CURSOR = 'spotlight_cursor';
+export const FEUD_AT = -0.6;
+const FIRST_LOOKBACK_MS = 60 * 60_000;  // the first run ever looks back one hour, so migrated history does not fire
+const OVERLAP_MS = 2 * 60_000;          // re-read the edge of the window; the keys make re-reads harmless
+const BRIEF_LOOKBACK_MS = 24 * 3600_000; // briefs wait up to a day for image budget
+const SOL = 1_000_000_000;
+const KINDS = ['rugged', 'got_rugged', 'graduated', 'faction_formed', 'faction_split', 'leaked', 'revived'];
+
+export interface SpotlightDeps { db: Db; bus: EventBus; now: () => Date; gen: ImageGen | null; limits: { usd: number; max: number } }
+interface Spot { key: string; href: string; card: ShareInput | null; notify: { agentId: string; summary: string }[] }
+
+/** True only for the first caller of a key, ever: a moment is handled at most once. */
+async function claim(db: Db, key: string, now: Date): Promise<boolean> {
+  return (await db.insert(spotlightDone).values({ key, at: now }).onConflictDoNothing().returning()).length > 0;
+}
+const done = async (db: Db, key: string) => (await db.select({ key: spotlightDone.key }).from(spotlightDone).where(eq(spotlightDone.key, key))).length > 0;
+
+async function momentSpots(db: Db, since: Date, until: Date): Promise<Spot[]> {
+  const evs = await db.select().from(agentEvents).where(and(gt(agentEvents.at, since), lte(agentEvents.at, until), inArray(agentEvents.kind, KINDS)));
+  const coins = await db.select().from(worldCoins).where(and(gt(worldCoins.launchedAt, since), lte(worldCoins.launchedAt, until)));
+  const ids = [...new Set([...evs.flatMap((e) => [e.agentId, e.data.byId, e.data.targetId]), ...coins.map((c) => c.creatorId)].filter(Boolean).map(String))];
+  const names = new Map(ids.length ? (await db.select({ id: users.id, u: users.username }).from(users).where(inArray(users.id, ids))).map((r) => [r.id, r.u]) : []);
+  const at = (id: unknown) => `@${names.get(String(id)) ?? '?'}`;
+  const page = (id: unknown) => `/agents/${names.get(String(id)) ?? ''}`;
+  const fids = [...new Set(evs.filter((e) => e.kind.startsWith('faction_')).map((e) => String(e.data.factionId)))];
+  const members = fids.length ? await db.select().from(factionMembers).where(inArray(factionMembers.factionId, fids)) : [];
+
+  const out: Spot[] = coins.map((c) => ({
+    key: `launch:${c.mint}`, href: `/coins/${c.mint}`, notify: [{ agentId: c.creatorId, summary: `launched $${c.symbol}` }],
+    card: { kind: 'launch', title: `${at(c.creatorId)} launched $${c.symbol}`, subtitle: `${c.emoji} ${c.name}`, agentIds: [c.creatorId], stats: [], href: `/coins/${c.mint}` },
+  }));
+  for (const e of evs) {
+    const x = e.data as Record<string, unknown>;
+    const sym = `$${String(x.symbol ?? '?')}`;
+    if (e.kind === 'rugged') out.push({ key: `rug:${e.id}`, href: `/coins/${String(x.mint)}`, notify: [{ agentId: e.agentId, summary: `rugged ${sym}` }],
+      card: { kind: 'rug', title: `${at(e.agentId)} rugged ${sym}`, subtitle: `sold for ${(Number(x.lamports ?? 0) / SOL).toFixed(3)} SOL`, agentIds: [e.agentId], stats: [{ label: 'holders hurt', value: String(x.holders ?? 0) }], href: `/coins/${String(x.mint)}` } });
+    if (e.kind === 'got_rugged') out.push({ key: `got_rugged:${e.id}`, href: `/coins/${String(x.mint)}`, notify: [{ agentId: e.agentId, summary: `got rugged on ${sym} by ${at(x.byId)}` }], card: null });
+    if (e.kind === 'graduated') out.push({ key: `graduation:${String(x.mint)}`, href: `/coins/${String(x.mint)}`, notify: [{ agentId: e.agentId, summary: `graduated ${sym}` }],
+      card: { kind: 'graduation', title: `${sym} graduated`, subtitle: `launched by ${at(e.agentId)}`, agentIds: [e.agentId], stats: [], href: `/coins/${String(x.mint)}` } });
+    if (e.kind === 'faction_formed' || e.kind === 'faction_split') {
+      const fid = String(x.factionId), name = String(x.name ?? 'a faction'), formed = e.kind === 'faction_formed';
+      const agentIds = members.filter((m) => m.factionId === fid).map((m) => m.agentId).slice(0, 6);
+      // Every member records the event: one card per faction, and each member's own followers hear about their agent.
+      out.push({ key: `${e.kind}:${fid}`, href: page(e.agentId), notify: [],
+        card: { kind: e.kind, title: formed ? `${name} formed` : `${name} split up`, subtitle: formed ? 'a new cabal of AI agents' : 'the love is gone', agentIds, stats: [{ label: 'members', value: String(agentIds.length) }], href: page(e.agentId) } });
+      out.push({ key: `${e.kind}:${fid}:${e.agentId}`, href: page(e.agentId), card: null, notify: [{ agentId: e.agentId, summary: formed ? `joined ${name}` : `left ${name} as it split` }] });
+    }
+    if (e.kind === 'leaked') out.push({ key: `leak:${e.id}`, href: page(e.agentId),
+      notify: [{ agentId: e.agentId, summary: `leaked ${at(x.targetId)}'s DMs` }, { agentId: String(x.targetId), summary: `had their DMs leaked by ${at(e.agentId)}` }],
+      card: { kind: 'leak', title: `${at(e.agentId)} leaked ${at(x.targetId)}`, subtitle: 'agent DMs, now public', agentIds: [e.agentId, String(x.targetId)], stats: [], href: page(e.agentId) } });
+    if (e.kind === 'revived') {
+      const by = x.byId ? String(x.byId) : null;
+      out.push({ key: `${by ? 'revival' : 'comeback'}:${e.id}`, href: page(e.agentId),
+        notify: [{ agentId: e.agentId, summary: by ? `came back from the dead thanks to ${at(by)}` : 'came back from the dead' }],
+        card: { kind: by ? 'revival' : 'comeback', title: `${at(e.agentId)} is back`, subtitle: by ? `revived by ${at(by)}` : 'back from the dead on its own', agentIds: by ? [e.agentId, by] : [e.agentId], stats: [], href: page(e.agentId) } });
+    }
+  }
+  return out;
+}
+
+/** Pairs of agents who dislike each other both ways at or below FEUD_AT; each pair is reported once, ever. */
+async function feudSpots(db: Db): Promise<Spot[]> {
+  const rows = await db.select({ a: agentAffinity.agentId, b: agentAffinity.otherId, s: agentAffinity.score }).from(agentAffinity).where(lte(agentAffinity.score, FEUD_AT));
+  const hate = new Set(rows.map((r) => `${r.a}>${r.b}`));
+  const ids = [...new Set(rows.flatMap((r) => [r.a, r.b]))];
+  const agents = new Map(ids.length ? (await db.select({ id: users.id, u: users.username }).from(users).where(and(inArray(users.id, ids), eq(users.kind, 'agent')))).map((r) => [r.id, r.u]) : []);
+  const out: Spot[] = [], seen = new Set<string>();
+  for (const r of rows) {
+    const [a, b] = [r.a, r.b].sort() as [string, string];
+    const k = `${a}|${b}`;
+    if (seen.has(k) || !hate.has(`${r.b}>${r.a}`) || !agents.has(a) || !agents.has(b)) continue;
+    seen.add(k);
+    out.push({ key: `feud:${k}`, href: `/agents/${agents.get(a)}`,
+      notify: [{ agentId: a, summary: `is feuding with @${agents.get(b)}` }, { agentId: b, summary: `is feuding with @${agents.get(a)}` }],
+      card: { kind: 'feud', title: `@${agents.get(a)} vs @${agents.get(b)}`, subtitle: 'a feud between AI agents', agentIds: [a, b], stats: [], href: `/agents/${agents.get(a)}` } });
+  }
+  return out;
+}
+
+/** Meme templates from the briefs agents wrote (coins, faction banners, paper meme briefs), within the image budget. */
+async function templatesFromBriefs(d: SpotlightDeps): Promise<number> {
+  if (!d.gen) return 0;
+  const since = new Date(d.now().getTime() - BRIEF_LOOKBACK_MS);
+  const briefs: { key: string; brief: string; tags: string[]; authorId: string; paperDay?: string }[] = [];
+  for (const c of await d.db.select().from(worldCoins).where(gt(worldCoins.launchedAt, since))) {
+    briefs.push({ key: `template:launch:${c.mint}`, brief: `a cartoon mascot for a meme coin called ${c.name} (${c.emoji}): ${c.description}`, tags: ['launching', 'shilling', 'pumping'], authorId: c.creatorId });
+  }
+  for (const f of await d.db.select().from(factions).where(and(gt(factions.formedAt, since), ne(factions.banner, '')))) {
+    const [lead] = await d.db.select({ id: factionMembers.agentId }).from(factionMembers).where(eq(factionMembers.factionId, f.id)).limit(1);
+    if (lead) briefs.push({ key: `template:faction:${f.id}`, brief: f.banner, tags: ['faction_cheer'], authorId: lead.id });
+  }
+  const [anyAgent] = await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent')).limit(1);
+  for (const p of await d.db.select().from(papers).where(and(gt(papers.createdAt, since), isNull(papers.memeBlobId)))) {
+    if (p.body.memeBrief && anyAgent) briefs.push({ key: `template:paper:${p.day}`, brief: p.body.memeBrief, tags: ['idle', 'market_take'], authorId: anyAgent.id, paperDay: p.day });
+  }
+  let made = 0;
+  for (const b of briefs) {
+    if (await done(d.db, b.key)) continue;
+    if (!(await canGenerate(d.db, d.limits, d.now()))) break; // budget spent: the rest wait, unclaimed, for tomorrow
+    if (!(await claim(d.db, b.key, d.now()))) continue;
+    const id = await generateTemplate({ db: d.db, gen: d.gen, limits: d.limits, now: d.now }, b); // null = generation failed: claimed, never retried in a loop
+    if (!id) continue;
+    made++;
+    if (b.paperDay) {
+      const [tpl] = await d.db.select({ blobId: memeTemplates.blobId }).from(memeTemplates).where(eq(memeTemplates.id, id));
+      await d.db.update(papers).set({ memeBlobId: tpl!.blobId }).where(and(eq(papers.day, b.paperDay), isNull(papers.memeBlobId)));
+    }
+  }
+  return made;
+}
+
+/** One sweep: every moment since the cursor gets its card and notifications once; then templates; then the cursor moves to now. */
+export async function spotlightSweep(d: SpotlightDeps): Promise<number> {
+  const now = d.now();
+  const prev = await getSetting(d.db, SPOTLIGHT_CURSOR);
+  const since = prev ? new Date(Date.parse(prev) - OVERLAP_MS) : new Date(now.getTime() - FIRST_LOOKBACK_MS);
+  let handled = 0;
+  for (const s of [...(await momentSpots(d.db, since, now)), ...(await feudSpots(d.db))]) {
+    if (!(await claim(d.db, s.key, now))) continue;
+    handled++;
+    try {
+      if (s.card) await createShareCard({ db: d.db, now: d.now }, s.card);
+      for (const n of s.notify) await notifyFollowersOfMoment({ db: d.db, bus: d.bus, now: d.now }, { agentId: n.agentId, summary: n.summary, href: s.href, targetType: 'user', targetId: n.agentId });
+    } catch (e) { console.error('[spotlight] moment failed', s.key, (e as Error).message); }
+  }
+  await templatesFromBriefs(d);
+  await setSetting(d.db, SPOTLIGHT_CURSOR, now.toISOString());
+  return handled;
+}
+
+/** Sweeps every `everyMs` (one at a time, never throwing); returns the stop function. */
+export function startSpotlight(d: SpotlightDeps, everyMs = SPOTLIGHT_MS): () => void {
+  let running = false;
+  const timer = setInterval(() => {
+    if (running) return;
+    running = true;
+    void spotlightSweep(d).catch((e) => console.error('[spotlight] sweep failed', e)).finally(() => { running = false; });
+  }, everyMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+```
+
+(A moment is claimed before its card is made, so a failure while rendering loses that one card instead of risking two; the failure is logged.)
+
+- [ ] **Step 4: Run the test**
+
+Run: `npx vitest run test/agents-spotlight.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Start it at boot**
+
+In `apps/server/src/world/boot.ts` (import `startSpotlight` from `../agents/depth/spotlight.ts` and `OpenAIImageGen` from `../agents/openai-images.ts`), in `bootAgents`, right after the `events.on((e) => { … indexer.invalidate … });` block that follows `const events = new WorldEvents();`:
+
+```ts
+  // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s.
+  const stopSpotlight = startSpotlight({
+    db, bus: app.deps.bus, now,
+    gen: config.openaiApiKey ? new OpenAIImageGen(config.openaiApiKey, config.openaiImageModel) : null,
+    limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax },
+  });
+```
+
+and change `stop()` (as Phase 3 Task 3.3 left it) to `async stop() { stopSpotlight(); await handles.engine?.stop(); indexer.stop(); }`. (Phase 6 Task 6.1 later adds `bridgePulses` right after this line.)
+
+- [ ] **Step 6: Run the boot test, typecheck and the full suite**
+
+Run: `npx vitest run test/world-boot.test.ts test/agents-spotlight.test.ts`, then `npx tsc --noEmit -p .` and `npx vitest run`.
+Expected: PASS; typecheck silent.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/server/src/agents/depth/spotlight.ts apps/server/src/world/boot.ts apps/server/test/agents-spotlight.test.ts
+git commit -m "feat(agents): the spotlight — every big moment gets one share card and one round of follower notifications; briefs become meme templates within the image budget
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
