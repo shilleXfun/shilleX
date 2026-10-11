@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentTurns, agents, messages, posts, users } from '../db/schema.ts';
+import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { TOOLS, runTool, type ToolContext } from '../world/tools.ts';
@@ -10,6 +10,7 @@ import type { EngineDeps } from './engine.ts';
 import { HAIKU, type ModelBudget } from './haiku.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
+import { rememberEvent } from './state.ts';
 import type { Moment, MomentKind, Moments } from './types.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
@@ -20,11 +21,17 @@ export const HUMAN_REPLIES_PER_HOUR = 3;
 const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
+const HUMAN_PURPOSE = 'reply to a human';
+/** Human replies may use at most this share of the daily model budget. */
+export const HUMAN_REPLY_BUDGET_SHARE = 0.5;
+const WRONG_TARGET = 'Refused: you may only answer in the conversation or post you were given';
 const REJECTED = 'Text refused: plain text only, with no links, markup or @mentions';
 export interface ModelTurnOptions {
   purpose: string; prompt: string; tools: string[]; privateConversation?: boolean; maxTrips?: number;
   /** The one username (without @) the text may @mention: the user being replied to. */
   mention?: string;
+  /** Tool input fields fixed by the caller: the model may repeat them (or leave them out) but never name another target. A null pin means the field must stay empty. */
+  pin?: Record<string, unknown>;
 }
 export type ModelTurnRunner = (agentId: string, o: ModelTurnOptions) => Promise<{ ok: boolean; turnId: string; text: string }>;
 export type MomentHandler = (m: Moment, run: ModelTurnRunner) => Promise<void>;
@@ -94,11 +101,37 @@ export function guardToolInput(input: unknown, mention?: string): unknown {
   return g.ok ? g.v : null;
 }
 
+/** The input with the pinned fields forced, or null when it names a different target than the pin. */
+function applyPin(input: unknown, pin: Record<string, unknown>): Record<string, unknown> | null {
+  const out: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  for (const [k, want] of Object.entries(pin)) {
+    const got = out[k];
+    if (got !== undefined && got !== null && got !== want) return null;
+    out[k] = want;
+  }
+  return out;
+}
+
 export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: ModelBudget; handlers?: Partial<Record<MomentKind, MomentHandler>> }): Moments {
   const queue: Moment[] = [];
   const keys = new Set<string>();
   const retried = new WeakSet<Moment>();
   const perHuman = new Map<string, number[]>();
+  // Human replies may spend at most half the day's budget. Seeded from today receipts a moment after start.
+  const humanCap = () => HUMAN_REPLY_BUDGET_SHARE * d.app.deps.config.agentDailyBudgetUsd;
+  const dayOf = () => d.now().toISOString().slice(0, 10);
+  let humanDay = dayOf(), humanSpent = 0;
+  const rollHuman = () => { if (dayOf() !== humanDay) { humanDay = dayOf(); humanSpent = 0; } };
+  const addHumanSpend = (usd: number) => { rollHuman(); humanSpent += usd; };
+  void (async () => {
+    try {
+      const start = new Date(`${dayOf()}T00:00:00Z`).toISOString();
+      const [r] = await d.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns)
+        .where(sql`${agentTurns.startedAt} >= ${start}::timestamptz and ${agentTurns.triggers} @> ${JSON.stringify([{ note: HUMAN_PURPOSE }])}::jsonb`);
+      rollHuman();
+      humanSpent += Number(r?.s ?? 0);
+    } catch (e) { console.error('[agents] could not load the human reply spend of today', e); }
+  })();
   let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
   let bounced = false;
@@ -129,6 +162,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         const cost = priceOf(HAIKU, res.usage);
         costUsd += cost;
         d.budget.add(cost);
+        if (o.purpose === HUMAN_PURPOSE) addHumanSpend(cost);
         for (const b of res.content) {
           if (b.type === 'thinking' && (b as { thinking?: string }).thinking) reasoning += `${reasoning ? '\n\n' : ''}${(b as { thinking: string }).thinking}`;
           if (b.type === 'text') text += (b as Anthropic.TextBlock).text;
@@ -148,8 +182,14 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
             fail(REJECTED);
             continue;
           }
-          const out = await runTool(ctx, u.name, input);
-          toolCalls.push({ name: u.name, input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
+          const pinned = o.pin ? applyPin(input, o.pin) : input;
+          if (pinned === null) {
+            toolCalls.push({ name: u.name, input: { rejected: true }, ok: false, result: { error: WRONG_TARGET } });
+            fail(WRONG_TARGET);
+            continue;
+          }
+          const out = await runTool(ctx, u.name, pinned);
+          toolCalls.push({ name: u.name, input: pinned, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
           if (out.ok && out.write) status = 'acted';
           results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out.result ?? null).slice(0, 20_000), is_error: !out.ok });
         }
@@ -191,9 +231,12 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));
       if (!h) return;
       if (m.data.postId) {
-        const [p] = await d.db.select({ body: posts.body }).from(posts).where(eq(posts.id, String(m.data.postId)));
-        if (!p) return;
-        await r(m.agentId, { purpose: 'reply to a human', tools: ['reply'], mention: h.username,
+        const [p] = await d.db.select({ body: posts.body, deletedAt: posts.deletedAt, visibility: posts.visibility, communityId: posts.communityId, cv: communities.visibility })
+          .from(posts).leftJoin(communities, eq(communities.id, posts.communityId)).where(eq(posts.id, String(m.data.postId)));
+        if (!p || p.deletedAt) return;
+        // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
+        const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
+        await r(m.agentId, { purpose: HUMAN_PURPOSE, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
           prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
@@ -201,7 +244,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
       const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
-      await r(m.agentId, { purpose: 'reply to a human', tools: ['chat'], privateConversation: true, mention: h.username,
+      await r(m.agentId, { purpose: HUMAN_PURPOSE, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
     async phrasebook(m) {
@@ -212,9 +255,22 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       });
     },
   };
+  /** Hands a human's message back to the engine (it answers from its phrasebook) and returns the per-human slot. */
+  async function release(m: Moment, giveSlotBack: boolean) {
+    const ref = String(m.data.postId ?? m.data.conversationId ?? '');
+    if (giveSlotBack) { const l = perHuman.get(String(m.data.humanId)); l?.pop(); if (l && !l.length) perHuman.delete(String(m.data.humanId)); }
+    try { await rememberEvent(d.db, m.agentId, 'reply_released', { ref }, d.now()); } catch (e) { console.error('[agents] could not release a human reply', e); }
+  }
   const handlerOf = (k: MomentKind) => d.handlers?.[k] ?? builtIn[k];
   const open = () => !halted && !stopped && affordable(MOMENT_WORST);
   const push = (m: Moment) => { queue.push(m); keys.add(keyOf(m)); };
+
+  /** Empties the queue (budget closed, halt, shutdown): human messages go back to the engine instead of being lost. */
+  async function dropAll(extra: Moment[] = []) {
+    const dropped = [...queue, ...extra].filter((x) => x.kind === 'human_reply');
+    queue.length = 0; keys.clear();
+    for (const m of dropped) await release(m, true);
+  }
 
   async function drainLoop() {
     const later: Moment[] = [];
@@ -225,17 +281,26 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const h = handlerOf(m.kind);
       if (!h) continue;
       bounced = false;
-      try { await h(m, run); }
+      let answered = false, threw = false;
+      const track: ModelTurnRunner = async (a, o) => { const x = await run(a, o); if (x.ok) answered = true; return x; };
+      try { await h(m, m.kind === 'human_reply' ? track : run); }
       catch (e) {
+        threw = true;
         const p = accountProblem(e);
         if (p) { halted = p; console.error(`[agents] model calls halted: ${p}`); }
         else console.error('[agents] moment failed', m.kind, e);
       }
       // The agent was mid-turn in the engine: try once more on the next drain rather than lose the moment.
-      if (bounced && !retried.has(m)) { retried.add(m); later.push(m); }
+      const requeue = bounced && !retried.has(m) && !answered && !threw;
+      if (requeue) { retried.add(m); later.push(m); }
+      // Dropped or finished: the engine may answer from the phrasebook again; a conversation is not muted after it was answered.
+      else if (m.kind === 'human_reply') await release(m, !answered);
     }
-    if (!open()) { queue.length = 0; keys.clear(); return; }
-    for (const m of later) if (queue.length < MAX_QUEUE && !keys.has(keyOf(m))) push(m);
+    if (!open()) { await dropAll(later); return; }
+    for (const m of later) {
+      if (queue.length < MAX_QUEUE && !keys.has(keyOf(m))) push(m);
+      else if (m.kind === 'human_reply') await release(m, true);
+    }
   }
 
   return {
@@ -244,7 +309,12 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       if (!open() || !affordable(worstOf(m.kind)) || queue.length >= MAX_QUEUE || !handlerOf(m.kind)) return false;
       if (keys.has(keyOf(m))) return false;
       if (m.kind === 'human_reply') {
+        rollHuman();
+        const queuedHuman = queue.filter((x) => x.kind === 'human_reply').length;
+        // Worst case for everything already queued plus this one, against half the day's budget.
+        if (humanSpent + (queuedHuman + 1) * MOMENT_WORST > humanCap()) return false;
         const human = String(m.data.humanId), t = d.now().getTime();
+        for (const [h, xs] of perHuman) { const keep = xs.filter((x) => t - x < 3_600_000); if (keep.length) perHuman.set(h, keep); else perHuman.delete(h); }
         const recent = (perHuman.get(human) ?? []).filter((x) => t - x < 3_600_000);
         if (recent.length >= HUMAN_REPLIES_PER_HOUR) return false;
         perHuman.set(human, [...recent, t]);
@@ -262,8 +332,8 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     },
     async stop() {
       stopped = true;
-      queue.length = 0; keys.clear();
       await current?.catch(() => {});
+      await dropAll();
     },
   };
 }
