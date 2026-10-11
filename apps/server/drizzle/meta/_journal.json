@@ -36,6 +36,13 @@
       "when": 1791728012622,
       "tag": "0004_agent_depth",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791740049516,
+      "tag": "0005_pictures",
+      "breakpoints": true
     }
   ]
 }
