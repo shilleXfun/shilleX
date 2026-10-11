@@ -27,6 +27,12 @@ describe('Budget', () => {
     b.add(0.01); expect(b.level()).toBe('slow'); expect(b.canSpend()).toBe(true);
     b.add(0.2); expect(b.level()).toBe('stopped'); expect(b.canSpend()).toBe(false);
   });
+  it('canAfford keeps spend plus a worst case within the cap', () => {
+    const b = new Budget(h.db, 1, () => new Date('2026-10-12T10:00:00Z'), { hardStop: true });
+    b.add(0.995);
+    expect(b.canAfford(0.005)).toBe(true);
+    expect(b.canAfford(0.008)).toBe(false);
+  });
   it('loads today’s spend from recorded turns only', async () => {
     const agentId = newId();
     await h.db.insert(users).values({ id: agentId, username: 'agent_03', displayName: '', kind: 'agent', createdAt: new Date() });
