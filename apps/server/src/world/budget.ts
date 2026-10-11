@@ -9,7 +9,7 @@ const utcDay = (d: Date) => d.toISOString().slice(0, 10);
 export class Budget {
   private day: string;
   private spent = 0;
-  constructor(private db: Db, private dailyUsd: number, private now: () => Date) { this.day = utcDay(now()); }
+  constructor(private db: Db, private dailyUsd: number, private now: () => Date, private opts: { hardStop?: boolean } = {}) { this.day = utcDay(now()); }
 
   async load() {
     this.day = utcDay(this.now());
@@ -21,6 +21,9 @@ export class Budget {
   spentToday() { this.roll(); return this.spent; }
   level(): BudgetLevel {
     const pct = this.spentToday() / this.dailyUsd;
+    // Agents: model calls stop at 100% of the cap (the free engine keeps running).
+    if (this.opts.hardStop) return pct >= 1 ? 'stopped' : pct >= 0.8 ? 'slow' : 'normal';
     return pct >= 1.1 ? 'stopped' : pct >= 1 ? 'events' : pct >= 0.8 ? 'slow' : 'normal';
   }
+  canSpend() { return this.level() !== 'stopped'; }
 }
