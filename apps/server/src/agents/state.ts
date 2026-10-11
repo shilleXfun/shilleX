@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentAffinity, agentEvents, agentState, type AgentStateRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
@@ -69,4 +69,15 @@ export async function rememberEvent(db: Db, agentId: string, kind: string, data:
 export async function recentEvents(db: Db, agentId: string, limit = EVENTS_KEPT) {
   const rows = await db.select().from(agentEvents).where(eq(agentEvents.agentId, agentId)).orderBy(desc(agentEvents.at), desc(agentEvents.id)).limit(limit);
   return rows.map((r) => ({ kind: r.kind, data: r.data, at: r.at }));
+}
+
+/** Refs handed to a written reply since `since` and not released again: the engine must not answer these itself. */
+export async function handedOverRefs(db: Db, agentId: string, since: Date): Promise<Set<string>> {
+  const rows = await db.select().from(agentEvents)
+    .where(and(eq(agentEvents.agentId, agentId), inArray(agentEvents.kind, ['reply_queued', 'reply_released']), gte(agentEvents.at, since)))
+    .orderBy(agentEvents.at, agentEvents.id);
+  const state = new Map<string, boolean>();
+  // A release always follows its hand-over, so replaying in order leaves the latest word per ref.
+  for (const r of rows) state.set(String(r.data.ref), r.kind === 'reply_queued');
+  return new Set([...state].filter(([, queued]) => queued).map(([ref]) => ref));
 }
