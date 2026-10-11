@@ -10,7 +10,8 @@ import { startTurn } from '../src/world/provenance.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
 import { cleanModelText } from '../src/agents/phrasebook-writer.ts';
-import { MOMENT_MAX_TOKENS, accountProblem, createMoments, type Moment, type MomentKind } from '../src/agents/moments.ts';
+import { MOMENT_MAX_TOKENS, accountProblem, createMoments, exclusiveTurn, guardToolInput, type Moment, type MomentKind } from '../src/agents/moments.ts';
+import { verifyChain } from '../src/world/provenance.ts';
 import { startEngine, type EngineDeps } from '../src/agents/engine.ts';
 import { act } from '../src/agents/act.ts';
 import { perceive } from '../src/agents/perceive.ts';
@@ -195,7 +196,159 @@ describe('moment queue', () => {
   });
 });
 
+describe('one turn at a time per agent (fix round 1)', () => {
+  it('act skips an agent whose moment is mid-call, and both turns seal (engine/queue race)', async () => {
+    const x = w.agents[0]!;
+    const busy = new Set<string>();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const brain = new FakeBrain(async (_r, call) => { if (call === 0) { await gate; return fakeReply.tools({ name: 'post', input: { body: 'held' } }); } return fakeReply.end(); });
+    const q = createMoments({ ...base(), busy, brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    q.enqueue(m('launch', x.id, { mint: 'M', symbol: 'M' }));
+    const draining = q.drain();
+    await vi.waitFor(() => expect(brain.calls).toHaveLength(1));
+    const d = { ...base(), busy };
+    const r = await act(d, await perceive(d, x.id), { kind: 'post', score: 1, situation: 'idle', reason: 'meanwhile' });
+    expect(r).toMatchObject({ ok: false, turnId: '' });
+    expect(await turnsOf(x.id)).toHaveLength(1);
+    release();
+    await draining;
+    const after = await act(d, await perceive(d, x.id), { kind: 'post', score: 1, situation: 'idle', reason: 'later' });
+    expect(after.turnId).not.toBe('');
+    const turns = (await turnsOf(x.id)).sort((a, b) => a.seq - b.seq);
+    expect(turns.map((t) => [t.model, t.status !== 'running', Boolean(t.hash)])).toEqual([[HAIKU, true, true], ['engine', true, true]]);
+    expect(await verifyChain(w.t.db, x.id)).toMatchObject({ ok: true });
+  });
+  it('a moment and an act started together for one agent never leave a turn unsealed', async () => {
+    const x = w.agents[0]!;
+    const busy = new Set<string>();
+    const q = createMoments({ ...base(), busy, brain: new FakeBrain(() => fakeReply.end()), budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    const d = { ...base(), busy };
+    const v = await perceive(d, x.id);
+    for (let i = 0; i < 5; i++) {
+      q.enqueue(m('launch', x.id, { mint: `M${i}` }));
+      await Promise.all([q.drain(), act(d, v, { kind: 'post', score: 1, situation: 'idle', reason: `race ${i}` })]);
+    }
+    expect((await turnsOf(x.id)).filter((t) => t.status === 'running')).toEqual([]);
+    expect(await verifyChain(w.t.db, x.id)).toMatchObject({ ok: true });
+  });
+  it('a moment skipped because the agent was busy is re-queued once, then dropped', async () => {
+    const x = w.agents[0]!;
+    const busy = new Set<string>([x.id]);
+    const brain = new FakeBrain(() => fakeReply.end());
+    const q = createMoments({ ...base(), busy, brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    q.enqueue(m('launch', x.id, { mint: 'A' }));
+    await q.drain();
+    expect(q.size()).toBe(1);
+    busy.clear();
+    await q.drain();
+    expect(brain.calls).toHaveLength(1);
+    busy.add(x.id);
+    q.enqueue(m('rug', x.id, { mint: 'B' }));
+    await q.drain();
+    await q.drain();
+    expect(q.size()).toBe(0);
+    expect(brain.calls).toHaveLength(1);
+  });
+  it('never runs a moment for a paused agent', async () => {
+    const x = w.agents[0]!;
+    await w.t.db.update(agentsTable).set({ status: 'paused' }).where(eq(agentsTable.userId, x.id));
+    const brain = new FakeBrain(() => fakeReply.end('not json'));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    q.enqueue(m('graduation', x.id, { mint: 'G', symbol: 'G' }));
+    q.enqueue(m('phrasebook', x.id));
+    await q.drain();
+    expect(brain.calls).toHaveLength(0);
+    expect(await turnsOf(x.id)).toHaveLength(0);
+  });
+  it('exclusiveTurn is the guarded path for handlers that open their own turn', async () => {
+    const x = w.agents[0]!;
+    const busy = new Set<string>();
+    const d = { ...base(), busy };
+    expect(await exclusiveTurn(d, x.id, async () => {
+      expect(busy.has(x.id)).toBe(true);
+      expect(await exclusiveTurn(d, x.id, async () => 'nested')).toEqual({ ran: false, reason: 'busy' });
+      return 'mine';
+    })).toEqual({ ran: true, value: 'mine' });
+    expect(busy.has(x.id)).toBe(false);
+  });
+  it('stop() lets the moment in flight finish, then drops the rest and refuses new ones', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const ran: string[] = [];
+    const q = createMoments({ ...base(), brain: new FakeBrain(() => fakeReply.end()), budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }),
+      handlers: { launch: async (x) => { ran.push(String(x.data.mint)); await gate; } } });
+    q.enqueue(m('launch', w.agents[0]!.id, { mint: 'A' }));
+    q.enqueue(m('launch', w.agents[1]!.id, { mint: 'B' }));
+    const draining = q.drain();
+    const stopping = q.stop();
+    release();
+    await stopping;
+    await draining;
+    expect(ran).toEqual(['A']);
+    expect(q.size()).toBe(0);
+    expect(q.enqueue(m('launch', w.agents[2]!.id, { mint: 'C' }))).toBe(false);
+  });
+});
+
+describe('model turn bounds (fix round 1)', () => {
+  const always = () => new FakeBrain(() => fakeReply.tools({ name: 'post', input: { body: `again ${Math.random()}` } }));
+  it('takes at most maxTrips calls, clamped to 4', async () => {
+    for (const [i, [trips, expected]] of ([[undefined, 2], [3, 3], [50, 4]] as const).entries()) {
+      const brain = always();
+      const a = w.agents[i]!;
+      const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }),
+        handlers: { faction: async (x, run) => { await run(x.agentId, { purpose: 'loop', prompt: 'go', tools: ['post'], maxTrips: trips }); } } });
+      q.enqueue(m('faction', a.id));
+      await q.drain();
+      expect(brain.calls).toHaveLength(expected);
+    }
+  });
+  it('answers every tool_use but runs only the offered tools', async () => {
+    const a = w.agents[0]!;
+    const brain = new FakeBrain((_r, call) => (call === 0
+      ? fakeReply.tools({ name: 'post', input: { body: 'offered' } }, { name: 'follow', input: { username: w.agents[1]!.username, follow: true } })
+      : fakeReply.end()));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    q.enqueue(m('launch', a.id, { mint: 'M', symbol: 'M' }));
+    await q.drain();
+    const results = brain.calls[1]!.messages.at(-1)!.content as { type: string; is_error?: boolean }[];
+    expect(results.map((r) => [r.type, Boolean(r.is_error)])).toEqual([['tool_result', false], ['tool_result', true]]);
+    const [t] = await turnsOf(a.id);
+    expect(t!.toolCalls.map((c) => c.name)).toEqual(['post']);
+  });
+  it('records a refusal', async () => {
+    const a = w.agents[0]!;
+    const q = createMoments({ ...base(), brain: new FakeBrain(() => fakeReply.refusal()), budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    q.enqueue(m('launch', a.id, { mint: 'M', symbol: 'M' }));
+    await q.drain();
+    expect(await turnsOf(a.id)).toMatchObject([{ status: 'refused', model: HAIKU }]);
+  });
+  it('returns the model\'s free text only through the filter', async () => {
+    const out: string[] = [];
+    const brain = new FakeBrain((_r, call) => fakeReply.end(call === 0 ? 'go to https://evil.example' : 'fine\ntext'));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }),
+      handlers: { faction: async (x, run) => { out.push((await run(x.agentId, { purpose: 'say', prompt: 'say', tools: [] })).text); } } });
+    q.enqueue(m('faction', w.agents[0]!.id));
+    q.enqueue(m('faction', w.agents[1]!.id));
+    await q.drain();
+    expect(out).toEqual(['', 'fine text']);
+  });
+});
+
 describe('hostile model output (ruling 3)', () => {
+  it('guardToolInput filters every free-text field, nested too, and leaves ids and enums alone', () => {
+    expect(guardToolInput({ post_id: 'p<1>', body: 'hi\nthere' })).toEqual({ post_id: 'p<1>', body: 'hi there' });
+    expect(guardToolInput({ bio: 'see https://x.example' })).toBeNull();
+    expect(guardToolInput({ display_name: '<b>me</b>' })).toBeNull();
+    expect(guardToolInput({ topic: 'ok', reason: 'fine' })).toEqual({ topic: 'ok', reason: 'fine' });
+    expect(guardToolInput({ new_notes: ['ok', 'http://x.example'] })).toBeNull();
+    expect(guardToolInput({ outer: { message: '`x`' } })).toBeNull();
+    const ids = { mint: 'M', username: 'bob', usernames: ['a', 'b'], to: '@bob', emoji: '🔥', visibility: 'public', target_type: 'post', slug: 's', invite_code: 'c', channel_id: 'c1', replace_ids: ['n1'] };
+    expect(guardToolInput(ids)).toEqual(ids);
+    expect(guardToolInput({ body: 'hey @bob' }, 'bob')).toEqual({ body: 'hey @bob' });
+    expect(guardToolInput({ description: '' })).toEqual({ description: '' });
+  });
   it('cleanModelText drops links, markup, backticks, control characters and stray mentions, and collapses newlines', () => {
     expect(cleanModelText('gm\n\nfrens', 500)).toBe('gm frens');
     expect(cleanModelText('see https://evil.example', 500)).toBeNull();
@@ -263,7 +416,7 @@ describe('engine with the queue', () => {
   it('logs a failed drain with a tag instead of swallowing it (ruling 5)', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const boom = new Error('drain broke');
-    const moments = { enqueue: () => false, size: () => 0, drain: () => Promise.reject(boom), halted: () => null };
+    const moments = { enqueue: () => false, size: () => 0, drain: () => Promise.reject(boom), halted: () => null, stop: async () => {} };
     const e = startEngine({ ...base(), moments, tickMs: [1000, 1000], autoStart: false });
     await e.tick();
     await new Promise((r) => setTimeout(r, 0));
@@ -276,7 +429,7 @@ describe('engine with the queue', () => {
     const mint = (l.result as { mint: string }).mint;
     w.chain.airdrop((await walletOf(w.t.db, whale!.id))!.publicKey, 3_000_000_000);
     const queued: Moment[] = [];
-    const d = { ...base(), moments: { enqueue: (x: Moment) => { queued.push(x); return true; }, size: () => 0, drain: async () => {}, halted: () => null } };
+    const d = { ...base(), moments: { enqueue: (x: Moment) => { queued.push(x); return true; }, size: () => 0, drain: async () => {}, halted: () => null, stop: async () => {} } };
     const v = await perceive(d, whale!.id);
     await act(d, v, { kind: 'buy', score: 1, lamports: 2_800_000_000, situation: 'bought', target: { mint, userId: maker!.id }, reason: 'bought $GRAD: test' });
     expect(queued).toContainEqual(expect.objectContaining({ kind: 'graduation', agentId: maker!.id, data: expect.objectContaining({ mint }) }));

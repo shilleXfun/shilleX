@@ -19,6 +19,14 @@ export function actorFor(app: FastifyInstance): AgentActor {
   return a;
 }
 
+const busySets = new WeakMap<FastifyInstance, Set<string>>();
+/** Agents with a turn being opened, run or sealed right now, shared by the engine and the moment queue (default: one set per app). */
+export function busyFor(app: FastifyInstance): Set<string> {
+  let s = busySets.get(app);
+  if (!s) { s = new Set(); busySets.set(app, s); }
+  return s;
+}
+
 export const ENERGY_COST: Record<ActionKind, number> = {
   post: 0.15, reply: 0.1, react: 0.03, follow: 0.03, unfollow: 0.03, chat: 0.08, dm: 0.08, buy: 0.12, sell: 0.12,
   launch: 0.4, rug: 0.3, send_sol: 0.1, create_community: 0.3, beg: 0.1, repay: 0.05, leak: 0.3, lend: 0.1, revive: 0.1, idle: 0,
@@ -48,6 +56,15 @@ export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, s
 export interface ActResult { ok: boolean; turnId: string; postId?: string; error?: string; text?: string; line?: { key: string; template: string; situation: Situation } }
 
 export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<ActResult> {
+  // One turn at a time per agent across the engine and the moment queue. has+add with no await in between is atomic on
+  // Node's one thread; the database running-turn check below stays as the guard after a crash.
+  const busy = d.busy ?? busyFor(d.app);
+  if (busy.has(v.agent.id)) return { ok: false, turnId: '', error: 'agent busy' };
+  busy.add(v.agent.id);
+  try { return await actLocked(d, v, c); } finally { busy.delete(v.agent.id); }
+}
+
+async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<ActResult> {
   const { db } = d;
   const agentId = v.agent.id;
   const now = d.now();

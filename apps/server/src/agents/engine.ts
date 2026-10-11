@@ -10,7 +10,9 @@ import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
 import type { ImagePolicy, Moments } from './types.ts';
 
-export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy }
+export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
+  /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
+  busy?: Set<string> }
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {

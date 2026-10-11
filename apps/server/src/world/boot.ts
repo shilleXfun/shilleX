@@ -81,9 +81,11 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       if (handles.engine) return 'running';
       if (!config.agentsOn) return 'AGENTS is off';
       const rng = mulberry32(Date.now() % 2 ** 31);
+      // One set for the engine and the queue: an agent never has two turns open at once.
+      const busy = new Set<string>();
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
-      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, brain, budget }) : null;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
+      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, busy, brain, budget }) : null;
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
@@ -94,5 +96,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     const treasury = await walletOf(db, TREASURY);
     console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
-  return Object.assign(handles, { async stop() { await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
