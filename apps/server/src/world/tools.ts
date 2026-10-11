@@ -22,11 +22,11 @@ const nnum = (description: string) => ({ type: ['number', 'null'], description }
 export const WRITE_TOOLS = new Set(['set_profile', 'post', 'reply', 'quote', 'react', 'follow', 'chat', 'start_dm', 'start_group', 'add_to_group', 'leave_group',
   'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol']);
 
-// The API allows at most 20 strict tools per request: strict goes to tools that change things, and reads and
-// single-argument writes rely on the closed schema alone.
-const LOOSE = new Set(['follow', 'leave_group', 'leave_community']);
+// Strict schemas compile into one grammar per request, and 18 strict tools was "too complex" for the API. Only the
+// money tools are strict; runTool fills any field the model leaves out of the others with null.
+const STRICT = new Set(['launch_coin', 'buy', 'sell', 'send_sol']);
 const tool = (name: string, description: string, properties: Record<string, object>): Anthropic.Tool =>
-  ({ name, description, ...(WRITE_TOOLS.has(name) && !LOOSE.has(name) ? { strict: true } : {}), input_schema: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }) as unknown as Anthropic.Tool;
+  ({ name, description, ...(STRICT.has(name) ? { strict: true } : {}), input_schema: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }) as unknown as Anthropic.Tool;
 
 export const TOOLS: Anthropic.Tool[] = [
   tool('set_profile', 'Change your own profile. Pass null for anything you are not changing.', {
@@ -262,7 +262,9 @@ export async function runTool(ctx: ToolContext, name: string, input: unknown): P
   const write = WRITE_TOOLS.has(name);
   if (!h) return { ok: false, write: false, result: { code: 'UNKNOWN_TOOL', error: `No tool named ${name}` } };
   try {
-    const r = await h(ctx, (input ?? {}) as In);
+    const given = (input && typeof input === 'object' ? input : {}) as In;
+    const fields = Object.keys((TOOLS.find((t) => t.name === name)!.input_schema as { properties: object }).properties);
+    const r = await h(ctx, Object.fromEntries(fields.map((k) => [k, given[k] ?? null])) as In);
     return { ok: true, write, result: r.result, signatures: r.signatures, endTurn: r.endTurn };
   } catch (e) {
     if (e instanceof ToolFail || e instanceof ChainError) return { ok: false, write, result: { code: e.code, error: e.message } };

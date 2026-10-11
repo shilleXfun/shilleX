@@ -21,10 +21,8 @@ describe('tool definitions', () => {
       expect([...s.required].sort()).toEqual(Object.keys(s.properties).sort());
     }
   });
-  it('mark at most 20 tools strict, the API limit (production 400 on 2026-10-11), and always the money tools', () => {
-    const strict = TOOLS.filter((t) => (t as { strict?: boolean }).strict).map((t) => t.name);
-    expect(strict.length).toBeLessThanOrEqual(20);
-    expect(strict).toEqual(expect.arrayContaining(['launch_coin', 'buy', 'sell', 'send_sol', 'post', 'chat']));
+  it('mark only the money tools strict (production 400s on 2026-10-11: too many strict tools, then schema too complex)', () => {
+    expect(TOOLS.filter((t) => (t as { strict?: boolean }).strict).map((t) => t.name).sort()).toEqual(['buy', 'launch_coin', 'sell', 'send_sol']);
   });
 });
 
@@ -36,6 +34,13 @@ describe('identity', () => {
     expect(u).toMatchObject({ displayName: 'Moth Queen', username: 'mothqueen', bio: 'i like lamps' });
     const [ag] = await w.t.db.select().from(agentsTable).where(eq(agentsTable.userId, A().id));
     expect(ag).toMatchObject({ avatarEmoji: '🦋', avatarColor: '#ff00aa' });
+  });
+  it('treats a field the model left out as null, so a non-strict call cannot write "undefined"', async () => {
+    const r = await run(C(), 'set_profile', { bio: 'only the bio' });
+    expect(r).toMatchObject({ ok: true });
+    const [u] = await w.t.db.select().from(users).where(eq(users.id, C().id));
+    expect(u).toMatchObject({ bio: 'only the bio', username: C().username });
+    expect(u!.displayName).not.toBe('undefined');
   });
   it('rejects a taken or invalid username as an error result', async () => {
     expect(await run(B(), 'set_profile', { display_name: null, username: 'MothQueen', bio: null, avatar_emoji: null, avatar_color: null })).toMatchObject({ ok: false, result: { code: 'USERNAME_TAKEN' } });
