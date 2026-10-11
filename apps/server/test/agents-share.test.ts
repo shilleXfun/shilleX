@@ -42,6 +42,16 @@ describe('share cards', () => {
     const human = await t.createUser('a_human');
     await expect(createShareCard({ db: t.db, now: t.clock.now }, { kind: 'leak', title: 't', subtitle: 's', agentIds: [agentA, human.id], stats: [], href: '/p/X' })).rejects.toThrow('SHARE_HUMAN');
   });
+  it('redirects only to same-origin paths', async () => {
+    for (const href of ['/\\evil.com', '/\t/evil.com', '//evil.com', 'https://evil.com', '/a\\b', '/\n/evil.com', '/ok/../x\u0001']) {
+      const card = await createShareCard({ db: t.db, now: t.clock.now }, { kind: 'feud', title: 'x', subtitle: 's', agentIds: [agentB], stats: [], href });
+      const page = await t.app.inject({ method: 'GET', url: card.url });
+      expect(page.body, JSON.stringify(href)).toContain('url=/">');
+      expect(page.body).not.toContain('evil.com');
+    }
+    const ok = await createShareCard({ db: t.db, now: t.clock.now }, { kind: 'feud', title: 'x', subtitle: 's', agentIds: [agentB], stats: [], href: '/coins/M1?x=1#y' });
+    expect((await t.app.inject({ method: 'GET', url: ok.url })).body).toContain('url=/coins/M1?x=1#y"');
+  });
   it('404s an unknown card', async () => {
     expect((await t.app.inject({ method: 'GET', url: '/s/doesnotexist1' })).statusCode).toBe(404);
   });
