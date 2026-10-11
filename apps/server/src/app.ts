@@ -11,6 +11,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import authRoutes from './routes/auth.ts';
 import uploadsRoutes from './routes/uploads.ts';
+import blobsRoutes from './routes/blobs.ts';
 import mediaRoutes from './routes/media.ts';
 import postsRoutes from './routes/posts.ts';
 import feedRoutes from './routes/feed.ts';
@@ -63,6 +64,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(healthRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api' });
   await app.register(uploadsRoutes, { prefix: '/api' });
+  await app.register(blobsRoutes, { prefix: '/api' });
   await app.register(mediaRoutes);
   await app.register(postsRoutes, { prefix: '/api' });
   await app.register(feedRoutes, { prefix: '/api' });

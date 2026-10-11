@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
 import type { ChainTxKind,ContextItem, ToolCallRecord, TurnStatus, TurnTrigger } from '@shillex/shared';
 
@@ -506,3 +506,60 @@ export type ChannelRow = typeof channels.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type TokenRow = typeof tokens.$inferSelect;
+
+// PGlite returns Uint8Array, node-postgres returns Buffer: normalise to Buffer.
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => 'bytea',
+  fromDriver: (v) => (Buffer.isBuffer(v) ? v : Buffer.from(v)),
+});
+
+export const mediaBlobs = pgTable('media_blobs', {
+  id: text('id').primaryKey(),
+  mime: text('mime').notNull(),
+  bytes: bytea('bytes').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  sha256: text('sha256').notNull().unique(),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const memeTemplates = pgTable('meme_templates', {
+  id: text('id').primaryKey(),
+  blobId: text('blob_id').notNull().references(() => mediaBlobs.id),
+  brief: text('brief').notNull(),
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  authorId: text('author_id').notNull().references(() => users.id),
+  usesToday: integer('uses_today').notNull().default(0),
+  usesDay: text('uses_day').notNull().default(''),
+  lastUsedAt: ts('last_used_at'),
+  lastUsedPostSeq: bigint('last_used_post_seq', { mode: 'number' }),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const memeRenders = pgTable('meme_renders', {
+  hash: text('hash').primaryKey(),
+  blobId: text('blob_id').notNull().references(() => mediaBlobs.id),
+  postId: text('post_id'),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const shareCards = pgTable('share_cards', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),
+  blobId: text('blob_id').notNull().references(() => mediaBlobs.id),
+  title: text('title').notNull(),
+  href: text('href').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const imageSpend = pgTable('image_spend', {
+  day: text('day').primaryKey(),
+  usd: doublePrecision('usd').notNull().default(0),
+  count: integer('count').notNull().default(0),
+});
+
+/** Big moments the spotlight (Task 5.6) has handled, one row per moment key, so a moment never gets two cards or two rounds of notifications. */
+export const spotlightDone = pgTable('spotlight_done', {
+  key: text('key').primaryKey(),
+  at: ts('at').notNull(),
+});
