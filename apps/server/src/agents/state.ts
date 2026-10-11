@@ -1,0 +1,72 @@
+import { createHash } from 'node:crypto';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import type { Db } from '../db/client.ts';
+import { agentAffinity, agentEvents, agentState, type AgentStateRow } from '../db/schema.ts';
+import { newId } from '../lib/ids.ts';
+import type { AgentView, Trait, Traits } from './types.ts';
+
+export const TRAITS: Trait[] = ['risk', 'chattiness', 'loyalty', 'pettiness', 'greed', 'humor', 'curiosity'];
+const ENERGY_PER_MINUTE = 0.03; // a resting agent is back to full in about half an hour
+const MOOD_HALF_LIFE_MIN = 60;  // moods fade toward 0
+const EVENTS_KEPT = 50;
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+type State = AgentView['state'];
+
+/** Starting traits for an agent with no phrasebook yet: stable per agent, between 0.2 and 0.8. */
+export function seededTraits(agentId: string): Traits {
+  const h = createHash('sha256').update(`traits:${agentId}`).digest();
+  return Object.fromEntries(TRAITS.map((t, i) => [t, Math.round((0.2 + (h[i]! / 255) * 0.6) * 100) / 100])) as Traits;
+}
+
+function toState(r: AgentStateRow, now: Date): State {
+  const minutes = Math.max(0, (now.getTime() - r.updatedAt.getTime()) / 60_000);
+  return {
+    energy: clamp(r.energy + minutes * ENERGY_PER_MINUTE, 0, 1),
+    mood: clamp(r.mood * 0.5 ** (minutes / MOOD_HALF_LIFE_MIN), -1, 1),
+    traits: r.traits, cooldowns: r.cooldowns, recentLines: r.recentLines,
+    brokeSince: r.brokeSince?.toISOString() ?? null, ghostSince: r.ghostSince?.toISOString() ?? null,
+  };
+}
+
+export async function loadState(db: Db, agentId: string, now: Date): Promise<State> {
+  const [r] = await db.select().from(agentState).where(eq(agentState.agentId, agentId));
+  if (r) return toState(r, now);
+  const fresh: AgentStateRow = { agentId, energy: 1, mood: 0, traits: seededTraits(agentId), cooldowns: {}, recentLines: [], brokeSince: null, ghostSince: null, updatedAt: now };
+  await db.insert(agentState).values(fresh).onConflictDoNothing();
+  return toState(fresh, now);
+}
+
+export async function saveState(db: Db, agentId: string, s: State, now: Date): Promise<void> {
+  const row = {
+    agentId, energy: clamp(s.energy, 0, 1), mood: clamp(s.mood, -1, 1), traits: s.traits, cooldowns: s.cooldowns,
+    recentLines: s.recentLines.slice(-30), brokeSince: s.brokeSince ? new Date(s.brokeSince) : null,
+    ghostSince: s.ghostSince ? new Date(s.ghostSince) : null, updatedAt: now,
+  };
+  await db.insert(agentState).values(row).onConflictDoUpdate({ target: agentState.agentId, set: row });
+}
+
+export async function adjustAffinity(db: Db, agentId: string, otherId: string, delta: number, now: Date): Promise<number> {
+  if (agentId === otherId) return 0;
+  const [r] = await db.select({ score: agentAffinity.score }).from(agentAffinity).where(and(eq(agentAffinity.agentId, agentId), eq(agentAffinity.otherId, otherId)));
+  const score = clamp((r?.score ?? 0) + delta, -1, 1);
+  await db.insert(agentAffinity).values({ agentId, otherId, score, updatedAt: now })
+    .onConflictDoUpdate({ target: [agentAffinity.agentId, agentAffinity.otherId], set: { score, updatedAt: now } });
+  return score;
+}
+
+export async function affinitiesOf(db: Db, agentId: string): Promise<Record<string, number>> {
+  const rows = await db.select({ otherId: agentAffinity.otherId, score: agentAffinity.score }).from(agentAffinity).where(eq(agentAffinity.agentId, agentId));
+  return Object.fromEntries(rows.map((r) => [r.otherId, r.score]));
+}
+
+export async function rememberEvent(db: Db, agentId: string, kind: string, data: Record<string, unknown>, now: Date): Promise<void> {
+  await db.insert(agentEvents).values({ id: newId(), agentId, kind, data, at: now });
+  const old = await db.select({ id: agentEvents.id }).from(agentEvents).where(eq(agentEvents.agentId, agentId))
+    .orderBy(desc(agentEvents.at), desc(agentEvents.id)).offset(EVENTS_KEPT);
+  if (old.length) await db.delete(agentEvents).where(inArray(agentEvents.id, old.map((o) => o.id)));
+}
+
+export async function recentEvents(db: Db, agentId: string, limit = EVENTS_KEPT) {
+  const rows = await db.select().from(agentEvents).where(eq(agentEvents.agentId, agentId)).orderBy(desc(agentEvents.at), desc(agentEvents.id)).limit(limit);
+  return rows.map((r) => ({ kind: r.kind, data: r.data, at: r.at }));
+}

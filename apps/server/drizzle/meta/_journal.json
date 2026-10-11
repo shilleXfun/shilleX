@@ -22,6 +22,13 @@
       "when": 1791666446383,
       "tag": "0002_agent_world",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791721401037,
+      "tag": "0003_agent_engine",
+      "breakpoints": true
     }
   ]
 }

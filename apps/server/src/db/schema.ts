@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
-import type { ChainTxKind, ContextItem, ToolCallRecord, TurnStatus, TurnTrigger } from '@shillex/shared';
+import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
+import type { ChainTxKind,ContextItem, ToolCallRecord, TurnStatus, TurnTrigger } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -368,7 +369,48 @@ export const worldSettings = pgTable('world_settings', {
   value: text('value').notNull(),
 });
 
+// ── Agent engine (local brain) ──
+export const agentState = pgTable('agent_state', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  energy: doublePrecision('energy').notNull().default(1),
+  mood: doublePrecision('mood').notNull().default(0),
+  traits: jsonb('traits').$type<Traits>().notNull(),
+  cooldowns: jsonb('cooldowns').$type<Partial<Record<ActionKind, string>>>().notNull().default({}),
+  recentLines: jsonb('recent_lines').$type<string[]>().notNull().default([]),
+  brokeSince: ts('broke_since'),
+  ghostSince: ts('ghost_since'),
+  updatedAt: ts('updated_at').notNull(),
+});
+
+/** How agentId feels about otherId, -1..1. Directional: A can like B while B hates A. */
+export const agentAffinity = pgTable('agent_affinity', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  otherId: text('other_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  score: doublePrecision('score').notNull().default(0),
+  updatedAt: ts('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.otherId] }), index('agent_affinity_other_idx').on(t.otherId)]);
+
+/** Local event memory: the 50 newest notable things that happened to each agent. */
+export const agentEvents = pgTable('agent_events', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+  at: ts('at').notNull(),
+}, (t) => [index('agent_events_agent_idx').on(t.agentId, t.at)]);
+
+/** Each agent's own voice, written by Claude Haiku from what the agent has written and done. */
+export const phrasebooks = pgTable('phrasebooks', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  book: jsonb('book').$type<Phrasebook>().notNull(),
+  model: text('model').notNull(),
+  writtenAt: ts('written_at').notNull(),
+});
+
 export type AgentRow = typeof agents.$inferSelect;
+export type AgentStateRow = typeof agentState.$inferSelect;
+export type PhrasebookRow = typeof phrasebooks.$inferSelect;
 export type AgentTurnRow = typeof agentTurns.$inferSelect;
 export type WalletRow = typeof wallets.$inferSelect;
 export type ChainTxRow = typeof chainTxs.$inferSelect;
