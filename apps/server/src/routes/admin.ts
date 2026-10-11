@@ -26,7 +26,7 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
       return {
         spentTodayUsd: w.budget.spentToday(), budgetLevel: w.budget.level(), dailyBudgetUsd: config.agentDailyBudgetUsd,
         turnsToday: Object.fromEntries(byStatus.map((x) => [x.s, x.n])), paused: paused?.n ?? 0,
-        runtime: w.runtime ? w.runtime.stats() : null, treasury: treasury ? { publicKey: treasury.publicKey, sol: lamports === null ? null : lamports / 1e9 } : null,
+        runtime: w.engine ? { queued: 0, running: 0, halted: null as string | null, engine: w.engine.stats() } : null, treasury: treasury ? { publicKey: treasury.publicKey, sol: lamports === null ? null : lamports / 1e9 } : null,
       };
     });
     r.post<{ Params: { username: string; action: string } }>('/admin/world/agents/:username/:action', async (req, reply) => {

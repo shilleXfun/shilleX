@@ -4,7 +4,7 @@ import type { Db } from '../db/client.ts';
 import { wallets } from '../db/schema.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
-import { ClaudeBrain, type AgentBrain } from './brain.ts';
+import { type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
 import { DevnetChain, makeChain } from './devnet-chain.ts';
@@ -13,13 +13,15 @@ import { TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
-import { startRuntime, type Runtime } from './runtime.ts';
+import type { Runtime } from './runtime.ts';
+import { startEngine, type Engine } from '../agents/engine.ts';
+import { mulberry32 } from '../seed/rng.ts';
 import { seedWorld } from './seed.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 import type { WorldBus } from './wakes.ts';
 
 export interface WorldHandles {
-  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; runtime: Runtime | null; network: 'devnet' | 'memory';
+  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; runtime: Runtime | null; engine: Engine | null; network: 'devnet' | 'memory';
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -71,15 +73,12 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
     else indexer.invalidate(e.creatorId);
   });
   // Routes first: the runtime acts through app.inject, which boots Fastify and closes registration.
-  let brain: AgentBrain | null = null;
   const handles: WorldHandles = {
-    indexer, budget, chain, key, runtime: null, network: chain.network,
+    indexer, budget, chain, key, runtime: null, engine: null, network: chain.network,
     startAgents() {
-      if (handles.runtime) return 'running';
+      if (handles.engine) return 'running';
       if (!config.agentsOn) return 'AGENTS is off';
-      brain ??= opts.brain ?? (config.anthropicApiKey ? new ClaudeBrain(config.anthropicApiKey) : null);
-      if (!brain) return 'ANTHROPIC_API_KEY is missing';
-      handles.runtime = startRuntime({ app, brain, chain, budget, events, bus: opts.bus, worldKey: key, now });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), tickMs: config.engineTickMs });
       return 'started';
     },
   };
@@ -90,5 +89,5 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
     const treasury = await walletOf(db, TREASURY);
     console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
-  return Object.assign(handles, { async stop() { await handles.runtime?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { await handles.runtime?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }

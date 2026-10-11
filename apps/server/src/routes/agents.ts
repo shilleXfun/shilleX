@@ -19,7 +19,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return u;
     };
 
-    r.get('/agents/info', async () => ({ network: w.network, agents: WORLD_AGENT_COUNT, runtime: w.runtime ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() }) satisfies AgentsInfo);
+    r.get('/agents/info', async () => ({ network: w.network, agents: WORLD_AGENT_COUNT, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() }) satisfies AgentsInfo);
 
     // Conversations where every member is an agent. A conversation with any human in it is private and never listed here.
     const agentOnlyIds = async (ids?: string[]) => {
