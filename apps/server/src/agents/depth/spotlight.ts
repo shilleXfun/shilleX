@@ -21,7 +21,8 @@ const SOL = 1_000_000_000;
 // `revived` is only ever recorded by the revive action, always with `byId`; a ghost waking on its own records nothing.
 const KINDS = ['rugged', 'got_rugged', 'graduated', 'faction_formed', 'faction_split', 'leaked', 'revived'];
 
-export interface SpotlightDeps { db: Db; bus: EventBus; now: () => Date; gen: ImageGen | null; limits: { usd: number; max: number } }
+/** `stopped`, when it returns true, ends a sweep before its next claim: shutdown waits only for the one card or image call in flight. */
+export interface SpotlightDeps { db: Db; bus: EventBus; now: () => Date; gen: ImageGen | null; limits: { usd: number; max: number }; stopped?: () => boolean }
 /** A moment: its card (if any) and whose human followers hear about it. `shareOf` is the key of another spot whose card the notifications link. */
 interface Spot { key: string; href: string; card: ShareInput | null; shareOf?: string; notify: { agentId: string; summary: string }[] }
 
@@ -131,6 +132,7 @@ async function templatesFromBriefs(d: SpotlightDeps): Promise<number> {
   const finished = await doneKeys(d.db, briefs.map((b) => b.key));
   let made = 0;
   for (const b of briefs) {
+    if (d.stopped?.()) break; // shutting down: start no new paid call; unclaimed briefs wait for the next run
     if (finished.has(b.key)) continue;
     // Reserve the call's worst-case price, as generateTemplate does, so a brief is never claimed and then refused (burned).
     if (!(await canGenerate(d.db, d.limits, d.now(), WORST_IMAGE_USD))) break; // budget spent: the rest wait, unclaimed, for tomorrow
@@ -157,6 +159,7 @@ export async function spotlightSweep(d: SpotlightDeps): Promise<number> {
   const urls = new Map<string, string>();
   let handled = 0;
   for (const s of spots) {
+    if (d.stopped?.()) return handled; // shutting down: the cursor stays, so the next run re-reads the moments not yet claimed
     // Claimed before any work: a failure loses that one card or notification instead of risking two.
     if (finished.has(s.key) || !(await claim(d.db, s.key, now))) continue;
     handled++;
@@ -173,17 +176,17 @@ export async function spotlightSweep(d: SpotlightDeps): Promise<number> {
       } catch (e) { console.error('[spotlight] notification failed', s.key, (e as Error).message); }
     }
   }
-  try { await templatesFromBriefs(d); } catch (e) { console.error('[spotlight] templates failed', (e as Error).message); }
+  if (!d.stopped?.()) try { await templatesFromBriefs(d); } catch (e) { console.error('[spotlight] templates failed', (e as Error).message); }
   await setSetting(d.db, SPOTLIGHT_CURSOR, now.toISOString());
   return handled;
 }
 
-/** Sweeps every `everyMs`, one at a time, never throwing. The returned stop ends the timer and waits for a sweep in flight. */
+/** Sweeps every `everyMs`, one at a time, never throwing. The returned stop ends the timer, tells a running sweep to claim nothing more, and waits for its call in flight. */
 export function startSpotlight(d: SpotlightDeps, everyMs = SPOTLIGHT_MS): () => Promise<void> {
   let running: Promise<void> | null = null, stopped = false;
   const timer = setInterval(() => {
     if (running || stopped) return;
-    running = spotlightSweep(d).then(() => undefined, (e) => console.error('[spotlight] sweep failed', e)).finally(() => { running = null; });
+    running = spotlightSweep({ ...d, stopped: () => stopped || (d.stopped?.() ?? false) }).then(() => undefined, (e) => console.error('[spotlight] sweep failed', e)).finally(() => { running = null; });
   }, everyMs);
   timer.unref?.();
   return async () => { stopped = true; clearInterval(timer); await running; };
