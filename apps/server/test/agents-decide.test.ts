@@ -90,3 +90,77 @@ describe('scoring', () => {
     expect(choose([], mulberry32(1))).toMatchObject({ kind: 'idle', score: 0 });
   });
 });
+
+describe('fix round 1', () => {
+  const pos = (over = {}) => ({ mint: 'MINE', symbol: 'MINE', raw: 1_000_000_000, costLamports: 10_000_000, valueLamports: 30_000_000, createdByMe: false, creatorId: 'maker', ...over });
+  const top = (cs: ReturnType<typeof candidates>) => [...cs].sort((a, b) => b.score - a.score)[0]!;
+
+  it('sells a held coin that is missing from the coin list, treating it as flat', () => {
+    const v = view({ wallet: { lamports: 50_000_000, positions: [pos({ mint: 'OLD', symbol: 'OLD' })] } }, { greed: 0.9 });
+    expect(of(v, 'sell')).toHaveLength(1);
+  });
+  it('launch is rarer than posting, and damped by recent world launches', () => {
+    const recent = (n: number) => Array.from({ length: n }, (_, i) => ({ ...hot, mint: `R${i}`, creatorId: 'maker', change10m: 0, change1h: 0 }));
+    const base = (n: number) => view({ coins: recent(n) });
+    const launch0 = of(base(0), 'launch')[0]!, post0 = of(base(0), 'post')[0]!;
+    expect(launch0.score).toBeLessThan(post0.score);
+    expect(of(base(5), 'launch')[0]!.score).toBeLessThan(launch0.score / 5);
+  });
+  it('ignores launches older than an hour for damping', () => {
+    const old = { ...hot, mint: 'OLDL', launchedAt: new Date(Date.parse(NOW) - 2 * 3_600_000).toISOString(), change10m: 0, change1h: 0 };
+    expect(of(view({ coins: [old] }), 'launch')[0]!.score).toBeCloseTo(of(view(), 'launch')[0]!.score, 10);
+  });
+  it('a human mention outranks any number of agent mentions', () => {
+    const m = (i: number, kind: 'human' | 'agent') => ({ postId: `p${i}`, authorId: `a${i}`, authorKind: kind, body: 'hi', at: NOW });
+    const v = view({ mentions: [1, 2, 3, 4, 5].map((i) => m(i, 'agent')).concat([m(6, 'human')]) });
+    const replies = candidates(v, mulberry32(1)).filter((c) => c.kind === 'reply');
+    const human = replies.find((c) => c.target?.postId === 'p6')!;
+    for (const r of replies) if (r !== human) expect(r.score).toBeLessThan(human.score);
+    expect(top(candidates(v, mulberry32(1))).target?.postId).toBe('p6');
+  });
+  it('buy reserve at the edge', () => {
+    for (let s = 0; s < 30; s++) for (const c of candidates(view({ coins: [hot], wallet: { lamports: 12_000_000, positions: [] } }, { risk: 1 }), mulberry32(s)).filter((x) => x.kind === 'buy')) {
+      expect(c.lamports!).toBeLessThanOrEqual(2_000_000);
+    }
+    expect(of(view({ coins: [hot], wallet: { lamports: 12_000_000, positions: [] } }, { risk: 1 }), 'buy')).toHaveLength(1);
+    expect(of(view({ coins: [hot], wallet: { lamports: 11_999_999, positions: [] } }, { risk: 1 }), 'buy')).toEqual([]);
+  });
+  it('broke alone excludes trading', () => {
+    // 9_999_999 is below the reserve; 10_000_000 exactly has nothing spendable, so also no buy
+    expect(of(view({ coins: [hot], wallet: { lamports: 9_999_999, positions: [] } }, { risk: 1 }), 'buy')).toEqual([]);
+    expect(of(view({ coins: [hot], wallet: { lamports: 9_999_999, positions: [] }, affinity: { ally: 0.9 } }, { risk: 1, loyalty: 1 }), 'send_sol')).toEqual([]);
+  });
+  it('rug floor holds at greed 0 with an odd bag, using the literal 0.7', () => {
+    const mine = { ...hot, mint: 'MINE', creatorId: 'me' };
+    const p = pos({ raw: 1_000_000_001, createdByMe: true, creatorId: 'me' });
+    const [r] = of(view({ coins: [mine], wallet: { lamports: 50_000_000, positions: [p] } }, { greed: 0, pettiness: 0.9 }), 'rug');
+    expect(r).toBeDefined();
+    expect(r!.raw!).toBeGreaterThanOrEqual(Math.ceil(0.7 * 1_000_000_001));
+    expect(r!.raw!).toBeLessThanOrEqual(1_000_000_001);
+  });
+  it('a coin I created never yields a plain sell', () => {
+    const mine = { ...hot, mint: 'MINE', creatorId: 'me' };
+    for (const valueLamports of [30_000_000, 5_000_000]) {
+      const v = view({ coins: [mine], wallet: { lamports: 50_000_000, positions: [pos({ createdByMe: true, creatorId: 'me', valueLamports })] } }, { greed: 0.9 });
+      expect(of(v, 'sell')).toEqual([]);
+    }
+  });
+  it('send_sol to a close ally keeps the reserve', () => {
+    const [s] = of(view({ affinity: { ally: 0.9 }, wallet: { lamports: 80_000_001, positions: [] } }, { loyalty: 1 }), 'send_sol');
+    expect(s).toMatchObject({ target: { userId: 'ally' } });
+    expect(80_000_001 - s!.lamports!).toBeGreaterThanOrEqual(RESERVE);
+    expect(of(view({ affinity: { ally: 0.9 }, wallet: { lamports: 80_000_000, positions: [] } }, { loyalty: 1 }), 'send_sol')).toEqual([]);
+  });
+  it('is deterministic for the same view and seed', () => {
+    const v = view({ coins: [hot], feed: [{ postId: 'p2', authorId: 'x', body: 'yo', at: NOW, reactions: 1 }, { postId: 'p3', authorId: 'y', body: 'hey', at: NOW, reactions: 0 }], wallet: { lamports: 100_000_000, positions: [pos()] } });
+    expect(candidates(v, mulberry32(11))).toEqual(candidates(v, mulberry32(11)));
+  });
+  it('an unparsable cooldown timestamp counts as ready', () => {
+    const v = view({ coins: [hot] }, { risk: 1 });
+    expect(of({ ...v, state: { ...v.state, cooldowns: { buy: 'garbage' } } }, 'buy')).toHaveLength(1);
+  });
+  it('skips dust and fee-less sells', () => {
+    expect(of(view({ wallet: { lamports: 50_000_000, positions: [pos({ raw: 999_999 })] } }, { greed: 0.9 }), 'sell')).toEqual([]);
+    expect(of(view({ wallet: { lamports: 9_999, positions: [pos()] } }, { greed: 0.9 }), 'sell')).toEqual([]);
+  });
+});

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import {
   chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
@@ -20,8 +20,8 @@ export function flowChange(totalNetLamports: number, windowNetLamports: number):
   return (after / before) ** 2 - 1;
 }
 
-async function coinsView(db: Db, now: Date): Promise<AgentView['coins']> {
-  const coins = await db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt)).limit(60);
+async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSelect)[]): Promise<AgentView['coins']> {
+  const coins = rows ?? await db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt)).limit(60);
   if (!coins.length) return [];
   const mints = coins.map((c) => c.mint);
   const tenAgo = new Date(now.getTime() - 10 * MIN).toISOString(), hourAgo = new Date(now.getTime() - 60 * MIN).toISOString();
@@ -135,10 +135,17 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const now = d.now();
   const [u] = await d.db.select().from(users).where(eq(users.id, agentId));
   if (!u) throw new Error(`No agent ${agentId}`);
-  const { coins, rooms } = await globalView(d.db, now);
+  const { coins: globalCoins, rooms } = await globalView(d.db, now);
   const [state, phrasebook, wallet, mentions, dms, feed, affinity] = await Promise.all([
-    loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, coins),
+    loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, globalCoins),
     mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), affinitiesOf(d.db, agentId),
   ]);
+  // Every coin this agent holds or made must be visible, even if older than the 60 newest.
+  // Merged into a new array: the shared cached array is never touched.
+  const have = new Set(globalCoins.map((c) => c.mint));
+  const heldMints = wallet.positions.map((p) => p.mint).filter((m) => !have.has(m));
+  const extraRows = await d.db.select().from(worldCoins).where(heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId));
+  const missing = extraRows.filter((r) => !have.has(r.mint));
+  const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing))] : globalCoins;
   return { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions, dms, feed, rooms, affinity, weather: 'grind', now: now.toISOString() };
 }

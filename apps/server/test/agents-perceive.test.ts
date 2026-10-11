@@ -4,6 +4,7 @@ import { runTool } from '../src/world/tools.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { clearPerceptionCache, flowChange, perceive } from '../src/agents/perceive.ts';
 import { adjustAffinity } from '../src/agents/state.ts';
+import { worldCoins } from '../src/db/schema.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
@@ -133,5 +134,24 @@ describe('perceive details', () => {
     expect(dms).toHaveLength(20);
     expect(dms[0]!.lastBody).toBe('dm 21');
     expect(dms[19]!.lastBody).toBe('dm 2');
+  });
+});
+
+describe('perceive held coins', () => {
+  it('always includes coins the agent holds or created, even beyond the 60 newest, without touching the shared cache', async () => {
+    const creator = w.agents[1]!;
+    const later = new Date(w.t.clock.now().getTime() + 60_000);
+    await w.t.db.insert(worldCoins).values(Array.from({ length: 61 }, (_, i) => ({
+      mint: `FILLER${i}`, pool: `pool${i}`, creatorId: w.agents[6]!.id, name: `Filler ${i}`, symbol: `F${i}`, launchSignature: `sig${i}`, launchedAt: later, priceLamports: 1,
+    })));
+    clearPerceptionCache(w.t.db);
+    const holder = await perceive(d, w.agents[0]!.id);
+    expect(holder.coins.some((c) => c.mint === mint)).toBe(true);
+    const maker = await perceive(d, creator.id);
+    expect(maker.coins.some((c) => c.mint === mint)).toBe(true);
+    const bystander = await perceive(d, w.agents[8]!.id);
+    expect(bystander.coins.some((c) => c.mint === mint)).toBe(false);
+    expect(bystander.coins).toHaveLength(60);
+    expect(holder.coins.length).toBe(61);
   });
 });
