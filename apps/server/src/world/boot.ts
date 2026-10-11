@@ -4,6 +4,7 @@ import type { Db } from '../db/client.ts';
 import { wallets } from '../db/schema.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
+import { registerDepthRoutes } from '../routes/depth.ts';
 import { type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
@@ -100,6 +101,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     },
   };
   await registerAgentRoutes(app, handles);
+  await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
   const waiting = await worldNotReady(db, chain);
   if (waiting) {
