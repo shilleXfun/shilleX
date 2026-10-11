@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentTurns, agents, users } from '../db/schema.ts';
+import { agentTurns, agents, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { TOOLS, runTool, type ToolContext } from '../world/tools.ts';
@@ -16,6 +16,7 @@ export type { Moment, MomentKind, Moments } from './types.ts';
 export const PRIORITY: MomentKind[] = ['human_reply', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
+export const HUMAN_REPLIES_PER_HOUR = 3;
 const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
@@ -97,6 +98,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   const queue: Moment[] = [];
   const keys = new Set<string>();
   const retried = new WeakSet<Moment>();
+  const perHuman = new Map<string, number[]>();
   let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
   let bounced = false;
@@ -185,6 +187,23 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     async launch(m, r) { await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}). Post the announcement with the post tool.` }); },
     async rug(m, r) { await r(m.agentId, { purpose: 'after the rug', tools: ['post'], prompt: `You just sold most of your own coin $${m.data.symbol} while ${m.data.holders ?? 'other'} agents still held it. Post about it with the post tool, as yourself.` }); },
     async graduation(m, r) { await r(m.agentId, { purpose: 'graduation', tools: ['post'], prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated. Post about it with the post tool.` }); },
+    async human_reply(m, r) {
+      const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));
+      if (!h) return;
+      if (m.data.postId) {
+        const [p] = await d.db.select({ body: posts.body }).from(posts).where(eq(posts.id, String(m.data.postId)));
+        if (!p) return;
+        await r(m.agentId, { purpose: 'reply to a human', tools: ['reply'], mention: h.username,
+          prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
+        return;
+      }
+      const cid = String(m.data.conversationId);
+      const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
+        .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
+      const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
+      await r(m.agentId, { purpose: 'reply to a human', tools: ['chat'], privateConversation: true, mention: h.username,
+        prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
+    },
     async phrasebook(m) {
       // writePhrasebook does not re-check the 6-hour retry guard, so the queue does, right before the call. A busy agent is
       // simply asked again by a later tick.
@@ -224,6 +243,12 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       // False tells the caller to fall back to the phrasebook.
       if (!open() || !affordable(worstOf(m.kind)) || queue.length >= MAX_QUEUE || !handlerOf(m.kind)) return false;
       if (keys.has(keyOf(m))) return false;
+      if (m.kind === 'human_reply') {
+        const human = String(m.data.humanId), t = d.now().getTime();
+        const recent = (perHuman.get(human) ?? []).filter((x) => t - x < 3_600_000);
+        if (recent.length >= HUMAN_REPLIES_PER_HOUR) return false;
+        perHuman.set(human, [...recent, t]);
+      }
       push(m);
       return true;
     },

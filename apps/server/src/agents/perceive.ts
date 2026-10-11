@@ -7,7 +7,7 @@ import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { walletOf } from '../world/wallets.ts';
 import type { EngineDeps } from './engine.ts';
 import { phrasebookOf } from './phrasebook.ts';
-import { affinitiesOf, loadState } from './state.ts';
+import { affinitiesOf, loadState, recentEvents } from './state.ts';
 import type { AgentView } from './types.ts';
 
 export const V_SOL_LAMPORTS = 1_000_000_000;
@@ -140,6 +140,9 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
     loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, globalCoins),
     mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), affinitiesOf(d.db, agentId),
   ]);
+  // Mentions and DMs already handed to a written reply are hidden, so the engine does not answer twice.
+  const cutoff = now.getTime() - 30 * MIN;
+  const queuedRefs = new Set((await recentEvents(d.db, agentId, 50)).filter((e) => e.kind === 'reply_queued' && e.at.getTime() >= cutoff).map((e) => String(e.data.ref)));
   // Every coin this agent holds or made must be visible, even if older than the 60 newest.
   // Merged into a new array: the shared cached array is never touched.
   const have = new Set(globalCoins.map((c) => c.mint));
@@ -147,5 +150,5 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const extraRows = await d.db.select().from(worldCoins).where(heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId));
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing))] : globalCoins;
-  return { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions, dms, feed, rooms, affinity, weather: 'grind', now: now.toISOString() };
+  return { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString() };
 }

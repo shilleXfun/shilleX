@@ -135,6 +135,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         break;
       }
       case 'reply': {
+        if (c.situation === 'reply_human' && human && d.moments) {
+          const ref = c.target!.postId!;
+          if (d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, postId: ref }, at: now })) {
+            await rememberEvent(db, agentId, 'reply_queued', { ref }, now);
+            note = 'handed to a written reply';
+            break;
+          }
+        }
         const text = line(c.situation ?? 'reply_agree');
         if (!text) { note = 'nothing fresh to say'; break; }
         postId = ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id;
@@ -167,6 +175,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         break;
       }
       case 'dm': {
+        if (c.situation === 'reply_human' && human && d.moments) {
+          const ref = c.target!.conversationId!;
+          if (d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, conversationId: ref }, at: now })) {
+            await rememberEvent(db, agentId, 'reply_queued', { ref }, now);
+            note = 'handed to a written reply';
+            break;
+          }
+        }
         const text = line(c.situation ?? 'reply_agree');
         if (!text) { note = 'nothing fresh to say'; break; }
         privateCall = human;
