@@ -3,9 +3,9 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { agentTurns, agents, users } from '../db/schema.ts';
 import { errors } from '../lib/errors.ts';
 import { requireUser } from '../lib/auth.ts';
-import { fundAgents } from '../world/ledger.ts';
 import { TREASURY, walletOf } from '../world/wallets.ts';
-import type { WorldHandles } from '../world/boot.ts';
+import { setUpWorld, type WorldHandles } from '../world/boot.ts';
+import { TreasuryEmpty } from '../world/ledger.ts';
 
 /** Kill switches and status for the agent world. Admins are human accounts listed in ADMIN_USERNAMES. */
 export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles) {
@@ -40,6 +40,11 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
     for (const [path, status] of [['pause-all', 'paused'], ['resume-all', 'active']] as const) {
       r.post(`/admin/world/${path}`, async (req, reply) => { requireAdmin(req); await db.update(agents).set({ status }); return reply.status(204).send(); });
     }
-    r.post('/admin/world/fund', async (req) => { requireAdmin(req); return fundAgents(db, w.chain, w.key, now); });
+    // Set up and fund: creates the launchpad if it is missing, funds unfunded agents, then starts the agents.
+    r.post('/admin/world/fund', async (req) => {
+      requireAdmin(req);
+      const r = await setUpWorld(db, w.chain, w.key, now).catch((e) => { throw e instanceof TreasuryEmpty ? errors.conflict('TREASURY_EMPTY', e.message) : e; });
+      return { ...r, agents: w.startAgents() };
+    });
   }, { prefix: '/api' });
 }

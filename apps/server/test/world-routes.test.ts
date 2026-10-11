@@ -11,18 +11,19 @@ import { Budget } from '../src/world/budget.ts';
 import { registerWorldRoutes } from '../src/routes/world.ts';
 import { registerAdminRoutes } from '../src/routes/admin.ts';
 import { finishTurn } from '../src/world/provenance.ts';
-import { signerFor } from '../src/world/wallets.ts';
+import { TREASURY, signerFor, walletOf } from '../src/world/wallets.ts';
 import { agents as agentsTable, users, wallets } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { createSession, SESSION_COOKIE } from '../src/lib/auth.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 let postId = '', mint = '', convId = '', turnId = '';
+let agentStarts = 0;
 const get = async (url: string, cookie?: string) => { const r = await w.t.app.inject({ method: 'GET', url, headers: cookie ? { cookie } : {} }); return { status: r.statusCode, body: r.json(), raw: r.body }; };
 
 beforeAll(async () => {
   w = await worldTestCtx();
-  const handles = { indexer: new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }), budget: new Budget(w.t.db, 20, w.t.clock.now), chain: w.chain, key: w.key, runtime: null, network: 'memory' as const };
+  const handles = { indexer: new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 }), budget: new Budget(w.t.db, 20, w.t.clock.now), chain: w.chain, key: w.key, runtime: null, network: 'memory' as const, startAgents: () => { agentStarts++; return 'AGENTS is off'; } };
   await registerWorldRoutes(w.t.app, handles);
   await registerAdminRoutes(w.t.app, handles);
   const A = w.agents[0]!, B = w.agents[1]!;
@@ -108,6 +109,15 @@ describe('admin routes', () => {
     expect((await w.t.db.select().from(agentsTable).where(eq(agentsTable.userId, w.agents[5]!.id)))[0]!.status).toBe('paused');
     const other = await w.t.createUser('someone_else');
     expect((await get('/api/admin/world', other.cookie)).status).toBe(403);
+    const setUp = () => w.t.app.inject({ method: 'POST', url: '/api/admin/world/fund', headers: { cookie } });
+    const broke = await setUp();
+    expect(broke.statusCode).toBe(409);
+    expect(broke.json()).toMatchObject({ code: 'TREASURY_EMPTY', message: expect.stringMatching(/top it up with devnet SOL/) });
+    expect(agentStarts).toBe(0);
+    w.chain.airdrop((await walletOf(w.t.db, TREASURY))!.publicKey, 10_000_000_000);
+    const ok = await setUp();
+    expect(ok.json()).toMatchObject({ launchpad: null, funded: 50, skipped: 0, agents: 'AGENTS is off' });
+    expect(agentStarts).toBe(1);
   });
 });
 

@@ -29,7 +29,8 @@ export function AdminPage() {
       <div className={s.tabsRow}>
         <Button onClick={() => act.mutate('/admin/world/pause-all')}>Pause all</Button>
         <Button onClick={() => act.mutate('/admin/world/resume-all')}>Resume all</Button>
-        <Button onClick={() => act.mutate('/admin/world/fund')}>Fund unfunded agents</Button>
+        {/* Creates the launchpad if missing, funds every unfunded agent (one transaction each, so it can take a minute), then starts the agents. */}
+        <Button loading={act.isPending && act.variables === '/admin/world/fund'} onClick={() => act.mutate('/admin/world/fund')}>Set up and fund</Button>
       </div>
       <form className={s.tabsRow} onSubmit={(e) => e.preventDefault()}>
         <label className={s.field}>Agent username <input value={agent} onChange={(e) => setAgent(e.target.value)} /></label>
@@ -37,6 +38,7 @@ export function AdminPage() {
         <Button type="button" disabled={!agent} onClick={() => act.mutate(`/admin/world/agents/${encodeURIComponent(agent)}/resume`)}>Resume</Button>
       </form>
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
+      {act.data !== undefined && act.data !== null && <pre className={s.json} role="status">{JSON.stringify(act.data, null, 2)}</pre>}
     </section>
   );
 }

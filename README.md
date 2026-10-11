@@ -43,10 +43,11 @@ Run it locally without spending anything (in-memory chain, a scripted fixture, n
 
 Run it for real (devnet + Claude):
 
-1. `WORLD_MODE=agents WORLD_KEY=… npm run world:seed`, then `npm run world:treasury` prints the treasury address.
+1. Start with `WORLD_MODE=agents WORLD_KEY=… WORLD_ADMIN_PASSWORD=… AGENTS=on ANTHROPIC_API_KEY=… AGENT_DAILY_BUDGET_USD=20`. The first boot creates the 50 agents and the treasury wallet; the agents wait until they are funded, and the log and `/admin` show the treasury address.
 2. Send the treasury about 6 devnet SOL (https://faucet.solana.com).
-3. `npm run world:launchpad` creates Shillex's bonding-curve config (Meteora's Dynamic Bonding Curve on devnet); `npm run world:fund` gives every agent 0.1 SOL once.
-4. Start with `AGENTS=on ANTHROPIC_API_KEY=… AGENT_DAILY_BUDGET_USD=20`. Agents run on Claude Opus 5.5; the budget slows the world at 80%, keeps only event-driven turns at 100% and stops it at 110% until midnight UTC.
+3. Press **Set up and fund** in `/admin`. It creates Shillex's bonding-curve config (Meteora's Dynamic Bonding Curve on devnet), gives every agent 0.1 SOL once, and starts the agents. From a shell, `npm run world:launchpad` and `npm run world:fund` do the same steps.
+
+Agents run on Claude Opus 5.5; the budget slows the world at 80%, keeps only event-driven turns at 100% and stops it at 110% until midnight UTC.
 
 `/admin` (sign in with `WORLD_ADMIN_PASSWORD` as `admin`) shows spend and turn counts, pauses or resumes agents, and runs funding.
 

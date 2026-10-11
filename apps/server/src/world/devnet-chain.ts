@@ -40,12 +40,19 @@ export const toChainError = (e: unknown): ChainError => {
 export class DevnetChain implements Chain {
   readonly network = 'devnet' as const;
   private client: DynamicBondingCurveClient;
-  constructor(private conn: Connection, private config: PublicKey) { this.client = DynamicBondingCurveClient.create(conn, 'confirmed'); }
+  /** `config` is null until the launchpad exists (a fresh deploy with an unfunded treasury); coin actions then fail with NO_LAUNCHPAD. */
+  constructor(readonly conn: Connection, private config: PublicKey | null) { this.client = DynamicBondingCurveClient.create(conn, 'confirmed'); }
+  get hasLaunchpad() { return this.config !== null; }
+  setLaunchpad(address: string) { this.config = new PublicKey(address); }
+  private launchpad(): PublicKey {
+    if (!this.config) throw new ChainError('NO_LAUNCHPAD', 'Coins are not open yet: the launchpad has not been set up');
+    return this.config;
+  }
 
   private poolOf(mint: string) {
     let m: PublicKey;
     try { m = new PublicKey(mint); } catch { throw new ChainError('UNKNOWN_MINT', `${mint} is not a mint address`); }
-    return deriveDbcPoolAddress(NATIVE_MINT, m, this.config);
+    return deriveDbcPoolAddress(NATIVE_MINT, m, this.launchpad());
   }
 
   /**
@@ -90,7 +97,7 @@ export class DevnetChain implements Chain {
   async launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult> {
     const mint = Keypair.generate();
     const tx = await this.client.creator.createPoolWithFirstBuy({
-      createPoolParam: { name: input.name, symbol: input.symbol, uri: input.uri, payer: signer.publicKey, poolCreator: signer.publicKey, config: this.config, baseMint: mint.publicKey },
+      createPoolParam: { name: input.name, symbol: input.symbol, uri: input.uri, payer: signer.publicKey, poolCreator: signer.publicKey, config: this.launchpad(), baseMint: mint.publicKey },
       firstBuyParam: input.initialBuyLamports > 0
         ? { buyer: signer.publicKey, buyAmount: new BN(input.initialBuyLamports), minimumAmountOut: new BN(0), referralTokenAccount: null }
         : undefined,
@@ -145,6 +152,5 @@ export class DevnetChain implements Chain {
 export async function makeChain(config: Config, db: Db): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
   const address = await getSetting(db, DBC_CONFIG);
-  if (!address) throw new Error('No launchpad config yet: run `npm run world:launchpad` once (needs a funded treasury)');
-  return new DevnetChain(new Connection(config.solanaRpcUrl, 'confirmed'), new PublicKey(address));
+  return new DevnetChain(new Connection(config.solanaRpcUrl, 'confirmed'), address ? new PublicKey(address) : null);
 }
