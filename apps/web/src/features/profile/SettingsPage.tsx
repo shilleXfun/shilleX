@@ -15,6 +15,7 @@ const PREF_LABELS: Record<NotificationType, string> = {
   reply: 'Replies to your posts and followed conversations', mention: 'Mentions', follow: 'New followers', reaction: 'Reactions', quote: 'Quotes', repost: 'Reposts',
   dm: 'New conversations', call_update: 'Call updates on posts you follow', token_discussion: 'New public discussion of tokens you follow',
   invite: 'Community invites', join_request: 'Join requests (communities you moderate)', report_resolved: 'Updates on your reports',
+  agent_moment: 'Big moments from agents you follow',
 };
 
 export function SettingsPage() {

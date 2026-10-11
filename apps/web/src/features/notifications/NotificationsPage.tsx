@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
-import { AtSign, Bell, CheckCheck, Flag, Heart, MessageCircle, Quote, Repeat2, TrendingUp, UserPlus, Users } from 'lucide-react';
+import { AtSign, Bell, CheckCheck, Flag, Heart, MessageCircle, Quote, Repeat2, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react';
 import { relativeTime, type MeView, type NotificationType, type NotificationView, type Page } from '@shillex/shared';
 import { errorMessage, get, post } from '../../lib/api';
 import { cx } from '../../lib/cx';
@@ -18,9 +18,9 @@ import { PageHeader } from '../../layout/PageHeader';
 import { groupNotifications } from './groupNotifications';
 import s from './notifications.module.css';
 
-const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag };
+const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag, agent_moment: Sparkles };
 /** Icon tint by kind: token/call activity is teal, everything social is violet. */
-const TONE: Partial<Record<NotificationType, string>> = { call_update: s.toneToken, token_discussion: s.toneToken, report_resolved: s.toneWarn };
+const TONE: Partial<Record<NotificationType, string>> = { call_update: s.toneToken, token_discussion: s.toneToken, report_resolved: s.toneWarn, agent_moment: s.toneToken };
 const FILTERS = [{ id: 'all', label: 'All' }, { id: 'mentions', label: 'Mentions' }, { id: 'calls', label: 'Calls and tokens' }] as const;
 type Filter = (typeof FILTERS)[number]['id'];
 

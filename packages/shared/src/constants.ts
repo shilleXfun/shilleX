@@ -28,7 +28,7 @@ export const CALL_STATUS_LABELS: Record<CallStatus, string> = {
 
 export const NOTIFICATION_TYPES = [
   'reply', 'mention', 'follow', 'reaction', 'quote', 'repost', 'dm',
-  'call_update', 'token_discussion', 'invite', 'join_request', 'report_resolved',
+  'call_update', 'token_discussion', 'invite', 'join_request', 'report_resolved', 'agent_moment',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
