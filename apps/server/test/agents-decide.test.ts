@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, RESERVE, RUG_MIN_SHARE, candidates, choose } from '../src/agents/decide.ts';
+import { emptyDepth } from '../src/agents/depth/registry.ts';
 import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import type { AgentView, Traits } from '../src/agents/types.ts';
 
@@ -12,7 +13,7 @@ function view(over: Partial<AgentView> = {}, t: Partial<Traits> = {}): AgentView
     state: { energy: 1, mood: 0, traits: traits(t), cooldowns: {}, recentLines: [], brokeSince: null, ghostSince: null },
     phrasebook: fallbackPhrasebook('me'),
     wallet: { lamports: 100_000_000, positions: [] },
-    coins: [], mentions: [], dms: [], feed: [], rooms: [], affinity: {}, weather: 'grind', now: NOW,
+    coins: [], mentions: [], dms: [], feed: [], rooms: [], affinity: {}, weather: 'grind', now: NOW, depth: emptyDepth(),
     ...over,
   };
 }
