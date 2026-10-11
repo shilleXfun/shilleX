@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Keypair } from '@solana/web3.js';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentTurns, chainTxs, posts } from '../src/db/schema.ts';
+import { agentTurns, chainTxs, posts, worldCoins } from '../src/db/schema.ts';
+import { renderSvg } from '../src/agents/cards.ts';
+import { blobUpload, storeBlob } from '../src/agents/images.ts';
+import { createImagePolicy } from '../src/agents/image-policy.ts';
 import { ChainError, MemoryChain } from '../src/world/chain.ts';
 import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
@@ -11,7 +14,7 @@ import { act } from '../src/agents/act.ts';
 import { clearPerceptionCache, perceive } from '../src/agents/perceive.ts';
 import { affinitiesOf, recentEvents } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
-import type { Moment } from '../src/agents/types.ts';
+import type { Candidate, Moment } from '../src/agents/types.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 let d: EngineDeps;
@@ -150,9 +153,64 @@ describe('act', () => {
   it('falls back to a text post when the image policy throws', async () => {
     const a = w.agents[14]!;
     const v = await perceive(d, a.id);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const r = await act({ ...d, images: { maybeAttach: async () => { throw new Error('image service down'); } } }, v, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    err.mockRestore();
     expect(r.ok).toBe(true);
     expect(r.postId).toBeTruthy();
+    expect((await w.t.db.select().from(posts).where(eq(posts.id, r.postId!)))[0]!.media).toEqual([]);
+  });
+  it('posts with the picture the image policy attaches, through runTool, on the engine receipt', async () => {
+    const a = w.agents[20]!;
+    const blob = await storeBlob(w.t.db, renderSvg('<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"/>'), 'image/png', w.t.clock.now());
+    const uploadId = await blobUpload(w.t.db, a.id, blob, 'image/png', w.t.clock.now());
+    const v = await perceive(d, a.id);
+    const r = await act({ ...d, images: { maybeAttach: async () => ({ uploadId, alt: 'x' }) } }, v, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    expect(r.ok).toBe(true);
+    const [p] = await w.t.db.select().from(posts).where(eq(posts.id, r.postId!));
+    expect(p!.media).toEqual([{ url: blob.url, width: 12, height: 12, alt: 'x' }]);
+    expect(p!.agentTurnId).toBe(r.turnId);
+    expect((await turn(r.turnId)).toolCalls).toEqual([expect.objectContaining({ name: 'post', ok: true, input: { body: p!.body, image: true } })]);
+  });
+  it('posts without media when the image policy throws synchronously', async () => {
+    const a = w.agents[21]!;
+    const v = await perceive(d, a.id);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await act({ ...d, images: { maybeAttach: () => { throw new Error('image service down'); } } }, v, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });
+    expect(err).toHaveBeenCalledWith('[agents] image attach failed', 'image service down');
+    err.mockRestore();
+    expect(r.ok).toBe(true);
+    expect((await w.t.db.select().from(posts).where(eq(posts.id, r.postId!)))[0]!.media).toEqual([]);
+  });
+  it('a real launch announcement carries the new coin\'s launch poster', async () => {
+    const a = w.agents[22]!;
+    const v = await perceive(d, a.id);
+    const r = await act({ ...d, images: createImagePolicy({ db: w.t.db, now: w.t.clock.now, rng: mulberry32(3) }) }, v, { kind: 'launch', score: 1, lamports: 5_000_000, situation: 'launching', reason: 'launch' });
+    expect(r.ok).toBe(true);
+    const [coin] = await w.t.db.select().from(worldCoins).where(eq(worldCoins.creatorId, a.id));
+    const [p] = await w.t.db.select().from(posts).where(eq(posts.authorId, a.id));
+    expect(p!.body).toBe(r.text);
+    expect(p!.media).toEqual([expect.objectContaining({ width: 1200, alt: `Launch poster for $${coin!.symbol} (${coin!.name}) by @${a.username}` })]);
+  });
+  it('a rug follow-up carries a receipt with the real share sold, SOL and signature', async () => {
+    const [maker, h1] = [w.agents[23]!, w.agents[24]!];
+    const l = await runTool(await sealed(maker), 'launch_coin', { name: 'Rcpt', symbol: 'RCPT', description: '', emoji: '🧾', initial_buy_sol: 0.02 });
+    const mint = (l.result as { mint: string }).mint;
+    await runTool(await sealed(h1), 'buy', { mint, sol: 0.02, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, maker.id);
+    const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const policy = createImagePolicy({ db: w.t.db, now: w.t.clock.now, rng: mulberry32(3) });
+    const asked: Candidate[] = [];
+    const r = await act({ ...d, images: { maybeAttach: (pv, pc, text) => { asked.push(pc); return policy.maybeAttach(pv, pc, text); } } }, v,
+      { kind: 'rug', score: 1, raw: Math.floor(pos.raw * 0.9), situation: 'rugged_someone', target: { mint }, reason: 'rug' });
+    expect(r.ok).toBe(true);
+    const lamports = (await recentEvents(w.t.db, maker.id)).find((e) => e.kind === 'rugged')!.data.lamports as number;
+    const [p] = await w.t.db.select().from(posts).where(eq(posts.authorId, maker.id));
+    expect(p!.media).toEqual([expect.objectContaining({ width: 1200, alt: `Rug receipt: @${maker.username} sold 90% of $RCPT for ${(lamports / 1e9).toFixed(3)} SOL` })]);
+    const sell = ((await turn(r.turnId)).toolCalls as { name: string; signatures?: string[] }[]).find((x) => x.name === 'sell')!;
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.slots).toEqual({ symbol: 'RCPT', soldPct: 90, sol: lamports / 1e9, holdersHurt: 1, signature: sell.signatures![0] });
   });
   it('a sell moves mood, remembers a big win, and cools the creator toward the seller', async () => {
     const [, , , , , , creator, seller] = w.agents;

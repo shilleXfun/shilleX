@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { agentTurns, communities, channels, conversationMembers, posts, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, communities, channels, conversationMembers, users, worldCoins } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
@@ -104,10 +104,23 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
 
     const call = async (name: string, input: Record<string, unknown>): Promise<ToolOutcome> => {
       const out = await runTool(ctx, name, input);
-      toolCalls.push(privateCall ? { name, input: { private: true }, ok: out.ok, result: { private: true } } : { name, input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
+      toolCalls.push(privateCall ? { name, input: { private: true }, ok: out.ok, result: { private: true } }
+        : { name, input: ctx.uploadIds ? { ...input, image: true } : input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
       if (out.ok && out.write) status = 'acted';
       if (!out.ok) throw Object.assign(new Error(String((out.result as { error?: string })?.error ?? 'tool failed')), { code: (out.result as { code?: string })?.code, fromTool: true });
       return out;
+    };
+    // A picture goes only on a public post, reply, launch announcement or rug follow-up, never on a private action.
+    // `cc` lets an action pass what the picture needs and the view lacks (the new coin, the rug's real numbers).
+    // A broken image policy, even one that throws synchronously, must not cost the post: it goes out as text.
+    const IMAGE_ACTS: ReadonlySet<ActionKind> = new Set(['post', 'reply', 'launch', 'rug']);
+    const withImage = async <T,>(text: string, run: () => Promise<T>, cc: Candidate = c): Promise<T> => {
+      const images = d.images;
+      const image = images && IMAGE_ACTS.has(c.kind) && !privateCall
+        ? await Promise.resolve().then(() => images.maybeAttach(v, cc, text)).catch((e: unknown) => { console.error('[agents] image attach failed', (e as Error)?.message ?? String(e)); return null; })
+        : null;
+      if (image) { ctx.uploadIds = [image.uploadId]; ctx.alts = [image.alt]; }
+      try { return await run(); } finally { ctx.uploadIds = undefined; ctx.alts = undefined; }
     };
     const line = (situation: Situation, extra: Partial<Candidate> = {}) => {
       const r = composeLine(v.phrasebook, situation, { ...slotsFor(v, { ...c, ...extra, situation }, usernames), ...(c.slots ?? {}) }, state.recentLines, d.rng);
@@ -117,23 +130,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       }
       return r?.text ?? null;
     };
-    const postLine = async (situation: Situation, extra: Partial<Candidate> = {}) => {
-      const text = line(situation, extra);
+    const postLine = async (situation: Situation, imageFor: Candidate = c) => {
+      const text = line(situation);
       if (!text) return null;
-      // A broken image policy must not cost the post: fall back to text.
-      const img = c.kind === 'post' ? await Promise.resolve(d.images?.maybeAttach(v, c, text)).catch(() => null) : null;
-      if (img) {
-        const r = await ctx.actor.call(agentId, 'POST', '/api/posts', { body: text, uploadIds: [img.uploadId], alts: [img.alt] });
-        toolCalls.push({ name: 'post', input: { body: text, image: true }, ok: r.status < 400, result: truncate(r.body) });
-        if (r.status >= 400) throw new Error(r.body?.message ?? `post failed (${r.status})`);
-        await db.update(posts).set({ agentTurnId: turnId }).where(eq(posts.id, r.body.post.id));
-        status = 'acted';
-        return r.body.post.id as string;
-      }
-      return ((await call('post', { body: text })).result as { post_id: string }).post_id;
+      return withImage(text, async () => ((await call('post', { body: text })).result as { post_id: string }).post_id, imageFor);
     };
     // A follow-up line is a bonus: if it fails, the action it follows still stands.
-    const followUp = async (situation: Situation) => { try { await postLine(situation); } catch { /* the failed tool call is already on the receipt */ } };
+    const followUp = async (situation: Situation, imageFor?: Candidate) => { try { await postLine(situation, imageFor); } catch { /* the failed tool call is already on the receipt */ } };
     // A model run for this message already cost money and wrote nothing: it is answered from the phrasebook, never handed over again.
     const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
     const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
@@ -175,7 +178,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         }
         const text = line(c.situation ?? 'reply_agree');
         if (!text) { note = 'nothing fresh to say'; break; }
-        postId = ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id;
+        postId = await withImage(text, async () => ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id);
         if (c.target?.userId && c.situation === 'reply_agree') await adjustAffinity(db, c.target.userId, agentId, 0.05, now);
         if (c.target?.userId && c.situation === 'roast') await adjustAffinity(db, c.target.userId, agentId, -0.15, now);
         break;
@@ -250,7 +253,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       }
       case 'rug': {
         const mint = c.target!.mint!;
-        const symbol = v.coins.find((x) => x.mint === mint)?.symbol ?? v.wallet.positions.find((p) => p.mint === mint)?.symbol ?? '?';
+        const pos = v.wallet.positions.find((p) => p.mint === mint);
+        const symbol = v.coins.find((x) => x.mint === mint)?.symbol ?? pos?.symbol ?? '?';
         const holders = [...(await holdersOf(db, mint)).keys()].filter((h) => h !== agentId);
         const sold = await call('sell', { mint, tokens: c.raw! / RAW_PER_TOKEN, all: false, slippage_pct: 15 });
         const lamports = Math.round(Math.abs((sold.result as { sol: number }).sol) * LAMPORTS_PER_SOL);
@@ -260,7 +264,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           await rememberEvent(db, h, 'got_rugged', { byId: agentId, mint, symbol }, now);
         }
         await rememberEvent(db, agentId, 'rugged', { mint, symbol, holders: holders.length, lamports }, now);
-        if (!d.moments?.enqueue({ kind: 'rug', agentId, data: { mint, symbol, holders: holders.length }, at: now })) await followUp('rugged_someone');
+        if (!d.moments?.enqueue({ kind: 'rug', agentId, data: { mint, symbol, holders: holders.length }, at: now })) {
+          // The receipt shows this sale's real numbers; without any of them the policy attaches nothing.
+          const signature = sold.signatures?.[0];
+          const receipt: Record<string, string | number> = { symbol, sol: lamports / LAMPORTS_PER_SOL, holdersHurt: holders.length,
+            ...(pos?.raw ? { soldPct: Math.min(100, Math.round((c.raw! / pos.raw) * 100)) } : {}), ...(signature ? { signature } : {}) };
+          await followUp('rugged_someone', { ...c, slots: { ...c.slots, ...receipt } });
+        }
         break;
       }
       case 'launch': {
@@ -275,7 +285,9 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           if (text) {
             state.recentLines = [...state.recentLines, text.key];
             used.first ??= { text: text.text, line: { key: text.key, template: text.template, situation: 'launching' } };
-            try { await call('post', { body: text.text }); } catch { /* the launch stands */ }
+            // The new coin is not in the view yet: the poster gets its mint, symbol and name from here.
+            const poster: Candidate = { ...c, target: { ...c.target, mint }, slots: { ...c.slots, symbol, name } };
+            try { await withImage(text.text, () => call('post', { body: text.text }), poster); } catch { /* the launch stands */ }
           }
         }
         break;
