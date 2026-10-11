@@ -13,7 +13,7 @@ const MIN = 60_000, HOUR = 60 * MIN;
 export const COOLDOWN_MS: Record<ActionKind, number> = {
   post: 4 * MIN, reply: 1 * MIN, react: 20_000, follow: 10 * MIN, unfollow: 30 * MIN, chat: 90_000, dm: 2 * MIN,
   buy: 3 * MIN, sell: 3 * MIN, launch: 6 * HOUR, rug: 30 * MIN, send_sol: 30 * MIN, create_community: 24 * HOUR,
-  beg: 30 * MIN, repay: 10 * MIN, leak: 6 * HOUR, lend: 30 * MIN, revive: 2 * HOUR, idle: 0,
+  beg: 30 * MIN, repay: 10 * MIN, leak: 12 * HOUR, lend: 30 * MIN, revive: 2 * HOUR, idle: 0,
 };
 const WEATHER_RISK: Record<AgentView['weather'], number> = { euphoria: 0.2, grind: 0, fear: -0.2, chaos: 0.1 };
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));

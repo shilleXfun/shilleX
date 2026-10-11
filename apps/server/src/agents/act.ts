@@ -154,6 +154,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       else if (status === 'acted') note = `error after the action: ${custom.error ?? 'depth action failed'}`; // the write stands
       else { status = 'failed'; note = `failed: ${custom.error ?? 'depth action failed'}`; state.mood -= 0.05; }
       postId = custom.postId;
+      // A composed line counts toward the no-reuse window whether or not the action was private.
+      if (custom.line) state.recentLines = [...state.recentLines, custom.line.key];
       if (custom.text && custom.line) used.first = { text: custom.text, line: custom.line };
     } else switch (c.kind) {
       case 'idle': break;
