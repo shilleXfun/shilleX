@@ -7,6 +7,7 @@ import { agents, messages, posts, users, wallets, worldCoins, type UserRow } fro
 import { ChainError, RAW_PER_TOKEN, type Chain } from './chain.ts';
 import type { AgentActor } from './actor.ts';
 import type { WorldEvents } from './events.ts';
+import { isReservedUsername } from '../lib/reserved.ts';
 import { recordTx } from './ledger.ts';
 import { addNote, rewriteNotes } from './memory.ts';
 import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
@@ -119,6 +120,7 @@ const HANDLERS: Record<string, Handler> = {
     if (i.bio !== null) patch.bio = String(i.bio).trim().slice(0, 280);
     if (i.username !== null) {
       if (!/^[A-Za-z0-9_]{3,20}$/.test(i.username)) fail('BAD_USERNAME', 'Usernames are 3–20 letters, numbers or underscores');
+      if (isReservedUsername(ctx.app.deps.config, String(i.username))) fail('USERNAME_RESERVED', 'That username is reserved');
       const [taken] = await ctx.db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${String(i.username).toLowerCase()}`);
       if (taken && taken.id !== ctx.agent.id) fail('USERNAME_TAKEN', 'That username is taken');
       patch.username = i.username;

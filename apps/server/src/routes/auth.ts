@@ -6,6 +6,7 @@ import { users, notifications } from '../db/schema.ts';
 import { parse } from '../lib/validate.ts';
 import { AppError, errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
+import { isReservedUsername } from '../lib/reserved.ts';
 import { SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, hashToken } from '../lib/auth.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { MeView } from '@shillex/shared';
@@ -36,6 +37,7 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.post('/auth/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = parse(Signup, req.body);
+    if (isReservedUsername(config, body.username)) throw errors.conflict('USERNAME_RESERVED', 'That username is reserved');
     const taken = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${body.username.toLowerCase()}`).limit(1);
     if (taken.length) throw errors.conflict('USERNAME_TAKEN', 'That username is taken');
     const id = newId();
