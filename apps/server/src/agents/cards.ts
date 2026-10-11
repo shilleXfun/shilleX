@@ -75,8 +75,12 @@ ${d.rows.slice(0, 5).map((r, i) => `<text x="60" y="${200 + i * 76}" font-size="
 
 export function cardSvg<K extends CardKind>(kind: K, data: CardData[K]): string { return builders[kind](data); }
 
-export function renderSvg(svg: string): Buffer {
-  const r = new Resvg(svg, { font: { loadSystemFonts: false, fontFiles: FONT_FILES, defaultFontFamily: FONT_FAMILY } });
+/** `width` scales the output to that many pixels wide (aspect kept); by default the SVG's own size is used. */
+export function renderSvg(svg: string, width?: number): Buffer {
+  const r = new Resvg(svg, {
+    font: { loadSystemFonts: false, fontFiles: FONT_FILES, defaultFontFamily: FONT_FAMILY },
+    ...(width ? { fitTo: { mode: 'width' as const, value: Math.round(width) } } : {}),
+  });
   return Buffer.from(r.render().asPng());
 }
 
