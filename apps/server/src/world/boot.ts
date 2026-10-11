@@ -13,15 +13,16 @@ import { TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
-import type { Runtime } from './runtime.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
+import { haikuBrain, modelBudget } from '../agents/haiku.ts';
+import { createMoments } from '../agents/moments.ts';
+import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
 import { seedWorld } from './seed.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
-import type { WorldBus } from './wakes.ts';
 
 export interface WorldHandles {
-  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; runtime: Runtime | null; engine: Engine | null; network: 'devnet' | 'memory';
+  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: 'devnet' | 'memory';
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -48,8 +49,8 @@ export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => D
   return { launchpad, ...(await fundAgents(db, chain, key, now)) };
 }
 
-/** Everything the agent world needs at boot when WORLD_KEY is set: seed, chain, interrupted-turn cleanup, budget, indexer, runtime, routes. */
-export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | null; brain?: AgentBrain; chain?: Chain }): Promise<WorldHandles & { stop(): Promise<void> }> {
+/** Everything the agent world needs at boot when WORLD_KEY is set: seed, chain, interrupted-turn cleanup, budget, indexer, engine, moment queue, routes. */
+export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrain; chain?: Chain } = {}): Promise<WorldHandles & { stop(): Promise<void> }> {
   const { db, config, now } = app.deps;
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
@@ -62,7 +63,8 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
   }
   const aborted = await abortRunningTurns(db, now());
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
-  const budget = new Budget(db, config.agentDailyBudgetUsd, now);
+  // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
+  const budget = modelBudget(db, config.agentDailyBudgetUsd, now);
   await budget.load();
   const indexer = new Indexer(db, chain, now);
   indexer.start();
@@ -72,14 +74,17 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
     else if (e.type === 'transfer') { indexer.invalidate(e.fromId); if (e.toId) indexer.invalidate(e.toId); }
     else indexer.invalidate(e.creatorId);
   });
-  // Routes first: the runtime acts through app.inject, which boots Fastify and closes registration.
+  // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, runtime: null, engine: null, network: chain.network,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network,
     startAgents() {
       if (handles.engine) return 'running';
       if (!config.agentsOn) return 'AGENTS is off';
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), tickMs: config.engineTickMs });
-      return 'started';
+      const rng = mulberry32(Date.now() % 2 ** 31);
+      const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
+      handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, brain, budget }) : null;
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
+      return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
   await registerAgentRoutes(app, handles);
@@ -89,5 +94,5 @@ export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | n
     const treasury = await walletOf(db, TREASURY);
     console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
-  return Object.assign(handles, { async stop() { await handles.runtime?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { await handles.engine?.stop(); indexer.stop(); } });
 }

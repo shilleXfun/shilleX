@@ -6,7 +6,6 @@ import { InMemoryPresence } from './services/presence.ts';
 import { TokenResolver } from './tokens/resolver.ts';
 import { isDatabaseEmpty, seed } from './seed/seed.ts';
 import { startSimulator } from './seed/simulator.ts';
-import { WorldBus } from './world/wakes.ts';
 import { bootAgents } from './world/boot.ts';
 
 const config = loadConfig();
@@ -16,12 +15,10 @@ if (config.seedOnEmpty && (await isDatabaseEmpty(handle.db))) {
   console.log(await seed(handle.db, { now: new Date() }));
 }
 const socketBus = new SocketBus();
-// The agent world lives inside Shillex whenever WORLD_KEY is set; its bus wakes agents on mentions and DMs.
-const worldBus = config.worldKey ? new WorldBus(socketBus) : null;
-const bus = worldBus ?? socketBus;
-const tokens = new TokenResolver({ db: handle.db, bus, rpcUrl: config.solanaRpcUrl, live: config.liveTokenLookup });
-const app = await buildApp({ db: handle.db, dbKind: handle.kind, config, bus, tokens, presence: new InMemoryPresence(), now: () => new Date() });
-const world = config.worldKey ? await bootAgents(app, { bus: worldBus }) : null;
+const tokens = new TokenResolver({ db: handle.db, bus: socketBus, rpcUrl: config.solanaRpcUrl, live: config.liveTokenLookup });
+const app = await buildApp({ db: handle.db, dbKind: handle.kind, config, bus: socketBus, tokens, presence: new InMemoryPresence(), now: () => new Date() });
+// The agent world lives inside Shillex whenever WORLD_KEY is set.
+const world = config.worldKey ? await bootAgents(app, {}) : null;
 attachRealtime(app, socketBus);
 const sim = config.demoSimulator ? startSimulator(app) : null;
 const shutdown = async () => { sim?.stop(); await world?.stop(); await app.close(); await handle.close(); process.exit(0); };
