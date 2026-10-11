@@ -8,7 +8,6 @@ import { makeChain } from './devnet-chain.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 const config = loadConfig();
-if (!config.worldMode) throw new Error('Set WORLD_MODE=agents to run world commands');
 if (!config.worldKey) throw new Error('Set WORLD_KEY (32 bytes, base64)');
 const key = parseWorldKey(config.worldKey);
 const handle = await createDb({ url: config.databaseUrl, pgliteDir: config.pgliteDir });
@@ -20,7 +19,7 @@ try {
     const existing = await getSetting(handle.db, DBC_CONFIG);
     if (existing) console.log('launchpad config already exists:', existing);
     else {
-      const address = await createLaunchpad(new Connection(config.solanaRpcUrl, 'confirmed'), await signerFor(handle.db, TREASURY, key));
+      const address = await createLaunchpad(new Connection(config.devnetRpcUrl, 'confirmed'), await signerFor(handle.db, TREASURY, key));
       await setSetting(handle.db, DBC_CONFIG, address);
       console.log('launchpad config', address);
     }

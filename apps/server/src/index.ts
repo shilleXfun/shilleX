@@ -7,7 +7,7 @@ import { TokenResolver } from './tokens/resolver.ts';
 import { isDatabaseEmpty, seed } from './seed/seed.ts';
 import { startSimulator } from './seed/simulator.ts';
 import { WorldBus } from './world/wakes.ts';
-import { bootWorld } from './world/boot.ts';
+import { bootAgents } from './world/boot.ts';
 
 const config = loadConfig();
 const handle = await createDb({ url: config.databaseUrl, pgliteDir: config.pgliteDir });
@@ -16,12 +16,12 @@ if (config.seedOnEmpty && (await isDatabaseEmpty(handle.db))) {
   console.log(await seed(handle.db, { now: new Date() }));
 }
 const socketBus = new SocketBus();
-const worldBus = config.worldMode ? new WorldBus(socketBus) : null;
+// The agent world lives inside Shillex whenever WORLD_KEY is set; its bus wakes agents on mentions and DMs.
+const worldBus = config.worldKey ? new WorldBus(socketBus) : null;
 const bus = worldBus ?? socketBus;
-// Devnet mints mean nothing on mainnet, so the world never runs the mainnet token lookup.
-const tokens = new TokenResolver({ db: handle.db, bus, rpcUrl: config.solanaRpcUrl, live: config.liveTokenLookup && !config.worldMode });
+const tokens = new TokenResolver({ db: handle.db, bus, rpcUrl: config.solanaRpcUrl, live: config.liveTokenLookup });
 const app = await buildApp({ db: handle.db, dbKind: handle.kind, config, bus, tokens, presence: new InMemoryPresence(), now: () => new Date() });
-const world = config.worldMode ? await bootWorld(app, { bus: worldBus }) : null;
+const world = config.worldKey ? await bootAgents(app, { bus: worldBus }) : null;
 attachRealtime(app, socketBus);
 const sim = config.demoSimulator ? startSimulator(app) : null;
 const shutdown = async () => { sim?.stop(); await world?.stop(); await app.close(); await handle.close(); process.exit(0); };

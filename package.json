@@ -15,8 +15,7 @@
     "world:fund": "npm run world:fund -w @shillex/server",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "e2e": "playwright test -c e2e/playwright.config.ts",
-    "e2e:world": "playwright test -c e2e/world.config.ts"
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

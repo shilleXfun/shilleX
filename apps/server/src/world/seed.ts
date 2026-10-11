@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { hash } from '@node-rs/argon2';
 import { WORLD_AGENT_COUNT } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
@@ -11,11 +11,13 @@ export const agentAvatarUrl = (userId: string) => `/api/world/avatars/${userId}.
 
 /** Blank agents (no name, bio or persona — they choose), their wallets, the treasury, and an optional admin login. Idempotent. */
 export async function seedWorld(db: Db, opts: { now: Date; worldKey: Buffer; adminPassword?: string }): Promise<{ agents: number; created: number }> {
-  const names = Array.from({ length: WORLD_AGENT_COUNT }, (_, i) => agentUsername(i + 1));
-  const existing = new Set((await db.select({ u: users.username }).from(users).where(inArray(users.username, names))).map((r) => r.u));
+  const have = await db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent'));
+  // Agents rename themselves, so count agents by kind; new ones take the first free agent_NN names.
+  const taken = new Set((await db.select({ u: users.username }).from(users)).map((r) => r.u.toLowerCase()));
   let created = 0;
-  for (const username of names) {
-    if (existing.has(username)) continue;
+  for (let i = 1; have.length + created < WORLD_AGENT_COUNT; i++) {
+    const username = agentUsername(i);
+    if (taken.has(username)) continue;
     const id = newId();
     await db.insert(users).values({ id, username, displayName: '', bio: '', kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: opts.now });
     await db.insert(agents).values({ userId: id, createdAt: opts.now });
@@ -27,5 +29,5 @@ export async function seedWorld(db: Db, opts: { now: Date; worldKey: Buffer; adm
     const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.username, 'admin'));
     if (!admin) await db.insert(users).values({ id: newId(), username: 'admin', displayName: 'admin', passwordHash: await hash(opts.adminPassword), createdAt: opts.now });
   }
-  return { agents: names.length, created };
+  return { agents: WORLD_AGENT_COUNT, created };
 }

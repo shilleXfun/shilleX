@@ -4,7 +4,6 @@ import type { Db } from '../db/client.ts';
 import { wallets } from '../db/schema.ts';
 import { registerWorldRoutes } from '../routes/world.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
-import { AgentActor } from './actor.ts';
 import { ClaudeBrain, type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
@@ -12,7 +11,6 @@ import { DevnetChain, makeChain } from './devnet-chain.ts';
 import { createLaunchpad, DBC_CONFIG, setSetting } from './launchpad.ts';
 import { TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
-import { runFixture } from './fixture.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
 import { startRuntime, type Runtime } from './runtime.ts';
@@ -48,10 +46,10 @@ export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => D
   return { launchpad, ...(await fundAgents(db, chain, key, now)) };
 }
 
-/** Everything WORLD_MODE=agents needs at boot: seed, chain, interrupted-turn cleanup, budget, indexer, optional fixture and runtime, routes. */
-export async function bootWorld(app: FastifyInstance, opts: { bus: WorldBus | null; brain?: AgentBrain; chain?: Chain }): Promise<WorldHandles & { stop(): Promise<void> }> {
+/** Everything the agent world needs at boot when WORLD_KEY is set: seed, chain, interrupted-turn cleanup, budget, indexer, runtime, routes. */
+export async function bootAgents(app: FastifyInstance, opts: { bus: WorldBus | null; brain?: AgentBrain; chain?: Chain }): Promise<WorldHandles & { stop(): Promise<void> }> {
   const { db, config, now } = app.deps;
-  if (!config.worldKey) throw new Error('WORLD_MODE=agents needs WORLD_KEY (32 bytes, base64)');
+  if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
   const chain = opts.chain ?? (await makeChain(config, db));
@@ -72,7 +70,7 @@ export async function bootWorld(app: FastifyInstance, opts: { bus: WorldBus | nu
     else if (e.type === 'transfer') { indexer.invalidate(e.fromId); if (e.toId) indexer.invalidate(e.toId); }
     else indexer.invalidate(e.creatorId);
   });
-  // Routes first: the fixture and the runtime act through app.inject, which boots Fastify and closes registration.
+  // Routes first: the runtime acts through app.inject, which boots Fastify and closes registration.
   let brain: AgentBrain | null = null;
   const handles: WorldHandles = {
     indexer, budget, chain, key, runtime: null, network: chain.network,
@@ -87,7 +85,6 @@ export async function bootWorld(app: FastifyInstance, opts: { bus: WorldBus | nu
   };
   await registerWorldRoutes(app, handles);
   await registerAdminRoutes(app, handles);
-  if (config.worldFixture && chain instanceof MemoryChain) console.log('[world] fixture', (await runFixture(app, { chain, key, events, actor: new AgentActor(app) })) ? 'created' : 'skipped (world not empty)');
   const waiting = await worldNotReady(db, chain);
   if (waiting) {
     const treasury = await walletOf(db, TREASURY);
