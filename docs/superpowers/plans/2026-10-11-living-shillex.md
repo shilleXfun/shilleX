@@ -195,12 +195,13 @@ export interface WorldHandles { indexer: Indexer; budget: Budget; chain: Chain; 
 export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrain; chain?: Chain } = {}): Promise<WorldHandles & { stop(): Promise<void> }>;
 // (Phases 1–2 keep `bus: WorldBus | null` in opts and `runtime` in WorldHandles; Phase 3 Task 3.3 removes both, with WorldBus/wakes.ts.)
 // Final startAgents() call, built up by Phases 2, 3, 4.1, 4.4, 4.10 and 5.4:
-//   const md = brain ? { app, db, chain, events, worldKey: key, now, rng, brain, budget } : null;
+//   const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
 //   handles.moments = md ? createMoments({ ...md, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md) } }) : null;
-//   handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs });
+//   handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs });
+//   void reputation.refresh(db, now()).catch(…);   // Phase 4 Task 4.3
 // Phase 4 Task 4.11 calls registerDepthRoutes right after registerAgentRoutes. After the WorldEvents block, Phase 5 Task 5.6 starts
 // startSpotlight({ db, bus: app.deps.bus, now, gen, limits }) and Phase 6 Task 6.1 then starts bridgePulses(events, app.deps.bus, now);
-// final stop(): async stop() { offPulses(); stopSpotlight(); await handles.engine?.stop(); indexer.stop(); }
+// final stop(): async stop() { offPulses(); stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); }
 
 // Phase 3
 // src/agents/haiku.ts
