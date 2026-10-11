@@ -13,6 +13,7 @@ import { TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
+import { createDepth } from '../agents/depth/index.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
@@ -87,7 +88,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const bootAt = now();
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
       handles.moments = brain ? createMoments({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget }) : null;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, tickMs: config.engineTickMs });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), tickMs: config.engineTickMs });
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };

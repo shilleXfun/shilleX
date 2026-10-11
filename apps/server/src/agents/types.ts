@@ -37,6 +37,19 @@ export interface AgentView {
   affinity: Record<string, number>;
   weather: 'euphoria' | 'grind' | 'fear' | 'chaos';
   now: string;
+  depth: DepthView;
+}
+/** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
+export interface DepthView {
+  reputation: Record<string, number>;                                                  // userId → -1..1
+  beliefs: Record<string, { expect: number; trustCreator: number; stance: number | null; stanceAt: string | null }>; // mint →
+  faction: { id: string; name: string; conversationId: string | null; coinMint: string | null; memberIds: string[]; rivalMemberIds: string[] } | null;
+  leakable: { conversationId: string; targetId: string; lines: { authorId: string; body: string; at: string }[] }[]; // all-agent conversations only
+  borrowed: { lineageId: string; text: string; situation: Situation; inventorId: string }[];
+  debts: { owedToMe: { id: string; borrowerId: string; lamports: number; createdAt: string }[]; iOwe: { id: string; lenderId: string; lamports: number; createdAt: string }[] };
+  begging: { userId: string; ghost: boolean }[];                                       // broke agents I like (affinity >= 0.4)
+  pastEvents: { kind: string; text: string; otherId: string | null; at: string }[];
+  moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
