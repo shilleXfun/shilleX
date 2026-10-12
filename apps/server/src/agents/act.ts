@@ -10,7 +10,8 @@ import { runTool, symbolsInUse, type ToolContext, type ToolOutcome } from '../wo
 import { depthToolRecord } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
-import { composeLine } from './phrasebook.ts';
+import { normalizeBody } from '../services/moderation.ts';
+import { WEATHER_WORD, composeLine } from './phrasebook.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
 import { RUG_BOND, buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
@@ -47,7 +48,7 @@ export function saleMood(realisedLamports: number, walletLamports: number): numb
 }
 
 export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, string>): Record<string, string | number> {
-  const out: Record<string, string | number> = { weather: v.weather };
+  const out: Record<string, string | number> = { weather: WEATHER_WORD[v.weather] };
   const coin = c.target?.mint ? v.coins.find((x) => x.mint === c.target!.mint) : undefined;
   const pos = c.target?.mint ? v.wallet.positions.find((p) => p.mint === c.target!.mint) : undefined;
   if (coin) { out.coin = `$${coin.symbol}`; out.holders = coin.holders; out.price = (coin.priceLamports / LAMPORTS_PER_SOL).toPrecision(3); }
@@ -101,6 +102,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   let privateCall = false;
   // An object, not a let: TypeScript does not see assignments made inside the closures below.
   const used: { first: { text: string; line: { key: string; template: string; situation: Situation } } | null } = { first: null };
+  // Lines anyone already has on the feed are not posted again (L6), compared like the duplicate-post rule.
+  const seen = new Set(v.feed.map((f) => normalizeBody(f.body)));
   try {
     const [agent] = await db.select().from(users).where(eq(users.id, agentId));
     const ctx: ToolContext = { app: d.app, db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent: agent!, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
@@ -131,7 +134,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       try { return await run(); } finally { ctx.uploadIds = undefined; ctx.alts = undefined; }
     };
     const line = (situation: Situation, extra: Partial<Candidate> = {}) => {
-      const r = composeLine(v.phrasebook, situation, { ...slotsFor(v, { ...c, ...extra, situation }, usernames), ...(c.slots ?? {}) }, state.recentLines, d.rng);
+      const r = composeLine(v.phrasebook, situation, { ...slotsFor(v, { ...c, ...extra, situation }, usernames), ...(c.slots ?? {}) }, state.recentLines, d.rng, seen);
       if (r) {
         state.recentLines = [...state.recentLines, r.key];
         used.first ??= { text: r.text, line: { key: r.key, template: r.template, situation } };
@@ -193,7 +196,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           }
         }
         const text = line(c.situation ?? 'reply_agree');
-        if (!text) { note = 'nothing fresh to say'; break; }
+        if (!text) {
+          // Nothing fresh to say: a reaction answers instead, and perceive counts a reacted-to mention as answered,
+          // so it stops winning turns (the silence loop).
+          await reactTo('post', c.target!.postId!, c.target?.userId);
+          note = 'nothing fresh to say; reacted instead';
+          break;
+        }
         postId = await withImage(text, async () => ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id);
         // Agreeing warms both sides, disagreeing cools both, a roast stings the roasted most (L4); talk never scores a human.
         if (c.target?.userId) await applyFeelings(db, notTowardHumans(replyFeelings(c.situation, c.target.userId, agentId), humanIds), now);
@@ -234,8 +243,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           }
         }
         const text = line(c.situation ?? 'reply_agree');
-        if (!text) { note = 'nothing fresh to say'; break; }
         privateCall = human;
+        if (!text) {
+          // As with mentions: react to the last message, and the DM counts as answered (kept private when a human is in it).
+          if (c.target?.messageId) { await reactTo('message', c.target.messageId, c.target.userId); note = 'nothing fresh to say; reacted instead'; }
+          else note = 'nothing fresh to say';
+          break;
+        }
         await call('chat', { channel_id: null, conversation_id: c.target!.conversationId, body: text, reply_to_id: null });
         break;
       }
@@ -305,7 +319,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
         if (!d.moments?.enqueue({ kind: 'launch', agentId, data: { mint, symbol, name }, at: now })) {
-          const text = composeLine(v.phrasebook, 'launching', { coin: `$${symbol}`, weather: v.weather }, state.recentLines, d.rng);
+          const text = composeLine(v.phrasebook, 'launching', { coin: `$${symbol}`, weather: WEATHER_WORD[v.weather] }, state.recentLines, d.rng, seen);
           if (text) {
             state.recentLines = [...state.recentLines, text.key];
             used.first ??= { text: text.text, line: { key: text.key, template: text.template, situation: 'launching' } };

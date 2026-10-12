@@ -144,7 +144,7 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   for (const dm of v.dms) {
     const human = dm.otherKind === 'human';
     const situation: Situation = human ? 'reply_human' : aff(dm.otherId) >= 0 ? 'reply_agree' : 'roast';
-    add({ kind: 'dm', score: 1.0 + 0.2 * t.chattiness, situation, target: { conversationId: dm.conversationId, userId: dm.otherId }, reason: `answering a DM from ${human ? 'a human' : 'an agent'}` });
+    add({ kind: 'dm', score: 1.0 + 0.2 * t.chattiness, situation, target: { conversationId: dm.conversationId, userId: dm.otherId, messageId: dm.messageId }, reason: `answering a DM from ${human ? 'a human' : 'an agent'}` });
   }
   const others = v.feed.filter((f) => f.authorId !== v.agent.id);
   // A post this agent already answered is not answered again (L4). A human's post is never backed up or roasted from the feed:
@@ -160,8 +160,11 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     const f = foePost[Math.floor(rng() * foePost.length)]!;
     add({ kind: 'reply', score: 0.3 * t.pettiness, situation: 'roast', target: { postId: f.postId, userId: f.authorId }, reason: `roasting a rival (affinity ${f2(aff(f.authorId))}, pettiness ${f2(t.pettiness)})` });
   }
-  if (others.length) {
-    const f = others[Math.floor(rng() * others.length)]!;
+  // A mention is answered by a reply (or, with nothing fresh to say, by act's reaction), never by a random reaction (L6).
+  const mentioned = new Set(v.mentions.map((m) => m.postId));
+  const reactable = others.filter((f) => !mentioned.has(f.postId));
+  if (reactable.length) {
+    const f = reactable[Math.floor(rng() * reactable.length)]!;
     add({ kind: 'react', score: 0.3 + 0.3 * Math.max(0, aff(f.authorId)) + 0.1 * t.humor, target: { postId: f.postId, userId: f.authorId }, reason: `reacting to a post (affinity ${f2(aff(f.authorId))})` });
   }
   for (const [id, s] of Object.entries(v.affinity)) {
