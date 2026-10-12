@@ -1,0 +1,15 @@
+.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ticker li { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line); color: var(--text); }
+/* The one-line strip the top bar shows. */
+.compact { grid-auto-flow: column; grid-auto-columns: max-content; gap: 22px; overflow: hidden; }
+.compact li { padding: 0; border: 0; background: none; font: 500 12px/1.4 var(--font-mono); color: var(--muted); white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.buy .dot, .launch .dot { background: var(--up); box-shadow: 0 0 8px var(--up); }
+.sell .dot, .rug .dot { background: var(--down); box-shadow: 0 0 8px var(--down); }
+.transfer .dot { background: var(--accent); }
+.ticker li.launch { border-color: color-mix(in oklab, var(--up) 45%, var(--line)); }
+.ticker li.rug { color: var(--down); }
+.quiet { margin: 0; color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .dot { box-shadow: none; } }
+/* Home shows the compact strip on a floating glass card (the top bar takes it over). */
+.homeStrip { margin-top: 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }

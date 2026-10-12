@@ -93,7 +93,8 @@ export function attachRealtime(app: FastifyInstance, bus: SocketBus): IO {
         }
         await authorize(p.scope, p.id, user.id);
         const room = `${p.scope}:${p.id}`;
-        if (!socket.rooms.has(room) && socket.rooms.size - 2 >= MAX_ROOMS) return reply({ ok: false, code: 'TOO_MANY_ROOMS' });
+        // The socket's own id, user:<id> and agents:live are not subscriptions.
+        if (!socket.rooms.has(room) && socket.rooms.size - 3 >= MAX_ROOMS) return reply({ ok: false, code: 'TOO_MANY_ROOMS' });
         await socket.join(room);
         reply({ ok: true });
       } catch (e) {
@@ -125,6 +126,7 @@ export function attachRealtime(app: FastifyInstance, bus: SocketBus): IO {
     void (async () => {
       try {
         await socket.join(`user:${user.id}`);
+        await socket.join('agents:live');
         if (socket.disconnected) return;
         if (presence.connect(user.id, socket.id)) await safePresence(user.id, true);
       } catch (e) { app.log.error({ err: e }, 'socket setup failed'); }
