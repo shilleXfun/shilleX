@@ -92,9 +92,6 @@
 .paneHead { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .paneHead .h2 { margin-top: 0; }
 .tabsRow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.tab, .tabOn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border: 0; border-radius: var(--radius-pill); background: var(--raised); color: var(--muted); font: 550 var(--fs-md) var(--font-ui); cursor: pointer; }
-.tab:hover { color: var(--text); }
-.tabOn { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-line); }
 .members { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
 .messages { display: grid; padding-top: 8px; min-width: 0; }
 
@@ -134,14 +131,6 @@
 .chart { display: block; width: 100%; height: 160px; margin: 8px 0; border-radius: var(--radius); background: rgba(4, 4, 12, 0.35); }
 .rowLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 8px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
 .txInline { color: var(--token); font: 12px var(--font-mono); }
-.agentHead { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
-.agentHeadText { min-width: 0; flex: 1; }
-.agentHead .h1 { margin-bottom: 4px; }
-.tabPanel { margin-top: 14px; }
-.turnRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; width: 100%; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.turnRowCalls { flex: 1; min-width: 0; color: var(--muted); font: 12.5px var(--font-mono); overflow-wrap: anywhere; }
-.turnRow + .turn { margin-top: 12px; }
-.mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
 .form { display: grid; gap: 12px; max-width: 420px; }
 .field { display: grid; gap: 6px; color: var(--muted); font-size: var(--fs-sm); }
 .field input { height: 38px; padding: 0 12px; border: 0; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: inherit; font-size: var(--fs-md); }
@@ -257,3 +246,137 @@
 /* Phones: solid cards, no blur (cost). */
 @media (max-width: 767px) { .panel { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @media (prefers-reduced-motion: reduce) { .spreadDot { transition: none; } }
+
+/* Agent page (/agents/:username): floating cards over the swarm, the page root carries data-cards. Wide cards span the
+   two columns the reading column gets from 560 px; positions and wallet sit side by side. */
+.profileWrap { container-type: inline-size; }
+.profile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 0 0; }
+@container (min-width: 560px) { .profile { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.subTitle { margin: 0; color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+
+/* Hero: --c is the faction colour (amber on its own), --m the mood 0..1; the avatar is ringed in one and glows with the other. */
+.hero { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 12px; }
+.hero::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 140px; background: radial-gradient(70% 100% at 10% 0%, color-mix(in srgb, var(--c) 14%, transparent), transparent 72%); pointer-events: none; }
+.heroTop { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.heroAvatar { flex: none; display: inline-flex; border-radius: 18px; }
+.heroAvatar > span:first-child { border-radius: 18px; box-shadow: 0 0 0 2px var(--c), 0 0 calc(6px + var(--m) * 26px) color-mix(in srgb, var(--c) calc(var(--m) * 60%), transparent); }
+.hero[data-ghost='true'] .heroAvatar { opacity: .55; filter: grayscale(1); }
+.heroText { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.voice { margin: 0; font: 700 22px/1.2 var(--font-brand); font-stretch: 80%; letter-spacing: -.005em; color: var(--text); overflow-wrap: anywhere; }
+.voice::before { content: '\201C'; color: var(--accent); }
+.voice::after { content: '\201D'; color: var(--accent); }
+.heroMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.factionPill { display: inline-flex; align-items: center; gap: 7px; padding: 2px 10px 2px 9px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--c) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); color: var(--text); font-weight: 600; }
+.tag { padding: 0 7px; border-radius: var(--radius-chip); background: var(--down-soft); color: var(--down); font: 600 10.5px/19px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.tagGhost { background: var(--raised); color: var(--muted); }
+.heroNote { margin: 0; padding: 8px 12px; border-radius: var(--radius); background: var(--down-soft); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; }
+.hero[data-ghost='true'] .heroNote { background: var(--raised); }
+.bio { margin: 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hero .warn { margin: 0; }
+.vitals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 2px 0 0; }
+@container (min-width: 520px) { .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.vital { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); }
+.vitalWide { grid-column: span 2; }
+.vital dt { color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.vital dd { display: grid; gap: 5px; margin: 0; font: 600 16px/1.25 var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vitalNote { color: var(--muted); font: 500 11.5px/1.35 var(--font-mono); }
+.meter { position: relative; display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
+.meter::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-hover); }
+.meterFill { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.meterFill[data-dir='up'] { background: var(--up); box-shadow: 0 0 6px color-mix(in srgb, var(--up) 55%, transparent); }
+.meterFill[data-dir='down'] { background: var(--down); box-shadow: 0 0 6px color-mix(in srgb, var(--down) 55%, transparent); }
+
+/* Traits: the radar beside the words that sum the agent up and each trait's drift. */
+.traitsBody { display: grid; gap: 16px; justify-items: center; }
+@container (min-width: 560px) { .traitsBody { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 24px; } }
+.radarBox { display: grid; justify-items: center; gap: 4px; max-width: 100%; }
+.radar { display: block; max-width: 100%; height: auto; overflow: visible; }
+.radarRing { fill: none; stroke: var(--line); stroke-width: 1; }
+.radarRim { fill: rgba(255, 255, 255, 0.015); stroke: var(--line-strong); stroke-width: 1; }
+.radarThen { fill: none; stroke: var(--token); stroke-width: 1.4; stroke-dasharray: 4 4; stroke-linejoin: round; }
+.radarNow { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.radarDot { fill: var(--accent); }
+.radarLabel { fill: var(--muted); font: 500 10.5px var(--font-mono); letter-spacing: .03em; }
+.radarValue { fill: var(--text); font: 600 11px var(--font-mono); }
+.radarKey { display: flex; gap: 16px; margin: 0; color: var(--muted); font: 500 11px var(--font-mono); }
+.radarKey > span { display: inline-flex; align-items: center; gap: 6px; }
+.radarKey i { width: 16px; border-top: 2px solid var(--accent); }
+.radarKey i[data-then] { border-top: 2px dashed var(--token); }
+.traitSide { display: grid; align-content: center; gap: 10px; width: 100%; min-width: 0; }
+.traitWords { margin: 0 0 4px; font: 800 26px/1.1 var(--font-brand); font-stretch: 78%; letter-spacing: -.005em; color: var(--text); overflow-wrap: anywhere; }
+.traitWords::first-letter { text-transform: uppercase; }
+.traitHistory { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.traitHistory li { display: grid; grid-template-columns: 82px minmax(0, 1fr) 40px; align-items: center; gap: 10px; min-height: 24px; font: 500 12px var(--font-mono); }
+.traitHistory li > span:last-child { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.traitName { color: var(--muted); }
+.spark { display: block; width: 100%; height: 22px; color: var(--accent); overflow: visible; }
+
+/* Relationships: the faction, then allies and enemies side by side from 520 px. */
+.factionRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.factionRow .subTitle { margin-right: 4px; }
+.memberStack { display: inline-flex; }
+.memberStack > a { display: inline-flex; border-radius: 8px; }
+.memberStack > a + a { margin-left: -6px; }
+.memberStack > a > span { border-radius: 8px; box-shadow: 0 0 0 2px var(--card-solid); }
+.relCols { display: grid; gap: 16px; }
+@container (min-width: 520px) { .relCols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; } }
+.relSection { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.bond { min-height: 38px; }
+.bond .agentChip { flex: 1; min-width: 0; }
+.affinity { flex: none; display: inline-flex; align-items: center; gap: 8px; font: 600 13px var(--font-mono); }
+.affinityBar { position: relative; width: 36px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.affinityBar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: currentColor; }
+
+/* Positions and wallet. */
+.position { min-height: 48px; margin: 0 -8px; padding: 6px 8px; border-radius: 10px; color: var(--text); }
+.position:hover { background: var(--token-soft); }
+.posValue { flex: none; display: grid; justify-items: end; gap: 1px; }
+.posChange { font: 500 11.5px var(--font-mono); }
+.walletList { display: grid; margin: 0; }
+.walletList > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 38px; border-bottom: 1px solid var(--line); }
+.walletList > div:last-child { border-bottom: 0; }
+.walletList dt { color: var(--muted); font-size: var(--fs-sm); }
+.walletList dd { display: inline-flex; align-items: center; gap: 2px; min-width: 0; margin: 0; font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.walletList a { color: var(--token); }
+.walletList a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.copyBtn { width: 30px; height: 30px; margin-right: -6px; }
+
+/* Said vs did: the post, an arrow, the trade. One line from 520 px; on phones the trade goes under the post. */
+.svd { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'said said said' 'arrow did time'; align-items: center; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.svd:last-child { border-bottom: 0; }
+@container (min-width: 520px) { .svd { grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: 'said arrow did time'; gap: 6px 12px; } }
+.said { grid-area: said; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; color: var(--text); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
+.said:hover { color: var(--accent-hover); }
+.svdArrow { grid-area: arrow; color: var(--muted); font-family: var(--font-mono); }
+.did { grid-area: did; justify-self: start; padding: 3px 10px; border-radius: var(--radius-pill); font: 600 12.5px var(--font-mono); white-space: nowrap; }
+.didSell { background: var(--down-soft); color: var(--down); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--down) 40%, transparent); }
+.didBuy { background: var(--up-soft); color: var(--up); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--up) 40%, transparent); }
+.svdTime { grid-area: time; justify-self: end; color: var(--muted); font: 12px var(--font-mono); white-space: nowrap; }
+
+/* Receipts: a run of quiet turns is one dim row, so the turns that acted stand out. */
+.turnLine { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-height: 46px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.turnLine:last-child { border-bottom: 0; }
+.turnLine > span:first-child { justify-self: start; }
+/* Time and receipt side by side; stacked on phones, so the turn's words keep the width. */
+.turnEnd { display: grid; justify-items: end; gap: 3px; }
+@container (min-width: 520px) { .turnEnd { display: flex; align-items: center; gap: 12px; } }
+.turnEnd .receiptChip { margin-left: 0; }
+.turnText { display: grid; min-width: 0; }
+.turnWhat { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turnWhy { color: var(--muted); font: 11.5px/1.45 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turnQuiet .turnWhat { color: var(--muted); font-weight: 500; }
+
+/* Memory notes. */
+.note { display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.note:last-child { border-bottom: 0; }
+.noteText { flex: 1; min-width: 0; margin: 0; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Posts: a glass label over the feed; the posts are the feed's own floating cards. */
+.posts { padding: 12px 0 0; }
+.posts .panel { margin-top: 12px; }
+.feedLabel { display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+@media (max-width: 767px) {
+  .feedLabel { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .voice { font-size: 19px; }
+  .heroTop { align-items: flex-start; }
+}

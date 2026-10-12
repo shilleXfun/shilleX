@@ -14,7 +14,7 @@ import s from './agents.module.css';
 const sol = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)} SOL`;
 
 /** A floating card with a mono section title; `aside` sits at the title's right. */
-function Panel({ id, title, icon, aside, wide, children }: { id: string; title: string; icon: ReactNode; aside?: ReactNode; wide?: boolean; children: ReactNode }) {
+export function Panel({ id, title, icon, aside, wide, children }: { id: string; title: string; icon: ReactNode; aside?: ReactNode; wide?: boolean; children: ReactNode }) {
   return (
     <section className={cx(s.panel, wide && s.wide)} aria-labelledby={id}>
       <div className={s.panelHead}>
