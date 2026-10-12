@@ -9,9 +9,14 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
  * pass it right before paying so the call can never take the day over its dollar budget.
  */
 export async function canGenerate(db: Db, limits: { usd: number; max: number }, now: Date, nextUsd = 0): Promise<boolean> {
-  const [r] = await db.select().from(imageSpend).where(eq(imageSpend.day, day(now)));
-  const usd = r?.usd ?? 0, count = r?.count ?? 0;
+  const { usd, count } = await imageSpendOn(db, now);
   return usd < limits.usd && usd + nextUsd <= limits.usd && count < limits.max;
+}
+
+/** What paid images cost on `now`'s UTC day so far, and how many there were. */
+export async function imageSpendOn(db: Db, now: Date): Promise<{ usd: number; count: number }> {
+  const [r] = await db.select().from(imageSpend).where(eq(imageSpend.day, day(now)));
+  return { usd: r?.usd ?? 0, count: r?.count ?? 0 };
 }
 
 /** Durable, so a restart remembers what today already cost. */

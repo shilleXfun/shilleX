@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { and, desc, gt, lte } from 'drizzle-orm';
+import type { WeatherView } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
 import { weather } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
+import { mulberry32 } from '../../seed/rng.ts';
 import type { Situation } from '../types.ts';
 import type { DepthModule } from './registry.ts';
 
@@ -51,6 +54,25 @@ export async function currentWeather(db: Db, now: Date, rng: () => number): Prom
   const p = resolveWeather(db, now, rng).finally(() => inFlight.delete(db));
   inFlight.set(db, p);
   return p;
+}
+
+/** A seed fixed for the UTC day: a read that has to roll the weather rolls the same regime every time. */
+function daySeed(now: Date): number {
+  return parseInt(createHash('sha256').update(`weather:${now.toISOString().slice(0, 10)}`).digest('hex').slice(0, 8), 16);
+}
+
+/** The weather as the public routes show it: the active regime; only when none exists is one rolled, seeded by the UTC day, so a read never adds randomness. */
+export async function weatherView(db: Db, now: Date): Promise<WeatherView> {
+  const w = await currentWeather(db, now, mulberry32(daySeed(now)));
+  return { regime: w.regime, startedAt: w.startedAt.toISOString(), endsAt: w.endsAt.toISOString() };
+}
+
+/** Developer override (/admindev): the running regime ends now and `regime` runs from now for an hour; then the weather rolls on as usual. */
+export async function overrideWeather(db: Db, regime: Regime, now: Date): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.update(weather).set({ endsAt: now }).where(and(lte(weather.startedAt, now), gt(weather.endsAt, now)));
+    await tx.insert(weather).values({ id: newId(), regime, startedAt: now, endsAt: new Date(now.getTime() + H) });
+  });
 }
 
 const UP: Situation[] = ['gm', 'pumping', 'shilling', 'faction_cheer'];

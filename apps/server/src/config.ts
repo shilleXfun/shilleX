@@ -22,6 +22,8 @@ export interface Config {
   worldKey: string | undefined;
   adminUsernames: string[];
   worldAdminPassword: string | undefined;
+  /** Password for the /admindev console (ADMIN_DEV_PASSWORD). Defaults to 12345 outside production; null (console off) in production when unset. */
+  adminDevPassword: string | null;
   worldChain: 'devnet' | 'memory';
   /** RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. */
   devnetRpcUrl: string;
@@ -66,6 +68,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     worldKey: env.WORLD_KEY || undefined,
     adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
+    adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv === 'production' ? null : '12345'),
     worldChain: env.WORLD_CHAIN === 'memory' ? 'memory' : 'devnet',
     devnetRpcUrl: env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: env.OPENAI_API_KEY || undefined,

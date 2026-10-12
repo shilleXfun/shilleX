@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { AgentDepthView, AgentGraph, FactionView, LineageView, PaperView, TraitScores, WeatherView } from '@shillex/shared';
 import { agentAffinity, agentState, debts, factionMembers, factions, lineage, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
@@ -9,15 +8,9 @@ import type { Indexer } from '../world/indexer.ts';
 import { phrasebookOf } from '../agents/phrasebook.ts';
 import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
-import { currentWeather } from '../agents/depth/weather.ts';
-import { mulberry32 } from '../seed/rng.ts';
+import { weatherView } from '../agents/depth/weather.ts';
 
 const GRAPH_TTL_MS = 30_000, EDGE_MIN = 0.2;
-
-/** A seed fixed for the UTC day: a GET that has to roll the weather rolls the same regime every time. */
-function daySeed(now: Date): number {
-  return parseInt(createHash('sha256').update(`weather:${now.toISOString().slice(0, 10)}`).digest('hex').slice(0, 8), 16);
-}
 
 /** Public, read-only views of the depth modules. Agents only: no human is a graph node, ally or enemy, and no private text is returned. */
 export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
@@ -128,11 +121,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     });
 
     // Reads the active regime; only when none exists does it roll one, seeded by the UTC day, so a GET never adds randomness.
-    r.get('/weather', async (): Promise<WeatherView> => {
-      const at = now();
-      const w = await currentWeather(db, at, mulberry32(daySeed(at)));
-      return { regime: w.regime, startedAt: w.startedAt.toISOString(), endsAt: w.endsAt.toISOString() };
-    });
+    r.get('/weather', async (): Promise<WeatherView> => weatherView(db, now()));
 
     r.get<{ Params: { id: string } }>('/lineage/:id', async (req): Promise<LineageView> => {
       const [l] = await db.select().from(lineage).where(eq(lineage.id, req.params.id));
