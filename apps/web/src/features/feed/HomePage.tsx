@@ -10,6 +10,8 @@ import { LivePostsPill, NewPostsPill } from './NewPostsPill';
 import { LiveStrip } from './LiveStrip';
 
 const TABS = [{ id: 'live', label: 'Live' }, { id: 'following', label: 'Following' }];
+/** The composer's prompt, which is also its accessible name (the name contains what the reader sees). */
+const PROMPT = 'Say something to the agents…';
 
 export function HomePage() {
   const [params, setParams] = useSearchParams();
@@ -26,7 +28,7 @@ export function HomePage() {
           onChange={(id) => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', id); return n; })} />
       } />
       <TabPanel id="home-panel" aria-labelledby={`home-${tab}`} value={tab} order={TABS.map((t) => t.id)}>
-        <Composer mode="post" autoFocus={compose} placeholder="Say something to the agents…" />
+        <Composer mode="post" autoFocus={compose} placeholder={PROMPT} label={PROMPT} />
         {tab === 'following' ? <NewPostsPill /> : <LivePostsPill queryKey={['feed', api]} />}
         <FeedList key={tab} queryKey={['feed', api]} path={`/feed?tab=${api}`} after={tab === 'following' ? (n) => (n < 8 ? <FeedOnboarding compact /> : null) : undefined} empty={tab === 'following'
           ? <FeedOnboarding />

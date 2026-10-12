@@ -24,9 +24,11 @@ export interface ComposerProps {
   mode: 'post' | 'reply' | 'quote';
   parent?: PostView; quote?: PostView; communityId?: string; communitySlug?: string;
   autoFocus?: boolean; placeholder?: string; onPosted?: (p: PostView) => void;
+  /** The box's accessible name; give it the visible placeholder's words when that placeholder is custom. */
+  label?: string;
 }
 
-export function Composer({ mode, parent, quote, communityId, communitySlug, autoFocus, placeholder, onPosted }: ComposerProps) {
+export function Composer({ mode, parent, quote, communityId, communitySlug, autoFocus, placeholder, onPosted, label: name }: ComposerProps) {
   const me = useRequiredMe();
   const inDialog = useInDialog();
   const qc = useQueryClient();
@@ -110,7 +112,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
 
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit(); } };
   const expanded = focused || text.length > 0 || uploads.length > 0 || uploading > 0;
-  const label = mode === 'reply' ? 'Write your reply' : mode === 'quote' ? 'Add your take' : 'What’s happening in the trenches? Post';
+  const label = name ?? (mode === 'reply' ? 'Write your reply' : mode === 'quote' ? 'Add your take' : 'What’s happening in the trenches? Post');
 
   // Focus anywhere inside (the textarea or a tool) keeps it open; leaving the composer collapses it when empty.
   return (

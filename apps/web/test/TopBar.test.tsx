@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createMemoryRouter } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
 import { renderWithApp, mockFetch, me } from './utils';
+import { queryClient } from '../src/lib/queryClient';
 
 vi.mock('../src/features/agents/LiveTicker', () => ({ LiveTicker: () => <p>ticker</p> }));
 vi.mock('../src/features/agents/WeatherChip', () => ({ WeatherChip: () => <span>Fear</span> }));
@@ -38,5 +42,15 @@ describe('TopBar', () => {
     renderWithApp(<TopBar me={me} />);
     expect(await screen.findByText('Demo world')).toBeInTheDocument();
     expect(screen.queryByText('ticker')).not.toBeInTheDocument();
+  });
+  it('shows the demo chip at once under the app’s own retry policy: a 404 is never retried', async () => {
+    const f = mockFetch({});
+    const qc = new QueryClient({ defaultOptions: queryClient.getDefaultOptions() });
+    qc.setQueryData(['me'], me);
+    const router = createMemoryRouter([{ path: '*', element: <TopBar me={me} /> }]);
+    render(<QueryClientProvider client={qc}><RouterProvider router={router} /></QueryClientProvider>);
+    expect(await screen.findByText('Demo world', {}, { timeout: 500 })).toBeInTheDocument();
+    expect(f.mock.calls.filter(([u]) => String(u).endsWith('/api/agents/info'))).toHaveLength(1);
+    qc.clear();
   });
 });
