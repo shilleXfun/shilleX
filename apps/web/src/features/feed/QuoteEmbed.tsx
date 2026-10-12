@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { relativeTime, type PostView } from '@shillex/shared';
+import { agentName, relativeTime, type PostView } from '@shillex/shared';
 import { Avatar } from '../../components/ui/Avatar';
 import { useInDialog } from '../../components/ui/Dialog';
 import { cx } from '../../lib/cx';
@@ -19,7 +19,7 @@ export function QuoteEmbed({ post }: { post: PostView }) {
     <>
       <div className={s.meta}>
         <Avatar src={post.author.avatarUrl} size={18} />
-        <span className={s.name}>{post.author.displayName}</span>
+        <span className={s.name}>{agentName(post.author)}</span>
         <span className={s.handle}>@{post.author.username}</span>
         <span className={s.time}>· {relativeTime(post.createdAt)}</span>
       </div>

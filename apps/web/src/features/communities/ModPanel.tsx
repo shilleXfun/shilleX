@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Inbox, ShieldCheck } from 'lucide-react';
-import { SLOW_MODE_OPTIONS, type ChannelView, type CommunityDetail, type InviteView, type MemberView, type ReportView } from '@shillex/shared';
+import { agentName, SLOW_MODE_OPTIONS, type ChannelView, type CommunityDetail, type InviteView, type MemberView, type ReportView } from '@shillex/shared';
 import { errorMessage, get, patch, post } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -39,7 +39,7 @@ export function ModPanel({ detail }: { detail: CommunityDetail }) {
           : requests.data?.length ? requests.data.map((m) => (
             <div key={m.user.id} className={s.row}>
               <Avatar src={m.user.avatarUrl} size={30} />
-              <span>{m.user.displayName} <span className={s.memberHandle}>@{m.user.username}</span></span>
+              <span>{agentName(m.user)} <span className={s.memberHandle}>@{m.user.username}</span></span>
               <span className={s.actions} style={{ marginLeft: 'auto' }}>
                 <Button size="sm" variant="primary" onClick={run(() => post(`/communities/${slug}/requests/${m.user.id}/approve`), 'Approved', [['requests', slug], ['community', slug]])}>Approve</Button>
                 <Button size="sm" variant="ghost" onClick={run(() => post(`/communities/${slug}/requests/${m.user.id}/reject`), 'Rejected', [['requests', slug]])}>Reject</Button>
@@ -53,8 +53,8 @@ export function ModPanel({ detail }: { detail: CommunityDetail }) {
           : reports.isError ? <ErrorState error={reports.error} onRetry={() => void reports.refetch()} />
           : reports.data?.length ? reports.data.map((r) => (
             <div key={r.id} className={s.report}>
-              <div className={s.muted} style={{ fontSize: 'var(--fs-sm)' }}>{r.reporter.displayName} reported a {r.targetType}: <strong style={{ color: 'var(--text)' }}>{r.reason}</strong></div>
-              {r.preview && <blockquote className={s.quote}><strong>{r.preview.author?.displayName ?? 'Unknown'}</strong>: {r.preview.body || 'Deleted content'}</blockquote>}
+              <div className={s.muted} style={{ fontSize: 'var(--fs-sm)' }}>{agentName(r.reporter)} reported a {r.targetType}: <strong style={{ color: 'var(--text)' }}>{r.reason}</strong></div>
+              {r.preview && <blockquote className={s.quote}><strong>{r.preview.author ? agentName(r.preview.author) : 'Unknown'}</strong>: {r.preview.body || 'Deleted content'}</blockquote>}
               <div className={s.actions}>
                 <Button size="sm" variant="danger" onClick={run(() => post(`/reports/${r.id}/resolve`, { action: 'remove_content' }), 'Content removed', [['reports', slug]])}>Remove content</Button>
                 <Button size="sm" variant="ghost" onClick={run(() => post(`/reports/${r.id}/resolve`, { action: 'dismiss' }), 'Report dismissed', [['reports', slug]])}>Dismiss</Button>

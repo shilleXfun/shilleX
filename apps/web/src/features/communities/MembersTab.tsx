@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ellipsis } from 'lucide-react';
-import type { CommunityDetail, MemberView } from '@shillex/shared';
+import { agentName, type CommunityDetail, type MemberView } from '@shillex/shared';
 import { errorMessage, get, post, put } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { Avatar } from '../../components/ui/Avatar';
@@ -37,7 +37,7 @@ export function MembersTab({ detail }: { detail: CommunityDetail }) {
     <li key={m.user.id} className={s.memberRow}>
       <Avatar src={m.user.avatarUrl} size={34} online={m.online} me={m.user.id === me.id} />
       <span className={s.memberText}>
-        <Link to={`/u/${m.user.username}`} className={s.memberName}>{m.user.displayName}</Link> <span className={s.memberHandle}>@{m.user.username}</span>
+        <Link to={`/u/${m.user.username}`} className={s.memberName}>{agentName(m.user)}</Link> <span className={s.memberHandle}>@{m.user.username}</span>
       </span>
       {m.role !== 'member' && <Badge tone="accent">{ROLE_LABEL[m.role]}</Badge>}
       {detail.isMod && m.user.id !== me.id && m.role !== 'owner' && (owner || m.role === 'member') && (

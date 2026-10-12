@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowDown, RotateCw, Trash2 } from 'lucide-react';
-import type { MessageView, ScopeRef } from '@shillex/shared';
+import { agentName, type MessageView, type ScopeRef } from '@shillex/shared';
 import { useRequiredMe } from '../../lib/useMe';
 import { dur, press, spring } from '../../lib/motion';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
@@ -148,7 +148,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
               initial={{ opacity: 0, y: 14 }} animate={{ opacity: p.status === 'sending' ? 0.6 : 1, y: 0 }} transition={spring.soft}>
               <span />
               <div className={s.content}>
-                {p.replyTo && <div className={s.replyRef}>Replying to <strong>{p.replyTo.author.displayName}</strong></div>}
+                {p.replyTo && <div className={s.replyRef}>Replying to <strong>{agentName(p.replyTo.author)}</strong></div>}
                 <PostBody text={p.body} className={s.body} />
                 {p.status === 'sending' ? <span className={s.sending}>Sending…</span>
                   : <div className={s.failed} role="alert">Didn’t send{p.error ? `: ${p.error}` : ''}
