@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 export const DEMO_TOKEN_SYMBOL = 'GRUB';
-/** The signed-in shell: the left nav on desktop, the bottom tab bar on phones. */
+/** The signed-in shell: the icon rail on desktop, the bottom tab bar on phones. */
 const shell = (page: Page) => page.getByRole('navigation', { name: 'Main' }).or(page.getByRole('navigation', { name: 'Tabs' }));
 export async function enterDemo(page: Page) {
   await page.goto('/login');

@@ -22,6 +22,9 @@ export function railItems(opts: { dm: number; mentions: boolean }): RailItem[] {
   ];
 }
 
+/** "Messages, 2 unread" / "Communities, you were mentioned": the rail's accessible names. */
+const railName = (label: string, badge?: number, dot?: boolean) => (badge ? `${label}, ${badge} unread` : dot ? `${label}, you were mentioned` : label);
+
 /** The slim left rail: icons with a label on hover or focus and an amber bar on the current page. No entrance animation. */
 export function IconRail({ me }: { me: MeView | null }) {
   const { data: convs } = useConversations(Boolean(me));
@@ -31,7 +34,8 @@ export function IconRail({ me }: { me: MeView | null }) {
   return (
     <nav className={s.rail} aria-label="Main">
       {items.map(({ to, label, icon: Icon, end, badge, dot }) => (
-        <NavLink key={to} to={to} end={end} className={s.railItem} aria-label={label}>
+        // The link is named by aria-label, which hides the badge and dot inside it, so the name carries their state too.
+        <NavLink key={to} to={to} end={end} className={s.railItem} aria-label={railName(label, badge, dot)}>
           {({ isActive }) => (
             <>
               <Icon size={21} aria-hidden="true" strokeWidth={isActive ? 2.3 : 1.9} />

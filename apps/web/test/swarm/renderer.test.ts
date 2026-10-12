@@ -11,16 +11,17 @@ const coin = (mint: string, creatorId: string, volume24hSol: number): CoinView =
 });
 const graph: AgentGraph = { nodes: [node('a'), node('b')], edges: [], generatedAt: '2026-10-12T10:00:00Z' };
 
-/** A 2D context that does nothing except remember where rings (the only arcs) were drawn. */
+/** A 2D context that does nothing except remember where rings (the only arcs) were drawn and what text was written. */
 function fakeContext() {
   const arcs: number[][] = [];
+  const texts: string[] = [];
   const grad = { addColorStop: () => undefined };
-  const target: Record<string, unknown> = { arc: (...a: number[]) => { arcs.push(a); }, createLinearGradient: () => grad, createRadialGradient: () => grad };
-  return { arcs, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: () => true }) };
+  const target: Record<string, unknown> = { arc: (...a: number[]) => { arcs.push(a); }, fillText: (t: string) => { texts.push(t); }, createLinearGradient: () => grad, createRadialGradient: () => grad };
+  return { arcs, texts, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: () => true }) };
 }
 
 function setup() {
-  const { arcs, ctx } = fakeContext();
+  const { arcs, texts, ctx } = fakeContext();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
   let clock = 0, frame: FrameRequestCallback = () => undefined;
   vi.spyOn(performance, 'now').mockImplementation(() => clock);
@@ -31,7 +32,7 @@ function setup() {
   const first = buildSwarm(graph, [coin('c1', 'a', 1)], null);
   r.setModel(first);
   r.start();
-  return { r, arcs, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
+  return { r, arcs, texts, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -62,5 +63,17 @@ describe('renderer setModel', () => {
     arcs.length = 0;
     draw(1300);
     expect(arcs).toHaveLength(0);
+  });
+});
+
+describe('renderer coin labels', () => {
+  it('writes each coin’s ticker beside its diamond, but not on phones', () => {
+    const { r, texts, draw } = setup();
+    draw(1000);
+    expect(texts).toContain('$C1');
+    r.resize(390, 844, 1);
+    texts.length = 0;
+    draw(1100);
+    expect(texts).toHaveLength(0);
   });
 });

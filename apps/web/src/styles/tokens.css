@@ -36,7 +36,7 @@
   /* Floating cards: the swarm shows between and faintly through them. Phones drop the blur (cost). */
   --card: rgba(10, 12, 20, 0.62);
   --card-hover: rgba(16, 19, 30, 0.72);
-  --card-solid: rgba(10, 12, 20, 0.84);
+  --card-solid: rgba(10, 12, 20, 0.93);
   --card-blur: blur(14px) saturate(140%);
   --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.25);
   /* Pages without their own cards sit on one glass sheet. */
