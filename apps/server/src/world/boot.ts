@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { and, isNull, ne } from 'drizzle-orm';
+import { and, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { wallets } from '../db/schema.ts';
+import { chainTxs, wallets, worldCoins } from '../db/schema.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
@@ -10,7 +10,7 @@ import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
 import { DevnetChain, makeChain } from './devnet-chain.ts';
 import { createLaunchpad, DBC_CONFIG, setSetting } from './launchpad.ts';
-import { TreasuryEmpty, fundAgents } from './ledger.ts';
+import { START_LAMPORTS, TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
@@ -57,6 +57,41 @@ export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => D
   return { launchpad, ...(await fundAgents(db, chain, key, now)) };
 }
 
+/** What a memory-chain wallet holds before any transaction: the same funding the boot airdrop gives. */
+const memoryStart = (ownerId: string) => (ownerId === TREASURY ? 10_000_000_000 : START_LAMPORTS);
+
+/**
+ * Rebuilds an empty MemoryChain from the database (local and e2e use): every coin's pool from the tokens its trades sold,
+ * every wallet's SOL and tokens from the transactions the world recorded. Null when the database has no chain history yet,
+ * so a first boot is funded by the plain airdrop instead.
+ */
+export async function restoreMemoryChain(db: Db, chain: MemoryChain): Promise<{ pools: number; accounts: number } | null> {
+  const [history] = await db.select({ txs: sql<number>`count(*)::int` }).from(chainTxs);
+  if (!history?.txs) return null;
+  const total = (col: typeof chainTxs.tokenDelta | typeof chainTxs.lamportsDelta) => sql<number>`coalesce(sum(${col}), 0)::float8`;
+  const [coins, keys, sold, lamports, bags, [launches]] = await Promise.all([
+    db.select({ mint: worldCoins.mint, pool: worldCoins.pool, graduatedAt: worldCoins.graduatedAt }).from(worldCoins),
+    db.select({ ownerId: wallets.ownerId, publicKey: wallets.publicKey }).from(wallets),
+    db.select({ mint: chainTxs.mint, sold: total(chainTxs.tokenDelta) }).from(chainTxs).where(isNotNull(chainTxs.mint)).groupBy(chainTxs.mint),
+    // A 'fund' row is the 0.1 SOL a treasury transfer gave the wallet: it is already the starting balance, not a change to it.
+    db.select({ ownerId: chainTxs.agentId, lamports: total(chainTxs.lamportsDelta) }).from(chainTxs).where(and(isNotNull(chainTxs.agentId), ne(chainTxs.kind, 'fund'))).groupBy(chainTxs.agentId),
+    db.select({ ownerId: chainTxs.agentId, mint: chainTxs.mint, raw: total(chainTxs.tokenDelta) }).from(chainTxs)
+      .where(and(isNotNull(chainTxs.agentId), isNotNull(chainTxs.mint))).groupBy(chainTxs.agentId, chainTxs.mint).having(sql`sum(${chainTxs.tokenDelta}) > 0`),
+    db.select({ n: sql<number>`count(*)::int` }).from(worldCoins),
+  ]);
+  const soldOf = new Map(sold.map((r) => [r.mint, r.sold]));
+  const spent = new Map(lamports.map((r) => [r.ownerId, r.lamports]));
+  const accounts = keys.map((w) => ({
+    publicKey: w.publicKey,
+    lamports: Math.max(0, memoryStart(w.ownerId) + (spent.get(w.ownerId) ?? 0)),
+    tokens: bags.filter((b) => b.ownerId === w.ownerId).map((b) => ({ mint: b.mint!, raw: b.raw })),
+  }));
+  const pools = coins.map((c) => ({ mint: c.mint, pool: c.pool, sold: soldOf.get(c.mint) ?? 0, graduated: c.graduatedAt !== null }));
+  // Every transaction used at most one signature and every launch one mint number: this stays above all of them.
+  chain.restore({ pools, accounts, signatures: history.txs + (launches?.n ?? 0) });
+  return { pools: pools.length, accounts: accounts.length };
+}
+
 /** Everything the agent world needs at boot when WORLD_KEY is set: seed, chain, interrupted-turn cleanup, budget, indexer, engine, moment queue, routes. */
 export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrain; chain?: Chain } = {}): Promise<WorldHandles & { stop(): Promise<void> }> {
   const { db, config, now } = app.deps;
@@ -65,8 +100,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
   const chain = opts.chain ?? (await makeChain(config, db));
   if (chain instanceof MemoryChain) {
-    // In-memory balances start empty each boot: give every wallet its 0.1 SOL again (local and e2e use only).
-    for (const w of await db.select().from(wallets)) chain.airdrop(w.publicKey, w.ownerId === TREASURY ? 10_000_000_000 : 100_000_000);
+    // The in-memory chain starts empty each boot (local and e2e use only): rebuild it from the database, or on a first boot give every wallet its 0.1 SOL.
+    const restored = await restoreMemoryChain(db, chain);
+    if (restored) console.log(`[world] memory chain restored: ${restored.pools} pools, ${restored.accounts} accounts`);
+    else for (const w of await db.select().from(wallets)) chain.airdrop(w.publicKey, memoryStart(w.ownerId));
     await db.update(wallets).set({ fundedAt: now() });
   }
   const aborted = await abortRunningTurns(db, now());
