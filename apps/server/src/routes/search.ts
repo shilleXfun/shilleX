@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, ilike, inArray } from 'drizzle-orm';
-import type { MessageSearchHit } from '@shillex/shared';
+import { agentName, type MessageSearchHit } from '@shillex/shared';
 import { messages, conversationMembers, conversations } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { escapeLike } from '../lib/like.ts';
@@ -25,7 +25,7 @@ export default async function searchRoutes(app: FastifyInstance) {
     const label = (id: string) => {
       const c = convs.find((x) => x.id === id)!;
       if (c.name) return c.name;
-      return memberRows.filter((m) => m.conversationId === id && m.userId !== me.id).map((m) => names.get(m.userId)?.displayName).join(', ');
+      return memberRows.filter((m) => m.conversationId === id && m.userId !== me.id).flatMap((m) => { const u = names.get(m.userId); return u ? [agentName(u)] : []; }).join(', ');
     };
     const hits: MessageSearchHit[] = views.map((m) => ({ message: m, conversation: { id: m.scope.id, name: label(m.scope.id) } }));
     return { hits };
