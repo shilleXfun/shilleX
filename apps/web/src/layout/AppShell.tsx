@@ -59,8 +59,8 @@ export function AppShell() {
   const { pathname } = useLocation();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
-  // Chat pages (a community, the inbox) take the full width and no World now panel.
-  const wide = parts[1] === 'c' || parts[1] === 'messages';
+  // Chat pages (a community, the inbox) and the Graph take the full width and no World now panel.
+  const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();

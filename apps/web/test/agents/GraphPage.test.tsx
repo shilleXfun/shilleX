@@ -74,6 +74,17 @@ describe('GraphPage', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('keeps the links in one order whatever the agents are worth, and gives small agents a big enough target', async () => {
+    const nodes = [{ ...node('a1', 'Nine', null), netWorthSol: 0.1 }, { ...node('a2', 'Ember', null), netWorthSol: 0.5 }, { ...node('a3', 'Ledger', null), netWorthSol: 0.001 }];
+    mockFetch({ '/api/agents/graph': { ...graph, nodes: [nodes[2], nodes[0], nodes[1]], edges: [] } });
+    renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    await screen.findByRole('link', { name: 'Nine' });
+    // By agent id, so tab order and focus stay put when net worth (and so drawing order) changes on a refetch.
+    expect(screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))).toEqual(['Nine', 'Ember', 'Ledger']);
+    const hit = screen.getByRole('link', { name: 'Ledger' }).querySelector('circle'); // the link's first circle is its target
+    expect(Number(hit?.getAttribute('r'))).toBeGreaterThanOrEqual(12);
+  });
+
   it('says so when this deployment has no agent world', async () => {
     mockFetch({});
     renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });

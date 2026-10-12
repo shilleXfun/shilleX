@@ -1,11 +1,15 @@
 /* Graph (/graph): one floating card over the swarm holding the sharp, interactive version of the backdrop's agent graph.
-   The page root carries data-cards; the drawing bleeds to the card's edges between two hairlines. */
+   A wide page (the full stage, no World now panel), so it brings its own gutter. The page root carries data-cards; the
+   drawing bleeds to the card's edges between two hairlines and is sized in code to fit the screen. */
+.page { padding: 0 24px 24px; }
+@media (max-width: 1023px) { .page { padding: 0 16px 16px; } }
+@media (max-width: 767px) { .page { padding: 0 8px 16px; } }
 .wrap { padding: 12px 0 0; }
 .card { overflow: hidden; }
 .summary { color: var(--muted); font: 500 11.5px var(--font-mono); font-variant-numeric: tabular-nums; }
 .box { position: relative; margin: 0 -16px; border-block: 1px solid var(--line); background: radial-gradient(62% 56% at 50% 48%, rgba(4, 5, 9, 0.42), transparent 78%); }
 .box > span { opacity: .5; }
-.svg { display: block; width: 100%; height: auto; overflow: visible; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.svg { display: block; width: 100%; overflow: visible; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 
 /* Ties. While an agent is hovered or focused, its own ties light up and the rest fall back. */
 .edge { transition: opacity .2s; }
@@ -14,21 +18,25 @@
 .svg[data-active] .edge { opacity: .08; }
 .svg[data-active] .edge[data-near] { opacity: 1; stroke-opacity: .9; }
 
-/* Agents: a glow (mood), the avatar on a dark disc, the ring (faction). */
-.node { cursor: pointer; outline: none; transition: opacity .2s; }
+/* Agents: a glow (mood), the avatar on a dark disc, the ring (faction). The links sit on top in their own layer: a
+   transparent target of at least 12 px, the trade flash and the focus ring (white, outside the faction ring). */
+.body { transition: opacity .2s; }
+.node { cursor: pointer; outline: none; }
+.hit { fill: transparent; pointer-events: all; }
+.focusRing { fill: none; pointer-events: none; }
+.node:focus-visible .focusRing { stroke: var(--text); stroke-width: 2; }
 .halo { pointer-events: none; }
 .disc { fill: #0B0D16; }
 .ring { fill: none; stroke-width: 2; transition: stroke-width .15s; }
-.node:hover .ring { stroke-width: 3.5; }
-.node:focus-visible .ring { stroke: var(--accent); stroke-width: 3.5; }
-.node[data-ghost] .avatar { opacity: .45; filter: grayscale(1); }
-.svg[data-active] .node:not([data-near]) { opacity: .3; }
+.body[data-on] .ring { stroke-width: 3.5; }
+.body[data-ghost] .avatar { opacity: .45; filter: grayscale(1); }
+.svg[data-active] .body:not([data-near]) { opacity: .3; }
 
 .label { fill: var(--text); fill-opacity: .78; font: 500 10.5px var(--font-mono); paint-order: stroke; stroke: rgba(6, 7, 12, 0.9); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; transition: fill-opacity .2s; }
 .svg[data-active] .label { fill-opacity: .2; }
 .svg[data-active] .label[data-near] { fill-opacity: 1; }
 .svg .labelOn { fill-opacity: 1; font-weight: 700; }
-@media (prefers-reduced-motion: reduce) { .edge, .node, .ring, .label { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .edge, .body, .ring, .label { transition: none; } }
 
 /* A trade: green for a buy, red for a sale. The agent's ring takes the colour and fades back while a ring flares out from it;
    under reduced motion the coloured ring just stands still until it clears. */
