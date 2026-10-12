@@ -7,6 +7,7 @@ import { candidates } from '../src/agents/decide.ts';
 import { LAUNCH_RENT } from '../src/world/chain.ts';
 import { adjustAffinity } from '../src/agents/state.ts';
 import { worldCoins } from '../src/db/schema.ts';
+import { finishTurn, startTurn } from '../src/world/provenance.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
@@ -188,5 +189,27 @@ describe('cost basis (L1)', () => {
     const v = await perceive(d, creator!.id);
     expect(v.wallet.positions.find((p) => p.mint === rent)!.costLamports).toBe(10_005_000);
     expect(candidates(v, mulberry32(1)).some((c) => c.kind === 'rug' && c.target?.mint === rent)).toBe(true);
+  });
+});
+
+describe('market facts (L2)', () => {
+  it('counts a launch’s first buy as inflow, so a new coin has momentum', async () => {
+    const creator = w.agents[26]!;
+    const l = await runTool(await w.ctxFor(creator), 'launch_coin', { name: 'Fresh', symbol: 'FRSH', description: '', emoji: '🌱', initial_buy_sol: 0.02 });
+    const fresh = (l.result as { mint: string }).mint;
+    clearPerceptionCache(w.t.db);
+    const c = (await perceive(d, creator.id)).coins.find((x) => x.mint === fresh)!;
+    expect(c.change10m).toBeGreaterThan(0.03); // (1 + 0.02)² - 1 ≈ 0.04 on a 1 SOL virtual reserve
+    expect(c.change1h).toBeCloseTo(c.change10m, 6);
+  });
+  it('remembers coins whose buy failed in the last 30 minutes', async () => {
+    const a = w.agents[27]!;
+    const failed = async (mint: string, at: Date) => {
+      const { id } = await startTurn(w.t.db, { agentId: a.id, triggers: [{ type: 'heartbeat' }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now: at });
+      await finishTurn(w.t.db, id, { status: 'failed', context: [], reasoning: 'bought: test; failed: No bonding-curve pool', toolCalls: [{ name: 'buy', input: { mint, sol: 0.01, slippage_pct: 10 }, ok: false, result: { code: 'UNKNOWN_MINT' } }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: at });
+    };
+    await failed('OLDPOOL', new Date(w.t.clock.now().getTime() - 31 * 60_000));
+    await failed('DEADPOOL', w.t.clock.now());
+    expect((await perceive(d, a.id)).failedBuys).toEqual(['DEADPOOL']);
   });
 });

@@ -18,8 +18,12 @@ export const WEATHER: Record<Regime, { risk: number; chatty: number; mood: numbe
 const WEIGHTS: [Regime, number][] = [['euphoria', 0.25], ['grind', 0.4], ['fear', 0.25], ['chaos', 0.1]];
 const H = 3600_000;
 
+/**
+ * The regime after `prev`; chaos never repeats. A world with no weather yet (`prev === null`) never opens in fear: a 2-6 h
+ * spell of it would show every first visitor a dead market, so the first regime draws from the other three at the same weights.
+ */
 export function nextRegime(prev: Regime | null, rng: () => number): { regime: Regime; durationMs: number } {
-  const pool = WEIGHTS.filter(([r]) => !(prev === 'chaos' && r === 'chaos'));
+  const pool = WEIGHTS.filter(([r]) => !(prev === 'chaos' && r === 'chaos') && !(prev === null && r === 'fear'));
   let x = rng() * pool.reduce((n, [, w]) => n + w, 0);
   let regime: Regime = pool[pool.length - 1]![0];
   for (const [r, w] of pool) { x -= w; if (x <= 0) { regime = r; break; } }

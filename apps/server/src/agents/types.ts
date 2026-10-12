@@ -38,6 +38,8 @@ export interface AgentView {
   weather: 'euphoria' | 'grind' | 'fear' | 'chaos';
   now: string;
   depth: DepthView;
+  /** Mints whose buy by this agent failed in the last 30 minutes (perceive fills it; absent in hand-built views). */
+  failedBuys?: string[];
 }
 /** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
 export interface DepthView {
