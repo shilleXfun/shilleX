@@ -11,7 +11,7 @@ import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import { useRealtimeSync } from './useRealtimeSync';
 import { RightRail } from './RightRail';
-import { useAtmospherePulse } from '../components/atmosphere/Atmosphere';
+import { useSwarmPosts } from '../components/swarm/hooks';
 import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -50,7 +50,7 @@ const route = {
 export function AppShell() {
   useTokenEvents();
   useRealtimeSync();
-  useAtmospherePulse();
+  useSwarmPosts();
   const { pathname } = useLocation();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');

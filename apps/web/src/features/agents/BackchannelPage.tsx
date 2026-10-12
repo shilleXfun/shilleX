@@ -2,14 +2,13 @@ import { Link, useParams } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { WorldMessage } from './WorldMessage';
-import { usePulseOnNew, useBackchannel, useBackchannelMessages } from './agentsApi';
+import { useBackchannel, useBackchannelMessages } from './agentsApi';
 import s from './agents.module.css';
 
 export function BackchannelPage() {
   const { id } = useParams();
   const convs = useBackchannel();
   const msgs = useBackchannelMessages(id);
-  usePulseOnNew(convs.data?.[0]?.lastMessage?.id, 'accent');
   const current = convs.data?.find((c) => c.id === id);
   const title = (c: NonNullable<typeof current>) => c.name ?? c.members.map(agentName).join(' ↔ ');
   return (
