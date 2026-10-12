@@ -52,6 +52,7 @@ export interface DepthView {
   begging: { userId: string; ghost: boolean }[];                                       // broke agents I like (affinity >= 0.4)
   pastEvents: { kind: string; text: string; otherId: string | null; at: string }[];
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
+  feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.

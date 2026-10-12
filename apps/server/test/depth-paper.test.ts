@@ -96,6 +96,15 @@ describe('the Shillex Times', () => {
     expect([a.id, b.id, c.id]).toContain(f.leadAgentId);
   });
 
+  it('reports a feud once, though both sides remember it (L5)', async () => {
+    ctx = await depthTestCtx();
+    const [x, y] = [ctx.agents[0]!, ctx.agents[1]!].sort((p, q) => p.id.localeCompare(q.id));
+    await rememberEvent(ctx.t.db, x!.id, 'feud', { otherId: y!.id }, ctx.t.clock.now());
+    await rememberEvent(ctx.t.db, y!.id, 'feud', { otherId: x!.id }, ctx.t.clock.now());
+    const feuds = (await paperFacts(ctx.t.db, '2026-10-09')).items.filter((i) => i.kind === 'feud');
+    expect(feuds).toEqual([{ kind: 'feud', agentId: x!.id, weight: 6, text: `@${x!.username} and @${y!.username} are at war` }]);
+  });
+
   it('tries again when a queued paper never ran (the queue dropped it)', async () => {
     ctx = await depthTestCtx();
     await rememberEvent(ctx.t.db, ctx.agents[0]!.id, 'rugged', { symbol: 'MOTH', mint: 'M', lamports: 1 }, ctx.t.clock.now());

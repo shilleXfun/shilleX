@@ -20,7 +20,7 @@ import { oneShotTool, type ModelDeps } from './system.ts';
 export interface PaperFacts {
   day: string;
   leadAgentId: string | null;
-  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin'; text: string; weight: number; agentId: string | null }[];
+  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin'; text: string; weight: number; agentId: string | null }[];
 }
 export interface PaperText { headline: string; stories: { title: string; body: string }[] }
 
@@ -34,7 +34,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
   const [from, to] = dayRange(day);
   const evs = await db.select().from(agentEvents).where(and(gte(agentEvents.at, from), lt(agentEvents.at, to)));
   const ref = (e: (typeof evs)[number], k: string) => (e.data as Record<string, unknown>)[k];
-  const ids = evs.flatMap((e) => [e.agentId, ...['byId', 'targetId', 'borrowerId'].map((k) => ref(e, k)).filter((x): x is string => typeof x === 'string')]);
+  const ids = evs.flatMap((e) => [e.agentId, ...['byId', 'targetId', 'borrowerId', 'otherId'].map((k) => ref(e, k)).filter((x): x is string => typeof x === 'string')]);
   const people = await userSummaries(db, ids);
   const at = (id: unknown) => { const u = people.get(String(id)); return u ? `@${u.username}` : 'someone'; };
   // Faction events are recorded once per member: report each faction once, under its current name (the model may have renamed it).
@@ -54,6 +54,8 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
       items.push(e.kind === 'faction_formed' ? { kind: 'faction', agentId: a, weight: 6, text: `${name} formed` } : { kind: 'split', agentId: a, weight: 7, text: `${name} split up` });
     }
     if (e.kind === 'leaked') items.push({ kind: 'leak', agentId: a, weight: 8, text: `${at(a)} leaked ${at(x.targetId)}'s DMs` });
+    // Both sides record a feud; it is one story, told once, under the agent whose id sorts first.
+    if (e.kind === 'feud' && a < String(x.otherId ?? '')) items.push({ kind: 'feud', agentId: a, weight: 6, text: `${at(a)} and ${at(x.otherId)} are at war` });
     if (e.kind === 'revived') items.push({ kind: 'comeback', agentId: a, weight: 5, text: `${at(a)} came back from the dead thanks to ${at(x.byId)}` });
     if (e.kind === 'ghost') items.push({ kind: 'ghost', agentId: a, weight: 3, text: `${at(a)} went broke and became a ghost` });
     if (e.kind === 'defaulted') items.push({ kind: 'default', agentId: a, weight: 4, text: `${at(x.borrowerId)} skipped out on a debt to ${at(a)}` });

@@ -12,7 +12,7 @@ import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
-import { buyFeelings, notTowardHumans, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
+import { buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
@@ -273,7 +273,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const mint = c.target!.mint!;
         const pos = v.wallet.positions.find((p) => p.mint === mint);
         const symbol = v.coins.find((x) => x.mint === mint)?.symbol ?? pos?.symbol ?? '?';
-        const holders = [...(await holdersOf(db, mint)).keys()].filter((h) => h !== agentId);
+        const held = [...(await holdersOf(db, mint))].filter(([h]) => h !== agentId).sort((x, y) => y[1] - x[1]);
+        const holders = held.map(([h]) => h);
         const sold = await call('sell', { mint, tokens: c.raw! / RAW_PER_TOKEN, all: false, slippage_pct: 15 });
         const lamports = Math.round(Math.abs((sold.result as { sol: number }).sol) * LAMPORTS_PER_SOL);
         // The sell tool above already emitted a `trade`, so a rug reaches the live feed as a sell and then this rug (the swarm draws a streak, then the shockwave).
@@ -283,6 +284,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           await adjustAffinity(db, h, agentId, -0.5, now);
           await rememberEvent(db, h, 'got_rugged', { byId: agentId, mint, symbol }, now);
         }
+        // A shared enemy is the cheapest warm source: the victims (biggest bags first) bond with each other over the loss (L5).
+        await applyFeelings(db, pumpBonds(holders), now);
         await rememberEvent(db, agentId, 'rugged', { mint, symbol, holders: holders.length, lamports }, now);
         if (!d.moments?.enqueue({ kind: 'rug', agentId, data: { mint, symbol, holders: holders.length }, at: now })) {
           // The receipt shows this sale's real numbers; without any of them the policy attaches nothing.
