@@ -1,17 +1,17 @@
 /* Buttons: 10px radius. Press scale comes from PressScale (motion); colours transition here. */
 .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); background: var(--raised); box-shadow: var(--highlight); font-weight: 550; font-size: var(--fs-md); white-space: nowrap; transition: background .12s, border-color .12s, color .12s, box-shadow .2s; }
-.btn:hover:not(:disabled) { background: var(--hover); border-color: #444A80; }
+.btn:hover:not(:disabled) { background: var(--hover); border-color: var(--line-hover); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn[aria-busy='true'] { opacity: .85; cursor: progress; }
 .btnSlot { display: inline-grid; place-items: center; }
 .sm { height: 28px; padding: 0 11px; font-size: var(--fs-sm); gap: 6px; }
 .primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.3); }
 .primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--glow-accent); }
-.primary .spinner { border-color: rgba(8, 9, 20, 0.25); border-top-color: var(--accent-ink); }
+.primary .spinner { border-color: color-mix(in srgb, var(--bg) 25%, transparent); border-top-color: var(--accent-ink); }
 .ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); }
 .ghost:hover:not(:disabled) { color: var(--text); background: var(--hover); border-color: transparent; }
 .danger { color: var(--down); }
-.danger:hover:not(:disabled) { background: var(--down-soft); border-color: rgba(255, 79, 123, 0.4); }
+.danger:hover:not(:disabled) { background: var(--down-soft); border-color: color-mix(in srgb, var(--down) 40%, transparent); }
 .iconBtn { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 0; background: transparent; color: var(--muted); transition: background .12s, color .12s; }
 .iconBtn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .iconBtn:disabled { opacity: .4; cursor: not-allowed; }
@@ -33,14 +33,14 @@
 .tab { position: relative; flex: none; padding: 13px 12px 12px; border: 0; background: none; color: var(--muted); font-weight: 550; font-size: var(--fs-md); transition: color .12s; }
 .tab:hover { color: var(--text); }
 .tab[aria-selected='true'] { color: var(--text); }
-.tabLine { position: absolute; left: 8px; right: 8px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); box-shadow: 0 0 12px rgba(139, 108, 255, 0.6); }
+.tabLine { position: absolute; left: 8px; right: 8px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
 .tabCount { margin-left: 6px; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .tabPanel { position: relative; overflow-x: clip; }
 
 /* Skeleton: a sweep that travels across, transform-only. */
 .skeleton { position: relative; display: block; overflow: hidden; border-radius: var(--radius-chip); background: var(--raised); }
 @media (prefers-reduced-motion: no-preference) {
-  .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(139, 108, 255, 0.10) 45%, rgba(238, 239, 255, 0.07) 55%, transparent); animation: sweep 1.5s cubic-bezier(.4, 0, .2, 1) infinite; }
+  .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent) 45%, color-mix(in srgb, var(--text) 7%, transparent) 55%, transparent); animation: sweep 1.5s cubic-bezier(.4, 0, .2, 1) infinite; }
 }
 @keyframes sweep { to { transform: translateX(100%); } }
 
@@ -58,14 +58,14 @@
 .badge_muted { color: var(--muted); background: var(--raised); }
 
 /* Floating surfaces: 14px radius, glassy, elevated. */
-.menu { position: fixed; z-index: 60; min-width: 190px; padding: 5px; border-radius: var(--radius-pop); background: rgba(23, 26, 49, 0.92); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); }
+.menu { position: fixed; z-index: 60; min-width: 190px; padding: 5px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); }
 .menuItem { display: flex; width: 100%; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: none; text-align: left; font-weight: 500; transition: background .1s; }
 .menuItem svg { color: var(--muted); }
 .menuItem:hover, .menuItem:focus-visible { background: var(--hover); outline: none; box-shadow: none; }
 .menuItem:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line); }
 .menuDanger, .menuDanger svg { color: var(--down); }
 .menuDanger:hover, .menuDanger:focus-visible { background: var(--down-soft); }
-.dialog { width: min(500px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: var(--panel); color: var(--text); box-shadow: var(--shadow-pop), 0 0 80px rgba(139, 108, 255, 0.12); }
+.dialog { width: min(500px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: var(--panel); color: var(--text); box-shadow: var(--shadow-pop), 0 0 80px color-mix(in srgb, var(--accent) 12%, transparent); }
 .dialog::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
 @media (prefers-reduced-motion: no-preference) {
   .dialog[open] { animation: dialogIn .4s cubic-bezier(.16, 1, .3, 1); }
@@ -76,11 +76,11 @@
 .dialogHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--line); font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); font-stretch: 85%; }
 .dialogBody { padding: 18px 20px; }
 .dialogFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
-.popover { position: fixed; z-index: 70; border-radius: var(--radius-pop); background: rgba(23, 26, 49, 0.94); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), var(--glow-token); }
+.popover { position: fixed; z-index: 70; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), var(--glow-token); }
 
 .toasts { position: fixed; z-index: 90; left: 50%; bottom: calc(var(--tabbar-total) + 16px); transform: translateX(-50%); display: grid; justify-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
 @media (min-width: 768px) { .toasts { bottom: 24px; } }
-.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px; border-radius: var(--radius-pop); background: rgba(23, 26, 49, 0.94); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); font-weight: 500; touch-action: pan-y; cursor: grab; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); font-weight: 500; touch-action: pan-y; cursor: grab; }
 .toastIcon { flex: none; color: var(--accent); }
 .toast_error .toastIcon { color: var(--down); }
 .toast_success .toastIcon { color: var(--up); }
@@ -98,9 +98,9 @@
 /* List arrival: clip while the row grows from zero; the glow is an inset wash so the clip never cuts it. */
 .arrival { position: relative; overflow: clip; }
 .arrivalGlow { position: absolute; inset: 0; pointer-events: none; }
-.glow_accent { background: rgba(139, 108, 255, 0.09); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 24px rgba(139, 108, 255, 0.25); }
-.glow_token { background: rgba(39, 224, 192, 0.07); box-shadow: inset 3px 0 0 var(--token), inset 0 0 24px rgba(39, 224, 192, 0.22); }
-.glow_heat { background: rgba(255, 122, 61, 0.09); box-shadow: inset 3px 0 0 var(--heat); }
+.glow_accent { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 24px color-mix(in srgb, var(--accent) 25%, transparent); }
+.glow_token { background: color-mix(in srgb, var(--token) 7%, transparent); box-shadow: inset 3px 0 0 var(--token), inset 0 0 24px color-mix(in srgb, var(--token) 22%, transparent); }
+.glow_heat { background: color-mix(in srgb, var(--heat) 9%, transparent); box-shadow: inset 3px 0 0 var(--heat); }
 .tray { display: flex; gap: 2px; min-width: 0; border-radius: var(--radius-pill); }
 .tray .menuItem { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; }
 

@@ -1,16 +1,26 @@
-/* Posts are rows in one continuous column: hairline separators and a full-row hover wash, no boxes or shadows. */
-.card { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
+/* Posts float as separate glass cards over the swarm, 12 px apart. */
+.card { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; margin-top: 12px; padding: 14px 18px 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); cursor: pointer; transition: background .15s, border-color .15s; }
 /* Hover washes only where a real pointer hovers; on touch they would stick after a tap. */
-.card:focus-within { background: rgba(29, 33, 64, 0.38); }
-@media (hover: hover) { .card:hover { background: rgba(29, 33, 64, 0.38); } }
-.focused { cursor: default; padding-top: 16px; background: rgba(139, 108, 255, 0.045); }
-.focused:hover, .focused:focus-within { background: rgba(139, 108, 255, 0.045); }
+.card:focus-within { background: var(--card-hover); }
+@media (hover: hover) { .card:hover { background: var(--card-hover); border-color: var(--line-strong); } }
+.focused { cursor: default; padding-top: 16px; border-color: var(--accent-line); }
+.focused:hover, .focused:focus-within { background: var(--card); border-color: var(--accent-line); }
 .focused .body { font-size: var(--fs-lg); line-height: 1.55; }
 .compact { padding: 10px 18px 8px; grid-template-columns: 32px minmax(0, 1fr); }
 /* Ancestors in a thread: a spine connects their avatars to the focused post. */
 .ancestors .compact::before { content: ''; position: absolute; left: calc(18px + 15px); top: 48px; bottom: -2px; width: 2px; border-radius: 2px; background: var(--line-strong); }
+/* A thread's ancestors and the focused post read as one stack. */
+.ancestors .card { margin-top: 0; border-radius: 0; border-bottom-color: transparent; }
+.ancestors .card:first-child { margin-top: 12px; border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.ancestors + .focused { margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
 .static { cursor: default; }
-.static:hover, .static:focus-within { background: none; }
+.static:hover, .static:focus-within { background: var(--card); border-color: var(--line); }
+/* Phones: solid cards, no blur (cost), and no hover or focus wash (hover sticks after a tap). Last, so it wins over the washes above. */
+@media (max-width: 767px) {
+  .card, .card:hover, .card:focus-within, .focused:hover, .focused:focus-within, .static:hover, .static:focus-within { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .card { border-radius: 14px; }
+  .ancestors .card:first-child { border-radius: 14px 14px 0 0; }
+}
 .avatarLink { align-self: start; border-radius: 50%; }
 .main { min-width: 0; }
 .meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
@@ -45,7 +55,7 @@
 
 .tombstone { margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-sm); }
 .unavailable { grid-column: 1 / -1; margin-top: 0; }
-.quote { display: block; margin-top: 10px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: rgba(15, 17, 34, 0.7); transition: border-color .15s, background .15s; }
+.quote { display: block; margin-top: 10px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: color-mix(in srgb, var(--panel) 70%, transparent); transition: border-color .15s, background .15s; }
 a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .quote .meta { gap: 6px; align-items: center; }
 .quote .body { margin-top: 5px; }
@@ -54,7 +64,7 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--panel); font: 500 12.5px var(--font-mono); color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
 .reaction:hover { border-color: var(--accent-line); color: var(--text); }
-.reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); box-shadow: 0 0 14px rgba(139, 108, 255, 0.22); }
+.reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }
 .reactionEmoji { display: inline-block; font-size: 15px; line-height: 1; }
 .burst { position: absolute; left: 8px; top: 50%; width: 16px; height: 16px; margin-top: -8px; pointer-events: none; }
 .particle { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; line-height: 1; }
@@ -101,7 +111,7 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .statusOption:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .field { display: grid; gap: 6px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
 .field textarea { width: 100%; resize: vertical; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); font-size: var(--fs-md); font-weight: 400; transition: border-color .15s; }
-.field textarea:hover { border-color: #444A80; }
+.field textarea:hover { border-color: var(--line-hover); }
 .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 .formError { margin: 0; color: var(--down); font-size: var(--fs-sm); }
 .reasons { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
@@ -124,7 +134,7 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 }
 .stamp { margin: 10px 0 2px; color: var(--muted); font-size: var(--fs-sm); }
 /* The post selected with j/k: an inset accent ring (an outside ring would be clipped by the column). */
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 0; box-shadow: inset 0 0 24px rgba(139, 108, 255, 0.12); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--card-shadow), var(--glow-accent); }
 /* A post collapsed by a muted word: one quiet line with a way to see it anyway. */
 .mutedCard { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
 .mutedNote { margin: 0; color: var(--muted); font-size: var(--fs-sm); }

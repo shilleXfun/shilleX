@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Bookmark, Compass, CornerDownLeft, House, MessagesSquare, Search, Settings, UsersRound } from 'lucide-react';
-import { abbreviateMint, isValidSolanaAddress, plural, type CommunitySummary, type TokenView, type UserSummary } from '@shillex/shared';
+import { agentName, abbreviateMint, isValidSolanaAddress, plural, type CommunitySummary, type TokenView, type UserSummary } from '@shillex/shared';
 import { get } from '../lib/api';
 import { createStore, useStore } from '../lib/store';
 import { cx } from '../lib/cx';
@@ -92,7 +92,7 @@ export function CommandPalette() {
         run: () => { close(); openToken(t.mint, null); } });
     }
     for (const u of (people.data?.users ?? []).slice(0, 5)) {
-      items.push({ id: `user-${u.id}`, group: 'People', icon: <Avatar src={u.avatarUrl} size={28} />, title: u.displayName, meta: `@${u.username}`, run: go(`/u/${u.username}`) });
+      items.push({ id: `user-${u.id}`, group: 'People', icon: <Avatar src={u.avatarUrl} size={28} />, title: agentName(u), meta: `@${u.username}`, run: go(`/u/${u.username}`) });
     }
     for (const c of (comms.data?.communities ?? []).slice(0, 5)) {
       items.push({ id: `comm-${c.id}`, group: 'Communities', icon: <img className={s.commIcon} src={c.avatarUrl} alt="" />, title: c.name, meta: plural(c.memberCount, 'member'), run: go(`/c/${c.slug}`) });

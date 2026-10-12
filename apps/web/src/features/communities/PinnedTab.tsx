@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Pin } from 'lucide-react';
-import { relativeTime, type PinView } from '@shillex/shared';
+import { agentName, relativeTime, type PinView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -23,7 +23,7 @@ export function PinnedTab({ slug }: { slug: string }) {
           <Avatar src={p.message.author.avatarUrl} size={36} />
           <div className={cs.content}>
             <div className={cs.head}>
-              <span className={cs.author}>{p.message.author.displayName}</span>
+              <span className={cs.author}>{agentName(p.message.author)}</span>
               <time className={cs.time} dateTime={p.message.createdAt}>{relativeTime(p.message.createdAt)}</time>
               <Link to={`/c/${slug}/${p.channelId}?m=${p.message.id}`} style={{ marginLeft: 'auto', color: 'var(--accent-hover)', fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Jump to message</Link>
             </div>

@@ -2,7 +2,7 @@
 .aside { position: fixed; z-index: 50; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100vw; display: flex; flex-direction: column;
   /* Solid: the panel sits over the right rail, whose text would otherwise read through it. */
   background: var(--panel);
-  border-left: 1px solid var(--token-line); box-shadow: -24px 0 60px rgba(2, 2, 10, 0.55), -1px 0 24px rgba(39, 224, 192, 0.12); }
+  border-left: 1px solid var(--token-line); box-shadow: -24px 0 60px rgba(2, 2, 10, 0.55), -1px 0 24px color-mix(in srgb, var(--token) 12%, transparent); }
 .panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 
 /* Mobile: modal bottom sheet. */
@@ -49,7 +49,7 @@ a.link svg { color: var(--muted); }
 .row { display: flex; gap: 8px; margin: 14px 18px 0; }
 .follow { flex: 1; }
 .follow[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-hover); }
-.note { margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, 0.18); color: var(--text); font-size: var(--fs-sm); }
+.note { margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); font-size: var(--fs-sm); }
 
 .discussion { margin-top: 18px; border-top: 1px solid var(--line); }
 .discTitle { margin: 14px 18px 4px; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); font-stretch: 85%; }
@@ -77,13 +77,13 @@ a.link svg { color: var(--muted); }
 .heatTip { position: absolute; bottom: calc(100% + 4px); z-index: 2; transform: translateX(-50%); padding: 5px 8px; border-radius: var(--radius-sm); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; pointer-events: none; }
 .heatTip strong { color: var(--text); font-weight: 600; }
 .heatAxis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font: 10px var(--font-mono); }
-.heatSpark { position: absolute; bottom: 100%; z-index: 1; color: var(--token); font: 700 11px / 1 var(--font-mono); text-shadow: 0 0 8px rgba(39, 224, 192, 0.7); pointer-events: none; }
-.heatFlash { filter: brightness(1.5); box-shadow: 0 0 18px rgba(39, 224, 192, 0.8); }
+.heatSpark { position: absolute; bottom: 100%; z-index: 1; color: var(--token); font: 700 11px / 1 var(--font-mono); text-shadow: 0 0 8px color-mix(in srgb, var(--token) 70%, transparent); pointer-events: none; }
+.heatFlash { filter: brightness(1.5); box-shadow: 0 0 18px color-mix(in srgb, var(--token) 80%, transparent); }
 /* Copycat warning: other tokens here with the same ticker. */
-.twins { margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, 0.3); font-size: var(--fs-sm); }
+.twins { margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 30%, transparent); font-size: var(--fs-sm); }
 .twinsText { display: flex; gap: 8px; align-items: flex-start; margin: 0; color: var(--text); }
 .twinsText svg { flex: none; margin-top: 2px; color: var(--warn); }
 .twinList { display: grid; gap: 4px; margin: 8px 0 0 23px; padding: 0; list-style: none; }
-.twin { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 0; border-radius: var(--radius-pill); background: rgba(8, 9, 20, 0.5); color: var(--text); font-size: var(--fs-sm); cursor: pointer; }
-.twin:hover { background: rgba(23, 26, 49, 0.9); }
+.twin { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 0; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--bg) 50%, transparent); color: var(--text); font-size: var(--fs-sm); cursor: pointer; }
+.twin:hover { background: color-mix(in srgb, var(--raised) 90%, transparent); }
 .twin .mono { color: var(--muted); font-size: var(--fs-xs); }

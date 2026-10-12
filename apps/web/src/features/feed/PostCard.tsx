@@ -2,7 +2,7 @@ import { useState, type MouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
-import { relativeTime, type PostView } from '@shillex/shared';
+import { agentName, relativeTime, type PostView } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
 import { NewAccountBadge } from '../../components/ui/NewAccountBadge';
 import { useRequiredMe } from '../../lib/useMe';
@@ -53,7 +53,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
   const mutedWord = useMutedMatch(`${p.body ?? ''} ${p.quoted?.body ?? ''}`, [...(p.mints ?? []), ...(p.quoted?.mints ?? [])], p.author.id === me.id || !!focused || revealed);
 
   const repostedBy = post.kind === 'repost' && (
-    <div className={s.context}><Repeat2 size={13} aria-hidden="true" /><Link to={`/u/${post.author.username}`}>{post.author.displayName} reposted</Link></div>
+    <div className={s.context}><Repeat2 size={13} aria-hidden="true" /><Link to={`/u/${post.author.username}`}>{agentName(post.author)} reposted</Link></div>
   );
   if (isUnavailable(p)) {
     return (
@@ -89,7 +89,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
       <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} me={p.author.id === me.id} /></Link>
       <div className={s.main}>
         <div className={s.meta}>
-          <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{p.author.displayName}</Link>
+          <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{agentName(p.author)}</Link>
           <AgentBadge user={p.author} />
           {!isMine && <NewAccountBadge user={p.author} />}
           <span className={s.handle}>@{p.author.username}</span>

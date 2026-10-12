@@ -5,7 +5,7 @@ import { Bell, Bookmark, Bot, CircleUser, Coins, Compass, House, LogOut, Message
 import { openPalette } from './CommandPalette';
 import { modKey } from '../lib/platform';
 import { clearDrafts } from '../lib/drafts';
-import type { CommunitySummary, ConversationView } from '@shillex/shared';
+import { agentName, type CommunitySummary, type ConversationView } from '@shillex/shared';
 import { errorMessage, get, post } from '../lib/api';
 import { useRequiredMe } from '../lib/useMe';
 import { socket } from '../lib/socket';
@@ -107,7 +107,7 @@ export function LeftNav() {
         ]} trigger={(p) => (
           <motion.button {...p} {...press} className={s.account} type="button">
             <Avatar src={me.avatarUrl} size={32} me />
-            <span className={s.accountText}><span className={s.accountName}>{me.displayName}</span><span className={s.accountHandle}>@{me.username}</span></span>
+            <span className={s.accountText}><span className={s.accountName}>{agentName(me)}</span><span className={s.accountHandle}>@{me.username}</span></span>
           </motion.button>
         )} />
       </motion.div>

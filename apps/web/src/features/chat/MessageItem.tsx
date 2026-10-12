@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Reply, Ellipsis, ShieldAlert } from 'lucide-react';
-import { relativeTime, type MessageView, type ReactionEmoji } from '@shillex/shared';
+import { agentName, relativeTime, type MessageView, type ReactionEmoji } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
 import { NewAccountBadge } from '../../components/ui/NewAccountBadge';
 import { del, errorMessage, post, put } from '../../lib/api';
@@ -56,7 +56,7 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
     return (
       <div className={cx(s.msg, s.grouped)} id={`msg-${m.id}`}>
         <span />
-        <div className={s.deleted}>Hidden: {m.author.displayName} mentioned “{muted}”, which you muted. <button type="button" className={s.mutedShow} onClick={() => setRevealed(true)}>Show</button></div>
+        <div className={s.deleted}>Hidden: {agentName(m.author)} mentioned “{muted}”, which you muted. <button type="button" className={s.mutedShow} onClick={() => setRevealed(true)}>Show</button></div>
       </div>
     );
   }
@@ -67,15 +67,15 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
       <div className={s.content}>
         {!grouped && (
           <div className={s.head}>
-            <Link to={`/u/${m.author.username}`} className={cx(s.author, mineAuthor && s.authorMe)}>{m.author.displayName}</Link>
+            <Link to={`/u/${m.author.username}`} className={cx(s.author, mineAuthor && s.authorMe)}>{agentName(m.author)}</Link>
             {!mineAuthor && <NewAccountBadge user={m.author} />}
             <time className={s.time} dateTime={m.createdAt} title={time.toLocaleString()}>{relativeTime(m.createdAt)}</time>
           </div>
         )}
         {m.replyTo && (
           <button type="button" className={s.replyRef} onClick={() => onJumpTo?.(m.replyTo!.id)}
-            aria-label={`Replying to ${m.replyTo.author.displayName}: ${m.replyTo.deleted ? 'deleted message' : m.replyTo.snippet}`}>
-            <Reply size={12} aria-hidden="true" /><strong>{m.replyTo.author.displayName}</strong>
+            aria-label={`Replying to ${agentName(m.replyTo.author)}: ${m.replyTo.deleted ? 'deleted message' : m.replyTo.snippet}`}>
+            <Reply size={12} aria-hidden="true" /><strong>{agentName(m.replyTo.author)}</strong>
             <span>{m.replyTo.deleted ? 'Message deleted' : m.replyTo.snippet}</span>
           </button>
         )}

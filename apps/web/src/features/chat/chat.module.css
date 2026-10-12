@@ -16,8 +16,8 @@
 /* Messages: dense rows, grouped by author; a full-row hover wash, a floating action pill. */
 .msg { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 6px 18px 4px; transition: background .12s; }
 /* Hover only where a real pointer hovers; on touch a tap focuses the row (tabIndex -1), which shows the same actions. */
-.msg:focus-within { background: rgba(29, 33, 64, 0.38); }
-@media (hover: hover) { .msg:hover { background: rgba(29, 33, 64, 0.38); } .msg:hover .gutterTime { visibility: visible; } .msg:hover .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; } }
+.msg:focus-within { background: color-mix(in srgb, var(--hover) 38%, transparent); }
+@media (hover: hover) { .msg:hover { background: color-mix(in srgb, var(--hover) 38%, transparent); } .msg:hover .gutterTime { visibility: visible; } .msg:hover .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; } }
 .grouped { padding-top: 1px; padding-bottom: 1px; }
 .highlight { background: var(--accent-soft) !important; box-shadow: inset 2px 0 0 var(--accent); }
 .heldMsg { box-shadow: inset 2px 0 0 var(--warn); }
@@ -35,7 +35,7 @@ button.replyRef:hover { color: var(--text); }
 .replyRef svg { flex: none; color: var(--accent-hover); }
 .replyRef strong { color: var(--text); font-weight: 600; }
 .replyRef span { overflow: hidden; text-overflow: ellipsis; }
-.toolbar { position: absolute; z-index: 2; top: -16px; right: 18px; display: flex; gap: 1px; padding: 3px; border-radius: var(--radius-pill); background: rgba(23, 26, 49, 0.94); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop);
+.toolbar { position: absolute; z-index: 2; top: -16px; right: 18px; display: flex; gap: 1px; padding: 3px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop);
   opacity: 0; visibility: hidden; translate: 0 4px; scale: .94; transition: opacity .12s, translate .2s cubic-bezier(.16, 1, .3, 1), scale .2s cubic-bezier(.16, 1, .3, 1), visibility .12s; }
 .toolbar button { width: 30px; height: 30px; min-width: 0; padding: 0; border-radius: 50%; }
 .msg:focus-within .toolbar { opacity: 1; visibility: visible; translate: 0 0; scale: 1; }
@@ -81,7 +81,7 @@ button.replyRef:hover { color: var(--text); }
 .attachThumb { position: relative; display: block; }
 .attachThumb img { width: 52px; height: 52px; border-radius: var(--radius); object-fit: cover; }
 .attachRemove { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--raised); box-shadow: var(--shadow-pop); }
-.inputRow { position: relative; display: flex; align-items: flex-end; gap: 4px; padding: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: rgba(15, 17, 34, 0.85); overflow: hidden; transition: border-color .15s, box-shadow .2s; }
+.inputRow { position: relative; display: flex; align-items: flex-end; gap: 4px; padding: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: color-mix(in srgb, var(--panel) 85%, transparent); overflow: hidden; transition: border-color .15s, box-shadow .2s; }
 .inputRow:focus-within { border-color: var(--accent-line); box-shadow: var(--glow-accent); }
 .inputBlocked { border-color: var(--warn-line); }
 .input { flex: 1; resize: none; max-height: 160px; padding: 7px 4px; border: 0; background: transparent; color: var(--text); font-size: var(--fs-md); line-height: 1.45; }
@@ -97,7 +97,7 @@ button.replyRef:hover { color: var(--text); }
 .over { color: var(--down); }
 .disabled { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius-pop); color: var(--muted); }
 .composer { position: relative; }
-.composer[data-drop]::after { content: 'Drop images to attach'; position: absolute; inset: -4px 12px 8px; z-index: 3; display: grid; place-items: center; border: 1.5px dashed var(--accent); border-radius: var(--radius-pop); background: rgba(19, 17, 46, 0.9); color: var(--accent-hover); font-weight: 600; pointer-events: none; }
+.composer[data-drop]::after { content: 'Drop images to attach'; position: absolute; inset: -4px 12px 8px; z-index: 3; display: grid; place-items: center; border: 1.5px dashed var(--accent); border-radius: var(--radius-pop); background: color-mix(in srgb, var(--bg) 90%, transparent); color: var(--accent-hover); font-weight: 600; pointer-events: none; }
 .imageButton { padding: 0; border: 0; background: none; border-radius: var(--radius); cursor: zoom-in; }
 .mutedShow { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-style: normal; font-weight: 600; cursor: pointer; }
 .mutedShow:hover { text-decoration: underline; text-underline-offset: 3px; }

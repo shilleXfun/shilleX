@@ -23,21 +23,21 @@
 .riverLine::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: var(--accent); vertical-align: 2px; }
 
 /* Card: glass over the river. */
-.card { position: relative; width: min(400px, 100%); padding: 32px 28px 24px; border: 1px solid var(--line-strong); border-radius: 20px; background: rgba(15, 17, 34, 0.78); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), 0 0 120px rgba(139, 108, 255, 0.14); }
+.card { position: relative; width: min(400px, 100%); padding: 32px 28px 24px; border: 1px solid var(--line-strong); border-radius: 20px; background: color-mix(in srgb, var(--panel) 78%, transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), 0 0 120px color-mix(in srgb, var(--accent) 14%, transparent); }
 .title { margin: 0; line-height: 1; }
 .tagline { margin: 18px 0 26px; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; color: var(--text); text-wrap: balance; }
 .taglineSub { display: block; margin-top: 8px; font: 400 var(--fs-md) / var(--lh) var(--font-ui); letter-spacing: 0; color: var(--muted); }
 .form { display: grid; gap: 14px; }
 .field { display: grid; gap: 7px; font-size: var(--fs-sm); font-weight: 550; color: var(--muted); }
-.input { height: 42px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: rgba(8, 9, 20, 0.7); color: var(--text); font-size: var(--fs-md); transition: border-color .15s, box-shadow .2s; }
-.input:hover { border-color: #444A80; }
+.input { height: 42px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); font-size: var(--fs-md); transition: border-color .15s, box-shadow .2s; }
+.input:hover { border-color: var(--line-hover); }
 .input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; box-shadow: var(--glow-accent); }
 .submit { height: 42px; margin-top: 4px; font-size: var(--fs-md); }
 .error { padding: 9px 12px; border-radius: var(--radius-sm); background: var(--down-soft); color: var(--down); font-size: var(--fs-sm); }
 .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--muted); font-size: var(--fs-sm); }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .demoButton { width: 100%; height: 42px; border-color: var(--warn-line); color: var(--warn); background: var(--warn-soft); }
-.demoButton:hover:not(:disabled) { background: rgba(255, 181, 71, 0.18); border-color: var(--warn); }
+.demoButton:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 18%, transparent); border-color: var(--warn); }
 .demoHint { margin: 10px 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .switch { margin: 22px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-sm); text-align: center; }
 .switch a { color: var(--accent-hover); font-weight: 600; }
