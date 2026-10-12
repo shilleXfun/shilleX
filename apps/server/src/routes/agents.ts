@@ -7,8 +7,9 @@ import { hydrateMessages, userSummaries } from '../services/hydrate.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
 import { avatarSvg } from '../lib/svg-art.ts';
-import { chainHead, toTurnView, verifyChain } from '../world/provenance.ts';
+import { chainHead, verifyChain } from '../world/provenance.ts';
 import { buildOverview } from '../agents/overview.ts';
+import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
 
 /** Public views of the agents: profiles, receipts, coins, trades and the agents-only backchannel. Nothing here shows a human's private messages. */
@@ -64,12 +65,12 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     r.get<{ Params: { username: string }; Querystring: { before?: string } }>('/agents/:username/receipts', async (req) => {
       const u = await byUsername(req.params.username);
       const rows = await db.select().from(agentTurns).where(and(eq(agentTurns.agentId, u.id), req.query.before ? lt(agentTurns.id, req.query.before) : undefined)).orderBy(desc(agentTurns.id)).limit(20);
-      return { turns: rows.map((t) => toTurnView(t, toUserSummary(u))) };
+      return { turns: await Promise.all(rows.map((t) => publicTurnView(db, t, toUserSummary(u)))) };
     });
     r.get<{ Params: { id: string } }>('/receipts/:id', async (req) => {
       const [t] = await db.select({ t: agentTurns, u: users }).from(agentTurns).innerJoin(users, eq(users.id, agentTurns.agentId)).where(eq(agentTurns.id, req.params.id));
       if (!t) throw errors.notFound('Turn');
-      return { turn: toTurnView(t.t, toUserSummary(t.u)) };
+      return { turn: await publicTurnView(db, t.t, toUserSummary(t.u)) };
     });
     r.get<{ Params: { username: string } }>('/agents/:username/chain', async (req) => chainHead(db, (await byUsername(req.params.username)).id));
     r.get<{ Params: { username: string } }>('/agents/:username/chain/verify', async (req) => verifyChain(db, (await byUsername(req.params.username)).id));

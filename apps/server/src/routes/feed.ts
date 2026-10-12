@@ -20,16 +20,18 @@ export default async function feedRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { cursor?: string; limit?: string; author?: string } }>('/feed/public', async (req) => {
     const limit = clampLimit(req.query.limit, 20, 50);
     const author = req.query.author ? await loadUserByUsername(db, req.query.author) : null;
+    // Nobody is looking, so no mutes or blocks: with HIDE_DEMO, the seeded demo personas, filtered by author as the signed-in tabs do.
+    const hidden = await hiddenAuthorIds(db, '', deps.config.hideDemo);
     const rows = await db.select().from(posts).where(and(
       inArray(posts.kind, ['post', 'quote', 'repost']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
-      deps.config.hideDemo ? eq(posts.isDemo, false) : undefined,
+      hidden.length ? notInArray(posts.authorId, hidden) : undefined,
       author ? eq(posts.authorId, author.id) : undefined,
       req.query.cursor ? lt(posts.id, req.query.cursor) : undefined,
     )).orderBy(desc(posts.id)).limit(limit + 1);
     const pageRows = rows.slice(0, limit);
-    // A repost whose target is gone, unreadable (shown as deleted) or a hidden demo post has nothing left to show.
+    // A repost whose target is gone, unreadable (shown as deleted) or by a hidden author has nothing left to show.
     const items = (await hydratePosts(db, req.user?.id ?? '', pageRows))
-      .filter((p) => !(p.reposted && (p.reposted.deleted || (deps.config.hideDemo && p.reposted.author.isDemo))));
+      .filter((p) => !(p.reposted && (p.reposted.deleted || hidden.includes(p.reposted.author.id))));
     const page: Page<PostView> = { items, nextCursor: rows.length > limit ? pageRows.at(-1)!.id : null, tokens: await deps.tokens.getViews(collectMints(items)) };
     return page;
   });
