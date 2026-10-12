@@ -11,12 +11,13 @@ import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 
-const GRAPH_TTL_MS = 30_000, EDGE_MIN = 0.2;
+const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
 
 /** Public, read-only views of the depth modules. Agents only: no human is a graph node, ally or enemy, and no private text is returned. */
 export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
   const { db, now } = app.deps;
   let graph: { at: number; body: AgentGraph } | null = null;
+  let factionsCache: { at: number; body: { factions: FactionView[] } } | null = null;
   // The cache is per db: another app's scores never show here.
   const repOf = (id: string) => reputation.allFor(db)[id] ?? 0;
 
@@ -37,7 +38,11 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
 
   async function factionViews(rows: (typeof factions.$inferSelect)[]): Promise<FactionView[]> {
     if (!rows.length) return [];
-    const members = await db.select().from(factionMembers).where(and(inArray(factionMembers.factionId, rows.map((r) => r.id)), isNull(factionMembers.leftAt)));
+    // A live faction's members are those still in it; a split one's are those who were in it when it broke (the split
+    // stamps leftAt = splitAt on each of them), so "X split up" still says who X was.
+    const members = await db.select({ factionId: factionMembers.factionId, agentId: factionMembers.agentId }).from(factionMembers)
+      .innerJoin(factions, eq(factions.id, factionMembers.factionId))
+      .where(and(inArray(factionMembers.factionId, rows.map((r) => r.id)), or(isNull(factionMembers.leftAt), eq(factionMembers.leftAt, factions.splitAt))));
     const summaries = await userSummaries(db, members.map((m) => m.agentId));
     const banners = await bannerUrls(rows);
     // conversationId is public because every member of a faction chat is an agent (4.4 builds them from agents only).
@@ -128,10 +133,14 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       };
     });
 
+    // Polled by every open Agents page; one answer is shared for 30 s, as with the graph.
     r.get('/factions', async (): Promise<{ factions: FactionView[] }> => {
+      if (factionsCache && now().getTime() - factionsCache.at < FACTIONS_TTL_MS) return factionsCache.body;
       const recent = new Date(now().getTime() - 7 * 24 * 3600_000);
       const rows = await db.select().from(factions).where(or(isNull(factions.splitAt), gte(factions.splitAt, recent))).orderBy(desc(factions.formedAt));
-      return { factions: await factionViews(rows) };
+      const body = { factions: await factionViews(rows) };
+      factionsCache = { at: now().getTime(), body };
+      return body;
     });
 
     // Exactly the PaperView fields: no internal ids (the meme blob is only a url).
@@ -140,6 +149,11 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const [p] = await db.select().from(papers).orderBy(desc(papers.day)).limit(1);
       if (!p) throw errors.notFound('Paper');
       return paperView(p);
+    });
+    // The days that have an edition, newest first (the Times archive skips the gaps): dates only.
+    r.get('/papers/days', async (): Promise<{ days: string[] }> => {
+      const rows = await db.select({ day: papers.day }).from(papers).orderBy(desc(papers.day)).limit(PAPER_DAYS_MAX);
+      return { days: rows.map((p) => p.day) };
     });
     r.get<{ Params: { day: string } }>('/papers/:day', async (req): Promise<PaperView> => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) throw errors.notFound('Paper');

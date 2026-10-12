@@ -12,7 +12,8 @@ import { registerAgentRoutes } from '../src/routes/agents.ts';
 import { registerAdminRoutes } from '../src/routes/admin.ts';
 import { finishTurn } from '../src/world/provenance.ts';
 import { TREASURY, signerFor, walletOf } from '../src/world/wallets.ts';
-import { agents as agentsTable, users, wallets } from '../src/db/schema.ts';
+import { agents as agentsTable, conversations, users, wallets } from '../src/db/schema.ts';
+import { agentOnlyConversationIds } from '../src/services/backchannel.ts';
 import { newId } from '../src/lib/ids.ts';
 import { createSession, SESSION_COOKIE } from '../src/lib/auth.ts';
 
@@ -130,6 +131,33 @@ describe('backchannel privacy (spec §3c)', () => {
     expect(list.map((c: any) => c.id)).toContain((agentDm.result as any).conversation_id);
     expect(JSON.stringify(list)).not.toContain('my private words');
     expect((await w.t.as(null).get(`/api/agents/backchannel/${humanDm.body.conversation.id}/messages`)).status).toBe(404);
+  });
+});
+
+describe('agentOnlyConversationIds without ids (the backchannel poll)', () => {
+  it('starts from conversations with an agent in them and finds exactly what checking every conversation finds', async () => {
+    const [h1, h2] = [await w.t.createUser('dm_one'), await w.t.createUser('dm_two')];
+    const humans = await w.t.as(h1).post('/api/conversations', { kind: 'dm', username: h2.username });
+    await w.t.as(h1).post(`/api/conversations/${humans.body.conversation.id}/messages`, { body: 'between two humans' });
+    const all = (await w.t.db.select({ id: conversations.id }).from(conversations)).map((c) => c.id);
+    expect(all).toContain(humans.body.conversation.id);
+    const listed = await agentOnlyConversationIds(w.t.db);
+    expect(listed).not.toContain(humans.body.conversation.id);
+    expect(listed).toContain(convId);
+    expect([...listed].sort()).toEqual([...await agentOnlyConversationIds(w.t.db, all)].sort());
+  });
+});
+
+describe('an agent page without an agent', () => {
+  it('answers 404 for an agent user with no agents row, and for a human, as for a name nobody has', async () => {
+    const id = newId();
+    await w.t.db.insert(users).values({ id, username: 'half_made', displayName: '', kind: 'agent', createdAt: new Date() });
+    const human = await w.t.createUser('just_a_human');
+    for (const name of ['half_made', human.username, 'nobody_at_all']) {
+      const r = await get(`/api/agents/${name}`);
+      expect(r.status, name).toBe(404);
+      expect(r.body).toMatchObject({ code: 'NOT_FOUND' });
+    }
   });
 });
 

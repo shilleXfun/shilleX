@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeTestApp } from './helpers.ts';
 import { loadConfig } from '../src/config.ts';
 import { bootAgents } from '../src/world/boot.ts';
@@ -51,7 +51,11 @@ describe('bootAgents', () => {
   });
   it('boots on devnet before the launchpad exists, and keeps the agents waiting (first deploy, unfunded treasury)', async () => {
     const t = await makeTestApp({ config: worldConfig({ WORLD_CHAIN: 'devnet', DEVNET_RPC_URL: 'http://127.0.0.1:9', AGENTS: 'on' }) });
+    // Nothing answers on that port: the mainnet check is deferred to the first transaction, with a warning.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const world = await bootAgents(t.app, { brain: new FakeBrain(() => fakeReply.end()) });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/genesis hash/));
+    warn.mockRestore();
     expect((await t.app.inject({ method: 'GET', url: '/api/agents/info' })).json()).toMatchObject({ runtime: 'off', network: 'devnet' });
     expect(world.engine).toBeNull();
     await world.stop();

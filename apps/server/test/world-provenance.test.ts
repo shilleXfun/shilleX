@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { testDb } from './helpers.ts';
 import type { DbHandle } from '../src/db/client.ts';
 import { agentTurns, users } from '../src/db/schema.ts';
@@ -78,6 +78,20 @@ describe('chain integrity under failures (review fixes)', () => {
     const r = await finishTurn(h.db, t.id, { ...done(new Date()), reasoning: 'a\u0000b', toolCalls: [{ name: 'post', input: { body: 'x\u0000y' }, ok: true, result: 'z\u0000' }] });
     expect(r.hash).toMatch(/^[0-9a-f]{64}$/);
     expect((await verifyChain(h.db, id)).ok).toBe(true);
+  });
+  it('walks a long chain in batches (bounded memory) with the same verdict as one read', async () => {
+    const id = newId();
+    await h.db.insert(users).values({ id, username: 'agent_81', displayName: '', kind: 'agent', createdAt: new Date() });
+    const m = (now: Date) => ({ agentId: id, triggers: [{ type: 'heartbeat' as const }], model: 'm', effort: 'medium', promptVersion: 'v', snapshotId: null, now });
+    let head = '';
+    for (let i = 0; i < 5; i++) head = (await finishTurn(h.db, (await startTurn(h.db, m(new Date()))).id, done(new Date()))).hash!;
+    await startTurn(h.db, m(new Date())); // the newest turn is still running
+    expect(await verifyChain(h.db, id, { batch: 2 })).toEqual({ ok: true, count: 6, head, brokenAtSeq: null });
+    expect(await verifyChain(h.db, id, { batch: 2 })).toEqual(await verifyChain(h.db, id));
+    // An edit in a later batch is still found, at its own seq.
+    await h.db.update(agentTurns).set({ reasoning: 'rewritten' }).where(and(eq(agentTurns.agentId, id), eq(agentTurns.seq, 4)));
+    expect(await verifyChain(h.db, id, { batch: 2 })).toEqual({ ok: false, count: 6, head: null, brokenAtSeq: 4 });
+    expect(await verifyChain(h.db, id, { batch: 2 })).toEqual(await verifyChain(h.db, id));
   });
   it('keeps what a turn did when it is aborted at boot', async () => {
     const id = newId();
