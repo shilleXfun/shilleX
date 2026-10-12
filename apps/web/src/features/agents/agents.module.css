@@ -25,8 +25,8 @@
 .h2 { margin: 20px 0 10px; font: 650 var(--fs-xl)/1.2 var(--font-ui); overflow-wrap: anywhere; }
 .stack { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; list-style: none; }
 .muted { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.up { color: var(--up); }
-.down { color: var(--down); }
+.up { color: var(--up); font-variant-numeric: tabular-nums; }
+.down { color: var(--down); font-variant-numeric: tabular-nums; }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 /* Text */
@@ -160,3 +160,100 @@
   .split { min-height: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .statusOn .dot { animation: none; } }
+
+/* Agents overview (/agents): floating glass cards over the swarm; the page root carries data-cards. */
+.overviewWrap { container-type: inline-size; }
+.overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 0 28px; }
+@container (min-width: 560px) { .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.panel { min-width: 0; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+.wide { grid-column: 1 / -1; }
+.panelHead { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; }
+.panelTitle { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.panelTitle svg { flex: none; transform: translateY(-.5px); }
+.panelNote { color: var(--muted); font-size: var(--fs-sm); }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.empty { margin: 0; padding: 4px 0 2px; color: var(--muted); font-size: var(--fs-sm); }
+.skeletonRows { display: grid; gap: 10px; }
+.headLinks { margin-left: auto; display: flex; gap: 6px; min-width: 0; }
+.headLinks a { padding: 5px 11px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: var(--fs-sm); font-weight: 550; white-space: nowrap; transition: color .15s, box-shadow .15s; }
+.headLinks a:hover { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-line); }
+/* Agents' avatars are square-ish identicons (radius 9 at row size). */
+.agentAvatar { flex: none; display: inline-flex; border-radius: 9px; }
+.agentAvatar > span { border-radius: 9px; }
+.rowName, .rowText { flex: 1; min-width: 0; color: var(--text); }
+.rowName { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowText { font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.rowNum { flex: none; font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.rowTime { flex: none; color: var(--muted); font: 12px var(--font-mono); white-space: nowrap; }
+
+/* Movers: a depth bar grows from the right edge behind the number, sized against the biggest move on the page. */
+.mover { position: relative; isolation: isolate; min-height: 40px; margin: 0 -8px; padding: 0 8px; border-radius: 10px; }
+.mover::before { content: ''; position: absolute; z-index: -1; top: 5px; bottom: 5px; right: 0; width: var(--w); border-radius: 8px; background: linear-gradient(90deg, transparent, var(--bar)); }
+.mover[data-dir='up'] { --bar: color-mix(in srgb, var(--up) 22%, transparent); }
+.mover[data-dir='down'] { --bar: color-mix(in srgb, var(--down) 22%, transparent); }
+.mover:hover { background: color-mix(in srgb, var(--hover) 55%, transparent); }
+
+/* Feuds: the pair's avatars overlap; heat runs from orange (40°) to red (100°). */
+.feud { min-height: 40px; padding: 4px 0; }
+/* Both names always show: a long pair wraps rather than hiding the second agent. */
+.feud .rowName { line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
+.pair { flex: none; display: inline-flex; }
+.pair > a + a { margin-left: -7px; }
+.pair > a > span { box-shadow: 0 0 0 2px var(--card-solid); }
+.vs { margin: 0 3px; color: var(--down); font: 600 10.5px var(--font-mono); letter-spacing: .06em; }
+.heat { flex: none; display: inline-flex; align-items: center; gap: 8px; color: color-mix(in oklab, var(--down) calc(var(--h) * 100%), var(--heat)); font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.heatBar { position: relative; width: 40px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.heatBar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, var(--heat), var(--down)); }
+
+/* Rugs and launches: the coin's emoji on a small tile. */
+.coinBadge { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--token-soft); box-shadow: inset 0 0 0 1px var(--token-line); font-size: 17px; line-height: 1; }
+.rug { min-height: 44px; margin: 0 -8px; padding: 6px 8px; border-radius: 10px; }
+.rug:hover { background: color-mix(in srgb, var(--down) 8%, transparent); }
+.rug .coinBadge { background: var(--down-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--down) 45%, transparent); }
+.launches { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr)); }
+.launch { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); transition: box-shadow .15s, background .15s; }
+.launch:hover { background: var(--token-soft); box-shadow: inset 0 0 0 1px var(--token-line); }
+.launchText { flex: 1; min-width: 0; display: grid; }
+.ticker { color: var(--token); font: 600 13.5px/1.35 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launchBy { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launchMeta { flex: none; display: grid; justify-items: end; color: var(--muted); font: 11.5px/1.45 var(--font-mono); white-space: nowrap; }
+.holders { display: inline-flex; align-items: center; gap: 3px; }
+
+/* Moods: one line with every agent as a light (miserable left, euphoric right), the faction key, then a tile per agent. */
+.spread { margin: 2px 0 14px; }
+.spreadTrack { position: relative; height: 48px; border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--down) 13%, transparent), transparent 40%, transparent 60%, color-mix(in srgb, var(--up) 13%, transparent)); box-shadow: inset 0 0 0 1px var(--line); }
+.spreadTrack::before { content: ''; position: absolute; left: 50%; top: 7px; bottom: 7px; width: 1px; background: var(--line-strong); }
+.spreadDot { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 70%, transparent); transform: translateY(var(--dy)); transition: left .8s ease, transform .8s ease; }
+.spreadDot[data-ghost='true'] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); opacity: .6; }
+.spreadScale { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font: 500 10.5px var(--font-mono); letter-spacing: .04em; }
+.factionKey { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; padding: 0; font-size: var(--fs-sm); }
+.factionKey li { display: inline-flex; align-items: center; gap: 7px; }
+.keyDot { width: 8px; height: 8px; border-radius: 3px; background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
+.keyCount { color: var(--muted); font-family: var(--font-mono); }
+.keyNote { margin: 0 0 12px; color: var(--muted); font-size: var(--fs-sm); }
+.moodGrid { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+.moodGrid > li { min-width: 0; }
+/* --c: faction colour (amber on its own); --m: mood 0..1. A happier agent glows brighter, as on the backdrop. */
+.moodTile { position: relative; display: grid; justify-items: center; gap: 6px; height: 100%; padding: 11px 6px 9px; border-radius: 12px; color: var(--text); text-align: center;
+  background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--c) calc(var(--m) * 18%), transparent), transparent 72%), rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .15s; }
+.moodTile:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent); }
+.moodAvatar { position: relative; display: inline-flex; margin-bottom: 2px; border-radius: 10px; }
+.moodAvatar > span:first-child { border-radius: 10px; box-shadow: 0 0 0 2px var(--c), 0 0 calc(4px + var(--m) * 18px) color-mix(in srgb, var(--c) calc(var(--m) * 65%), transparent); }
+.moodName { max-width: 100%; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moodBar { position: relative; width: min(100%, 76px); height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); }
+.moodBar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-hover); }
+.moodFill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.moodFill[data-dir='up'] { background: var(--up); box-shadow: 0 0 6px color-mix(in srgb, var(--up) 55%, transparent); }
+.moodFill[data-dir='down'] { background: var(--down); box-shadow: 0 0 6px color-mix(in srgb, var(--down) 55%, transparent); }
+.moodPnl { font: 500 11.5px var(--font-mono); }
+/* Broke or ghost: a small pill on the avatar's bottom edge. */
+.moodTag { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--down) 22%, var(--panel)); box-shadow: 0 0 0 2px var(--panel); color: var(--down); font: 600 9px/13px var(--font-mono); letter-spacing: .02em; }
+.moodTile[data-ghost='true'] { background: rgba(255, 255, 255, 0.015); }
+.moodTile[data-ghost='true'] .moodAvatar > span:first-child, .moodTile[data-ghost='true'] .moodBar { opacity: .4; filter: grayscale(1); }
+.moodTile[data-ghost='true'] .moodName, .moodTile[data-ghost='true'] .moodPnl { color: var(--muted); }
+.moodTile[data-ghost='true'] .moodTag { background: var(--raised); color: var(--muted); }
+/* Phones: solid cards, no blur (cost). */
+@media (max-width: 767px) { .panel { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-reduced-motion: reduce) { .spreadDot { transition: none; } }
