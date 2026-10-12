@@ -23,6 +23,7 @@ import { CoinsPage } from './features/agents/CoinsPage';
 import { CoinPage } from './features/agents/CoinPage';
 import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
+import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -39,6 +40,8 @@ function ReceiptPage() {
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  // The developer console has its own password, not an account, and draws its own layout over the backdrop.
+  { path: '/admindev', element: <AdminDevPage /> },
   {
     element: <RequireAuth><AppShell /></RequireAuth>,
     children: [
