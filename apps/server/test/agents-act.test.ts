@@ -10,6 +10,7 @@ import { ChainError, MemoryChain } from '../src/world/chain.ts';
 import type { WorldEvent } from '../src/world/events.ts';
 import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
+import { newId } from '../src/lib/ids.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { act, saleMood } from '../src/agents/act.ts';
 import { clearPerceptionCache, perceive } from '../src/agents/perceive.ts';
@@ -289,5 +290,58 @@ describe('act', () => {
     expect(r.ok).toBe(true);
     const [coin] = await w.t.db.select().from(worldCoins).where(eq(worldCoins.creatorId, maker.id));
     expect(coin).toMatchObject({ symbol: 'MOSS', name: expect.stringMatching(/^Moss /) });
+  });
+  it('never takes a ticker word from a private-community post, only from public ones (L3 ruling)', async () => {
+    const [secretive, open] = [w.agents[40]!, w.agents[41]!];
+    const secret = { kind: 'post' as const, body: 'quokka quokka quokka', createdAt: w.t.clock.now(), isDemo: false };
+    await w.t.db.insert(posts).values([
+      { ...secret, id: newId(), authorId: secretive.id, visibility: 'community', communityId: 'private-c' },
+      { ...secret, id: newId(), authorId: open.id, visibility: 'community', communityId: 'private-c' },
+      { ...secret, id: newId(), authorId: open.id, visibility: 'public', body: 'okapi okapi okapi' },
+    ]);
+    clearPerceptionCache(w.t.db);
+    for (const a of [secretive, open]) {
+      const v = await perceive(d, a.id);
+      const r = await act(d, { ...v, phrasebook: { ...v.phrasebook, interests: [] } }, { kind: 'launch', score: 1, lamports: 0, situation: 'launching', reason: 'launching a coin: test' });
+      expect(r.ok).toBe(true);
+    }
+    const [mine] = await w.t.db.select().from(worldCoins).where(eq(worldCoins.creatorId, secretive.id));
+    expect(mine!.symbol).not.toBe('QUOKKA');
+    expect(mine!.name).not.toMatch(/quokka/i);
+    // The public word is still the agent's own: its coin takes OKAPI, and the private QUOKKA stays out of it too.
+    const [theirs] = await w.t.db.select().from(worldCoins).where(eq(worldCoins.creatorId, open.id));
+    expect(theirs).toMatchObject({ symbol: 'OKAPI', name: expect.stringMatching(/^Okapi /) });
+  });
+  it('a profitable sale warms the seller to the creator; the creator still cools on the seller (L4)', async () => {
+    const [creator, seller] = [w.agents[34]!, w.agents[35]!];
+    const l = await runTool(await sealed(creator), 'launch_coin', { name: 'Warm', symbol: 'WARM', description: '', emoji: '☀️', initial_buy_sol: 0.005 });
+    const mint = (l.result as { mint: string }).mint;
+    await runTool(await sealed(seller), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, seller.id);
+    const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const rigged = { ...v, wallet: { ...v.wallet, positions: v.wallet.positions.map((p) => (p.mint === mint ? { ...p, costLamports: 1_000_000, valueLamports: 3_000_000 } : p)) } };
+    const r = await act(d, rigged, { kind: 'sell', score: 1, raw: pos.raw, situation: 'took_profit', target: { mint, userId: creator.id }, reason: 'took profit on $WARM' });
+    expect(r.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, seller.id))[creator.id]).toBeCloseTo(0.1);
+    expect((await affinitiesOf(w.t.db, creator.id))[seller.id]).toBeCloseTo(-0.08);
+  });
+  it('a mocking reaction cools the author toward the reactor (L4)', async () => {
+    const [author, reactor] = [w.agents[36]!, w.agents[37]!];
+    const p = await runTool(await sealed(author), 'post', { body: 'a take to laugh at' });
+    const v = await perceive(d, reactor.id);
+    // The reactor already dislikes the author, so it reaches for 💀 or 😂, and both sting.
+    const r = await act(d, { ...v, affinity: { ...v.affinity, [author.id]: -0.5 } }, { kind: 'react', score: 1, target: { postId: (p.result as { post_id: string }).post_id, userId: author.id }, reason: 'reacting to a post' });
+    expect(r.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, author.id))[reactor.id]).toBeCloseTo(-0.03);
+  });
+  it('disagreeing cools both sides (L4)', async () => {
+    const [author, replier] = [w.agents[38]!, w.agents[39]!];
+    const p = await runTool(await sealed(author), 'post', { body: 'a take worth arguing with' });
+    const v = await perceive(d, replier.id);
+    const r = await act(d, v, { kind: 'reply', score: 1, situation: 'reply_disagree', target: { postId: (p.result as { post_id: string }).post_id, userId: author.id }, reason: 'disagree' });
+    expect(r.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.05);
+    expect((await affinitiesOf(w.t.db, replier.id))[author.id]).toBeCloseTo(-0.05);
   });
 });

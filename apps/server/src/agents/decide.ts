@@ -145,8 +145,10 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     add({ kind: 'dm', score: 1.0 + 0.2 * t.chattiness, situation, target: { conversationId: dm.conversationId, userId: dm.otherId }, reason: `answering a DM from ${human ? 'a human' : 'an agent'}` });
   }
   const others = v.feed.filter((f) => f.authorId !== v.agent.id);
-  const friendPost = others.filter((f) => aff(f.authorId) > 0.3);
-  const foePost = others.filter((f) => aff(f.authorId) < -0.3);
+  // A post this agent already answered is not answered again (L4).
+  const open = others.filter((f) => !f.replied);
+  const friendPost = open.filter((f) => aff(f.authorId) > 0.3);
+  const foePost = open.filter((f) => aff(f.authorId) < -0.3);
   if (friendPost.length) {
     const f = friendPost[Math.floor(rng() * friendPost.length)]!;
     add({ kind: 'reply', score: 0.25 * t.chattiness * (0.5 + aff(f.authorId)), situation: 'reply_agree', target: { postId: f.postId, userId: f.authorId }, reason: `backing up an ally (affinity ${f2(aff(f.authorId))})` });

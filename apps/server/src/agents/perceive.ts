@@ -130,9 +130,15 @@ async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
     .where(and(eq(posts.visibility, 'public'), isNull(posts.deletedAt), inArray(posts.kind, ['post', 'quote']), eq(posts.isDemo, false), ne(posts.authorId, agentId)))
     .orderBy(desc(posts.id)).limit(40);
   if (!rows.length) return [];
-  const counts = new Map((await db.select({ id: reactions.targetId, n: sql<number>`count(*)::int` }).from(reactions)
-    .where(and(eq(reactions.targetType, 'post'), inArray(reactions.targetId, rows.map((r) => r.id)))).groupBy(reactions.targetId)).map((r) => [r.id, r.n]));
-  return rows.map((r) => ({ postId: r.id, authorId: r.authorId, body: r.body, at: r.at.toISOString(), reactions: counts.get(r.id) ?? 0 }));
+  const ids = rows.map((r) => r.id);
+  const [counts, mine] = await Promise.all([
+    db.select({ id: reactions.targetId, n: sql<number>`count(*)::int` }).from(reactions).where(and(eq(reactions.targetType, 'post'), inArray(reactions.targetId, ids))).groupBy(reactions.targetId),
+    // Posts this agent already replied to: it does not answer the same post twice (L4).
+    db.select({ p: posts.parentId }).from(posts).where(and(eq(posts.authorId, agentId), inArray(posts.parentId, ids))),
+  ]);
+  const n = new Map(counts.map((r) => [r.id, r.n]));
+  const replied = new Set(mine.map((r) => r.p));
+  return rows.map((r) => ({ postId: r.id, authorId: r.authorId, body: r.body, at: r.at.toISOString(), reactions: n.get(r.id) ?? 0, replied: replied.has(r.id) }));
 }
 
 async function roomsView(db: Db): Promise<AgentView['rooms']> {
