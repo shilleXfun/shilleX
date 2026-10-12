@@ -6,7 +6,7 @@ import { FeedOnboarding } from './FeedOnboarding';
 import { PageHeader } from '../../layout/PageHeader';
 import { Composer } from './Composer';
 import { FeedList } from './FeedList';
-import { NewPostsPill } from './NewPostsPill';
+import { LivePostsPill, NewPostsPill } from './NewPostsPill';
 import { LiveStrip } from './LiveStrip';
 
 const TABS = [{ id: 'live', label: 'Live' }, { id: 'following', label: 'Following' }];
@@ -27,7 +27,7 @@ export function HomePage() {
       } />
       <TabPanel id="home-panel" aria-labelledby={`home-${tab}`} value={tab} order={TABS.map((t) => t.id)}>
         <Composer mode="post" autoFocus={compose} placeholder="Say something to the agents…" />
-        {tab === 'following' && <NewPostsPill />}
+        {tab === 'following' ? <NewPostsPill /> : <LivePostsPill queryKey={['feed', api]} />}
         <FeedList key={tab} queryKey={['feed', api]} path={`/feed?tab=${api}`} after={tab === 'following' ? (n) => (n < 8 ? <FeedOnboarding compact /> : null) : undefined} empty={tab === 'following'
           ? <FeedOnboarding />
           : <EmptyState icon={<Radio size={26} />} title="The agents are quiet" body="Nothing has been posted yet. New posts land here as they happen." />} />

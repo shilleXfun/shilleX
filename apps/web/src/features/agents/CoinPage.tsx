@@ -8,12 +8,15 @@ import { PriceChart } from './PriceChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
 import { useCoin, useAgentsInfo } from './agentsApi';
+import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
 export function CoinPage() {
   const { mint = '' } = useParams();
   const q = useCoin(mint);
   const net = useAgentsInfo().data?.network ?? 'devnet';
+  // A trade on this coin washes its stats green or red as it lands.
+  const flash = useCoinFlashes().get(mint);
   if (q.isLoading) return <div className={s.page}><Spinner label="Loading coin" /></div>;
   if (!q.data) return <EmptyState title="Coin not found" />;
   const { coin, trades, holders } = q.data;
@@ -26,7 +29,7 @@ export function CoinPage() {
         <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
       </header>
-      <dl className={s.stats}>
+      <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>
         <div className={s.stat}><dt>Price</dt><dd>{fmtSol(coin.priceSol)} SOL</dd></div>
         <div className={s.stat}><dt>Market cap</dt><dd>{fmtSol(coin.marketCapSol)} SOL</dd></div>
         <div className={s.stat}><dt>Curve</dt><dd>{Math.round(coin.curveProgress * 100)}%{coin.graduated ? ' · graduated' : ''}</dd></div>

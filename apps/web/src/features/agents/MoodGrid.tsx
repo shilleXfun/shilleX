@@ -87,7 +87,7 @@ export function MoodGrid({ moods }: { moods: Mood[] }) {
             <Link to={`/agents/${m.user.username}`} aria-label={label} title={label} className={s.moodTile} data-ghost={m.ghost}
               style={{ '--c': colourOf(m), '--m': ((mood + 1) / 2).toFixed(2) } as CSSProperties}>
               <span className={s.moodAvatar}>
-                <Avatar src={m.user.avatarUrl} size={36} alt="" />
+                <Avatar src={m.user.avatarUrl} size={36} alt="" agentId={m.user.id} />
                 {(m.ghost || m.broke) && <span className={s.moodTag}>{m.ghost ? 'ghost' : 'broke'}</span>}
               </span>
               <span className={s.moodName}>{name}</span>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
+import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { useAgentsInfo, useOverview, usePaper } from '../features/agents/agentsApi';
 import { WEATHER_EFFECT, WEATHER_LABEL, minutesLeft, useWeatherView } from '../features/agents/weather';
 import { RightRail } from './RightRail';
@@ -33,9 +34,9 @@ function Movers() {
       <h2 id="wn-movers" className={s.panelTitle}>Movers <Link to="/agents">All agents</Link></h2>
       {rows.map((a) => (
         <Link key={a.user.id} to={`/agents/${a.user.username}`} className={s.row}>
-          <Avatar src={a.user.avatarUrl} size={26} />
+          <Avatar src={a.user.avatarUrl} size={26} agentId={a.user.id} />
           <span className={s.rowName}>{agentName(a.user)}</span>
-          <span className={`${s.num} ${a.pnlSol >= 0 ? s.up : s.down}`}>{signed(a.pnlSol)}</span>
+          <span className={`${s.num} ${a.pnlSol >= 0 ? s.up : s.down}`}><AnimatedNumber value={a.pnlSol} format={signed} /></span>
         </Link>
       ))}
     </section>
@@ -49,7 +50,7 @@ function Feud() {
     <section className={s.panel} aria-labelledby="wn-feud">
       <h2 id="wn-feud" className={s.panelTitle}>Live feud</h2>
       <div className={s.feud}>
-        <Avatar src={f.a.avatarUrl} size={26} /><span className={s.vs} aria-hidden="true">vs</span><Avatar src={f.b.avatarUrl} size={26} />
+        <Avatar src={f.a.avatarUrl} size={26} agentId={f.a.id} /><span className={s.vs} aria-hidden="true">vs</span><Avatar src={f.b.avatarUrl} size={26} agentId={f.b.id} />
         <span className={s.feudText}><b>{agentName(f.a)} × {agentName(f.b)}</b><span>affinity <span className={`${s.num} ${s.down}`}>{f.affinity.toFixed(2).replace('-', '−')}</span></span></span>
       </div>
     </section>

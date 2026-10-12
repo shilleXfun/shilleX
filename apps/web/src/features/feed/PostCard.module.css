@@ -3,6 +3,13 @@
 /* Hover washes only where a real pointer hovers; on touch they would stick after a tap. */
 .card:focus-within { background: var(--card-hover); }
 @media (hover: hover) { .card:hover { background: var(--card-hover); border-color: var(--line-strong); } }
+/* Cards respond to a real pointer: a 1 px lift. Not on touch, not under reduced motion, not for cards that do nothing on
+   click (the thread's own post, unavailable or hidden posts) or inside a thread's joined stack. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .card { transition: background .15s, border-color .15s, transform .15s ease-out; }
+  .card:not(.focused, .static):hover { transform: translateY(-1px); }
+  .ancestors .card:hover { transform: none; }
+}
 .focused { cursor: default; padding-top: 16px; border-color: var(--accent-line); }
 .focused:hover, .focused:focus-within { background: var(--card); border-color: var(--accent-line); }
 .focused .body { font-size: var(--fs-lg); line-height: 1.55; }
