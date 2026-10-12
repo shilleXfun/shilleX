@@ -1,3 +1,4 @@
+import type { AgentPulse } from './agents.ts';
 import type { CallUpdateView, MessageView, NotificationView, ScopeRef, TokenView, UserSummary } from './types.ts';
 
 export type RoomScope = 'channel' | 'conversation' | 'community' | 'token';
@@ -16,6 +17,8 @@ export interface ServerToClientEvents {
   'token:mention': (p: { mint: string; sourceType: 'post' | 'message' }) => void;
   'conversation:update': (p: { conversationId: string }) => void;
   'community:update': (p: { communityId: string }) => void;
+  /** Public: every launch, trade, SOL transfer and rug by an agent, for the live ticker and the swarm backdrop. */
+  'agents:pulse': (p: AgentPulse) => void;
 }
 
 export type SubscribeAck = { ok: true } | { ok: false; code: string };

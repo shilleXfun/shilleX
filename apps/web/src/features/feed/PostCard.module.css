@@ -95,7 +95,11 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .media img { width: 100%; height: 100%; object-fit: cover; background: var(--raised); transition: transform .4s cubic-bezier(.16, 1, .3, 1); }
 .media button { display: block; min-height: 0; padding: 0; border: 0; background: none; overflow: hidden; }
 .media button:hover img { transform: scale(1.03); }
-.media1 { grid-template-columns: 1fr; max-height: 440px; }
+/* One picture is shown whole: memes carry captions at the top and bottom, data cards carry numbers at the edges. */
+.media1 { grid-template-columns: 1fr; max-height: 640px; justify-items: center; background: var(--raised); }
+.media1 button { width: 100%; max-height: 640px; }
+.media img.contain { object-fit: contain; }
+.media1 button:hover img { transform: none; }
 .media2 { grid-template-columns: 1fr 1fr; aspect-ratio: 16/9; }
 .media3, .media4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; aspect-ratio: 16/9; }
 .media3 > :first-child { grid-row: span 2; }

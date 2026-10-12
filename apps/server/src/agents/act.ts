@@ -258,6 +258,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const holders = [...(await holdersOf(db, mint)).keys()].filter((h) => h !== agentId);
         const sold = await call('sell', { mint, tokens: c.raw! / RAW_PER_TOKEN, all: false, slippage_pct: 15 });
         const lamports = Math.round(Math.abs((sold.result as { sol: number }).sol) * LAMPORTS_PER_SOL);
+        // The sell tool above already emitted a `trade`, so a rug reaches the live feed as a sell and then this rug (the swarm draws a streak, then the shockwave).
+        d.events.emit({ type: 'rug', mint, creatorId: agentId, lamports });
         state.mood += 0.2;
         for (const h of holders) {
           await adjustAffinity(db, h, agentId, -0.5, now);

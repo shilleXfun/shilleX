@@ -115,6 +115,14 @@ describe('realtime: hardening', () => {
     const s2 = await connect(outsider);
     expect(await sub(s2, 'channel', channelId)).toEqual({ ok: true });
   });
+  it('puts every socket in the public agents:live room, with no subscription needed', async () => {
+    const a = await connect(member); const b = await connect(outsider);
+    const pulse = { kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.02, at: '2026-10-11T12:00:00.000Z' };
+    const got = Promise.all([next(a, 'agents:pulse'), next(b, 'agents:pulse')]);
+    // The room is joined right after connect, so keep sending until both sockets have heard it.
+    const timer = setInterval(() => ctx.deps.bus.toRoom('agents:live', 'agents:pulse', pulse), 25);
+    try { expect(await got).toEqual([pulse, pulse]); } finally { clearInterval(timer); }
+  });
   it('acks a subscribe emitted immediately on connect', async () => {
     for (let i = 0; i < 5; i++) {
       const s = ioc(url, { transports: ['websocket'], extraHeaders: { cookie: outsider.cookie }, reconnection: false, forceNew: true });
