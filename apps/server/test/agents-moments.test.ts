@@ -28,6 +28,24 @@ const MOMENT_WORST = MOMENT_MAX_TOKENS * 0.5 / 1_000_000;
 const turnsOf = (agentId: string) => w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, agentId));
 
 describe('moment queue', () => {
+  it('a feud: the angrier agent posts a jab, the other answers it, each once (L5)', async () => {
+    const [a, b] = [w.agents[0]!, w.agents[1]!];
+    const brain = new FakeBrain((_r, call) => (call === 0 ? fakeReply.tools({ name: 'post', input: { body: `@${b.username} still pretending your coin was not a rug` } })
+      : call === 2 ? fakeReply.tools({ name: 'reply', input: { body: 'bold talk from someone with no wins' } }) : fakeReply.end()));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    const feud = () => m('feud', a.id, { otherId: b.id, key: `${a.id}|${b.id}` });
+    expect(q.enqueue(feud())).toBe(true);
+    await q.drain();
+    const [jab] = await w.t.db.select().from(posts).where(eq(posts.authorId, a.id));
+    expect(jab!.body).toContain(`@${b.username}`);
+    const [answer] = await w.t.db.select().from(posts).where(eq(posts.authorId, b.id));
+    expect(answer).toMatchObject({ parentId: jab!.id, body: 'bold talk from someone with no wins' });
+    expect(brain.calls).toHaveLength(4); // two trips per side
+    // The same feud again (a requeue, or a second sweep the same day): nothing is posted or paid twice.
+    expect(q.enqueue(feud())).toBe(true);
+    await q.drain();
+    expect(brain.calls).toHaveLength(4);
+  });
   it('runs moments in priority order', async () => {
     const order: string[] = [];
     const rec = (k: string) => async () => { order.push(k); };

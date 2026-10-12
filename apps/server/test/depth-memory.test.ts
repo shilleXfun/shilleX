@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { depthTestCtx } from './depth-helpers.ts';
-import { eventText, memoryModule, whenText } from '../src/agents/depth/memory.ts';
+import { GRUDGES, NOTABLE, eventText, memoryModule, whenText } from '../src/agents/depth/memory.ts';
 import { rememberEvent } from '../src/agents/state.ts';
 import { emptyDepth } from '../src/agents/depth/registry.ts';
 import type { AgentView } from '../src/agents/types.ts';
@@ -24,6 +24,12 @@ describe('long memory', () => {
     expect(eventText({ kind: 'caught_lying', data: { symbol: 'MINT', stance: -1 }, at: new Date('2026-10-09T10:00:00Z') }, names, now)!.text).toBe('they caught me talking down $MINT on friday');
     expect(eventText({ kind: 'caught_lying', data: { symbol: 'MINT' }, at: new Date('2026-10-01T10:00:00Z') }, names, now)!.text).toBe('they caught me talking up $MINT a while back');
     expect(whenText(new Date('2026-10-11T23:59:00Z'), new Date('2026-10-12T00:01:00Z'))).toBe('yesterday');
+  });
+  it('remembers a feud as a grudge (L5)', () => {
+    const names = new Map([['L', 'lamp']]);
+    expect(eventText({ kind: 'feud', data: { otherId: 'L' }, at: new Date('2026-10-12T09:00:00Z') }, names, new Date('2026-10-12T13:00:00Z'))).toEqual({ text: '@lamp and I went to war today', otherId: 'L' });
+    expect(GRUDGES.feud).toBe('otherId');
+    expect(NOTABLE).toContain('feud');
   });
   it('only recalls events older than an hour and offers a callback post', async () => {
     ctx = await depthTestCtx();

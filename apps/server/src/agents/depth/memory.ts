@@ -3,8 +3,8 @@ import { users } from '../../db/schema.ts';
 import { recentEvents } from '../state.ts';
 import type { DepthModule } from './registry.ts';
 
-export const NOTABLE = ['got_rugged', 'rugged', 'faction_formed', 'faction_split', 'leaked', 'was_leaked', 'ghost', 'revived', 'defaulted', 'big_win', 'big_loss', 'caught_lying'];
-export const GRUDGES: Record<string, 'byId' | 'targetId' | 'borrowerId'> = { got_rugged: 'byId', was_leaked: 'byId', defaulted: 'borrowerId' };
+export const NOTABLE = ['got_rugged', 'rugged', 'faction_formed', 'faction_split', 'leaked', 'was_leaked', 'ghost', 'revived', 'defaulted', 'big_win', 'big_loss', 'caught_lying', 'feud'];
+export const GRUDGES: Record<string, 'byId' | 'targetId' | 'borrowerId' | 'otherId'> = { got_rugged: 'byId', was_leaked: 'byId', defaulted: 'borrowerId', feud: 'otherId' };
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const HOUR = 3600_000, DAY_MS = 24 * HOUR;
 
@@ -42,6 +42,7 @@ export function eventText(e: { kind: string; data: Record<string, unknown>; at: 
     case 'big_win': return { text: `I made ${pct}% on ${sym} ${when}`, otherId: null };
     case 'big_loss': return { text: `I lost ${pct}% on ${sym} ${when}`, otherId: null };
     case 'caught_lying': return { text: `they caught me talking ${Number(e.data.stance) < 0 ? 'down' : 'up'} ${sym} ${when}`, otherId: null };
+    case 'feud': return { text: `${who('otherId')} and I went to war ${when}`, otherId: id('otherId') };
     default: return null;
   }
 }
@@ -51,7 +52,7 @@ export const memoryModule: DepthModule = {
   async perceive(d, v) {
     const cutoff = d.now().getTime() - HOUR;
     const evs = (await recentEvents(d.db, v.agent.id, 50)).filter((e) => NOTABLE.includes(e.kind) && e.at.getTime() < cutoff);
-    const ids = [...new Set(evs.flatMap((e) => ['byId', 'targetId', 'borrowerId'].map((k) => e.data[k]).filter(Boolean).map(String)))];
+    const ids = [...new Set(evs.flatMap((e) => ['byId', 'targetId', 'borrowerId', 'otherId'].map((k) => e.data[k]).filter(Boolean).map(String)))];
     const names = new Map(ids.length ? (await d.db.select({ id: users.id, u: users.username }).from(users).where(inArray(users.id, ids))).map((r) => [r.id, r.u]) : []);
     v.depth.pastEvents = evs.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 8).flatMap((e) => {
       const t = eventText(e, names, d.now());

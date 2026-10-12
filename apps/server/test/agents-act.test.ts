@@ -83,6 +83,23 @@ describe('act', () => {
     expect((await recentEvents(w.t.db, maker!.id))[0]).toMatchObject({ kind: 'rugged', data: { mint, symbol: 'RUGG', holders: 2, lamports: expect.any(Number) } });
     expect(queued.some((m) => m.kind === 'rug' && m.agentId === maker!.id)).toBe(true);
   });
+  it('a rug bonds its victims: the holders warm to each other, never to the rugger (L5)', async () => {
+    const [maker, h1, h2, h3] = [w.agents[25]!, w.agents[26]!, w.agents[27]!, w.agents[28]!];
+    const l = await runTool(await sealed(maker), 'launch_coin', { name: 'Shared Loss', symbol: 'LOSS', description: '', emoji: '🧯', initial_buy_sol: 0.02 });
+    const mint = (l.result as { mint: string }).mint;
+    for (const h of [h1, h2, h3]) await runTool(await sealed(h), 'buy', { mint, sol: 0.02, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, maker.id);
+    const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const r = await act(d, v, { kind: 'rug', score: 1, raw: Math.floor(pos.raw * 0.9), situation: 'rugged_someone', target: { mint }, reason: 'dumped my own $LOSS: test' });
+    expect(r.ok).toBe(true);
+    for (const h of [h1, h2, h3]) {
+      const row = await affinitiesOf(w.t.db, h.id);
+      expect(row[maker.id]).toBeCloseTo(-0.5);
+      for (const other of [h1, h2, h3].filter((x) => x !== h)) expect(row[other.id]).toBeCloseTo(0.02);
+    }
+    expect((await affinitiesOf(w.t.db, maker.id))[h1.id]).toBeUndefined(); // the rugger feels nothing new about its victims
+  });
   it('records a failed receipt when the chain fails, and does not throw (Review Focus 2)', async () => {
     class DownChain extends MemoryChain { override async buy(_s: Keypair, _m: string, _l: number): Promise<never> { throw new ChainError('RPC_DOWN', 'devnet RPC down'); } }
     const a = w.agents[7]!;
