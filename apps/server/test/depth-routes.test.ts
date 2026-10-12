@@ -6,7 +6,8 @@ import { adjustAffinity } from '../src/agents/state.ts';
 import { formFactions } from '../src/agents/depth/factions.ts';
 import { writePaper } from '../src/agents/depth/paper.ts';
 import { recordLineage } from '../src/agents/depth/lineage.ts';
-import { debts, factions, memeTemplates, posts, saidVsDid, weather, worldCoins } from '../src/db/schema.ts';
+import { and, eq, isNull } from 'drizzle-orm';
+import { debts, factionMembers, factions, memeTemplates, papers, posts, saidVsDid, weather, worldCoins } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { reputation } from '../src/agents/depth/reputation.ts';
 import { spotlightSweep } from '../src/agents/depth/spotlight.ts';
@@ -48,6 +49,32 @@ describe('depth routes', () => {
     await writePaper(ctx.d, '2026-10-08', { headline: 'H', stories: [{ title: 't', body: 'b' }], memeBrief: null }, 'local');
     expect((await get('/api/papers/latest')).json()).toMatchObject({ day: '2026-10-08', headline: 'H', source: 'local', memeUrl: null });
     expect((await get('/api/papers/2026-10-08')).statusCode).toBe(200);
+  });
+  it('lists a faction that split this week with the members it had when it split', async () => {
+    const get = await setup();
+    const trio = ctx.agents.slice(0, 4);
+    for (const x of trio) for (const y of trio) if (x !== y) await adjustAffinity(ctx.t.db, x.id, y.id, 0.7, ctx.t.clock.now());
+    await formFactions(ctx.d);
+    const [f] = await ctx.t.db.select().from(factions);
+    // One member walked out a day before the split; the rest were in it when it broke.
+    const left = new Date(ctx.t.clock.now().getTime() - 86_400_000), splitAt = ctx.t.clock.now();
+    await ctx.t.db.update(factionMembers).set({ leftAt: left }).where(and(eq(factionMembers.factionId, f!.id), eq(factionMembers.agentId, trio[3]!.id)));
+    await ctx.t.db.update(factionMembers).set({ leftAt: splitAt }).where(and(eq(factionMembers.factionId, f!.id), isNull(factionMembers.leftAt)));
+    await ctx.t.db.update(factions).set({ splitAt }).where(eq(factions.id, f!.id));
+    const [view] = (await get('/api/factions')).json().factions;
+    expect(view).toMatchObject({ id: f!.id, splitAt: splitAt.toISOString() });
+    expect(view.members.map((m: { username: string }) => m.username).sort()).toEqual(trio.slice(0, 3).map((x) => x.username).sort());
+  });
+  it('shares one factions answer for 30 s', async () => {
+    const get = await setup();
+    expect((await get('/api/factions')).json().factions).toEqual([]);
+    const trio = ctx.agents.slice(0, 3);
+    for (const x of trio) for (const y of trio) if (x !== y) await adjustAffinity(ctx.t.db, x.id, y.id, 0.7, ctx.t.clock.now());
+    await formFactions(ctx.d);
+    ctx.t.clock.advance(29_000);
+    expect((await get('/api/factions')).json().factions).toEqual([]);
+    ctx.t.clock.advance(1_000);
+    expect((await get('/api/factions')).json().factions).toHaveLength(1);
     expect((await get('/api/weather')).json().regime).toMatch(/^(euphoria|grind|fear|chaos)$/);
     const id = await recordLineage(ctx.t.db, { kind: 'line', text: 'ngmi {user}', situation: 'roast', inventorId: trio[0]!.id }, ctx.t.clock.now());
     expect((await get(`/api/lineage/${id}`)).json()).toMatchObject({ text: 'ngmi {user}', inventor: { username: trio[0]!.username }, uses: 1 });
@@ -99,7 +126,8 @@ describe('depth routes', () => {
       debt('d1', b!.id, a!.id, 20_000_000, 100, { defaultedAt: ago(28) }), // a dodged b
       debt('d2', c!.id, a!.id, 40_000_000, 2),                            // a owes c
       debt('d3', a!.id, d!.id, 10_000_000, 50, { repaidAt: ago(10) }),    // d paid a back
-      debt('d4', human.id, a!.id, 500_000_000, 1),                        // a human is never the other side
+      debt('d4', human.id, a!.id, 500_000_000, 1),                        // a human is never the other side: not as the lender
+      debt('d5', a!.id, human.id, 300_000_000, 3),                        // and not as the borrower
     ]);
     const r = (await get(`/api/agents/${a!.username}/depth`)).json();
     expect(r.debts).toMatchObject({ lent: 1, borrowed: 2, defaulted: 1, owesSol: 0.04 });
@@ -125,12 +153,14 @@ describe('depth routes', () => {
     expect((await get('/api/factions')).json().factions[0]).toMatchObject({ banner: brief, bannerUrl: null });
     // A picture drawn from the same words that is not a faction banner never counts.
     await generateTemplate({ db: ctx.t.db, gen: art('#112233'), limits, now: ctx.t.clock.now }, { brief, tags: ['idle'], authorId: trio[0]!.id });
+    ctx.t.clock.advance(30_000); // past the factions cache
     expect((await get('/api/factions')).json().factions[0].bannerUrl).toBeNull();
     ctx.t.clock.advance(1000);
     await spotlightSweep({ db: ctx.t.db, bus: ctx.t.bus, now: ctx.t.clock.now, gen: art('#334455'), limits });
     const [tpl] = (await ctx.t.db.select().from(memeTemplates)).filter((m) => m.tags.includes('faction_cheer'));
     expect(tpl).toBeDefined();
     const url = `/api/blobs/${tpl!.blobId}`;
+    ctx.t.clock.advance(30_000);
     expect((await get('/api/factions')).json().factions[0].bannerUrl).toBe(url);
     expect((await get(`/api/agents/${trio[0]!.username}/depth`)).json().faction.bannerUrl).toBe(url);
     expect((await get(url)).statusCode).toBe(200);
@@ -168,5 +198,18 @@ describe('depth routes', () => {
     expect(p).toEqual({ day: '2026-10-09', headline: 'H2', stories: [{ title: 't', body: 'b' }], memeUrl: null, source: 'model' });
     expect((await get('/api/papers/not-a-day')).statusCode).toBe(404);
     expect((await get('/api/lineage/nope')).statusCode).toBe(404);
+  });
+
+  it('lists the days that have an edition, newest first, at most 60, and nothing else', async () => {
+    const get = await setup();
+    expect((await get('/api/papers/days')).json()).toEqual({ days: [] });
+    // 62 editions with gaps (every other day), written out of order.
+    const day = (i: number) => new Date(Date.UTC(2026, 5, 1) + i * 2 * 86_400_000).toISOString().slice(0, 10);
+    const rows = Array.from({ length: 62 }, (_, i) => ({ day: day(i), headline: `SECRET-HEADLINE-${i}`, body: { stories: [], memeBrief: 'SECRET-BRIEF', source: 'local' as const }, createdAt: ctx.t.clock.now() }));
+    await ctx.t.db.insert(papers).values([...rows.slice(31), ...rows.slice(0, 31)]);
+    const r = await get('/api/papers/days');
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ days: Array.from({ length: 60 }, (_, i) => day(61 - i)) });
+    expect(r.body).not.toMatch(/SECRET/);
   });
 });

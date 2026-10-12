@@ -1,10 +1,9 @@
-import { Connection } from '@solana/web3.js';
 import { loadConfig } from '../config.ts';
 import { createDb } from '../db/client.ts';
 import { seedWorld } from './seed.ts';
 import { DBC_CONFIG, createLaunchpad, getSetting, setSetting } from './launchpad.ts';
 import { fundAgents } from './ledger.ts';
-import { makeChain } from './devnet-chain.ts';
+import { DevnetChain, makeChain } from './devnet-chain.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 const config = loadConfig();
@@ -19,7 +18,11 @@ try {
     const existing = await getSetting(handle.db, DBC_CONFIG);
     if (existing) console.log('launchpad config already exists:', existing);
     else {
-      const address = await createLaunchpad(new Connection(config.devnetRpcUrl, 'confirmed'), await signerFor(handle.db, TREASURY, key));
+      // Through makeChain, so a mainnet DEVNET_RPC_URL is refused before anything is signed.
+      const chain = await makeChain(config, handle.db);
+      if (!(chain instanceof DevnetChain)) throw new Error('The launchpad is a devnet program: set WORLD_CHAIN=devnet');
+      await chain.assertNotMainnet();
+      const address = await createLaunchpad(chain.conn, await signerFor(handle.db, TREASURY, key));
       await setSetting(handle.db, DBC_CONFIG, address);
       console.log('launchpad config', address);
     }
