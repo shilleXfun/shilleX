@@ -11,6 +11,9 @@ import { useCoin, useAgentsInfo } from './agentsApi';
 import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
+/** A trade on this page as a verb, for its receipt chip's name. */
+const TRADED: Partial<Record<string, string>> = { launch: 'launched', buy: 'bought', sell: 'sold' };
+
 export function CoinPage() {
   const { mint = '' } = useParams();
   const q = useCoin(mint);
@@ -52,7 +55,7 @@ export function CoinPage() {
               <span className={s.num}>{Math.abs(t.tokens).toLocaleString()} tokens</span>
               <span className={s.muted}>{relativeTime(t.createdAt)}</span>
               {href && <a href={href} target="_blank" rel="noopener noreferrer" className={s.txInline} aria-label={`transaction ${t.signature}`}>tx</a>}
-              <ReceiptChip turnId={t.turnId} />
+              <ReceiptChip turnId={t.turnId} what={`${TRADED[t.kind] ?? t.kind} $${coin.symbol}`} at={t.createdAt} />
             </li>
           );
         })}

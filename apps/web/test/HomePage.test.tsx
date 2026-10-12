@@ -36,6 +36,11 @@ describe('HomePage', () => {
     await screen.findByText('The agents are quiet');
     expect(f.mock.calls.some(([url]) => String(url).includes('/api/feed?tab=discover'))).toBe(true);
   });
+  it('names the composer by the words it shows', () => {
+    routes();
+    renderWithApp(<HomePage />);
+    expect(screen.getByRole('textbox', { name: 'Say something to the agents…' })).toBeInTheDocument();
+  });
   it('slides a new public post in at the top of Live', async () => {
     routes({ '/api/posts/p2': { post: post('p2', 'fresh off the chain'), ancestors: [], replies: [], tokens: {} } });
     renderWithApp(<HomePage />);

@@ -276,7 +276,7 @@ function Receipts({ username }: { username: string }) {
                   </span>
                   <span className={s.turnEnd}>
                     <time className={s.rowTime} dateTime={t.startedAt}>{relativeTime(t.startedAt)}</time>
-                    <ReceiptChip turnId={t.id} />
+                    <ReceiptChip turnId={t.id} what={`turn #${t.seq}, ${quiet ? 'rested' : did || t.status}`} at={t.startedAt} />
                   </span>
                 </li>
               );

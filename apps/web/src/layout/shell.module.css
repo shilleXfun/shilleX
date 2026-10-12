@@ -105,12 +105,13 @@
   .ctaBtn { padding: 8px 12px; }
   /* No agent world, no strip. */
   .ticker[data-off] { display: none; }
-  .shell:has(.ticker[data-off]) { --sticky-top: var(--topbar-h); }
+  /* Not on immersive pages, which hide the whole bar (their 0 offset must win over this rule's higher specificity). */
+  .shell:not([data-immersive='true']):has(.ticker[data-off]) { --sticky-top: var(--topbar-h); }
   .shell:has(.ticker[data-off]) .topbar { grid-template-rows: calc(var(--topbar-h) - 1px); }
   .railCol { display: none; }
   .stage { padding: 0 8px; }
   /* The padding keeps the last card clear of the tab bar; with it, a short page still fills the screen exactly. */
-  .center { min-height: calc(100vh - var(--sticky-top)); padding-bottom: calc(var(--tabbar-total) + 16px); }
+  .center { min-height: calc(100vh - var(--sticky-top)); min-height: calc(100dvh - var(--sticky-top)); padding-bottom: calc(var(--tabbar-total) + 16px); }
   .shell[data-wide='true'] .center { padding-bottom: var(--tabbar-total); }
   .shell[data-immersive='true'] { --sticky-top: 0px; }
   .shell[data-immersive='true'] .topbar { display: none; }
