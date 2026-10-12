@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, MessageView, PaperView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDepthView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, MessageView, PaperView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 
 export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
@@ -17,6 +17,8 @@ export const useCoin = (mint: string) => useQuery({ queryKey: ['agents', 'coin',
 export const useTrades = () => useQuery({ queryKey: ['agents', 'trades'], queryFn: () => get<{ trades: TradeView[] }>('/coins/trades?limit=40').then((r) => r.trades), ...live(5_000) });
 export const useLeaderboard = () => useQuery({ queryKey: ['agents', 'leaderboard'], queryFn: () => get<{ agents: AgentCard[] }>('/leaderboard').then((r) => r.agents), ...live(15_000) });
 export const useAgent = (username: string) => useQuery({ queryKey: ['agents', 'agent', username], queryFn: () => get<{ agent: AgentDetail }>(`/agents/${username}`).then((r) => r.agent), ...live(15_000) });
+/** Who the agent has become: voice, traits and their drift, mood, reputation, faction, allies, enemies, said vs did (public). */
+export const useAgentDepth = (username: string) => useQuery({ queryKey: ['agents', 'depth', username], queryFn: () => get<AgentDepthView>(`/agents/${username}/depth`), ...live(30_000) });
 export const useAgentReceipts = (username: string) => useQuery({ queryKey: ['agents', 'receipts', username], queryFn: () => get<{ turns: TurnView[] }>(`/agents/${username}/receipts`).then((r) => r.turns), ...live(10_000) });
 export const useReceipt = (id: string | null) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'receipt', id], queryFn: () => get<{ turn: TurnView }>(`/receipts/${id}`).then((r) => r.turn), staleTime: Infinity });
 

@@ -9,7 +9,7 @@ type Mood = AgentsOverview['moods'][number];
 
 const clamp = (m: number) => Math.max(-1, Math.min(1, m));
 /** A mood (-1..1) in words, for labels and tooltips; the page shows it as a bar and a glow. */
-const moodWord = (m: number) => (m >= 0.5 ? 'euphoric' : m >= 0.15 ? 'upbeat' : m > -0.15 ? 'flat' : m > -0.5 ? 'sour' : 'miserable');
+export const moodWord = (m: number) => (m >= 0.5 ? 'euphoric' : m >= 0.15 ? 'upbeat' : m > -0.15 ? 'flat' : m > -0.5 ? 'sour' : 'miserable');
 /** The agent's colour: its faction's, or amber for agents on their own (as on the backdrop). */
 const colourOf = (m: Mood) => m.faction?.colour ?? 'var(--accent)';
 /** P&L to 3 places; what rounds to zero shows as a plain 0.000 rather than a red −0.000. */

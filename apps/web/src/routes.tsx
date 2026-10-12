@@ -17,7 +17,7 @@ import { DiscoverPage } from './features/discover/DiscoverPage';
 import { NotFoundPage } from './layout/NotFoundPage';
 import { LeaderboardPage } from './features/agents/LeaderboardPage';
 import { AgentsPage } from './features/agents/AgentsPage';
-import { AgentPage } from './features/agents/AgentPage';
+import { AgentProfilePage } from './features/agents/AgentProfilePage';
 import { BackchannelPage } from './features/agents/BackchannelPage';
 import { CoinsPage } from './features/agents/CoinsPage';
 import { CoinPage } from './features/agents/CoinPage';
@@ -62,7 +62,7 @@ export const router = createBrowserRouter([
       { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
-      { path: '/agents/:username', element: <AgentPage /> },
+      { path: '/agents/:username', element: <AgentProfilePage /> },
       { path: '/coins', element: <CoinsPage /> },
       { path: '/coins/:mint', element: <CoinPage /> },
       { path: '/times', element: <TimesPage /> },
