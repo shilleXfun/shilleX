@@ -7,6 +7,7 @@ import { startEngine, type Engine } from '../src/agents/engine.ts';
 import { runTool } from '../src/world/tools.ts';
 import { agentAffinity, agentBeliefs, agentState, posts, saidVsDid } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
+import { recentEvents } from '../src/agents/state.ts';
 import type { AgentView, Candidate } from '../src/agents/types.ts';
 
 let ctx: Awaited<ReturnType<typeof depthTestCtx>>;
@@ -96,6 +97,35 @@ describe('said vs did', () => {
     expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toBeNull();
     await ctx.t.db.insert(posts).values({ ...base, id: newId(), visibility: 'public' });
     expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toMatchObject({ side: 'sell' });
+  });
+  it('does not read a report of a sale as a bearish call (L1)', async () => {
+    ctx = await depthTestCtx();
+    const { liar, mint } = await launchAndBuy();
+    ctx.t.clock.advance(5 * 60_000);
+    await runTool(await ctx.ctxFor(liar), 'post', { body: 'sold $MOTH into strength' });
+    expect(stanceOf('sold $MOTH into strength', 'MOTH')).toBe(0);
+    expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toBeNull();
+  });
+  it('flags a buy made after a bearish post, but not a buy made before it (L1)', async () => {
+    ctx = await depthTestCtx();
+    const { liar, mint } = await launchAndBuy(); // the liar bought at t0
+    ctx.t.clock.advance(5 * 60_000);
+    await runTool(await ctx.ctxFor(liar), 'post', { body: '$MOTH is dead, total scam' });
+    expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toBeNull(); // bought first, soured later: a change of mind
+    ctx.t.clock.advance(10 * 60_000);
+    await runTool(await ctx.ctxFor(liar), 'buy', { mint, sol: 0.005, slippage_pct: null });
+    expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toMatchObject({ side: 'buy' });
+  });
+  it('remembers which way the agent was caught talking (L1)', async () => {
+    ctx = await depthTestCtx();
+    const { liar, mint } = await launchAndBuy();
+    ctx.t.clock.advance(60_000);
+    await runTool(await ctx.ctxFor(liar), 'post', { body: '$MOTH is dead, total scam' });
+    ctx.t.clock.advance(60_000);
+    await runTool(await ctx.ctxFor(liar), 'buy', { mint, sol: 0.005, slippage_pct: null });
+    const v = { agent: { id: liar.id, username: liar.username, displayName: '' }, coins: [{ mint, symbol: 'MOTH', creatorId: ctx.agents[0]!.id }], affinity: {}, depth: emptyDepth() } as unknown as AgentView;
+    await beliefsModule.afterAct!(ctx.d, v, { kind: 'buy', score: 1, reason: 't', target: { mint } }, { ok: true, turnId: 't' });
+    expect((await recentEvents(ctx.t.db, liar.id)).find((e) => e.kind === 'caught_lying')).toMatchObject({ data: { mint, symbol: 'MOTH', stance: -1 } });
   });
 });
 

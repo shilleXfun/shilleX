@@ -1,4 +1,4 @@
-import { RAW_PER_TOKEN } from '../world/chain.ts';
+import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
@@ -6,7 +6,8 @@ const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
 export const SOL = 1_000_000_000;
 export const RESERVE = 10_000_000;
 export const LAUNCH_MIN = 40_000_000;
-export const LAUNCH_COST = 27_500_000;
+/** What a launch costs before its first buy: the chain's rent and creation (LAUNCH_RENT) plus a margin for fees. */
+export const LAUNCH_COST = LAUNCH_RENT + 1_000_000;
 export const MIN_TRADE = 2_000_000;
 export const RUG_MIN_SHARE = 0.7;
 const MIN = 60_000, HOUR = 60 * MIN;

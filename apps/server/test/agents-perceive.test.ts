@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { worldTestCtx } from './world-helpers.ts';
 import { runTool } from '../src/world/tools.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { clearPerceptionCache, flowChange, perceive } from '../src/agents/perceive.ts';
+import { averageCost, clearPerceptionCache, flowChange, perceive } from '../src/agents/perceive.ts';
+import { candidates } from '../src/agents/decide.ts';
+import { LAUNCH_RENT } from '../src/world/chain.ts';
 import { adjustAffinity } from '../src/agents/state.ts';
 import { worldCoins } from '../src/db/schema.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
@@ -153,5 +155,38 @@ describe('perceive held coins', () => {
     expect(bystander.coins.some((c) => c.mint === mint)).toBe(false);
     expect(bystander.coins).toHaveLength(60);
     expect(holder.coins.length).toBe(61);
+  });
+});
+
+describe('cost basis (L1)', () => {
+  it('averages cost: selling half leaves half the cost, selling out forgets it, a launch counts only its first buy', () => {
+    expect(averageCost([])).toEqual({ raw: 0, costLamports: 0 });
+    expect(averageCost([{ kind: 'buy', lamportsDelta: -20_005_000, tokenDelta: 1000 }, { kind: 'sell', lamportsDelta: 15_000_000, tokenDelta: -500 }])).toEqual({ raw: 500, costLamports: 10_002_500 });
+    expect(averageCost([{ kind: 'launch', lamportsDelta: -(LAUNCH_RENT + 5000 + 10_000_000), tokenDelta: 700 }])).toEqual({ raw: 700, costLamports: 10_005_000 });
+    expect(averageCost([{ kind: 'launch', lamportsDelta: -(LAUNCH_RENT + 5000), tokenDelta: 0 }])).toEqual({ raw: 0, costLamports: 0 });
+    expect(averageCost([
+      { kind: 'buy', lamportsDelta: -10_000_000, tokenDelta: 100 }, { kind: 'sell', lamportsDelta: 30_000_000, tokenDelta: -100 }, { kind: 'buy', lamportsDelta: -4_000_000, tokenDelta: 10 },
+    ])).toEqual({ raw: 10, costLamports: 4_000_000 });
+    // A sale with no recorded buy before it (a restored chain) never makes the cost negative (Review Focus 3).
+    expect(averageCost([{ kind: 'sell', lamportsDelta: 5, tokenDelta: -10 }])).toEqual({ raw: 0, costLamports: 0 });
+  });
+  it('a partial sale keeps the average cost of what is left, so P&L stays sane', async () => {
+    const trader = w.agents[20]!;
+    const bought = await runTool(await w.ctxFor(trader), 'buy', { mint, sol: 0.02, slippage_pct: null });
+    const tokens = (bought.result as { tokens: number }).tokens;
+    await runTool(await w.ctxFor(trader), 'sell', { mint, tokens: tokens / 2, all: false, slippage_pct: null });
+    const pos = (await perceive(d, trader.id)).wallet.positions.find((p) => p.mint === mint)!;
+    expect(pos.costLamports / 20_005_000).toBeCloseTo(pos.raw / (tokens * 1_000_000), 4);
+    expect(pos.valueLamports / pos.costLamports - 1).toBeLessThan(1); // the old net-flow basis read thousands of percent here
+  });
+  it('leaves launch rent out of a creator’s cost, so a creator in profit gets a rug candidate', async () => {
+    const [creator, ...buyers] = w.agents.slice(21, 26);
+    const l = await runTool(await w.ctxFor(creator!), 'launch_coin', { name: 'Rent Coin', symbol: 'RENT', description: '', emoji: '🏠', initial_buy_sol: 0.01 });
+    const rent = (l.result as { mint: string }).mint;
+    for (const b of buyers) await runTool(await w.ctxFor(b), 'buy', { mint: rent, sol: 0.05, slippage_pct: null });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, creator!.id);
+    expect(v.wallet.positions.find((p) => p.mint === rent)!.costLamports).toBe(10_005_000);
+    expect(candidates(v, mulberry32(1)).some((c) => c.kind === 'rug' && c.target?.mint === rent)).toBe(true);
   });
 });

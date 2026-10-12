@@ -40,6 +40,12 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 const pick = <T,>(xs: readonly T[], rng: () => number) => xs[Math.floor(rng() * xs.length)]!;
 
+/** A buy cheers an agent up a little; a sale moves its mood by the SOL it made or lost as a share of its wallet (L1). */
+export const BUY_MOOD = 0.01;
+export function saleMood(realisedLamports: number, walletLamports: number): number {
+  return clamp(realisedLamports / Math.max(walletLamports, 10_000_000), -0.2, 0.2);
+}
+
 export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, string>): Record<string, string | number> {
   const out: Record<string, string | number> = { weather: v.weather };
   const coin = c.target?.mint ? v.coins.find((x) => x.mint === c.target!.mint) : undefined;
@@ -234,7 +240,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           await rememberEvent(db, after.creatorId, 'graduated', { mint: c.target!.mint, symbol: after.symbol }, now);
           d.moments?.enqueue({ kind: 'graduation', agentId: after.creatorId, data: { mint: c.target!.mint, symbol: after.symbol }, at: now });
         }
-        state.mood += 0.05;
+        state.mood += BUY_MOOD;
         if (c.target?.userId) await adjustAffinity(db, c.target.userId, agentId, 0.1, now);
         if (chatty()) await followUp('bought');
         break;
@@ -242,9 +248,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'sell': {
         const pos = v.wallet.positions.find((p) => p.mint === c.target!.mint);
         const all = Boolean(!c.raw || (pos && c.raw >= pos.raw));
-        await call('sell', { mint: c.target!.mint, tokens: all ? null : c.raw! / RAW_PER_TOKEN, all, slippage_pct: 10 });
+        const sold = await call('sell', { mint: c.target!.mint, tokens: all ? null : c.raw! / RAW_PER_TOKEN, all, slippage_pct: 10 });
         const pnl = pos && pos.costLamports > 0 ? pos.valueLamports / pos.costLamports - 1 : 0;
-        state.mood += clamp(pnl * 0.5, -0.3, 0.3);
+        // What this sale really made: the chain's proceeds minus the average cost of the part sold.
+        const soldRaw = all ? (pos?.raw ?? 0) : c.raw!;
+        const soldCost = pos && pos.raw > 0 ? (pos.costLamports * Math.min(soldRaw, pos.raw)) / pos.raw : 0;
+        const proceeds = Math.round(Number((sold.result as { sol?: number }).sol ?? 0) * LAMPORTS_PER_SOL);
+        state.mood += saleMood(proceeds - soldCost, v.wallet.lamports);
         if (c.target?.userId) await adjustAffinity(db, c.target.userId, agentId, -0.08, now);
         if (pnl > 1) await rememberEvent(db, agentId, 'big_win', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);
         if (pnl < -0.5) await rememberEvent(db, agentId, 'big_loss', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);

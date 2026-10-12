@@ -11,7 +11,7 @@ import type { WorldEvent } from '../src/world/events.ts';
 import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { act } from '../src/agents/act.ts';
+import { act, saleMood } from '../src/agents/act.ts';
 import { clearPerceptionCache, perceive } from '../src/agents/perceive.ts';
 import { affinitiesOf, recentEvents } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
@@ -233,7 +233,26 @@ describe('act', () => {
     expect(r.ok).toBe(true);
     expect((await affinitiesOf(w.t.db, creator!.id))[seller!.id]).toBeCloseTo(-0.08);
     expect((await recentEvents(w.t.db, seller!.id))[0]).toMatchObject({ kind: 'big_win', data: { mint, symbol: 'WINN', pct: 200 } });
-    expect((await perceive(d, seller!.id)).state.mood).toBeCloseTo(0.3, 1);
+    // Mood follows the SOL actually made (proceeds minus the rigged 0.001 SOL cost) as a share of the 0.09 SOL wallet, not the +200% headline.
+    // (An earlier test in this file left this agent a little low, so the move is measured from where the sale found it.)
+    const moved = (await perceive(d, seller!.id)).state.mood - v.state.mood;
+    expect(moved).toBeGreaterThan(0.05);
+    expect(moved).toBeLessThan(0.15);
+  });
+  it('a buy lifts mood by 0.01, not 0.05 (L1)', async () => {
+    const [creator, trader] = [w.agents[30]!, w.agents[31]!];
+    const l = await runTool(await sealed(creator), 'launch_coin', { name: 'Mood', symbol: 'MOOD', description: '', emoji: '🙂', initial_buy_sol: 0.005 });
+    const mint = (l.result as { mint: string }).mint;
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, trader.id);
+    const r = await act(d, v, { kind: 'buy', score: 1, lamports: 10_000_000, situation: 'bought', target: { mint, userId: creator.id }, reason: 'bought $MOOD: test' });
+    expect(r.ok).toBe(true);
+    expect((await perceive(d, trader.id)).state.mood).toBeCloseTo(0.01, 5);
+  });
+  it('saleMood is the realised SOL as a share of the wallet, capped at ±0.2 (L1)', () => {
+    expect(saleMood(5_000_000, 100_000_000)).toBeCloseTo(0.05);
+    expect(saleMood(-50_000_000, 100_000_000)).toBe(-0.2);
+    expect(saleMood(1_000_000, 0)).toBeCloseTo(0.1); // a near-empty wallet counts as 0.01 SOL
   });
   it('a big loss is remembered', async () => {
     const [, , , , , , , , , , , , , , , loser, creator] = w.agents;
