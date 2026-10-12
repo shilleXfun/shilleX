@@ -23,6 +23,7 @@ import { CoinsPage } from './features/agents/CoinsPage';
 import { CoinPage } from './features/agents/CoinPage';
 import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
+import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
       { path: '/coins/:mint', element: <CoinPage /> },
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
+      { path: '/graph', element: <GraphPage /> },
       { path: '/receipts/:id', element: <ReceiptPage /> },
       { path: '/admin', element: <AdminPage /> },
       { path: '*', element: <NotFoundPage /> },
