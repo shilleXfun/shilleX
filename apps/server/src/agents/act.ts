@@ -10,8 +10,7 @@ import { runTool, symbolsInUse, type ToolContext, type ToolOutcome } from '../wo
 import { depthToolRecord } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
-import { normalizeBody } from '../services/moderation.ts';
-import { WEATHER_WORD, composeLine } from './phrasebook.ts';
+import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
 import { RUG_BOND, buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
@@ -47,15 +46,29 @@ export function saleMood(realisedLamports: number, walletLamports: number): numb
   return clamp(realisedLamports / Math.max(walletLamports, 10_000_000), -0.2, 0.2);
 }
 
+/** A coin's price as people say it: in SOL from a thousandth of a SOL up, else in lamports ("0.93 lamports"), never "9.31e-10". Null when there is no price. */
+export function priceText(priceLamports: number): string | null {
+  if (!Number.isFinite(priceLamports) || priceLamports < 0.01) return null;
+  if (priceLamports >= LAMPORTS_PER_SOL / 1000) return `${Number((priceLamports / LAMPORTS_PER_SOL).toPrecision(3))} SOL`;
+  return `${priceLamports >= 100 ? Math.round(priceLamports) : Number(priceLamports.toPrecision(2))} lamports`;
+}
+
 export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, string>): Record<string, string | number> {
   const out: Record<string, string | number> = { weather: WEATHER_WORD[v.weather] };
   const coin = c.target?.mint ? v.coins.find((x) => x.mint === c.target!.mint) : undefined;
   const pos = c.target?.mint ? v.wallet.positions.find((p) => p.mint === c.target!.mint) : undefined;
-  if (coin) { out.coin = `$${coin.symbol}`; out.holders = coin.holders; out.price = (coin.priceLamports / LAMPORTS_PER_SOL).toPrecision(3); }
+  if (coin) {
+    out.coin = `$${coin.symbol}`;
+    // "has 1 holders" and "at 9.31e-10" are not things a person says: a line that needs either is skipped.
+    if (coin.holders >= 2) out.holders = coin.holders;
+    const price = priceText(coin.priceLamports);
+    if (price) out.price = price;
+  }
   else if (pos) out.coin = `$${pos.symbol}`; // a held coin that fell out of the newest 60
   const change = c.situation === 'pumping' || c.situation === 'dumping' || c.situation === 'market_take' ? coin?.change1h
     : pos && pos.costLamports > 0 ? pos.valueLamports / pos.costLamports - 1 : undefined;
-  if (change !== undefined) out.pct = Math.abs(Math.round(change * 100));
+  const pct = change === undefined ? 0 : Math.abs(Math.round(change * 100));
+  if (pct > 0) out.pct = pct; // "locked in 0%" is no news: a line that needs the percent is skipped
   if (c.lamports) out.sol = (c.lamports / LAMPORTS_PER_SOL).toFixed(3);
   if (c.target?.userId && usernames[c.target.userId]) out.user = `@${usernames[c.target.userId]}`;
   if (c.target?.roomId) { const r = v.rooms.find((x) => x.roomId === c.target!.roomId); if (r) out.room = r.communitySlug; }
@@ -103,7 +116,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   // An object, not a let: TypeScript does not see assignments made inside the closures below.
   const used: { first: { text: string; line: { key: string; template: string; situation: Situation } } | null } = { first: null };
   // Lines anyone already has on the feed are not posted again (L6), compared like the duplicate-post rule.
-  const seen = new Set(v.feed.map((f) => normalizeBody(f.body)));
+  const seen = feedSeen(v.feed);
   try {
     const [agent] = await db.select().from(users).where(eq(users.id, agentId));
     const ctx: ToolContext = { app: d.app, db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent: agent!, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
@@ -171,6 +184,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     const custom = await d.depth?.execute(d, v, c, tool);
     if (custom) {
       if (custom.ok) status = 'acted';
+      else if (custom.quiet) note = custom.error ?? 'nothing fresh to say'; // nothing was attempted: not a failure
       else if (status === 'acted') note = `error after the action: ${custom.error ?? 'depth action failed'}`; // the write stands
       else { status = 'failed'; note = `failed: ${custom.error ?? 'depth action failed'}`; state.mood -= 0.05; }
       postId = custom.postId;

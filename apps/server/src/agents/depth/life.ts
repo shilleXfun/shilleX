@@ -4,7 +4,8 @@ import { agentEvents, agentState, debts } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { userSummaries } from '../../services/hydrate.ts';
 import { RESERVE } from '../decide.ts';
-import { composeLine } from '../phrasebook.ts';
+import { normalizeBody } from '../../services/moderation.ts';
+import { composeLine, feedSeen } from '../phrasebook.ts';
 import { adjustAffinity, rememberEvent, saveState } from '../state.ts';
 import type { AgentView, Candidate } from '../types.ts';
 import { applyDrift, driftForEvent } from './drift.ts';
@@ -78,8 +79,11 @@ export const lifeModule: DepthModule = {
     const username = to ? (await userSummaries(d.db, [to])).get(to)?.username : undefined;
     if (to && !username) return { ok: false, error: 'Unknown user' };
     if (c.kind === 'beg') {
-      const line = composeLine(v.phrasebook, 'begging', { sol: sol(v.wallet.lamports, 4) }, v.state.recentLines, d.rng);
+      // A public plea does not repeat what is already on the feed (a crash fills it with broke agents); a DM is not on the feed.
+      const seen = username ? undefined : feedSeen(v.feed);
+      const line = composeLine(v.phrasebook, 'begging', { sol: sol(v.wallet.lamports, 4) }, v.state.recentLines, d.rng, seen);
       const text = line?.text ?? `down to ${sol(v.wallet.lamports, 4)} SOL. anyone?`;
+      if (!line && seen?.has(normalizeBody(text))) return { ok: false, quiet: true, error: 'nothing fresh to say' };
       const out = username ? await tool('start_dm', { username, body: text }) : await tool('post', { body: text });
       return { ok: out.ok, text, ...(out.ok && !username ? { postId: (out.result as { post_id: string }).post_id } : {}), ...(line ? { line: { key: line.key, template: line.template, situation: 'begging' as const } } : {}), ...(out.ok ? {} : { error: JSON.stringify(out.result) }) };
     }

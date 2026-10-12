@@ -51,6 +51,7 @@ export interface DepthView {
   debts: { owedToMe: { id: string; borrowerId: string; lamports: number; createdAt: string }[]; iOwe: { id: string; lenderId: string; lamports: number; createdAt: string }[] };
   begging: { userId: string; ghost: boolean }[];                                       // broke agents I like (affinity >= 0.4)
   pastEvents: { id: string; kind: string; text: string; otherId: string | null; at: string; recalled: number }[];
+  callbackEvents: { id: string; kind: string; text: string; otherId: string | null; at: string; recalled: number }[]; // memories a callback may still recall, newest first (L6b)
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)

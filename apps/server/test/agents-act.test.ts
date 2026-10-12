@@ -12,7 +12,7 @@ import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
 import { newId } from '../src/lib/ids.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { act, saleMood, slotsFor } from '../src/agents/act.ts';
+import { act, priceText, saleMood, slotsFor } from '../src/agents/act.ts';
 import { clearPerceptionCache, perceive } from '../src/agents/perceive.ts';
 import { affinitiesOf, recentEvents } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
@@ -418,6 +418,43 @@ describe('act', () => {
     expect(t.toolCalls).toEqual([{ name: 'react', input: { private: true }, ok: true, result: { private: true } }]);
     expect(JSON.stringify(t)).not.toContain('a private question');
     expect((await perceive(d, me.id)).dms).toEqual([]);
+  });
+  it('posts a different line when the one it would pick is already on the feed, and stays quiet when all of them are (L6b)', async () => {
+    const [me, other] = [w.agents[44]!, w.agents[45]!];
+    await runTool(await sealed(other), 'post', { body: 'Line   ONE' });
+    const v = await perceive(d, me.id);
+    expect(v.feed.map((f) => f.body)).toContain('Line   ONE');
+    // rng 0 takes the first fresh line: without the feed check this turn would post the duplicate.
+    const first = { ...d, rng: () => 0 };
+    const pb = { ...v.phrasebook, lines: { ...v.phrasebook.lines, idle: ['line one', 'line two'] }, openers: [], closers: [] };
+    const r = await act(first, { ...v, phrasebook: pb }, { kind: 'post', score: 1, situation: 'idle', reason: 'felt like posting (idle)' });
+    expect(r.ok).toBe(true);
+    expect(r.text).toBe('line two');
+    const [p] = await w.t.db.select().from(posts).where(eq(posts.id, r.postId!));
+    expect(p!.body).toBe('line two');
+    // Every line is on the feed now (one from the other agent, one from this turn): nothing fresh, so no post.
+    await runTool(await sealed(other), 'post', { body: 'line two' });
+    const crowded = await perceive(d, me.id);
+    const r2 = await act(first, { ...crowded, phrasebook: pb }, { kind: 'post', score: 1, situation: 'idle', reason: 'felt like posting (idle)' });
+    expect(r2.ok).toBe(false);
+    expect(r2.postId).toBeUndefined();
+    expect(await turn(r2.turnId)).toMatchObject({ status: 'quiet', reasoning: 'felt like posting (idle); nothing fresh to say' });
+  });
+  it('says only what a person would about a coin: no "1 holders", no 0%, no 9.31e-10 (L6b)', async () => {
+    const v = await perceive(d, w.agents[46]!.id);
+    const coin = { mint: 'M', symbol: 'X', creatorId: 'c', priceLamports: 0.93, change10m: 0, change1h: 0.404, holders: 1, graduated: false, launchedAt: v.now };
+    const slots = (c: Partial<typeof coin>, situation: Candidate['situation'] = 'market_take') =>
+      slotsFor({ ...v, coins: [{ ...coin, ...c }] }, { kind: 'post', score: 1, situation, target: { mint: 'M' }, reason: 'r' }, {});
+    expect(slots({})).toMatchObject({ coin: '$X', pct: 40, price: '0.93 lamports' });
+    expect(slots({}).holders).toBeUndefined(); // a sole holder is not "1 holders"
+    expect(slots({ holders: 2 }).holders).toBe(2);
+    expect(slots({ change1h: 0.003 }).pct).toBeUndefined(); // "up 0%" is no news
+    expect(slots({ priceLamports: 12.34 }).price).toBe('12 lamports');
+    expect(slots({ priceLamports: 12_345.6 }).price).toBe('12346 lamports');
+    expect(slots({ priceLamports: 2_500_000 }).price).toBe('0.0025 SOL');
+    expect(slots({ priceLamports: 0 }).price).toBeUndefined();
+    expect(priceText(9.31e-10 * 1e9)).toBe('0.93 lamports');
+    for (const p of [0.93, 1.5, 47, 999, 123_456, 5e8, 3e9]) expect(priceText(p), String(p)).not.toMatch(/e[-+]\d/);
   });
   it('fills {weather} with a mood word, never the regime’s name (L6)', async () => {
     const v = await perceive(d, w.agents[43]!.id);

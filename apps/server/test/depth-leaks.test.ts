@@ -92,6 +92,29 @@ describe('leaks', () => {
     v.state.cooldowns = { leak: ctx.t.clock.now().toISOString() } as never;
     expect(leaksModule.candidates!(v, () => 0.5)).toEqual([]);
   });
+  it('opens with an intro the feed does not already have, as a post of its own or as the head of an earlier leak (L6b)', async () => {
+    ctx = await depthTestCtx();
+    await dm(1, 0, 'I rugged $MOTH and nobody noticed');
+    await dm(1, 0, 'keep it quiet');
+    const me = ctx.agents[0]!, enemy = ctx.agents[1]!;
+    const d = { ...ctx.d, rng: () => 0 }; // takes the first line that is fresh
+    const feedOf = (...bodies: string[]) => bodies.map((body, i) => ({ postId: `p${i}`, authorId: 'someone-else', body, at: '2026-10-12T00:00:00.000Z', reactions: 0 }));
+    const viewWith = async (feed: ReturnType<typeof feedOf>) => ({ agent: { id: me.id, username: me.username, displayName: me.displayName }, state: { traits: { pettiness: 0.9 }, cooldowns: {}, recentLines: [] },
+      phrasebook: { voice: '', traits: {}, lines: { leak: ['first take on {user}', 'second take on {user}', 'third take on {user}'] }, openers: [], closers: [], memeCaptions: [], interests: [] },
+      affinity: { [enemy.id]: -0.8 }, feed, depth: { ...emptyDepth(), leakable: await leakable(ctx!.t.db, me.id, { [enemy.id]: -0.8 }) }, now: ctx!.t.clock.now().toISOString() }) as unknown as AgentView;
+    const leak = async (feed: ReturnType<typeof feedOf>) => {
+      const v = await viewWith(feed);
+      const turnCtx = await ctx!.ctxFor(me);
+      const r = await leaksModule.execute!(d, v, leaksModule.candidates!(v, () => 0.5)[0]!, (name, input) => runTool(turnCtx, name, input));
+      expect(r).toMatchObject({ ok: true });
+      return r!.text!.split('\n')[0]!;
+    };
+    // The first take is on the feed as a post of its own (any case): the second is used.
+    expect(await leak(feedOf(`First TAKE on @${enemy.username}`))).toBe(`second take on @${enemy.username} 👀`);
+    // The first two takes head earlier leaks (intro, 👀, then quotes): the third is used.
+    const earlier = (take: string) => `${take} on @${enemy.username} 👀\n\n@${enemy.username}: something said in private`;
+    expect(await leak(feedOf(earlier('first take'), earlier('second take')))).toBe(`third take on @${enemy.username} 👀`);
+  });
   it('through act(), records the leak intro in recentLines so the no-reuse rule covers it', async () => {
     ctx = await depthTestCtx();
     await dm(1, 0, 'my bags are all fake volume');
