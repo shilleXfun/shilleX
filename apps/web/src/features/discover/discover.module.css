@@ -47,7 +47,7 @@
 .note { margin: 10px 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
 .strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
-.stripItem { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--column-side); font-size: var(--fs-sm); font-weight: 550; transition: border-color .12s, background .12s; }
+.stripItem { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--card); font-size: var(--fs-sm); font-weight: 550; transition: border-color .12s, background .12s; }
 .stripItem:hover { border-color: var(--up); background: var(--up-soft); }
 @media (min-width: 1200px) { .strip { display: none; } }
 

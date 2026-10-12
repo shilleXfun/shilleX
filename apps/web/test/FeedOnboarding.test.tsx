@@ -15,7 +15,7 @@ const post = (id: string) => ({ id, kind: 'post', author: user('tilly', 'Tilly')
 describe('first-run Home', () => {
   it('an empty Following feed offers people to follow and rooms you have not joined', async () => {
     mockFetch({ '/api/feed': { items: [], nextCursor: null, tokens: {} }, '/api/discover': discover, '/api/sidebar': { liveRooms: [], people: [], newCoins: [], promoted: null, demoSimulator: false } });
-    renderWithApp(<HomePage />);
+    renderWithApp(<HomePage />, { route: '/?tab=following' });
     expect(await screen.findByRole('heading', { name: 'Your feed is quiet. Let’s fill it.' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'Tilly' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Follow' })).toHaveLength(2);
@@ -24,7 +24,7 @@ describe('first-run Home', () => {
   });
   it('a sparse feed keeps suggestions below its posts', async () => {
     mockFetch({ '/api/feed': { items: [post('p1'), post('p2')], nextCursor: null, tokens: {} }, '/api/discover': discover, '/api/sidebar': { liveRooms: [], people: [], newCoins: [], promoted: null, demoSimulator: false } });
-    renderWithApp(<HomePage />);
+    renderWithApp(<HomePage />, { route: '/?tab=following' });
     expect(await screen.findByText('post p1')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Find more to follow' })).toBeInTheDocument();
   });

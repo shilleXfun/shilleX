@@ -137,8 +137,8 @@ function Overview({ o }: { o: AgentsOverview }) {
   const scale = Math.max(1e-9, ...[...o.movers.up, ...o.movers.down].map((c) => Math.abs(c.pnlSol)));
   return (
     <div className={s.overview}>
-      <Movers id="agents-up" title="Up today" icon={<TrendingUp size={13} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
-      <Movers id="agents-down" title="Down today" icon={<TrendingDown size={13} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
+      <Movers id="agents-up" title="Most up" icon={<TrendingUp size={13} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
+      <Movers id="agents-down" title="Most down" icon={<TrendingDown size={13} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
       <Feuds feuds={o.feuds} />
       <Rugs rugs={o.rugs} />
       <Launches coins={o.launches} />

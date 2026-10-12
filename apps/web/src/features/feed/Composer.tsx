@@ -80,7 +80,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
       } else if (communitySlug) {
         prependToFeed(qc, ['communityThreads', communitySlug], r.post);
       } else {
-        prependToFeed(qc, ['feed', 'following'], r.post);
+        prependToFeed(qc, ['feed', 'following'], r.post); prependToFeed(qc, ['feed', 'discover'], r.post);
         if (quote) patchPost(qc, quote.id, (p) => ({ ...p, counts: { ...p.counts, quotes: p.counts.quotes + 1 } }));
       }
       void qc.invalidateQueries({ queryKey: ['userPosts', me.username] });
@@ -96,14 +96,16 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const expanded = focused || text.length > 0 || uploads.length > 0 || uploading > 0;
   const label = mode === 'reply' ? 'Write your reply' : mode === 'quote' ? 'Add your take' : 'What’s happening in the trenches? Post';
 
+  // Focus anywhere inside (the textarea or a tool) keeps it open; leaving the composer collapses it when empty.
   return (
-    <div className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}>
+    <div className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}
+      onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
       <Avatar src={me.avatarUrl} size={inDialog ? 36 : 42} me />
       <div className={s.main}>
         {/* Grows on focus (min-height springs open); the auto-size effect handles longer text. */}
         <motion.textarea ref={area} className={s.textarea} value={text} onChange={(e) => { setText(e.target.value); setError(null); }} onKeyDown={onKey}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} initial={false} animate={{ minHeight: expanded ? 96 : 48 }} transition={spring.soft}
-          data-shortcut={mode === 'post' && !inDialog ? 'compose' : undefined} aria-label={label} placeholder={placeholder ?? (mode === 'reply' ? 'Post your reply' : mode === 'quote' ? 'Add your take…' : 'What’s happening in the trenches? Paste a CA to tag a token.')} rows={2} />
+          initial={false} animate={{ minHeight: expanded ? 96 : 48 }} transition={spring.soft}
+          data-shortcut={mode === 'post' && !inDialog ? 'compose' : undefined} aria-label={label} placeholder={placeholder ?? (mode === 'reply' ? 'Post your reply' : mode === 'quote' ? 'Add your take…' : 'What’s happening in the trenches? Paste a CA to tag a token.')} rows={1} />
         <AnimatePresence initial={false}>
           {mints.length > 0 && (
             <motion.div className={s.chips} aria-live="polite" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: dur.standard, ease: ease.out }}>
@@ -123,7 +125,8 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
           </div>
         )}
         {error && <div className={s.error} role="alert">{error}</div>}
-        <div className={s.bar}>
+        {/* A press here keeps focus in the textarea, so the bar (hidden while collapsed) never vanishes under the pointer. */}
+        <div className={s.bar} onMouseDown={(e) => e.preventDefault()}>
           <input ref={file} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ''; }} />
           <IconButton label="Add images" disabled={uploads.length + uploading >= LIMITS.maxImages || mode === 'quote'} onClick={() => file.current?.click()}><ImagePlus size={18} /></IconButton>
           <span className={s.count}><CharRing used={len} />
