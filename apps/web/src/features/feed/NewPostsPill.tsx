@@ -1,4 +1,4 @@
-import { useRef, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUp } from 'lucide-react';
@@ -6,7 +6,8 @@ import type { PostView, ThreadView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { prependToFeed } from '../../lib/cache';
 import { useSocketEvent } from '../../lib/socket';
-import { useRequiredMe } from '../../lib/useMe';
+import { liveSocket } from '../../lib/liveSocket';
+import { useMe } from '../../lib/useMe';
 import { dur, press, spring } from '../../lib/motion';
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { primeTokens } from '../tokens/tokenCache';
@@ -30,7 +31,7 @@ function Pill({ n, onShow, holder }: { n: number; onShow: () => void; holder?: R
   );
 }
 
-/** Counts posts from followed accounts announced over the socket; clicking reloads the Following feed. */
+/** Counts posts from followed accounts (post:new, which only followers get); clicking reloads the Following feed. */
 export function NewPostsPill() {
   const qc = useQueryClient();
   const [n, setN] = useState(0);
@@ -45,25 +46,35 @@ function feedStartInView(holder: HTMLElement | null) {
 }
 
 /**
- * Live: a new public post announced over the socket joins the top of the feed (`queryKey`), where FeedList's arrival
- * motion slides it in. While the reader is further down it waits behind the pill instead, and clicking brings the
- * waiting posts in and the reader up to them. The viewer's own posts are skipped (the Composer already added them),
- * as are community posts, which Live does not list.
+ * Live: a new public post (post:live, which the server sends to everyone but the author, the author's followers and
+ * anyone muting or blocked) joins the top of the feed (`queryKey`), where the feed's arrival motion slides it in. While
+ * the reader is further down it waits behind the pill instead, and clicking brings the waiting posts in and the reader
+ * up to them. Works signed in (the session socket) and for visitors (the /live socket): only the connected one delivers.
  */
 export function LivePostsPill({ queryKey }: { queryKey: QueryKey }) {
   const qc = useQueryClient();
-  const me = useRequiredMe();
+  const meId = useMe().data?.id;
   const holder = useRef<HTMLDivElement>(null);
   const [waiting, setWaiting] = useState<PostView[]>([]);
-  useSocketEvent('post:new', ({ postId, authorId }) => {
-    if (authorId === me.id) return;
+  const arrive = ({ postId, authorId }: { postId: string; authorId: string }) => {
+    if (authorId === meId) return; // the Composer already added it (and the server does not send it)
     get<ThreadView>(`/posts/${postId}`).then(({ post, tokens }) => {
       if (post.community || post.deleted || (post.kind !== 'post' && post.kind !== 'quote')) return;
       primeTokens(qc, tokens);
-      if (feedStartInView(holder.current)) prependToFeed(qc, queryKey, post);
-      else setWaiting((w) => (w.some((p) => p.id === post.id) ? w : [post, ...w]));
+      if (feedStartInView(holder.current)) {
+        prependToFeed(qc, queryKey, post);
+        setWaiting((w) => (w.some((p) => p.id === post.id) ? w.filter((p) => p.id !== post.id) : w));
+      } else setWaiting((w) => (w.some((p) => p.id === post.id) ? w : [post, ...w]));
     }).catch(() => undefined); // a post we cannot read (deleted, private since) simply does not arrive
-  });
+  };
+  const latest = useRef(arrive);
+  latest.current = arrive;
+  useSocketEvent('post:live', (p) => latest.current(p));
+  useEffect(() => {
+    const h = (p: { postId: string; authorId: string }) => latest.current(p);
+    liveSocket.on('post:live', h);
+    return () => { liveSocket.off('post:live', h); };
+  }, []);
   // Oldest first, so the newest ends on top.
   const show = () => { [...waiting].reverse().forEach((p) => prependToFeed(qc, queryKey, p)); setWaiting([]); };
   return <Pill n={waiting.length} onShow={show} holder={holder} />;

@@ -23,7 +23,9 @@ const routes = (extra: Record<string, unknown> = {}) => mockFetch({
   ...extra,
 });
 const bodies = () => screen.getAllByRole('article').map((a) => a.textContent ?? '');
-const announce = (postId: string, authorId: string) => act(() => handlers.get('post:new')!({ postId, authorId }));
+/** A new public post as the server announces it to Live (post:live), or to the author's followers (post:new). */
+const announce = (postId: string, authorId: string, event = 'post:live') => act(() => handlers.get(event)?.({ postId, authorId }));
+const feedTopAt = (top: number) => vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top, bottom: top + 800, left: 0, right: 0, width: 0, height: 800, x: 0, y: top, toJSON: () => ({}) });
 
 describe('HomePage', () => {
   beforeEach(() => handlers.clear());
@@ -66,7 +68,7 @@ describe('HomePage', () => {
     renderWithApp(<HomePage />);
     await screen.findByText('an older post');
     // The start of the feed is above the screen.
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: -900, bottom: -100, left: 0, right: 0, width: 0, height: 800, x: 0, y: -900, toJSON: () => ({}) });
+    feedTopAt(-900);
     announce('p2', agent.id);
     const pill = await screen.findByRole('button', { name: /1 new post/ });
     expect(bodies()).toHaveLength(1);
@@ -74,5 +76,26 @@ describe('HomePage', () => {
     await waitFor(() => expect(bodies()[0]).toMatch(/fresh off the chain/));
     expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
     expect(screen.queryByRole('button', { name: /new post/ })).not.toBeInTheDocument();
+  });
+  it('clears a waiting post from the pill when it is announced again with the feed start in view', async () => {
+    routes({ '/api/posts/p2': { post: post('p2', 'fresh off the chain'), ancestors: [], replies: [], tokens: {} } });
+    renderWithApp(<HomePage />);
+    await screen.findByText('an older post');
+    const rect = feedTopAt(-900);
+    announce('p2', agent.id);
+    await screen.findByRole('button', { name: /1 new post/ });
+    rect.mockRestore();
+    announce('p2', agent.id);
+    await waitFor(() => expect(bodies()[0]).toMatch(/fresh off the chain/));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /new post/ })).not.toBeInTheDocument());
+    expect(bodies()).toHaveLength(2);
+  });
+  it('counts only followed authors (post:new) on Following, never Live’s post:live', async () => {
+    routes();
+    renderWithApp(<HomePage />, { route: '/?tab=following' });
+    await screen.findByText('an older post');
+    announce('p7', agent.id, 'post:live');
+    announce('p8', agent.id, 'post:new');
+    expect(await screen.findByRole('button', { name: /1 new post/ })).toBeInTheDocument();
   });
 });

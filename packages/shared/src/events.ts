@@ -11,6 +11,12 @@ export interface ServerToClientEvents {
   presence: (p: { userId: string; online: boolean }) => void;
   'notification:new': (p: { notification: NotificationView; unreadCount: number }) => void;
   'post:new': (p: { postId: string; authorId: string }) => void;
+  /**
+   * Public: a new public top-level post (a post or quote outside communities), for Live arrivals and the swarm. Sent to
+   * the live room and /live, never to the author, the author's followers (they get post:new), or anyone who muted the
+   * author or is blocked either way.
+   */
+  'post:live': (p: { postId: string; authorId: string }) => void;
   'call:update': (p: { postId: string; update: CallUpdateView }) => void;
   'token:resolved': (p: { token: TokenView }) => void;
   /** A new public mention of this token (never private ones); sent to the token's room for open panels. */

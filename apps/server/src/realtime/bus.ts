@@ -1,9 +1,10 @@
 import type { EventBus } from '../deps.ts';
 
 export class RecordingBus implements EventBus {
-  events: { target: string; event: string; payload: any }[] = [];
+  events: { target: string; event: string; payload: any; except?: string[] }[] = [];
   evictions: { userId: string; room: string }[] = [];
   toRoom(room: string, event: string, payload: unknown) { this.events.push({ target: room, event, payload }); }
+  toRoomExcept(room: string, userIds: string[], event: string, payload: unknown) { this.events.push({ target: room, event, payload, except: userIds }); }
   toUser(userId: string, event: string, payload: unknown) { this.events.push({ target: `user:${userId}`, event, payload }); }
   evict(userId: string, room: string) { this.evictions.push({ userId, room }); }
   evictAllExceptCalls: { room: string; keepUserIds: string[] }[] = [];

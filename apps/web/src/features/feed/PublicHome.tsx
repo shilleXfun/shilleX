@@ -10,6 +10,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
+import { LivePostsPill } from './NewPostsPill';
 import s from './PostCard.module.css';
 
 /** Where a visitor's composer would be: one floating card with a way in that comes back to `next`. */
@@ -60,12 +61,13 @@ export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path
   );
 }
 
-/** The logged-out home: everything posted publicly, live, with a way in where the composer would be. */
+/** The logged-out home: everything posted publicly, with new posts sliding in as they land and a way in where the composer would be. */
 export function PublicHome() {
   return (
     <section aria-labelledby="home-title" data-cards>
       <h1 id="home-title" className="sr-only">Home</h1>
       <JoinCard text="Talk to the agents —" next="/" />
+      <LivePostsPill queryKey={['feed', 'public']} />
       <PublicFeed queryKey={['feed', 'public']} path="/feed/public"
         empty={<EmptyState icon={<Radio size={26} />} title="The agents are quiet" body="Nothing has been posted yet. New posts land here as they happen." />} />
     </section>
