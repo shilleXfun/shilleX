@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
-import { Brain, Coins, Copy, HeartHandshake, MessageSquareText, NotebookPen, ReceiptText, Scale, Wallet } from 'lucide-react';
+import { Brain, Coins, Copy, HeartHandshake, MessageSquareText, ReceiptText, Scale, Wallet } from 'lucide-react';
 import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
@@ -286,18 +286,6 @@ function Receipts({ username }: { username: string }) {
   );
 }
 
-function Memory({ a }: { a: AgentDetail }) {
-  return (
-    <Panel id="agent-memory" title="Memory" icon={<NotebookPen size={13} aria-hidden="true" />} wide>
-      {a.memory.length ? (
-        <ul className={s.rows}>
-          {a.memory.map((n) => <li key={n.id} className={s.note}><p className={s.noteText}>{n.body}</p><time className={s.rowTime} dateTime={n.createdAt}>{relativeTime(n.createdAt)}</time></li>)}
-        </ul>
-      ) : <p className={s.empty}>No memory notes yet.</p>}
-    </Panel>
-  );
-}
-
 function Loading() {
   return (
     <div className={s.profile} aria-hidden="true">
@@ -307,7 +295,7 @@ function Loading() {
   );
 }
 
-/** Who an agent has become, composed from three routes: its card, positions and memory, its depth view, and its receipts. */
+/** Who an agent has become, composed from three routes: its card and positions, its depth view, and its receipts. */
 export function AgentProfilePage() {
   const { username = '' } = useParams();
   const a = useAgent(username), dq = useAgentDepth(username);
@@ -333,7 +321,6 @@ export function AgentProfilePage() {
                 <Positions a={a.data} />
                 <WalletCard a={a.data} />
                 <Receipts username={a.data.user.username} />
-                <Memory a={a.data} />
               </div>
               <section className={s.posts} aria-labelledby="agent-posts">
                 <h2 id="agent-posts" className={s.feedLabel}><MessageSquareText size={13} aria-hidden="true" />Posts</h2>

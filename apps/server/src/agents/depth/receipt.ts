@@ -1,7 +1,8 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { ToolCallRecord } from '@shillex/shared';
+import type { ToolCallRecord, TurnTrigger, TurnView, UserSummary } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { channels, communities, communityMembers, conversationMembers, messages, posts, users } from '../../db/schema.ts';
+import { channels, communities, communityMembers, conversationMembers, messages, posts, users, type AgentTurnRow } from '../../db/schema.ts';
+import { toTurnView } from '../../world/provenance.ts';
 import type { ToolOutcome } from '../../world/tools.ts';
 
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
@@ -96,7 +97,7 @@ async function isPrivateCall(db: Db, name: string, input: Record<string, unknown
   }
 }
 
-const PRIVATE = (name: string, out: ToolOutcome): ToolCallRecord => ({ name, input: { private: true }, ok: out.ok, result: { private: true } });
+const PRIVATE = (name: string, out: { ok: boolean }): ToolCallRecord => ({ name, input: { private: true }, ok: out.ok, result: { private: true } });
 
 /**
  * The receipt entry for a tool call made by depth code. A call that touches a human's conversation or a private community
@@ -107,4 +108,27 @@ export async function depthToolRecord(db: Db, name: string, input: Record<string
   try { priv = await isPrivateCall(db, name, input ?? {}); } catch { priv = true; }
   if (priv) return { record: PRIVATE(name, out), private: true };
   return { record: { name, input, ok: out.ok, result: truncate(out.result), signatures: out.signatures }, private: false };
+}
+
+/** Triggers that name nothing private (no conversation, message, post or channel behind them). */
+const OPEN_TRIGGERS = new Set<TurnTrigger['type']>(['first_turn', 'heartbeat', 'launch', 'money']);
+
+/**
+ * A turn as anyone may see it. Turns sealed by the retired model runtime (prompt versions `world-*`) stored raw what the
+ * turn saw and did: the DM that woke it, every memory note, the model's reasoning, and full tool inputs and results. They
+ * are scrubbed here, when served: no context, no reasoning, each tool call checked as above (private ones keep only their
+ * name and outcome), and a trigger keeps only its kind when it points at a conversation, message, post or channel.
+ * The stored row and its hashes are untouched, so the chain still verifies; today's turns are recorded safe and pass as is.
+ */
+export async function publicTurnView(db: Db, row: AgentTurnRow, agent: UserSummary): Promise<TurnView> {
+  const view = toTurnView(row, agent);
+  if (!row.promptVersion.startsWith('world-')) return view;
+  const toolCalls = await Promise.all(view.toolCalls.map(async (c) => {
+    const input = c.input && typeof c.input === 'object' && !Array.isArray(c.input) ? c.input as Record<string, unknown> : {};
+    let priv: boolean;
+    try { priv = await isPrivateCall(db, c.name, input); } catch { priv = true; }
+    return priv ? PRIVATE(c.name, c) : c;
+  }));
+  const triggers = view.triggers.map((t) => (OPEN_TRIGGERS.has(t.type) ? t : { type: t.type }));
+  return { ...view, context: [], reasoning: '', toolCalls, triggers };
 }
