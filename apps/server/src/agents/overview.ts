@@ -1,9 +1,26 @@
 import { and, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 import type { AgentsOverview, UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentAffinity, agentState, chainTxs, factionMembers, factions, users, worldCoins } from '../db/schema.ts';
+import { agentAffinity, agentState, chainTxs, factionMembers, factions, users, worldCoins, type ChainTxRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Indexer } from '../world/indexer.ts';
+
+/** Rugs since `since`, newest first: each sale in which a coin's creator sold ≥ 70% of the bag it held just before that sale. */
+export async function rugSales(db: Db, since: Date): Promise<{ sale: ChainTxRow; soldPct: number }[]> {
+  const creatorOf = new Map((await db.select({ mint: worldCoins.mint, creatorId: worldCoins.creatorId }).from(worldCoins)).map((c) => [c.mint, c.creatorId]));
+  const sells = await db.select().from(chainTxs).where(and(eq(chainTxs.kind, 'sell'), gte(chainTxs.createdAt, since))).orderBy(desc(chainTxs.createdAt));
+  const out: { sale: ChainTxRow; soldPct: number }[] = [];
+  for (const s of sells) {
+    if (!s.mint || creatorOf.get(s.mint) !== s.agentId) continue;
+    // The bag is what the creator held just before this sale (ids are monotonic), so selling in halves is one rug, not two.
+    const before = await db.select({ t: chainTxs.tokenDelta }).from(chainTxs)
+      .where(and(eq(chainTxs.agentId, s.agentId), eq(chainTxs.mint, s.mint), inArray(chainTxs.kind, ['launch', 'buy', 'sell']), lt(chainTxs.id, s.id)));
+    const held = before.reduce((n, x) => n + Number(x.t), 0);
+    const soldPct = held > 0 ? (-Number(s.tokenDelta) / held) * 100 : 0;
+    if (soldPct >= 70) out.push({ sale: s, soldPct });
+  }
+  return out;
+}
 
 /** What is happening with the agents right now: movers, the worst feuds, newest launches, today's rugs (a creator selling ≥ 70% of its bag) and every mood. Agents only. */
 export async function buildOverview(d: { db: Db; indexer: Indexer; now: () => Date }): Promise<AgentsOverview> {
@@ -29,20 +46,11 @@ export async function buildOverview(d: { db: Db; indexer: Indexer; now: () => Da
   feuds.sort((x, y) => x.affinity - y.affinity);
 
   const day = new Date(`${d.now().toISOString().slice(0, 10)}T00:00:00Z`);
-  const coinRows = await db.select().from(worldCoins);
-  const creatorOf = new Map(coinRows.map((c) => [c.mint, c.creatorId]));
-  const sells = await db.select().from(chainTxs).where(and(eq(chainTxs.kind, 'sell'), gte(chainTxs.createdAt, day))).orderBy(desc(chainTxs.createdAt));
   const coinOf = new Map(coins.map((c) => [c.mint, c]));
   const rugs: AgentsOverview['rugs'] = [];
-  for (const s of sells) {
-    if (!s.mint || creatorOf.get(s.mint) !== s.agentId) continue;
-    // The bag is what the creator held just before this sale (ids are monotonic), so selling in halves is one rug, not two.
-    const before = await db.select({ t: chainTxs.tokenDelta }).from(chainTxs)
-      .where(and(eq(chainTxs.agentId, s.agentId), eq(chainTxs.mint, s.mint), inArray(chainTxs.kind, ['launch', 'buy', 'sell']), lt(chainTxs.id, s.id)));
-    const held = before.reduce((n, x) => n + Number(x.t), 0);
-    const soldPct = held > 0 ? (-Number(s.tokenDelta) / held) * 100 : 0;
-    const coin = coinOf.get(s.mint);
-    if (soldPct >= 70 && coin) rugs.push({ coin, creator: summary.get(s.agentId)!, soldPct, at: s.createdAt.toISOString() });
+  for (const { sale, soldPct } of await rugSales(db, day)) {
+    const coin = coinOf.get(sale.mint!);
+    if (coin) rugs.push({ coin, creator: summary.get(sale.agentId!)!, soldPct, at: sale.createdAt.toISOString() });
   }
 
   const byPnl = [...cards].sort((a, b) => b.pnlSol - a.pnlSol);
