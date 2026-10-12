@@ -170,10 +170,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       const old = model;
       model = m;
       const n = m?.nodes.length ?? 0, nc = m?.coins.length ?? 0;
-      const oldHot = hot;
+      const oldHot = hot, oldPulse = pulse;
       px = new Float32Array(n); py = new Float32Array(n); hot = new Float32Array(n); pulse = new Float32Array(nc);
-      if (old && m) for (const [id, i] of m.index) { const o = old.index.get(id); if (o !== undefined) hot[i] = oldHot[o] ?? 0; }
-      streaks = []; rings = [];
+      if (old && m) {
+        // Animations in flight follow their agent and coin into the new model (by id and mint); those whose target is gone end.
+        for (const [id, i] of m.index) { const o = old.index.get(id); if (o !== undefined) hot[i] = oldHot[o] ?? 0; }
+        for (const [mint, i] of m.coinIndex) { const o = old.coinIndex.get(mint); if (o !== undefined) pulse[i] = oldPulse[o] ?? 0; }
+        const node = (i: number) => { const id = old.nodes[i]?.id; return id === undefined ? undefined : m.index.get(id); };
+        const coin = (i: number) => { const mint = old.coins[i]?.mint; return mint === undefined ? undefined : m.coinIndex.get(mint); };
+        const at = (a: At): At | null => { const i = 'node' in a ? node(a.node) : coin(a.coin); return i === undefined ? null : 'node' in a ? { node: i } : { coin: i }; };
+        streaks = streaks.flatMap((s) => { const f = node(s.from), to = at(s.to); return f === undefined || !to ? [] : [{ ...s, from: f, to }]; });
+        rings = rings.flatMap((r) => { const to = at(r.at); return to ? [{ ...r, at: to }] : []; });
+      } else { streaks = []; rings = []; }
       if (opts.reduced || !running) still();
     },
     setRegime(r) {

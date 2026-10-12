@@ -12,9 +12,11 @@ export function mulberry32(seed: number): () => number {
 
 /**
  * A small spring-and-repulsion layout, deterministic for a seed and `init`. Allies (w > 0) are springs with rest length
- * 90 + (1 - w) * 140; every pair repels; enemies (w < 0) repel 1 + 2|w| times harder; a weak pull toward the centre
- * keeps loners on screen. Every node ends inside [r, width - r] × [r, height - r]. Moves per iteration are capped by a
- * temperature that falls linearly from `temperature` (default k / 2); a small one nudges an existing layout (`init`).
+ * 90 + (1 - w) * 140; pairs closer than 2k repel gently (k is the ideal spacing); enemies (w < 0) repel 1 + 2|w| times
+ * harder; a pull toward a loose ring (an ellipse at 70% of the half extents) spreads loners over the whole box, and a
+ * soft margin of 6% per side eases nodes off the walls. Every node ends inside [r, width - r] × [r, height - r]. Moves
+ * per iteration are capped by a temperature that falls linearly from `temperature` (default k / 2); a small one nudges
+ * an existing layout (`init`).
  */
 export function forceLayout(
   nodes: { id: string; r: number }[],
@@ -49,7 +51,8 @@ export function forceLayout(
         let ex = xs[i]! - xs[j]!, ey = ys[i]! - ys[j]!;
         if (ex * ex + ey * ey < 0.01) { ex = rnd() - 0.5; ey = rnd() - 0.5; }
         const d = Math.max(0.1, Math.hypot(ex, ey));
-        const f = ((k * k) / d) * 0.6 * (boost.get(i * n + j) ?? 1);
+        if (d > 2 * k) continue;
+        const f = ((k * k) / d) * 0.08 * (boost.get(i * n + j) ?? 1);
         dx[i]! += (ex / d) * f; dy[i]! += (ey / d) * f; dx[j]! -= (ex / d) * f; dy[j]! -= (ey / d) * f;
       }
     }
@@ -59,9 +62,16 @@ export function forceLayout(
       dx[i]! += (ex / d) * f; dy[i]! += (ey / d) * f; dx[j]! -= (ex / d) * f; dy[j]! -= (ey / d) * f;
     }
     for (let i = 0; i < n; i++) {
-      dx[i]! += (cx - xs[i]!) * 0.02; dy[i]! += (cy - ys[i]!) * 0.02;
+      // Pull toward a loose ring (an ellipse at 70% of the half extents) instead of the centre, so agents spread over the
+      // whole backdrop rather than collapsing behind the reading column or flattening against the walls.
+      const ux = (xs[i]! - cx) / (width / 2), uy = (ys[i]! - cy) / (height / 2), rr = Math.max(1e-6, Math.hypot(ux, uy));
+      dx[i]! += (cx + (ux / rr) * 0.7 * (width / 2) - xs[i]!) * 0.08;
+      dy[i]! += (cy + (uy / rr) * 0.7 * (height / 2) - ys[i]!) * 0.08;
       const m = Math.hypot(dx[i]!, dy[i]!);
       if (m > 0) { const s = Math.min(m, temp) / m; xs[i]! += dx[i]! * s; ys[i]! += dy[i]! * s; }
+      const mx = width * 0.06, my = height * 0.06;
+      if (xs[i]! < mx) xs[i]! += (mx - xs[i]!) * 0.3; else if (xs[i]! > width - mx) xs[i]! -= (xs[i]! - (width - mx)) * 0.3;
+      if (ys[i]! < my) ys[i]! += (my - ys[i]!) * 0.3; else if (ys[i]! > height - my) ys[i]! -= (ys[i]! - (height - my)) * 0.3;
       const r = nodes[i]!.r;
       xs[i] = Math.min(width - r, Math.max(r, xs[i]!)); ys[i] = Math.min(height - r, Math.max(r, ys[i]!));
     }
