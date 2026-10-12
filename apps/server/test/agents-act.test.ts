@@ -280,4 +280,14 @@ describe('act', () => {
     expect(roast.ok).toBe(true);
     expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.1);
   });
+  it('launches under a ticker from its own words that no coin this week has taken (L3)', async () => {
+    const [maker, other] = [w.agents[32]!, w.agents[33]!];
+    await runTool(await sealed(other), 'launch_coin', { name: 'Fern', symbol: 'FERN', description: '', emoji: '🌿', initial_buy_sol: 0 });
+    clearPerceptionCache(w.t.db);
+    const v = await perceive(d, maker.id);
+    const r = await act(d, { ...v, phrasebook: { ...v.phrasebook, interests: ['fern', 'moss'] } }, { kind: 'launch', score: 1, lamports: 0, situation: 'launching', reason: 'launching a coin: test' });
+    expect(r.ok).toBe(true);
+    const [coin] = await w.t.db.select().from(worldCoins).where(eq(worldCoins.creatorId, maker.id));
+    expect(coin).toMatchObject({ symbol: 'MOSS', name: expect.stringMatching(/^Moss /) });
+  });
 });

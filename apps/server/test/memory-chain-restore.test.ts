@@ -10,7 +10,7 @@ import { MemoryChain, RAW_PER_TOKEN } from '../src/world/chain.ts';
 import { START_LAMPORTS, fundAgents } from '../src/world/ledger.ts';
 import { seedWorld } from '../src/world/seed.ts';
 import { runTool } from '../src/world/tools.ts';
-import { TREASURY, walletOf } from '../src/world/wallets.ts';
+import { TREASURY, signerFor, walletOf } from '../src/world/wallets.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 let mint = '';
@@ -71,8 +71,9 @@ describe('restoreMemoryChain', () => {
   it('never repeats a mint or a signature from before the restart', async () => {
     const fresh = await restored();
     const used = new Set((await w.t.db.select({ s: chainTxs.signature }).from(chainTxs)).map((r) => r.s));
-    // The same ticker again: only the signature counter keeps the new mint apart from the first coin's.
-    const launched = (await act(fresh, 3, 'launch_coin', { name: 'Lamp', symbol: 'LAMP', description: '', emoji: '💡', initial_buy_sol: 0.01 })).result as { mint: string; signature: string };
+    // The same ticker again, straight on the chain (the launch tool now refuses a ticker in use, L3): only the signature
+    // counter keeps the new mint apart from the first coin's.
+    const launched = await fresh.launch(await signerFor(w.t.db, w.agents[3]!.id, w.key), { name: 'Lamp', symbol: 'LAMP', uri: '', initialBuyLamports: 10_000_000 });
     expect(launched.mint).not.toBe(mint);
     expect(used.has(launched.signature)).toBe(false);
   });

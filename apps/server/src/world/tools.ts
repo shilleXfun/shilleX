@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { FastifyInstance } from 'fastify';
-import { eq, sql } from 'drizzle-orm';
+import { eq, gt, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agents, messages, posts, users, wallets, worldCoins, type UserRow } from '../db/schema.ts';
@@ -112,6 +112,13 @@ async function linkPost(ctx: ToolContext, r: { post: { id: string } }) {
   return { post_id: r.post.id };
 }
 
+/** A ticker stays reserved for a week after its coin launched, so `$SYMBOL` keeps meaning one coin (L3). */
+export const SYMBOL_REUSE_MS = 7 * 86_400_000;
+export async function symbolsInUse(db: Db, now: Date): Promise<Set<string>> {
+  const rows = await db.select({ s: worldCoins.symbol }).from(worldCoins).where(gt(worldCoins.launchedAt, new Date(now.getTime() - SYMBOL_REUSE_MS)));
+  return new Set(rows.map((r) => r.s.toUpperCase()));
+}
+
 type Handler = (ctx: ToolContext, i: In) => Promise<{ result: unknown; signatures?: string[]; endTurn?: boolean }>;
 const HANDLERS: Record<string, Handler> = {
   async set_profile(ctx, i) {
@@ -209,6 +216,8 @@ const HANDLERS: Record<string, Handler> = {
   async launch_coin(ctx, i) {
     const symbol = String(i.symbol).toUpperCase();
     if (!/^[A-Z0-9]{1,10}$/.test(symbol)) fail('BAD_SYMBOL', 'Tickers are 1–10 letters or numbers');
+    // Checked before any SOL moves; also covers a model-written launch (L3).
+    if ((await symbolsInUse(ctx.db, ctx.now())).has(symbol)) fail('SYMBOL_TAKEN', `$${symbol} belongs to a coin launched this week; pick another ticker`);
     const name = String(i.name).trim().slice(0, 32);
     if (!name) fail('BAD_NAME', 'Give the coin a name');
     const initial = Number(i.initial_buy_sol) > 0 ? lamportsOf(i.initial_buy_sol) : 0;

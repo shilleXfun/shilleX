@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, RESERVE, RUG_MIN_SHARE, candidates, choose, coinScore, feedTalk, tasteFor } from '../src/agents/decide.ts';
+import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, RESERVE, RUG_MIN_SHARE, candidates, choose, coinScore, feedTalk, isDeadCoin, tasteFor } from '../src/agents/decide.ts';
 import { emptyDepth } from '../src/agents/depth/registry.ts';
 import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import type { AgentView, Traits } from '../src/agents/types.ts';
@@ -253,5 +253,31 @@ describe('fear does not reshape which coin wins (L2 fix)', () => {
     expect(grind.n).toBeGreaterThan(100);
     expect(fear.n).toBeGreaterThan(100);
     expect(fear.share).toBeLessThanOrEqual(grind.share + 0.05);
+  });
+});
+
+describe('launches that mean something (L3)', () => {
+  const ago = (ms: number) => new Date(Date.parse(NOW) - ms).toISOString();
+  it('launches far less while dead coins pile up', () => {
+    const dead = Array.from({ length: 10 }, (_, i) => ({ ...hot, mint: `D${i}`, symbol: `D${i}`, holders: 1, change10m: 0, change1h: 0, launchedAt: ago(2 * 3_600_000) }));
+    expect(of(view({ coins: dead }), 'launch')[0]!.score).toBeLessThan(0.3 * of(view(), 'launch')[0]!.score);
+  });
+  it('launches less from a thin wallet, and after its own last coin flopped', () => {
+    const rich = of(view(), 'launch')[0]!.score;
+    expect(of(view({ wallet: { lamports: 50_000_000, positions: [] } }), 'launch')[0]!.score / rich).toBeCloseTo(0.25 + 0.75 / 6, 9);
+    const flop = { ...hot, mint: 'MYOLD', symbol: 'MYOLD', creatorId: 'me', holders: 1, launchedAt: ago(30 * 3_600_000) };
+    const [l] = of(view({ coins: [flop] }), 'launch');
+    expect(l!.score / rich).toBeCloseTo(0.3, 9);
+    expect(l!.reason).toContain('my last coin flopped');
+  });
+  it('waits 12 hours between its own launches', () => {
+    expect(COOLDOWN_MS.launch).toBe(12 * 3_600_000);
+  });
+  it('stops shilling its own coin once nobody bought it in its first half hour', () => {
+    const mine = { ...hot, mint: 'MINE', symbol: 'MINE', creatorId: 'me', holders: 1, change10m: 0, change1h: 0, launchedAt: ago(3 * 3_600_000) };
+    for (let s = 0; s < 50; s++) expect(candidates(view({ coins: [mine] }), mulberry32(s)).find((c) => c.kind === 'post')!.situation).not.toBe('shilling');
+    expect(isDeadCoin(mine, Date.parse(NOW))).toBe(true);
+    expect(isDeadCoin({ ...mine, launchedAt: ago(10 * 60_000) }, Date.parse(NOW))).toBe(false);
+    expect(isDeadCoin({ ...mine, holders: 2 }, Date.parse(NOW))).toBe(false);
   });
 });
