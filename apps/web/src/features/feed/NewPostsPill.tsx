@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUp } from 'lucide-react';
 import type { PostView, ThreadView } from '@shillex/shared';
 import { get } from '../../lib/api';
-import { prependToFeed } from '../../lib/cache';
+import { prependToFeed, type PostPages } from '../../lib/cache';
 import { useSocketEvent } from '../../lib/socket';
 import { liveSocket } from '../../lib/liveSocket';
 import { useMe } from '../../lib/useMe';
@@ -39,33 +39,46 @@ export function NewPostsPill() {
   return <Pill n={n} onShow={() => { setN(0); void qc.invalidateQueries({ queryKey: ['feed', 'following'] }); }} />;
 }
 
-/** Whether the start of the feed below `holder` is on screen, so a post put there will be seen arriving. */
+/**
+ * Whether the start of the feed below `holder` can be seen, so a post put there will be seen arriving. The holder sticks
+ * just under the top bar and the page's sticky tabs, so its bottom is where the visible part of the page begins: a feed
+ * that starts above that line is behind the header, not on screen.
+ */
 function feedStartInView(holder: HTMLElement | null) {
   const feed = holder?.parentElement?.querySelector('[role="feed"]');
-  return !feed || feed.getBoundingClientRect().top >= 0;
+  return !feed || !holder || feed.getBoundingClientRect().top >= holder.getBoundingClientRect().bottom;
 }
 
 /**
- * Live: a new public post (post:live, which the server sends to everyone but the author, the author's followers and
- * anyone muting or blocked) joins the top of the feed (`queryKey`), where the feed's arrival motion slides it in. While
- * the reader is further down it waits behind the pill instead, and clicking brings the waiting posts in and the reader
- * up to them. Works signed in (the session socket) and for visitors (the /live socket): only the connected one delivers.
+ * Live: a new public post (post:live, which the server sends to everyone but the author and anyone muting or blocked)
+ * joins the top of the feed (`queryKey`), where the feed's arrival motion slides it in. While the reader is further down
+ * it waits behind the pill instead, and clicking brings the waiting posts in and the reader up to them. Works signed in
+ * (the session socket) and for visitors (the /live socket): only the connected one delivers.
+ *
+ * Each arrival costs this client one GET, so it is fetched once and only when it can be shown: never twice, never when
+ * it is already listed, and not at all while the page is hidden. Posts announced while hidden are only counted; when the
+ * reader is back the list reloads once (one request instead of one per post), at once or from the pill.
  */
 export function LivePostsPill({ queryKey }: { queryKey: QueryKey }) {
   const qc = useQueryClient();
   const meId = useMe().data?.id;
   const holder = useRef<HTMLDivElement>(null);
   const [waiting, setWaiting] = useState<PostView[]>([]);
+  const [missed, setMissed] = useState<string[]>([]);
+  const fetching = useRef(new Set<string>());
+  const listed = (id: string) => qc.getQueryData<PostPages>(queryKey)?.pages.some((pg) => pg.items.some((p) => p.id === id)) ?? false;
   const arrive = ({ postId, authorId }: { postId: string; authorId: string }) => {
     if (authorId === meId) return; // the Composer already added it (and the server does not send it)
+    if (fetching.current.has(postId) || waiting.some((p) => p.id === postId) || missed.includes(postId) || listed(postId)) return;
+    if (document.visibilityState === 'hidden') { setMissed((m) => (m.includes(postId) ? m : [...m, postId])); return; }
+    fetching.current.add(postId);
     get<ThreadView>(`/posts/${postId}`).then(({ post, tokens }) => {
       if (post.community || post.deleted || (post.kind !== 'post' && post.kind !== 'quote')) return;
       primeTokens(qc, tokens);
-      if (feedStartInView(holder.current)) {
-        prependToFeed(qc, queryKey, post);
-        setWaiting((w) => (w.some((p) => p.id === post.id) ? w.filter((p) => p.id !== post.id) : w));
-      } else setWaiting((w) => (w.some((p) => p.id === post.id) ? w : [post, ...w]));
-    }).catch(() => undefined); // a post we cannot read (deleted, private since) simply does not arrive
+      if (feedStartInView(holder.current)) prependToFeed(qc, queryKey, post);
+      else setWaiting((w) => (w.some((p) => p.id === post.id) ? w : [post, ...w]));
+    }).catch(() => undefined) // a post we cannot read (deleted, private since) simply does not arrive
+      .finally(() => fetching.current.delete(postId));
   };
   const latest = useRef(arrive);
   latest.current = arrive;
@@ -75,7 +88,22 @@ export function LivePostsPill({ queryKey }: { queryKey: QueryKey }) {
     liveSocket.on('post:live', h);
     return () => { liveSocket.off('post:live', h); };
   }, []);
+  const reload = () => { setMissed([]); void qc.invalidateQueries({ queryKey }); };
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  const anyMissed = missed.length > 0;
+  useEffect(() => {
+    if (!anyMissed) return;
+    // Back with the start of the feed in sight: the missed posts slide in. Further down, the pill counts them instead.
+    const back = () => { if (document.visibilityState === 'visible' && feedStartInView(holder.current)) reloadRef.current(); };
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  }, [anyMissed]);
   // Oldest first, so the newest ends on top.
-  const show = () => { [...waiting].reverse().forEach((p) => prependToFeed(qc, queryKey, p)); setWaiting([]); };
-  return <Pill n={waiting.length} onShow={show} holder={holder} />;
+  const show = () => {
+    [...waiting].reverse().forEach((p) => prependToFeed(qc, queryKey, p));
+    setWaiting([]);
+    if (anyMissed) reload();
+  };
+  return <Pill n={waiting.length + missed.length} onShow={show} holder={holder} />;
 }

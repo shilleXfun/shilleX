@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import type { Page, PostView } from '@shillex/shared';
-import { posts, follows, reactions } from '../db/schema.ts';
+import type { Db } from '../db/client.ts';
+import { posts, follows, reactions, type PostRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
@@ -10,6 +11,25 @@ import { hiddenAuthorIds } from '../services/visibility.ts';
 import { loadUserByUsername } from './users.ts';
 
 const DISCOVER_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Public top-level posts outside communities, newest first, minus `hidden` authors. Paged by a keyset on the id: ids are
+ * ULIDs minted with the post (time-ordered, unique), so a page starts strictly after the last one and pages never repeat
+ * or skip a post when new ones arrive, and the walk follows the primary key and posts_community_idx instead of a sort.
+ */
+async function publicPostsPage(db: Db, viewerId: string, hidden: string[], o: { kinds: PostRow['kind'][]; authorId?: string; cursor?: string; limit: number }) {
+  const rows = await db.select().from(posts).where(and(
+    inArray(posts.kind, o.kinds), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
+    hidden.length ? notInArray(posts.authorId, hidden) : undefined,
+    o.authorId ? eq(posts.authorId, o.authorId) : undefined,
+    o.cursor ? lt(posts.id, o.cursor) : undefined,
+  )).orderBy(desc(posts.id)).limit(o.limit + 1);
+  const pageRows = rows.slice(0, o.limit);
+  // A repost whose target is gone, unreadable (shown as deleted) or by a hidden author has nothing left to show.
+  const items = (await hydratePosts(db, viewerId, pageRows))
+    .filter((p) => !(p.reposted && (p.reposted.deleted || hidden.includes(p.reposted.author.id))));
+  return { items, nextCursor: rows.length > o.limit ? pageRows.at(-1)!.id : null };
+}
 
 export default async function feedRoutes(app: FastifyInstance) {
   const deps = app.deps;
@@ -22,17 +42,8 @@ export default async function feedRoutes(app: FastifyInstance) {
     const author = req.query.author ? await loadUserByUsername(db, req.query.author) : null;
     // Nobody is looking, so no mutes or blocks: with HIDE_DEMO, the seeded demo personas, filtered by author as the signed-in tabs do.
     const hidden = await hiddenAuthorIds(db, '', deps.config.hideDemo);
-    const rows = await db.select().from(posts).where(and(
-      inArray(posts.kind, ['post', 'quote', 'repost']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
-      hidden.length ? notInArray(posts.authorId, hidden) : undefined,
-      author ? eq(posts.authorId, author.id) : undefined,
-      req.query.cursor ? lt(posts.id, req.query.cursor) : undefined,
-    )).orderBy(desc(posts.id)).limit(limit + 1);
-    const pageRows = rows.slice(0, limit);
-    // A repost whose target is gone, unreadable (shown as deleted) or by a hidden author has nothing left to show.
-    const items = (await hydratePosts(db, req.user?.id ?? '', pageRows))
-      .filter((p) => !(p.reposted && (p.reposted.deleted || hidden.includes(p.reposted.author.id))));
-    const page: Page<PostView> = { items, nextCursor: rows.length > limit ? pageRows.at(-1)!.id : null, tokens: await deps.tokens.getViews(collectMints(items)) };
+    const { items, nextCursor } = await publicPostsPage(db, req.user?.id ?? '', hidden, { kinds: ['post', 'quote', 'repost'], authorId: author?.id, cursor: req.query.cursor, limit });
+    const page: Page<PostView> = { items, nextCursor, tokens: await deps.tokens.getViews(collectMints(items)) };
     return page;
   });
 
@@ -44,7 +55,11 @@ export default async function feedRoutes(app: FastifyInstance) {
     let items: PostView[] = [];
     let nextCursor: string | null = null;
 
-    if (tab === 'following') {
+    if (tab === 'live') {
+      // Everyone's public posts and quotes as they happen, the viewer's own and followees' included (post:live announces the
+      // same set). Plain reposts stay on Following: in one time-ordered list a reposted post would show twice.
+      ({ items, nextCursor } = await publicPostsPage(db, user.id, hidden, { kinds: ['post', 'quote'], cursor: req.query.cursor, limit }));
+    } else if (tab === 'following') {
       const followees = (await db.select({ id: follows.followeeId }).from(follows).where(eq(follows.followerId, user.id))).map((r) => r.id);
       const authors = [...new Set([user.id, ...followees])].filter((id) => !hidden.includes(id));
       const rows = await db.select().from(posts).where(and(
@@ -96,7 +111,7 @@ export default async function feedRoutes(app: FastifyInstance) {
       items = await hydratePosts(db, user.id, slice);
       nextCursor = offset + limit < ordered.length ? `o:${offset + limit}` : null;
     } else {
-      throw errors.badRequest('BAD_TAB', 'tab must be following or discover');
+      throw errors.badRequest('BAD_TAB', 'tab must be live, following or discover');
     }
     const page: Page<PostView> = { items, nextCursor, tokens: await deps.tokens.getViews(collectMints(items)) };
     return page;

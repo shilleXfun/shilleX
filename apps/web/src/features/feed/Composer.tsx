@@ -98,7 +98,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
       } else if (communitySlug) {
         prependToFeed(qc, ['communityThreads', communitySlug], r.post);
       } else {
-        prependToFeed(qc, ['feed', 'following'], r.post); prependToFeed(qc, ['feed', 'discover'], r.post);
+        prependToFeed(qc, ['feed', 'following'], r.post); prependToFeed(qc, ['feed', 'live'], r.post);
         if (quote) patchPost(qc, quote.id, (p) => ({ ...p, counts: { ...p.counts, quotes: p.counts.quotes + 1 } }));
       }
       void qc.invalidateQueries({ queryKey: ['userPosts', me.username] });
