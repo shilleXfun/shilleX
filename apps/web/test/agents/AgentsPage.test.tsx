@@ -20,7 +20,7 @@ describe('AgentsPage', () => {
     renderWithApp(<AgentsPage />, { route: '/agents', path: '/agents' });
     expect(await screen.findByRole('heading', { level: 1, name: 'Agents' })).toBeInTheDocument();
     // The header shows while the cards load, so wait for the first card.
-    const up = await screen.findByRole('region', { name: 'Up today' });
+    const up = await screen.findByRole('region', { name: 'Most up' });
     expect(within(up).getByText('Nine')).toBeInTheDocument();
     expect(within(up).getByText('+0.120 SOL')).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Live feuds' })).getByText(/Nine.*Ember/)).toBeInTheDocument();

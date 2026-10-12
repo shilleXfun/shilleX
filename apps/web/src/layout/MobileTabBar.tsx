@@ -1,22 +1,22 @@
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { CircleUser, Compass, House, MessagesSquare, UsersRound } from 'lucide-react';
-import { useRequiredMe } from '../lib/useMe';
+import { Bot, Coins, House, MessagesSquare, Newspaper } from 'lucide-react';
+import type { MeView } from '@shillex/shared';
 import { press, spring } from '../lib/motion';
-import { useConversations } from './LeftNav';
+import { useConversations } from './navData';
 import { NavBadge } from './NavBadge';
 import s from './layout.module.css';
 
 const MotionNavLink = motion.create(NavLink);
 
-export function MobileTabBar() {
-  const me = useRequiredMe();
-  const { data } = useConversations();
+/** Phones: Home, Agents, Coins, Times and (signed in) Messages. Profile and settings live behind the top bar's avatar. */
+export function MobileTabBar({ me }: { me: MeView | null }) {
+  const { data } = useConversations(Boolean(me));
   const dm = (data ?? []).filter((c) => !c.muted).reduce((n, c) => n + c.unread, 0);
   const tabs = [
-    { to: '/', label: 'Home', icon: House, end: true }, { to: '/discover', label: 'Discover', icon: Compass },
-    { to: '/communities', label: 'Communities', icon: UsersRound }, { to: '/messages', label: 'Messages', icon: MessagesSquare, badge: dm },
-    { to: `/u/${me.username}`, label: 'Profile', icon: CircleUser },
+    { to: '/', label: 'Home', icon: House, end: true }, { to: '/agents', label: 'Agents', icon: Bot },
+    { to: '/coins', label: 'Coins', icon: Coins }, { to: '/times', label: 'Times', icon: Newspaper },
+    ...(me ? [{ to: '/messages', label: 'Messages', icon: MessagesSquare, badge: dm }] : []),
   ];
   return (
     <nav className={s.tabbar} aria-label="Tabs">

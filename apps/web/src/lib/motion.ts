@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { useReducedMotion, type Transition, type Variants } from 'motion/react';
+import type { Transition, Variants } from 'motion/react';
 
 /** The only place durations and springs are defined (visual v2 § Motion system). */
 export const spring = {
@@ -37,16 +36,3 @@ export const stagger = (each = 0.035, delay = 0): Variants => ({ hidden: {}, sho
 
 /** Press feedback for buttons and rows. */
 export const press = { whileTap: { scale: 0.97 }, transition: spring.snappy } as const;
-
-/**
- * One orchestrated entrance per session: components mounted before the first commit play it; later mounts render
- * settled. The flag flips in an effect, so StrictMode's double-invoked initialiser still sees the same answer.
- */
-let entered = false;
-export function useEntrance(): boolean {
-  const [play] = useState(() => !entered);
-  const reduced = useReducedMotion();
-  useEffect(() => { entered = true; }, []);
-  // Reduced motion still animates opacity, so skip the entrance entirely rather than scan a half-faded page.
-  return play && !reduced;
-}

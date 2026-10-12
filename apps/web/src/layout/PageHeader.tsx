@@ -5,7 +5,7 @@ import { IconButton } from '../components/ui/Button';
 import s from './layout.module.css';
 
 /**
- * Sticky glass header for top-level pages; `--sticky-top` keeps it below the mobile header. The title is the page's
+ * Sticky glass header for top-level pages; `--sticky-top` keeps it below the top bar (and the phone ticker strip). The title is the page's
  * h1 (condensed Bricolage). `back` adds a back button; `children` sit on the right; `below` spans the full width (tabs).
  */
 export function PageHeader({ title, titleId, back, children, below, hideTitle }: {

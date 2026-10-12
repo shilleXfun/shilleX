@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollRestoration, useLocation, useMatch, useNavigate, useOutlet } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { dur, ease } from '../lib/motion';
-import { LeftNav } from './LeftNav';
+import { useRequiredMe } from '../lib/useMe';
+import { TopBar } from './TopBar';
+import { IconRail } from './IconRail';
+import { WorldPanel } from './WorldPanel';
 import { MobileTabBar } from './MobileTabBar';
-import { MobileHeader } from './MobileHeader';
 import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
 import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import { useRealtimeSync } from './useRealtimeSync';
-import { RightRail } from './RightRail';
 import { useSwarmPosts } from '../components/swarm/hooks';
 import { useAgentPulses } from '../features/agents/pulses';
 import { useHotkeys } from '../lib/hotkeys';
@@ -18,6 +19,7 @@ import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, openPalette } from './CommandPalette';
 import s from './layout.module.css';
+import sh from './shell.module.css';
 
 /** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
 /** j/k: focus the next or previous post card, starting from the focused one or else the one in view. */
@@ -49,6 +51,7 @@ const route = {
 };
 
 export function AppShell() {
+  const me = useRequiredMe();
   useTokenEvents();
   useRealtimeSync();
   useSwarmPosts();
@@ -56,14 +59,16 @@ export function AppShell() {
   const { pathname } = useLocation();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
+  // Chat pages (a community, the inbox) take the full width and no World now panel.
+  const wide = parts[1] === 'c' || parts[1] === 'messages';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
-  // Conversation screens are immersive on mobile: no tab bar or global header (they render their own back header).
+  // Conversation screens are immersive on mobile: no tab bar or top bar (they render their own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
   const nav = useNavigate();
-  // The rail only exists from 1200px (layout.module.css); below that it isn't mounted, so it fetches nothing.
+  // The World now panel only exists from 1200px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
   const [help, setHelp] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
@@ -75,25 +80,27 @@ export function AppShell() {
     '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
     // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
     n: () => { if (pathname === '/' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/', { state: { compose: true } }); },
-    'g h': () => nav('/'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
+    'g h': () => nav('/'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),
   });
   return (
-    <div className={s.shell} data-immersive={!!(inChannel || inDm)} data-wide={parts[1] === 'c' || parts[1] === 'messages'}>
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <ReconnectBanner />
-      <aside className={s.left} aria-label="Primary"><LeftNav /></aside>
-      <main id="main" ref={mainRef} className={s.center} tabIndex={-1}>
-        <MobileHeader />
-        {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
-        </AnimatePresence>
-      </main>
-      {wideEnoughForRail && <aside className={s.right} aria-label="Activity"><RightRail /></aside>}
+      <TopBar me={me} />
+      <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
+      <div className={sh.stage}>
+        <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
+          {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+          </AnimatePresence>
+        </main>
+        {wideEnoughForRail && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel /></aside>}
+      </div>
       <TokenPanelHost />
-      <MobileTabBar />
+      <MobileTabBar me={me} />
       <Toaster />
       <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
       <CommandPalette />

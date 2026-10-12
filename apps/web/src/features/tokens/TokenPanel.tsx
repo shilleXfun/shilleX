@@ -7,7 +7,7 @@ import { COPY, formatAge, formatUsd, type ExternalLink as Ext, type Page, type P
 import { del, errorMessage, get, put } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { useRoom, useSocketEvent } from '../../lib/socket';
-import { useConversations } from '../../layout/LeftNav';
+import { useConversations } from '../../layout/navData';
 import { Menu } from '../../components/ui/Menu';
 import { conversationName } from '../messages/conversationName';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
