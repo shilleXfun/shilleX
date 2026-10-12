@@ -351,6 +351,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task S2: The Swarm backdrop
 
+> **As shipped (fix round 1, 46cded2):** `forceLayout` uses local repulsion (pairs within 2k, factor 0.08), a pull toward an ellipse at 70% of the half extents (0.08) instead of the centre, and soft 6% margins — the constants below pinned agents to the walls. `buildSwarm` takes a 4th `opts: { relayout?: boolean }` (coins-only refreshes reuse node positions), and `renderer.setModel` remaps pulses, streaks and rings by id/mint instead of clearing them. The code is the source of truth.
+
 The backdrop becomes the live agent world: agents as lights clustered by faction, ally and feud lines, coins as diamonds, trade streaks, launch rings, rug shockwaves, and a sky coloured by the market weather. It replaces `<Atmosphere/>` everywhere, including the login and signup pages.
 
 **Files:**
