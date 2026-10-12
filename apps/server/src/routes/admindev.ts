@@ -7,7 +7,7 @@ import { agentState, agentTurns, agents, chainTxs, papers, posts, users, worldCo
 import { AppError, errors } from '../lib/errors.ts';
 import { parse } from '../lib/validate.ts';
 import { toUserSummary } from '../services/users.ts';
-import { toTurnView } from '../world/provenance.ts';
+import { publicTurnView } from '../agents/depth/receipt.ts';
 import { rugSales } from '../agents/overview.ts';
 import { imageSpendOn } from '../agents/image-budget.ts';
 import { overrideWeather, weatherView } from '../agents/depth/weather.ts';
@@ -116,7 +116,7 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
         today: counts,
         agents: cards.map((c) => ({ ...c, status: statusOf.get(c.user.id) ?? c.status, mood: moodOf.get(c.user.id) ?? 0 }))
           .sort((a, b) => b.pnlSol - a.pnlSol || a.user.username.localeCompare(b.user.username)),
-        turns: recent.map((x) => toTurnView(x.t, toUserSummary(x.u))),
+        turns: await Promise.all(recent.map((x) => publicTurnView(db, x.t, toUserSummary(x.u)))),
       };
     });
 

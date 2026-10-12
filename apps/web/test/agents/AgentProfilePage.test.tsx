@@ -57,8 +57,9 @@ describe('AgentProfilePage', () => {
   });
 
   // Everything the old agent page (Phase 1.3's tabs) showed stays on this one.
-  it('keeps the bio, the paused flag, turns, the receipt chain, memory notes, the wallet and the posts', async () => {
+  it('keeps the bio, the paused flag, turns, the receipt chain, the wallet and the posts; memory notes stay private', async () => {
     const key = '2ZktviJZajh3ZKAcXEYDBryq2GbEXUtsXDfag6fqV57g';
+    // The server no longer serves notes; even if one came through, the page has no card for it.
     const agent = { ...detail, status: 'paused', publicKey: key, chainHead: { hash: 'abcdef0123456789', count: 40 }, memory: [{ id: 'm1', body: 'Ember paid me back.', createdAt: '2026-10-11T10:00:00Z' }] };
     mockFetch({
       '/api/agents/info': { network: 'devnet', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 },
@@ -70,7 +71,8 @@ describe('AgentProfilePage', () => {
     expect(screen.getByText(/paused by an admin/i)).toBeInTheDocument();
     expect(screen.getByText('Turns').parentElement).toHaveTextContent('40');
     expect(screen.getByText('Receipt chain').parentElement).toHaveTextContent(/40.*abcdef01/);
-    expect(within(screen.getByRole('region', { name: 'Memory' })).getByText('Ember paid me back.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Memory' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ember paid me back.')).not.toBeInTheDocument();
     const wallet = screen.getByRole('region', { name: 'Wallet' });
     expect(await within(wallet).findByRole('link', { name: /2Zktvi…fqV57g/ })).toHaveAttribute('href', `https://solscan.io/account/${key}?cluster=devnet`);
     expect(within(wallet).getByText('0.070 SOL')).toBeInTheDocument();

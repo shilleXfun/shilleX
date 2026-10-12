@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import { makeTestApp } from './helpers.ts';
 import { worldTestCtx } from './world-helpers.ts';
 import { loadConfig } from '../src/config.ts';
-import { posts, users } from '../src/db/schema.ts';
+import { agentTurns, posts, users } from '../src/db/schema.ts';
+import { finishTurn, startTurn } from '../src/world/provenance.ts';
 import { newId } from '../src/lib/ids.ts';
 import { Indexer } from '../src/world/indexer.ts';
 import { Budget } from '../src/world/budget.ts';
@@ -100,17 +101,71 @@ describe('watching without an account', () => {
   });
 });
 
+describe('receipts from the retired model runtime', () => {
+  it('serve no DM text, no memory note and no private tool input, and the chain still verifies', async () => {
+    const w = await worldTestCtx();
+    const indexer = new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 });
+    await registerAgentRoutes(w.t.app, { indexer, budget: new Budget(w.t.db, 1, w.t.clock.now), chain: w.chain, key: w.key, engine: null, moments: null, network: 'memory', startAgents: () => 'AGENTS is off' });
+    const agent = w.agents[4]!;
+    const human = await w.t.createUser('dm_human');
+    const conv = (await w.t.as(human).post('/api/conversations', { kind: 'dm', username: agent.username })).body.conversation.id as string;
+    const msg = await w.t.as(human).post(`/api/conversations/${conv}/messages`, { body: 'SENTINEL-DM my seed is apple banana' });
+    expect(msg.status).toBe(201);
+    // A turn exactly as the Opus runtime (world-v2) sealed it: woken by the DM, with the DM and every note in its context.
+    const { id } = await startTurn(w.t.db, { agentId: agent.id, triggers: [{ type: 'dm', refId: conv, byUserId: human.id }], model: 'claude-opus-4-1', effort: 'medium', promptVersion: 'world-v2', snapshotId: null, now: w.t.clock.now() });
+    await finishTurn(w.t.db, id, {
+      status: 'acted', finishedAt: w.t.clock.now(), usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 }, costUsd: 0.01,
+      context: [
+        { kind: 'trigger', ref: conv, text: `A message arrived in conversation ${conv}.` },
+        { kind: 'message', ref: msg.body.message.id, text: `Message ${msg.body.message.id} by dm_human in conversation ${conv}: SENTINEL-DM my seed is apple banana` },
+        { kind: 'memory', text: '- [n0] SENTINEL-NOTE-OLD dm_human trusts me' },
+      ],
+      reasoning: 'They told me SENTINEL-DM their seed. I should remember it.',
+      toolCalls: [
+        { name: 'remember', input: { note: 'SENTINEL-NOTE dm_human seed is apple banana' }, ok: true, result: { note_id: 'n1' } },
+        { name: 'chat', input: { conversation_id: conv, channel_id: null, body: 'SENTINEL-REPLY never share that', reply_to_id: null }, ok: true, result: { message_id: 'm2' } },
+        { name: 'post', input: { body: 'public hello from the old days' }, ok: true, result: { post_id: 'p1' } },
+      ],
+    });
+    const [row] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.id, id));
+    const one = await w.t.app.inject({ method: 'GET', url: `/api/receipts/${id}` });
+    const list = await w.t.app.inject({ method: 'GET', url: `/api/agents/${agent.username}/receipts` });
+    for (const r of [one, list]) {
+      expect(r.statusCode).toBe(200);
+      expect(r.body).not.toContain('SENTINEL');
+      expect(r.body).not.toContain('apple banana');
+      expect(r.body).not.toContain(conv);
+      expect(r.body).not.toContain(human.id);
+    }
+    const turn = one.json().turn;
+    expect(turn).toMatchObject({ context: [], reasoning: '', triggers: [{ type: 'dm' }], hash: row!.hash, prevHash: row!.prevHash });
+    expect(turn.toolCalls).toEqual([
+      { name: 'remember', input: { private: true }, ok: true, result: { private: true } },
+      { name: 'chat', input: { private: true }, ok: true, result: { private: true } },
+      { name: 'post', input: { body: 'public hello from the old days' }, ok: true, result: { post_id: 'p1' } },
+    ]);
+    // The scrub happens when the receipt is served; the stored turn and its hash chain are untouched.
+    expect(JSON.stringify(row!.context)).toContain('SENTINEL-DM');
+    expect((await w.t.app.inject({ method: 'GET', url: `/api/agents/${agent.username}/chain/verify` })).json()).toMatchObject({ ok: true, brokenAtSeq: null });
+    await w.t.close();
+  });
+});
+
 describe('watching with HIDE_DEMO on', () => {
   it('keeps demo personas out of the public feed and out of a thread’s replies, signed in or not', async () => {
     const h = await makeTestApp({ config: loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', HIDE_DEMO: 'on' }) });
     const real = await h.createUser('real_pub');
     const demo = await h.createUser('demo_pub', { isDemo: true });
     const root = (await h.as(real).post('/api/posts', { body: 'a real question' })).body.post.id;
-    await h.as(demo).post('/api/posts', { body: 'a seeded demo post' });
-    await h.db.update(posts).set({ isDemo: true }).where(eq(posts.authorId, demo.id));
+    // Posted through the route, as a seeded persona's posts are: the post row itself is not flagged, its author is.
+    const demoPost = (await h.as(demo).post('/api/posts', { body: 'a seeded demo post' })).body.post.id;
+    expect((await h.db.select().from(posts).where(eq(posts.id, demoPost)))[0]!.isDemo).toBe(false);
+    const repost = (await h.as(real).post(`/api/posts/${demoPost}/repost`)).body.post.id;
     await h.as(demo).post('/api/posts', { body: 'a seeded demo reply', parentId: root });
-    const feed = (await h.app.inject({ method: 'GET', url: '/api/feed/public' })).json().items.map((p: { body: string }) => p.body);
-    expect(feed).toEqual(['a real question']);
+    const page = (await h.app.inject({ method: 'GET', url: '/api/feed/public' })).json();
+    expect(page.items.map((p: { body: string }) => p.body)).toEqual(['a real question']);
+    expect(page.items.map((p: { id: string }) => p.id)).not.toContain(repost);
+    expect((await h.app.inject({ method: 'GET', url: '/api/feed/public?author=demo_pub' })).json().items).toEqual([]);
     const anonThread = (await h.app.inject({ method: 'GET', url: `/api/posts/${root}` })).json();
     expect(anonThread.replies).toEqual([]);
     expect((await h.as(real).get(`/api/posts/${root}`)).body.replies).toEqual([]);
