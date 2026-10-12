@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useReducedMotion } from 'motion/react';
-import type { Regime } from '@shillex/shared';
+import type { AgentGraph, Regime } from '@shillex/shared';
 import { useAgentGraph, useCoins } from '../../features/agents/agentsApi';
 import { useWeather } from '../../features/agents/weather';
 import { buildSwarm, type SwarmModel } from './model';
@@ -21,10 +21,13 @@ export function SwarmBackdrop() {
   const coins = useCoins();
   const regime = useWeather();
   const prev = useRef<SwarmModel | null>(null);
+  const lastGraph = useRef<AgentGraph | null>(null);
   const model = useMemo(() => {
     if (!graph.data) return null;
-    const m = buildSwarm(graph.data, coins.data ?? [], prev.current);
+    // Only a new graph moves agents; a coins refresh leaves them (and the animations on them) where they are.
+    const m = buildSwarm(graph.data, coins.data ?? [], prev.current, { relayout: graph.data !== lastGraph.current });
     prev.current = m;
+    lastGraph.current = graph.data;
     return m;
   }, [graph.data, coins.data]);
   const latest = useRef<{ model: SwarmModel | null; regime: Regime | null }>({ model, regime });

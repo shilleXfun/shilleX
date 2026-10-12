@@ -51,4 +51,17 @@ describe('buildSwarm', () => {
       expect(Math.hypot(s.x - n.x, s.y - n.y)).toBeLessThan(0.05);
     }
   });
+  it('keeps agents exactly where they are when only the coins change', () => {
+    const g = graph(Array.from({ length: 20 }, (_, i) => node(`n${i}`)), [{ a: 'n0', b: 'n1', score: 0.8 }, { a: 'n2', b: 'n3', score: -0.7 }]);
+    const first = buildSwarm(g, [coin('m1', 'n0')], null);
+    const second = buildSwarm(g, [coin('m1', 'n0'), coin('m2', 'n5')], first, { relayout: false });
+    for (const n of first.nodes) {
+      const s = second.nodes[second.index.get(n.id)!]!;
+      expect([s.x, s.y]).toEqual([n.x, n.y]);
+    }
+    expect(second.alliesByColour).toEqual(first.alliesByColour);
+    expect(second.feuds).toEqual(first.feuds);
+    expect(second.coins.map((c) => c.mint).sort()).toEqual(['m1', 'm2']);
+    expect(second.coins[second.coinIndex.get('m1')!]).toEqual(first.coins[0]);
+  });
 });
