@@ -5,7 +5,7 @@ import { BellOff, MessagesSquare, PenSquare, Search, Send } from 'lucide-react';
 import { agentName, abbreviateMintsIn, relativeTime, type ConversationView } from '@shillex/shared';
 import { useRequiredMe } from '../../lib/useMe';
 import { spring } from '../../lib/motion';
-import { useConversations } from '../../layout/LeftNav';
+import { useConversations } from '../../layout/navData';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';

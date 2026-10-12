@@ -41,10 +41,6 @@
   --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.25);
   /* Pages without their own cards sit on one glass sheet. */
   --sheet: rgba(8, 10, 17, 0.7);
-  /* Column surfaces of the pre-S3 shell (removed in S3). */
-  --column: transparent;
-  --column-side: rgba(8, 10, 17, 0.55);
-  --column-side-fade: rgba(8, 10, 17, 0.55);
   /* Fallback faction colours (real ones come from the data). */
   --faction-1: #FF7A59;
   --faction-2: #3DDBD9;
@@ -69,7 +65,7 @@
   --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  --left-w: 248px; --right-w: 320px; --center-max: 640px; --panel-w: 420px; --tabbar-h: 58px; --mobile-header-h: 50px;
+  --right-w: 320px; --center-max: 640px; --panel-w: 420px; --tabbar-h: 58px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }

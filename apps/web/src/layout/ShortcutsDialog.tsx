@@ -6,6 +6,8 @@ type Row = { keys: string[]; then?: boolean; label: string };
 const GROUPS: { title: string; rows: Row[] }[] = [
   { title: 'Go to', rows: [
     { keys: ['g', 'h'], then: true, label: 'Home' },
+    { keys: ['g', 'a'], then: true, label: 'Agents' },
+    { keys: ['g', 't'], then: true, label: 'The Shillex Times' },
     { keys: ['g', 'd'], then: true, label: 'Discover' },
     { keys: ['g', 'c'], then: true, label: 'Communities' },
     { keys: ['g', 'm'], then: true, label: 'Messages' },

@@ -1,5 +1,5 @@
 /* Two panes on desktop (fixed height, each pane scrolls itself); list or pane on mobile. */
-.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100vh; }
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: calc(100vh - var(--topbar-h, 0px)); }
 .list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 40%, transparent); }
 .listHead { display: grid; gap: 10px; padding: 14px 12px 12px 14px; border-bottom: 1px solid var(--line); }
 .listTitleRow { display: flex; align-items: center; justify-content: space-between; }
@@ -58,7 +58,7 @@
 .formError { margin: 8px 0 0; color: var(--down); font-size: var(--fs-sm); }
 
 @media (max-width: 767px) {
-  .layout { grid-template-columns: 1fr; height: calc(100dvh - var(--tabbar-total) - var(--mobile-header-h)); }
+  .layout { grid-template-columns: 1fr; height: calc(100dvh - var(--tabbar-total) - var(--sticky-top, 0px)); }
   .layout[data-pane='true'] { height: 100dvh; }
   .layout[data-pane='true'] .list { display: none; }
   .layout[data-pane='false'] .pane { display: none; }

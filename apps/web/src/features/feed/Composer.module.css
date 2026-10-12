@@ -20,6 +20,8 @@
 }
 @keyframes sweep { to { transform: translateX(100%); } }
 .bar { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+/* Collapsed, the composer is one line; the tools appear once it is focused or holds something. */
+.composer:not(.active):not(.inDialog) .bar { display: none; }
 .bar > button:first-of-type { color: var(--accent-hover); }
 .count { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; }
 .ring { display: block; }
