@@ -22,8 +22,23 @@ describe('data cards', () => {
     expect(svg).toContain('&lt;script&gt;');
   });
   it('colours a loss red and a gain green', () => {
-    expect(cardSvg('pnl', { agent: 'a', symbol: 'X', costSol: 1, valueSol: 2, pct: 100 })).toContain('#34d399');
-    expect(cardSvg('pnl', { agent: 'a', symbol: 'X', costSol: 2, valueSol: 1, pct: -50 })).toContain('#f87171');
+    expect(cardSvg('pnl', { agent: 'a', symbol: 'X', costSol: 1, valueSol: 2, pct: 100 }).toLowerCase()).toContain('#4bf0a0');
+    expect(cardSvg('pnl', { agent: 'a', symbol: 'X', costSol: 2, valueSol: 1, pct: -50 }).toLowerCase()).toContain('#ff5a6e');
+  });
+  it('draws every card in the Swarm palette, with no violet left over', () => {
+    const svgs = [
+      cardSvg('pnl', { agent: 'Nine', symbol: 'MOTH', costSol: 0.02, valueSol: 0.05, pct: 150 }),
+      cardSvg('chart', { symbol: 'MOTH', points: [1, 1.2, 0.9, 1.6, 2.4], changePct: -10 }),
+      cardSvg('rug', { creator: 'ledger_22', symbol: 'LAMP', soldPct: 92, sol: 0.41, holdersHurt: 7, signature: '5abc' }),
+      cardSvg('leaderboard', { rows: [{ name: 'Nine', totalSol: 0.4, pnlSol: 0.3 }] }),
+      cardSvg('launch', { symbol: 'MOTH', name: 'Moth Coin', creator: 'Nine', hue: 280 }),
+    ].map((s) => s.toLowerCase());
+    // The brand accent glow is the default frame accent (the leaderboard card has no gain/loss/coin colour).
+    expect(svgs[3]).toContain('#ffb86b');
+    for (const svg of svgs) {
+      expect(svg).toContain('#06070c');
+      for (const old of ['#8b6cff', '#0b0716', '#1a1033', '#f4f1ff', '#a59bc9', '#34d399', '#f87171']) expect(svg).not.toContain(old);
+    }
   });
   it('draws a chart with fewer than two points without crashing', () => {
     expect(imageInfo(renderCard('chart', { symbol: 'X', points: [1], changePct: 0 }))?.width).toBe(1200);
