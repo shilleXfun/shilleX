@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import type { ParsedTransactionWithMeta } from '@solana/web3.js';
 import { deltasFromTx } from '../src/world/devnet-chain.ts';
 
@@ -29,6 +29,7 @@ function fakeConnection(landed: boolean) {
   const sent: string[] = [];
   let confirms = 0;
   const conn = {
+    getGenesisHash: async () => DEVNET_GENESIS,
     getLatestBlockhash: async () => ({ blockhash: Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: 100 }),
     sendRawTransaction: async () => { const sig = `sig${sent.length + 1}`; sent.push(sig); return sig; },
     confirmTransaction: async (s: { signature: string }) => { if (confirms++ === 0) throw new TransactionExpiredBlockheightExceededError(s.signature); return { value: { err: null } }; },
@@ -55,7 +56,14 @@ describe('DevnetChain sending (review fix)', () => {
   });
 });
 
-import { toChainError } from '../src/world/devnet-chain.ts';
+import { MAINNET_GENESIS, makeChain, toChainError } from '../src/world/devnet-chain.ts';
+import { MemoryChain } from '../src/world/chain.ts';
+import { loadConfig } from '../src/config.ts';
+import type { DbHandle } from '../src/db/client.ts';
+import { testDb } from './helpers.ts';
+
+/** Solana devnet's genesis hash. */
+const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
 
 // Messages as the local validator returned them (2026-10-11 run against the cloned DBC program).
 const simFail = (logs: string[]) => `Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1. \nLogs: \n${JSON.stringify(logs, null, 2)}. \nCatch the \`SendTransactionError\` and call \`getLogs()\` on it for full details.`;
@@ -88,5 +96,57 @@ describe('toChainError (local validator findings)', () => {
     expect(e.code).toBe('TX_FAILED');
     expect(e.message).toBe('Transaction failed: Math operation overflow.');
     expect(toChainError(new Error('socket hang up')).message).toBe('Transaction failed: socket hang up');
+  });
+});
+
+describe('makeChain refuses Solana mainnet (defence in depth for devnet only)', () => {
+  const config = loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', WORLD_CHAIN: 'devnet', DEVNET_RPC_URL: 'http://rpc.example' });
+  /** A stubbed RPC answering getGenesisHash from `answers` in turn (an Error is thrown, as by an unreachable RPC). */
+  function rpc(...answers: (string | Error)[]) {
+    const sent: string[] = [];
+    const urls: string[] = [];
+    let n = 0;
+    const conn = {
+      getGenesisHash: async () => { const a = answers[Math.min(n++, answers.length - 1)]!; if (a instanceof Error) throw a; return a; },
+      getLatestBlockhash: async () => ({ blockhash: Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: 100 }),
+      sendRawTransaction: async () => { sent.push('sig'); return 'sig'; },
+      confirmTransaction: async () => ({ value: { err: null } }),
+      getParsedTransaction: async () => null,
+    } as unknown as Connection;
+    return { connect: (url: string) => { urls.push(url); return conn; }, sent, urls };
+  }
+  let h: DbHandle;
+  beforeAll(async () => { h = await testDb(); });
+  afterAll(() => h.close());
+
+  it('refuses to start when DEVNET_RPC_URL serves mainnet-beta', async () => {
+    const r = rpc(MAINNET_GENESIS);
+    await expect(makeChain(config, h.db, r.connect)).rejects.toThrow(/mainnet/);
+    expect(r.urls).toEqual(['http://rpc.example']);
+  });
+  it('starts on devnet and on a local validator (any other genesis)', async () => {
+    expect(await makeChain(config, h.db, rpc(DEVNET_GENESIS).connect)).toBeInstanceOf(DevnetChain);
+    expect(await makeChain(config, h.db, rpc(Keypair.generate().publicKey.toBase58()).connect)).toBeInstanceOf(DevnetChain);
+  });
+  it('starts when the RPC cannot be reached, and checks again before the first transaction', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const r = rpc(new Error('fetch failed'), MAINNET_GENESIS);
+      const chain = await makeChain(config, h.db, r.connect) as DevnetChain;
+      expect(warn).toHaveBeenCalled();
+      await expect(chain.sendSol(Keypair.generate(), Keypair.generate().publicKey.toBase58(), 1000)).rejects.toMatchObject({ code: 'WRONG_NETWORK' });
+      expect(r.sent).toEqual([]);
+    } finally { warn.mockRestore(); }
+  });
+  it('asks once: a checked devnet RPC is not asked again on every send', async () => {
+    const r = rpc(DEVNET_GENESIS, MAINNET_GENESIS);
+    const chain = await makeChain(config, h.db, r.connect) as DevnetChain;
+    await chain.sendSol(Keypair.generate(), Keypair.generate().publicKey.toBase58(), 1000);
+    expect(r.sent).toEqual(['sig']);
+  });
+  it('never asks a memory chain', async () => {
+    const r = rpc(MAINNET_GENESIS);
+    expect(await makeChain({ ...config, worldChain: 'memory' }, h.db, r.connect)).toBeInstanceOf(MemoryChain);
+    expect(r.urls).toEqual([]);
   });
 });

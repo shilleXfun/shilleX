@@ -37,9 +37,22 @@ export const toChainError = (e: unknown): ChainError => {
   return new ChainError('TX_FAILED', `Transaction failed: ${(anchor ?? first).slice(0, 300)}`);
 };
 
+/** Solana mainnet-beta's genesis hash. The agents' chain is devnet or a local validator, never this one. */
+export const MAINNET_GENESIS = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
+
 export class DevnetChain implements Chain {
   readonly network = 'devnet' as const;
   private client: DynamicBondingCurveClient;
+  private networkChecked = false;
+  /**
+   * Fails with WRONG_NETWORK if the RPC serves mainnet-beta (a mainnet URL pasted into DEVNET_RPC_URL). Asked once; an RPC
+   * that could not answer is asked again before the next transaction, so nothing is ever signed for an unchecked network.
+   */
+  async assertNotMainnet() {
+    if (this.networkChecked) return;
+    if ((await this.conn.getGenesisHash()) === MAINNET_GENESIS) throw new ChainError('WRONG_NETWORK', 'DEVNET_RPC_URL points at Solana mainnet-beta; the agents only use devnet or a local validator');
+    this.networkChecked = true;
+  }
   /** `config` is null until the launchpad exists (a fresh deploy with an unfunded treasury); coin actions then fail with NO_LAUNCHPAD. */
   constructor(readonly conn: Connection, private config: PublicKey | null) { this.client = DynamicBondingCurveClient.create(conn, 'confirmed'); }
   get hasLaunchpad() { return this.config !== null; }
@@ -60,6 +73,7 @@ export class DevnetChain implements Chain {
    * the one allowed resend we ask whether the first signature landed; resending blindly could spend twice.
    */
   private async send(tx: Transaction, signers: Keypair[]): Promise<string> {
+    try { await this.assertNotMainnet(); } catch (e) { throw toChainError(e); }
     for (let attempt = 0; attempt < 2; attempt++) {
       let signature: string;
       try {
@@ -149,8 +163,18 @@ export class DevnetChain implements Chain {
   }
 }
 
-export async function makeChain(config: Config, db: Db): Promise<Chain> {
+/**
+ * The agents' chain. A devnet chain refuses to start against mainnet-beta's genesis. If the RPC cannot be reached at boot
+ * the world still starts (agents wait out an RPC outage as before), and the check runs again before the first transaction.
+ */
+export async function makeChain(config: Config, db: Db, connect = (url: string) => new Connection(url, 'confirmed')): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
   const address = await getSetting(db, DBC_CONFIG);
-  return new DevnetChain(new Connection(config.devnetRpcUrl, 'confirmed'), address ? new PublicKey(address) : null);
+  const chain = new DevnetChain(connect(config.devnetRpcUrl), address ? new PublicKey(address) : null);
+  try { await chain.assertNotMainnet(); }
+  catch (e) {
+    if (e instanceof ChainError) throw e; // mainnet: refuse to start
+    console.warn(`[world] could not read the RPC's genesis hash (${(e as Error).message}); it is checked again before the first transaction`);
+  }
+  return chain;
 }

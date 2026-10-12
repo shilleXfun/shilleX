@@ -47,6 +47,8 @@ export async function worldNotReady(db: Db, chain: Chain): Promise<string | null
 export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => Date) {
   let launchpad: string | null = null;
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) {
+    // The launchpad transaction is signed outside DevnetChain's send, so it checks the network itself.
+    await chain.assertNotMainnet();
     try { launchpad = await createLaunchpad(chain.conn, await signerFor(db, TREASURY, key)); }
     catch (e) {
       if (/insufficient|no record of a prior credit/i.test((e as Error).message ?? '')) throw new TreasuryEmpty('The treasury has no devnet SOL to create the launchpad; send it ~6 devnet SOL and run this again');

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import type { ContextItem, ToolCallRecord, TurnStatus, TurnTrigger, TurnUsage, TurnView, UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentTurns, type AgentTurnRow } from '../db/schema.ts';
@@ -75,16 +75,28 @@ export async function abortRunningTurns(db: Db, now: Date): Promise<number> {
   return rows.length;
 }
 
-export async function verifyChain(db: Db, agentId: string) {
-  const rows = await db.select().from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(asc(agentTurns.seq));
-  let prev = genesisHash(agentId);
-  for (const r of rows) {
-    // Only the newest turn may still be in progress; an unsealed turn anywhere else is a broken link.
-    if (r.status === 'running' && r === rows.at(-1)) break;
-    if (r.prevHash !== prev || hashOf(r) !== r.hash) return { ok: false, count: rows.length, head: rows.at(-1)?.hash ?? null, brokenAtSeq: r.seq };
-    prev = r.hash!;
+/**
+ * Re-hashes the agent's whole chain from the genesis. The turns are read `batch` at a time, so memory stays flat however
+ * long the chain grows, and only up to the newest turn when the walk began: turns sealed while it runs wait for the next one.
+ */
+export async function verifyChain(db: Db, agentId: string, { batch = 500 }: { batch?: number } = {}) {
+  const [newest] = await db.select({ seq: agentTurns.seq, hash: agentTurns.hash }).from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(desc(agentTurns.seq)).limit(1);
+  const [total] = newest ? await db.select({ n: sql<number>`count(*)::int` }).from(agentTurns).where(and(eq(agentTurns.agentId, agentId), lte(agentTurns.seq, newest.seq))) : [];
+  const count = total?.n ?? 0;
+  let prev = genesisHash(agentId), head: string | null = null, after = 0;
+  while (newest && after < newest.seq) {
+    const rows = await db.select().from(agentTurns)
+      .where(and(eq(agentTurns.agentId, agentId), gt(agentTurns.seq, after), lte(agentTurns.seq, newest.seq))).orderBy(asc(agentTurns.seq)).limit(batch);
+    if (!rows.length) break;
+    for (const r of rows) {
+      // Only the newest turn may still be in progress; an unsealed turn anywhere else is a broken link.
+      if (r.status === 'running' && r.seq === newest.seq) return { ok: true, count, head, brokenAtSeq: null };
+      if (r.prevHash !== prev || hashOf(r) !== r.hash) return { ok: false, count, head: newest.hash, brokenAtSeq: r.seq };
+      prev = head = r.hash!;
+    }
+    after = rows.at(-1)!.seq;
   }
-  return { ok: true, count: rows.length, head: rows.findLast((r) => r.hash)?.hash ?? null, brokenAtSeq: null };
+  return { ok: true, count, head, brokenAtSeq: null };
 }
 
 export async function chainHead(db: Db, agentId: string) {

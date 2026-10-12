@@ -12,6 +12,8 @@ import { buildOverview } from '../agents/overview.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
 
+const VERIFY_TTL_MS = 60_000;
+
 /** Public views of the agents: profiles, receipts, coins, trades and the agents-only backchannel. Nothing here shows a human's private messages. */
 export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles) {
   await app.register(async (r) => {
@@ -61,7 +63,12 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       if (!cached || Date.now() - cached.at > 15_000) cached = { at: Date.now(), body: await buildOverview({ db, indexer: w.indexer, now: app.deps.now }) };
       return cached.body;
     });
-    r.get<{ Params: { username: string } }>('/agents/:username', async (req) => ({ agent: await w.indexer.agent((await byUsername(req.params.username)).id) }));
+    // An agent user without its agents row (half-migrated or half-seeded) has no page: 404, as for a name nobody has.
+    r.get<{ Params: { username: string } }>('/agents/:username', async (req) => {
+      const agent = await w.indexer.agent((await byUsername(req.params.username)).id);
+      if (!agent) throw errors.notFound('Agent');
+      return { agent };
+    });
     r.get<{ Params: { username: string }; Querystring: { before?: string } }>('/agents/:username/receipts', async (req) => {
       const u = await byUsername(req.params.username);
       const rows = await db.select().from(agentTurns).where(and(eq(agentTurns.agentId, u.id), req.query.before ? lt(agentTurns.id, req.query.before) : undefined)).orderBy(desc(agentTurns.id)).limit(20);
@@ -73,7 +80,21 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return { turn: await publicTurnView(db, t.t, toUserSummary(t.u)) };
     });
     r.get<{ Params: { username: string } }>('/agents/:username/chain', async (req) => chainHead(db, (await byUsername(req.params.username)).id));
-    r.get<{ Params: { username: string } }>('/agents/:username/chain/verify', async (req) => verifyChain(db, (await byUsername(req.params.username)).id));
+    // Re-hashing a chain reads every turn the agent ever took, and the engine adds hundreds a day. Anyone may ask, so each
+    // agent's verdict is shared for 60 s (one walk, however many ask at once) and each address may ask 20 times a minute.
+    const verdicts = new Map<string, { at: number; result: ReturnType<typeof verifyChain> }>();
+    r.get<{ Params: { username: string } }>('/agents/:username/chain/verify', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+      const { id } = await byUsername(req.params.username);
+      const at = app.deps.now().getTime();
+      let v = verdicts.get(id);
+      if (!v || at - v.at >= VERIFY_TTL_MS) {
+        const fresh = { at, result: verifyChain(db, id) };
+        verdicts.set(id, fresh);
+        fresh.result.catch(() => { if (verdicts.get(id) === fresh) verdicts.delete(id); }); // a failed walk is not cached
+        v = fresh;
+      }
+      return v.result;
+    });
 
     const avatar = async (req: { params: { file: string } }, reply: FastifyReply) => {
       const id = req.params.file.replace(/\.svg$/, '');

@@ -282,7 +282,7 @@ export const reports = pgTable('reports', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [index('reports_community_idx').on(t.communityId, t.status)]);
 
-// ── Agent world (WORLD_MODE=agents) ──
+// ── Agents (the agent world boots whenever WORLD_KEY is set) ──
 export const agents = pgTable('agents', {
   userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   status: text('status').$type<'active' | 'paused'>().notNull().default('active'),
