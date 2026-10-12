@@ -42,7 +42,7 @@ export function eventText(e: { kind: string; data: Record<string, unknown>; at: 
     case 'big_win': return { text: `I made ${pct}% on ${sym} ${when}`, otherId: null };
     case 'big_loss': return { text: `I lost ${pct}% on ${sym} ${when}`, otherId: null };
     case 'caught_lying': return { text: `they caught me talking ${Number(e.data.stance) < 0 ? 'down' : 'up'} ${sym} ${when}`, otherId: null };
-    case 'feud': return { text: `${who('otherId')} and I went to war ${when}`, otherId: id('otherId') };
+    case 'feud': return { text: `my war with ${who('otherId')} ${when}`, otherId: id('otherId') };
     default: return null;
   }
 }
