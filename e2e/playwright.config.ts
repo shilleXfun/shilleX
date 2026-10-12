@@ -8,8 +8,9 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const WEB = Number(process.env.E2E_WEB_PORT ?? 5199), API = Number(process.env.E2E_API_PORT ?? 3100);
 const dataDir = join(root, 'data', `e2e-${process.pid}`);
 // Clear databases left by earlier runs (their servers are gone). Runner process only: workers load this file too.
+// Only this suite's own e2e-<pid> folders: the agents suite (e2e-agents-<pid>) may be running alongside.
 if (!process.env.TEST_WORKER_INDEX && existsSync(join(root, 'data'))) {
-  for (const d of readdirSync(join(root, 'data'))) if (d.startsWith('e2e-')) rmSync(join(root, 'data', d), { recursive: true, force: true });
+  for (const d of readdirSync(join(root, 'data'))) if (/^e2e-\d+$/.test(d)) rmSync(join(root, 'data', d), { recursive: true, force: true });
 }
 
 export default defineConfig({
@@ -28,7 +29,9 @@ export default defineConfig({
     {
       command: 'npm run start -w @shillex/server',
       cwd: root, port: API, reuseExistingServer: false, timeout: 120_000,
-      env: { PORT: String(API), PGLITE_DIR: dataDir, UPLOADS_DIR: join(dataDir, 'uploads'), PUBLIC_URL: `http://localhost:${WEB}`,
+      // DATABASE_URL '' (not deleted): webServer env is merged over the shell's, and an empty value also beats a .env file,
+      // so a Postgres URL from either can never reach the e2e server. The server reads '' as unset and uses PGlite.
+      env: { PORT: String(API), DATABASE_URL: '', PGLITE_DIR: dataDir, UPLOADS_DIR: join(dataDir, 'uploads'), PUBLIC_URL: `http://localhost:${WEB}`,
         DEMO_SIMULATOR: 'off', LIVE_TOKEN_LOOKUP: 'off', SEED_ON_EMPTY: 'on', SESSION_SECRET: 'e2e' },
     },
     { command: 'npm run dev -w @shillex/web', cwd: root, port: WEB, reuseExistingServer: false, timeout: 120_000, env: { SHILLEX_API: `http://localhost:${API}`, WEB_PORT: String(WEB) } },
