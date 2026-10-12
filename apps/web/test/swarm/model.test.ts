@@ -51,6 +51,33 @@ describe('buildSwarm', () => {
       expect(Math.hypot(s.x - n.x, s.y - n.y)).toBeLessThan(0.05);
     }
   });
+  it('moves coins with their creator across refetches and leaves a coin of an unknown creator where it is', () => {
+    const people = Array.from({ length: 50 }, (_, i) => node(`n${i}`));
+    const edgesAt = (k: number): AgentGraph['edges'] => [
+      { a: 'n0', b: 'n1', score: 0.8 }, { a: 'n2', b: 'n3', score: -0.7 }, { a: 'n4', b: 'n5', score: 0.6 },
+      ...Array.from({ length: k }, (_, j): AgentGraph['edges'][number] => ({ a: 'n3', b: `n${10 + j}`, score: 0.9 })), // n3's ties change, so n3 moves
+    ];
+    const coins = [coin('m1', 'n3'), coin('m2', 'n7'), coin('m3', 'ghost')];
+    const initial = buildSwarm(graph(people, edgesAt(0)), coins, null);
+    let model = initial;
+    const first = new Map(model.coins.map((c) => [c.mint, { ...c }]));
+    const gap = (m: typeof model, mint: string, creator: string) => {
+      const c = m.coins[m.coinIndex.get(mint)!]!, a = m.nodes[m.index.get(creator)!]!;
+      return [c.x - a.x, c.y - a.y] as const;
+    };
+    const start = [gap(model, 'm1', 'n3'), gap(model, 'm2', 'n7')];
+    for (let k = 1; k <= 5; k++) {
+      model = buildSwarm(graph(people, edgesAt(k)), coins, model);
+      const now = [gap(model, 'm1', 'n3'), gap(model, 'm2', 'n7')];
+      // Each coin keeps its offset from its creator, so it follows the creator wherever the layout puts it.
+      now.forEach(([x, y], i) => { expect(x).toBeCloseTo(start[i]![0], 9); expect(y).toBeCloseTo(start[i]![1], 9); expect(Math.hypot(x, y)).toBeLessThan(0.15); });
+      // A creator the graph does not have leaves its coin where it first was.
+      expect(model.coins[model.coinIndex.get('m3')!]).toEqual(first.get('m3'));
+    }
+    // n3 really did move, so the check above is not vacuous.
+    const n3 = (m: typeof model) => m.nodes[m.index.get('n3')!]!;
+    expect(Math.hypot(n3(model).x - n3(initial).x, n3(model).y - n3(initial).y)).toBeGreaterThan(0.005);
+  });
   it('keeps agents exactly where they are when only the coins change', () => {
     const g = graph(Array.from({ length: 20 }, (_, i) => node(`n${i}`)), [{ a: 'n0', b: 'n1', score: 0.8 }, { a: 'n2', b: 'n3', score: -0.7 }]);
     const first = buildSwarm(g, [coin('m1', 'n0')], null);
