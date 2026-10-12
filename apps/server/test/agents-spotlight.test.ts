@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { makeTestApp } from './helpers.ts';
-import { factionMembers, factions, follows, memeTemplates, notifications, papers, shareCards, spotlightDone, users } from '../src/db/schema.ts';
+import { chainTxs, factionMembers, factions, follows, memeTemplates, notifications, papers, shareCards, spotlightDone, users, worldCoins } from '../src/db/schema.ts';
 import { loadConfig } from '../src/config.ts';
 import { newId } from '../src/lib/ids.ts';
 import { getSetting } from '../src/world/launchpad.ts';
@@ -8,7 +8,7 @@ import { adjustAffinity, rememberEvent } from '../src/agents/state.ts';
 import { renderSvg } from '../src/agents/cards.ts';
 import type { ImageGen } from '../src/agents/images.ts';
 import { OpenAIImageGen, WORST_IMAGE_USD } from '../src/agents/openai-images.ts';
-import { SPOTLIGHT_CURSOR, spotlightImageGen, spotlightSweep, startSpotlight, type SpotlightDeps } from '../src/agents/depth/spotlight.ts';
+import { COIN_MASCOTS_PER_DAY, SPOTLIGHT_CURSOR, spotlightImageGen, spotlightSweep, startSpotlight, type SpotlightDeps } from '../src/agents/depth/spotlight.ts';
 
 let t: Awaited<ReturnType<typeof makeTestApp>>;
 let rugger = '', other = '', third = '';
@@ -137,11 +137,12 @@ describe('spotlight', () => {
     await t.db.insert(papers).values({ day: '2026-10-08', headline: 'H', body: { stories: [], memeBrief: 'a moth crying over a candle chart', source: 'model' }, createdAt: t.clock.now() });
     await spotlightSweep(deps({ gen, limits: { usd: 1, max: 1 } }));
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain('raccoon');
+    expect(calls[0]).toContain('moth'); // the paper's meme goes first (L8)
     await spotlightSweep(deps({ gen, limits: { usd: 1, max: 1 } }));
-    expect(calls).toHaveLength(1); // today's image budget is spent: the paper's brief waits
+    expect(calls).toHaveLength(1); // today's image budget is spent: the faction's banner waits
     await spotlightSweep(deps({ gen, limits: { usd: 1, max: 5 } }));
-    expect(calls).toHaveLength(2); // the paper's brief; the faction's banner is never generated twice
+    expect(calls).toHaveLength(2); // the faction's banner; the paper's brief is never generated twice
+    expect(calls[1]).toContain('raccoon');
     const [tpl] = (await t.db.select().from(memeTemplates)).filter((m) => m.brief.includes('moth'));
     expect((await t.db.select().from(papers))[0]!.memeBlobId).toBe(tpl!.blobId);
     expect(await t.db.select().from(memeTemplates)).toHaveLength(2);
@@ -195,15 +196,15 @@ describe('spotlight', () => {
     const stop = startSpotlight(deps({ gen, limits: { usd: 1, max: 5 } }), 5);
     await until(() => calls.length > 0);
     await new Promise((r) => setTimeout(r, 60)); // many ticks pass while the first sweep waits on the image
-    expect(calls).toHaveLength(1); // an overlapping sweep would have started the paper's brief
+    expect(calls).toHaveLength(1); // an overlapping sweep would have started the faction's banner
     let stopped = false;
     const stopping = stop().then(() => { stopped = true; });
     await new Promise((r) => setTimeout(r, 20));
     expect(stopped).toBe(false);
     release();
     await stopping;
-    expect(calls).toHaveLength(1); // stop waited only for the call in flight: the paper's brief was never started
-    expect(await doneKeys()).toEqual([`template:faction:${fid}`]); // ...nor claimed, so it waits for the next run
+    expect(calls).toHaveLength(1); // stop waited only for the call in flight: the faction's banner was never started
+    expect(await doneKeys()).toEqual(['template:paper:2026-10-08']); // ...nor claimed, so it waits for the next run
     expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBe(t.clock.now().toISOString()); // every moment was handled before the templates
     await new Promise((r) => setTimeout(r, 40));
     expect(calls).toHaveLength(1); // no sweep after stop
@@ -216,5 +217,68 @@ describe('spotlight', () => {
     expect(await doneKeys()).toEqual([]);
     expect(await getSetting(t.db, SPOTLIGHT_CURSOR)).toBeNull();
     expect(await spotlightSweep(deps())).toBe(1);
+  });
+});
+
+describe('mascots (L8)', () => {
+  const coin = (i: number, over: Partial<typeof worldCoins.$inferInsert> = {}) => ({
+    mint: `MASCOT${i}`, pool: `P${i}`, creatorId: rugger, name: `Coin ${i}`, symbol: `C${i}`, launchSignature: `sig-m${i}`, launchedAt: t.clock.now(), ...over,
+  });
+  const recording = () => {
+    const calls: string[] = [];
+    const gen: ImageGen = { async generate(prompt) { calls.push(prompt); return { png: png(), usd: 0.011 }; } };
+    return { calls, gen };
+  };
+  it('spends nothing on twenty coins nobody bought, and draws the faction banner instead', async () => {
+    await t.db.insert(worldCoins).values(Array.from({ length: 20 }, (_, i) => coin(i)));
+    const fid = newId();
+    await t.db.insert(factions).values({ id: fid, name: 'Hard Hats', banner: 'a raccoon in a hard hat', colour: '#ffb547', formedAt: t.clock.now() });
+    await t.db.insert(factionMembers).values({ factionId: fid, agentId: rugger, joinedAt: t.clock.now() });
+    const { calls, gen } = recording();
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('raccoon');
+  });
+  it('draws a mascot for a coin with five or more holders', async () => {
+    await t.db.insert(worldCoins).values(coin(1, { name: 'Moth Club', emoji: '🦋' }));
+    const holders = Array.from({ length: 6 }, () => newId());
+    await t.db.insert(users).values(holders.map((id, i) => ({ id, username: `holder_${i}`, displayName: '', kind: 'agent' as const, createdAt: t.clock.now() })));
+    await t.db.insert(chainTxs).values(holders.map((agentId, i) => ({ id: newId(), signature: `sig-h${i}`, agentId, turnId: null, kind: 'buy' as const, mint: 'MASCOT1', lamportsDelta: -1_000_000, tokenDelta: 1000, feeLamports: 5000, createdAt: t.clock.now() })));
+    const { calls, gen } = recording();
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toEqual([expect.stringContaining('mascot for a meme coin called Moth Club')]);
+  });
+  it('draws a mascot for a coin with 0.3 SOL traded in the last day, but not for 0.2 SOL or for old volume', async () => {
+    await t.db.insert(worldCoins).values([coin(1), coin(2), coin(3)]);
+    const trade = (mint: string, sol: number, ageMs: number, kind: 'buy' | 'sell' = 'buy') => ({
+      id: newId(), signature: `sig-v${mint}-${ageMs}`, agentId: rugger, turnId: null, kind, mint, lamportsDelta: (kind === 'buy' ? -1 : 1) * sol * 1e9,
+      tokenDelta: kind === 'buy' ? 1000 : -1000, feeLamports: 5000, createdAt: new Date(t.clock.now().getTime() - ageMs),
+    });
+    await t.db.insert(chainTxs).values([
+      trade('MASCOT1', 0.2, 1000), trade('MASCOT1', 0.1, 2000, 'sell'), // 0.3 SOL both ways from one trader: it counts
+      trade('MASCOT2', 0.2, 1000), // under the line
+      trade('MASCOT3', 0.5, 25 * 3600_000), // over the line, but yesterday's
+    ]);
+    const { calls, gen } = recording();
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toEqual([expect.stringContaining('called Coin 1')]);
+  });
+  it('lets a graduated coin earn its mascot for three days, not four', async () => {
+    const ago = (hours: number) => new Date(t.clock.now().getTime() - hours * 3600_000);
+    await t.db.insert(worldCoins).values([coin(1, { graduatedAt: t.clock.now(), launchedAt: ago(70) }), coin(2, { graduatedAt: t.clock.now(), launchedAt: ago(74) })]);
+    const { calls, gen } = recording();
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toEqual([expect.stringContaining('called Coin 1')]);
+  });
+  it('draws at most five coin mascots a day', async () => {
+    await t.db.insert(worldCoins).values(Array.from({ length: 7 }, (_, i) => coin(i, { graduatedAt: t.clock.now() })));
+    const { calls, gen } = recording();
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toHaveLength(COIN_MASCOTS_PER_DAY);
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toHaveLength(COIN_MASCOTS_PER_DAY);
+    t.clock.advance(24 * 3600_000);
+    await spotlightSweep(deps({ gen, limits: { usd: 1, max: 15 } }));
+    expect(calls).toHaveLength(7);
   });
 });

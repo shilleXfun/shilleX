@@ -1,8 +1,9 @@
-import { and, asc, eq, gt, inArray, isNull, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
 import type { Config } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
 import type { EventBus } from '../../deps.ts';
-import { agentAffinity, agentEvents, factionMembers, factions, memeTemplates, papers, spotlightDone, users, worldCoins } from '../../db/schema.ts';
+import { agentAffinity, agentEvents, chainTxs, factionMembers, factions, memeTemplates, papers, spotlightDone, users, worldCoins } from '../../db/schema.ts';
+import { holderCounts } from '../../world/indexer.ts';
 import { getSetting, setSetting } from '../../world/launchpad.ts';
 import { notifyFollowersOfMoment } from '../follow-notify.ts';
 import { canGenerate } from '../image-budget.ts';
@@ -110,33 +111,60 @@ async function feudSpots(db: Db, since: Date): Promise<Spot[]> {
   return out;
 }
 
+/** Coin mascots are paid pictures: only for coins people hold or trade, at most this many a day, after the paper and banners (L8). */
+export const COIN_MASCOTS_PER_DAY = 5;
+export const MASCOT_HOLDERS = 5;
+export const MASCOT_VOLUME_LAMPORTS = 300_000_000;
+/** A coin may take a few days to earn its mascot. */
+const COIN_BRIEF_LOOKBACK_MS = 72 * 3600_000;
+
+/** Coins among `mints` with MASCOT_HOLDERS or more holders, or MASCOT_VOLUME_LAMPORTS or more traded in the last 24 hours. */
+async function mascotWorthy(db: Db, mints: string[], now: Date): Promise<Set<string>> {
+  if (!mints.length) return new Set();
+  const out = new Set([...(await holderCounts(db, mints))].filter(([, n]) => n >= MASCOT_HOLDERS).map(([m]) => m));
+  const volume = await db.select({ mint: chainTxs.mint, v: sql<number>`coalesce(sum(abs(${chainTxs.lamportsDelta})), 0)::float8` }).from(chainTxs)
+    .where(and(inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell']), gte(chainTxs.createdAt, new Date(now.getTime() - 24 * 3600_000)))).groupBy(chainTxs.mint);
+  for (const r of volume) if (r.mint && r.v >= MASCOT_VOLUME_LAMPORTS) out.add(r.mint);
+  return out;
+}
+
 /**
- * Meme templates from the public briefs agents wrote (coins, faction banners, the paper's meme brief), within the image budget.
+ * Meme templates from the public briefs agents wrote, within the image budget, in the order most people see them (L8): the
+ * day's paper meme, then faction banners, then mascots for coins that matter (graduated, ≥ MASCOT_HOLDERS holders or
+ * ≥ 0.3 SOL traded in 24 h; at most COIN_MASCOTS_PER_DAY a day). A coin nobody bought costs nothing.
  * Only the spotlight calls this, one sweep at a time, so the budget's check, call and record never interleave.
  */
 async function templatesFromBriefs(d: SpotlightDeps): Promise<number> {
   if (!d.gen) return 0; // no OPENAI_API_KEY: no paid call, and every brief waits unclaimed
-  const since = new Date(d.now().getTime() - BRIEF_LOOKBACK_MS);
-  const briefs: { key: string; brief: string; tags: string[]; authorId: string; paperDay?: string }[] = [];
-  for (const c of await d.db.select().from(worldCoins).where(gt(worldCoins.launchedAt, since)).orderBy(asc(worldCoins.launchedAt))) {
-    briefs.push({ key: `template:launch:${c.mint}`, brief: `a cartoon mascot for a meme coin called ${c.name} (${c.emoji})${c.description ? `: ${c.description}` : ''}`, tags: ['launching', 'shilling', 'pumping'], authorId: c.creatorId });
+  const now = d.now();
+  const since = new Date(now.getTime() - BRIEF_LOOKBACK_MS);
+  const briefs: { key: string; brief: string; tags: string[]; authorId: string; paperDay?: string; mascot?: boolean }[] = [];
+  const [anyAgent] = await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent')).orderBy(asc(users.id)).limit(1);
+  for (const p of await d.db.select().from(papers).where(and(gt(papers.createdAt, since), isNull(papers.memeBlobId))).orderBy(asc(papers.createdAt))) {
+    if (p.body.memeBrief && anyAgent) briefs.push({ key: `template:paper:${p.day}`, brief: p.body.memeBrief, tags: ['idle', 'market_take'], authorId: anyAgent.id, paperDay: p.day });
   }
   for (const f of await d.db.select().from(factions).where(and(gt(factions.formedAt, since), ne(factions.banner, ''))).orderBy(asc(factions.formedAt))) {
     const [lead] = await d.db.select({ id: factionMembers.agentId }).from(factionMembers).where(eq(factionMembers.factionId, f.id)).orderBy(asc(factionMembers.joinedAt), asc(factionMembers.agentId)).limit(1);
     if (lead) briefs.push({ key: `template:faction:${f.id}`, brief: f.banner, tags: ['faction_cheer'], authorId: lead.id });
   }
-  const [anyAgent] = await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent')).orderBy(asc(users.id)).limit(1);
-  for (const p of await d.db.select().from(papers).where(and(gt(papers.createdAt, since), isNull(papers.memeBlobId))).orderBy(asc(papers.createdAt))) {
-    if (p.body.memeBrief && anyAgent) briefs.push({ key: `template:paper:${p.day}`, brief: p.body.memeBrief, tags: ['idle', 'market_take'], authorId: anyAgent.id, paperDay: p.day });
+  const coins = await d.db.select().from(worldCoins).where(gt(worldCoins.launchedAt, new Date(now.getTime() - COIN_BRIEF_LOOKBACK_MS))).orderBy(asc(worldCoins.launchedAt));
+  const worthy = await mascotWorthy(d.db, coins.map((c) => c.mint), now);
+  for (const c of coins) {
+    if (!c.graduatedAt && !worthy.has(c.mint)) continue;
+    briefs.push({ key: `template:launch:${c.mint}`, brief: `a cartoon mascot for a meme coin called ${c.name} (${c.emoji})${c.description ? `: ${c.description}` : ''}`, tags: ['launching', 'shilling', 'pumping'], authorId: c.creatorId, mascot: true });
   }
+  const dayStart = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
+  let mascots = (await d.db.select({ key: spotlightDone.key }).from(spotlightDone).where(and(like(spotlightDone.key, 'template:launch:%'), gte(spotlightDone.at, dayStart)))).length;
   const finished = await doneKeys(d.db, briefs.map((b) => b.key));
   let made = 0;
   for (const b of briefs) {
     if (d.stopped?.()) break; // shutting down: start no new paid call; unclaimed briefs wait for the next run
     if (finished.has(b.key)) continue;
+    if (b.mascot && mascots >= COIN_MASCOTS_PER_DAY) continue; // today's mascots are drawn; the coin can earn one tomorrow
     // Reserve the call's worst-case price, as generateTemplate does, so a brief is never claimed and then refused (burned).
     if (!(await canGenerate(d.db, d.limits, d.now(), WORST_IMAGE_USD))) break; // budget spent: the rest wait, unclaimed, for tomorrow
     if (!(await claim(d.db, b.key, d.now()))) continue;
+    if (b.mascot) mascots++;
     // null = generation failed: the brief stays claimed, so a failing API is never retried in a loop.
     const id = await generateTemplate({ db: d.db, gen: d.gen, limits: d.limits, now: d.now }, { brief: b.brief, tags: b.tags, authorId: b.authorId });
     if (!id) continue;
