@@ -4,11 +4,11 @@ import type { DbHandle } from '../src/db/client.ts';
 import { phrasebooks, users } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { FALLBACK_LINES, FALLBACK_SITUATIONS, LINES_PER_AGENT, WEATHER_WORD, closerFits, composeLine, fallbackPhrasebook, fillLine, lineKey, phrasebookOf } from '../src/agents/phrasebook.ts';
+import { FALLBACK_LINES, FALLBACK_SITUATIONS, LINES_PER_AGENT, WEATHER_WORD, closerFits, composeLine, fallbackPhrasebook, feedSeen, fillLine, lineKey, phrasebookOf } from '../src/agents/phrasebook.ts';
 import { stanceOf } from '../src/agents/depth/beliefs.ts';
 import { normalizeBody } from '../src/services/moderation.ts';
 import { seededTraits } from '../src/agents/state.ts';
-import type { Phrasebook } from '../src/agents/types.ts';
+import type { Phrasebook, Situation } from '../src/agents/types.ts';
 
 let h: DbHandle;
 beforeAll(async () => { h = await testDb(); });
@@ -102,5 +102,70 @@ describe('many voices (L6)', () => {
   });
   it('names the weather with a mood word', () => {
     expect(WEATHER_WORD).toEqual({ euphoria: 'giddy', grind: 'slow', fear: 'jumpy', chaos: 'unhinged' });
+  });
+});
+
+describe('openers and closers sit right on the line (L6b)', () => {
+  const book = (lines: Partial<Record<Situation, string[]>>, openers: string[], closers: string[]): Phrasebook => ({ ...fallbackPhrasebook('x'), lines, openers, closers });
+  /** Every composed text over many seeds, so a decoration that is rolled sometimes shows up. */
+  const sayMany = (pb: Phrasebook, situation: Situation, slots: Record<string, string | number> = {}, n = 400, avoid?: Set<string>) =>
+    Array.from({ length: n }, (_, i) => composeLine(pb, situation, slots, [], mulberry32(i), avoid)!.text);
+
+  it('never puts a closer after a finished sentence or an emoji', () => {
+    for (const line of ['all done.', 'who is awake?', 'we are early!', 'wen moon 🚀', 'trimmed it…']) {
+      const texts = sayMany(book({ idle: [line] }, [], ['lol', 'pain', '🫡']), 'idle');
+      expect(texts, line).toEqual(texts.map(() => line));
+    }
+  });
+  it('joins each closer its own way: a comma, a dash or a space, never glued', () => {
+    const closing = (closer: string) => sayMany(book({ idle: ['bought some $DRIFT'] }, [], [closer]), 'idle').filter((t) => t !== 'bought some $DRIFT');
+    expect(new Set(closing('pain'))).toEqual(new Set(['bought some $DRIFT — pain']));
+    expect(new Set(closing('lol'))).toEqual(new Set(['bought some $DRIFT, lol']));
+    expect(new Set(closing('we will see'))).toEqual(new Set(['bought some $DRIFT — we will see']));
+    expect(new Set(closing('🫡'))).toEqual(new Set(['bought some $DRIFT 🫡']));
+    expect(new Set(closing('touch grass'))).toEqual(new Set(['bought some $DRIFT, touch grass'])); // a closer a model wrote
+  });
+  it('keeps a closer off a line that already ends like one, or already says its word', () => {
+    expect(new Set(sayMany(book({ idle: ['awake early. gm'] }, [], ['lol', 'ok']), 'idle'))).toEqual(new Set(['awake early. gm']));
+    expect(new Set(sayMany(book({ dumping: ['pain in {coin}'] }, [], ['pain']), 'dumping', { coin: '$X' }))).toEqual(new Set(['pain in $X']));
+    expect(sayMany(book({ dumping: ['pain in {coin}'] }, [], ['pain', 'rip']), 'dumping', { coin: '$X' })).toContain('pain in $X — rip');
+  });
+  it('keeps an opener off a line that already starts with a greeting or an interjection', () => {
+    for (const line of ['gm everyone, still here', 'good morning, everyone', 'ok then, watching $X', 'alright gm. who slept', 'so here we are', 'honestly just tired today', 'lol the feed is wild']) {
+      const texts = sayMany(book({ idle: [line] }, ['quick one', 'update', 'real talk', 'btw'], []), 'idle');
+      expect(new Set(texts), line).toEqual(new Set([line]));
+    }
+    // ...and goes on a plain one, with its own punctuation.
+    expect(sayMany(book({ idle: ['the chart is a mood ring'] }, ['honestly'], []), 'idle')).toContain('honestly, the chart is a mood ring');
+    expect(sayMany(book({ idle: ['the chart is a mood ring'] }, ['real talk'], []), 'idle')).toContain('real talk: the chart is a mood ring');
+    expect(sayMany(book({ idle: ['the chart is a mood ring'] }, ['ok'], []), 'idle')).toContain('ok the chart is a mood ring');
+  });
+  it('keeps openers to statements: no "real talk: welcome @lamp"', () => {
+    const texts = sayMany(book({ welcome: ['welcome to shillex friend'], thank: ['thanks for the help friend'] }, ['honestly', 'real talk'], []), 'welcome');
+    expect(new Set(texts)).toEqual(new Set(['welcome to shillex friend']));
+    expect(new Set(sayMany(book({ thank: ['thanks for the help friend'] }, ['honestly'], []), 'thank'))).toEqual(new Set(['thanks for the help friend']));
+  });
+  it('never puts an opener and a closer on a line shorter than four words', () => {
+    const short = sayMany(book({ idle: ['quiet in here'] }, ['honestly'], ['lol']), 'idle', {}, 2000);
+    expect(short.some((t) => t.startsWith('honestly,'))).toBe(true);
+    expect(short.some((t) => t.endsWith(', lol'))).toBe(true);
+    expect(short.filter((t) => t.startsWith('honestly,') && t.endsWith(', lol'))).toEqual([]);
+    const long = sayMany(book({ idle: ['quiet in here tonight'] }, ['honestly'], ['lol']), 'idle', {}, 2000);
+    expect(long.some((t) => t.startsWith('honestly,') && t.endsWith(', lol'))).toBe(true);
+  });
+  it('falls back to the bare line when its decorated form is already on the feed', () => {
+    const pb = book({ idle: ['the chart is a mood ring'] }, [], ['lol']);
+    const decorated = sayMany(pb, 'idle').find((t) => t.endsWith(', lol'))!;
+    expect(decorated).toBeTruthy();
+    expect(sayMany(pb, 'idle', {}, 400, new Set([normalizeBody(decorated)]))).not.toContain(decorated);
+  });
+  it('reads the feed into the normalized set composeLine avoids', () => {
+    expect(feedSeen([{ body: 'GM   Frens' }, { body: 'second post' }])).toEqual(new Set(['gm frens', 'second post']));
+    expect(feedSeen(undefined)).toEqual(new Set());
+  });
+  it('welcomes a human without a mournful closer', () => {
+    expect(closerFits('reply_human', 'ngmi')).toBe(false);
+    expect(closerFits('reply_human', 'wagmi')).toBe(true);
+    expect(closerFits('thank', 'whatever')).toBe(false);
   });
 });

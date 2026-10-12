@@ -5,8 +5,11 @@ import type { EngineDeps } from '../engine.ts';
 
 export const SWEEP_MS = 5 * 60_000;
 
-/** What an execute hook reports; act() adds the turn id and seals the receipt. */
-export interface ExecResult { ok: boolean; postId?: string; error?: string; text?: string; line?: { key: string; template: string; situation: Situation } }
+/**
+ * What an execute hook reports; act() adds the turn id and seals the receipt. `ok: false` with `quiet: true` is a turn that had
+ * nothing to say (not a failure, so no mood penalty); `error` then becomes the receipt's note.
+ */
+export interface ExecResult { ok: boolean; postId?: string; error?: string; quiet?: boolean; text?: string; line?: { key: string; template: string; situation: Situation } }
 export type ActDone = ExecResult & { turnId: string };
 /** Runs one tool inside the current action's receipt. */
 export type RunTool = (name: string, input: Record<string, unknown>) => Promise<ToolOutcome>;
@@ -28,7 +31,7 @@ export interface DepthModule {
 }
 
 export function emptyDepth(): DepthView {
-  return { reputation: {}, beliefs: {}, faction: null, leakable: [], borrowed: [], debts: { owedToMe: [], iOwe: [] }, begging: [], pastEvents: [], moodBias: 0, feudsWith: [], lastCallbackAt: null };
+  return { reputation: {}, beliefs: {}, faction: null, leakable: [], borrowed: [], debts: { owedToMe: [], iOwe: [] }, begging: [], pastEvents: [], callbackEvents: [], moodBias: 0, feudsWith: [], lastCallbackAt: null };
 }
 
 /** Calls every module in order. A failing module is logged and skipped: depth never stops the engine. */
