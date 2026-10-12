@@ -47,3 +47,17 @@ describe('weather', () => {
     expect(dump!.score).toBeCloseTo(0.9 * 1.15);
   });
 });
+
+describe('the first weather of a new world', () => {
+  it('is never fear, while a later regime can still be', () => {
+    const seen = { first: new Set<string>(), after: new Set<string>() };
+    for (let s = 0; s < 500; s++) {
+      const r = mulberry32(s);
+      seen.first.add(nextRegime(null, r).regime);
+      seen.after.add(nextRegime('grind', r).regime);
+    }
+    expect(seen.first.has('fear')).toBe(false);
+    expect([...seen.first].sort()).toEqual(['chaos', 'euphoria', 'grind']);
+    expect(seen.after.has('fear')).toBe(true);
+  });
+});

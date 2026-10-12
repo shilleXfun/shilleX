@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import {
-  chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
+  agentTurns, chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
 } from '../db/schema.ts';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { walletOf } from '../world/wallets.ts';
@@ -49,12 +49,14 @@ async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSele
   if (!coins.length) return [];
   const mints = coins.map((c) => c.mint);
   const tenAgo = new Date(now.getTime() - 10 * MIN).toISOString(), hourAgo = new Date(now.getTime() - 60 * MIN).toISOString();
+  // A launch row's SOL beyond the rent is its creator's first buy into the pool: it counts, so a new coin starts with momentum (L2).
+  const inflow = sql`case when ${chainTxs.kind} = 'launch' then greatest(0, -${chainTxs.lamportsDelta} - ${sql.raw(String(LAUNCH_RENT))}) else -${chainTxs.lamportsDelta} end`;
   const flows = await db.select({
     mint: chainTxs.mint,
-    total: sql<number>`coalesce(sum(-${chainTxs.lamportsDelta}), 0)::float8`,
-    h1: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${hourAgo}::timestamptz then -${chainTxs.lamportsDelta} else 0 end), 0)::float8`,
-    m10: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${tenAgo}::timestamptz then -${chainTxs.lamportsDelta} else 0 end), 0)::float8`,
-  }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell']))).groupBy(chainTxs.mint);
+    total: sql<number>`coalesce(sum(${inflow}), 0)::float8`,
+    h1: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${hourAgo}::timestamptz then ${inflow} else 0 end), 0)::float8`,
+    m10: sql<number>`coalesce(sum(case when ${chainTxs.createdAt} >= ${tenAgo}::timestamptz then ${inflow} else 0 end), 0)::float8`,
+  }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).groupBy(chainTxs.mint);
   const holderRows = await db.select({ mint: chainTxs.mint, agentId: chainTxs.agentId }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), isNotNull(chainTxs.agentId)))
     .groupBy(chainTxs.mint, chainTxs.agentId).having(sql`sum(${chainTxs.tokenDelta}) > 0`);
   const flow = new Map(flows.map((f) => [f.mint!, f]));
@@ -143,6 +145,15 @@ async function roomsView(db: Db): Promise<AgentView['rooms']> {
   return rows.map((r) => ({ roomId: r.roomId, communitySlug: r.slug, lastAt: (r.lastAt ? new Date(r.lastAt) : new Date(0)).toISOString(), members: Number(r.members) }));
 }
 
+/** A buy that failed is not retried for this long: a dead pool or a graduated curve must not eat an agent's turns (L2). */
+export const FAILED_BUY_MS = 30 * MIN;
+async function failedBuysView(db: Db, agentId: string, now: Date): Promise<string[]> {
+  const rows = await db.select({ calls: agentTurns.toolCalls }).from(agentTurns)
+    .where(and(eq(agentTurns.agentId, agentId), eq(agentTurns.status, 'failed'), gte(agentTurns.startedAt, new Date(now.getTime() - FAILED_BUY_MS))))
+    .orderBy(desc(agentTurns.seq)).limit(20);
+  return [...new Set(rows.flatMap((r) => r.calls.filter((c) => c.name === 'buy' && !c.ok).map((c) => String((c.input as { mint?: unknown } | null)?.mint ?? '')).filter(Boolean)))];
+}
+
 /** Coins and rooms are the same for every agent, so one computation serves all perceives inside the TTL (measured on the injected clock). */
 export const GLOBAL_TTL_MS = 10_000;
 interface GlobalView { at: number; coins: AgentView['coins']; rooms: AgentView['rooms'] }
@@ -163,9 +174,9 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const [u] = await d.db.select().from(users).where(eq(users.id, agentId));
   if (!u) throw new Error(`No agent ${agentId}`);
   const { coins: globalCoins, rooms } = await globalView(d.db, now);
-  const [state, phrasebook, wallet, mentions, dms, feed, affinity] = await Promise.all([
+  const [state, phrasebook, wallet, mentions, dms, feed, affinity, failedBuys] = await Promise.all([
     loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, globalCoins),
-    mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), affinitiesOf(d.db, agentId),
+    mentionsView(d.db, agentId, now), dmsView(d.db, agentId, now), feedView(d.db, agentId), affinitiesOf(d.db, agentId), failedBuysView(d.db, agentId, now),
   ]);
   // Mentions and DMs already handed to a written reply are hidden, so the engine does not answer twice.
   const cutoff = now.getTime() - 30 * MIN;
@@ -177,7 +188,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const extraRows = await d.db.select().from(worldCoins).where(heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId));
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing))] : globalCoins;
-  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth() };
+  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys };
   // Depth modules fill v.depth (and may replace, never mutate, v.coins and v.rooms: those arrays are the shared cache).
   await d.depth?.perceive(d, v);
   return v;
