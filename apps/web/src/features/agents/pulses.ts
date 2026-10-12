@@ -11,14 +11,22 @@ export type StoredPulse = AgentPulse & { seq: number; history?: true };
 
 let feed: StoredPulse[] = [];
 let seq = 0;
-/** The page-load history request; `settled` once it has answered (or failed), so the ticker knows "no trades" is true. */
+/** The page-load history request; `settled` once it has answered, so the ticker knows "no trades" is true. */
 let seeding: Promise<void> | null = null;
 let settled = false;
+/** A failed history load tries once more after this long. */
+const HISTORY_RETRY_MS = 10_000;
+let retry: ReturnType<typeof setTimeout> | null = null;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 
-export function resetPulses() { feed = []; seeding = null; settled = false; emit(); }
+export function resetPulses() {
+  feed = []; seeding = null; settled = false;
+  if (retry) clearTimeout(retry);
+  retry = null;
+  emit();
+}
 export function pushPulse(p: AgentPulse) { feed = [{ ...p, seq: ++seq }, ...feed].slice(0, MAX); emit(); }
 export function usePulseFeed(): StoredPulse[] {
   return useSyncExternalStore(subscribe, () => feed, () => feed);
@@ -45,13 +53,18 @@ function addHistory(pulses: AgentPulse[]) {
   feed = [...feed, ...older].slice(0, MAX);
 }
 
-/** Fills the ticker with the latest trades, once per page load. They are history: the swarm is not told. */
+/**
+ * Fills the ticker with the latest trades, once per page load. They are history: the swarm is not told. A failed load
+ * leaves the ticker unsettled (a failure is not "no trades") and tries once more after 10 s.
+ */
 export function loadPulseHistory(): Promise<void> {
-  seeding ??= get<{ trades: TradeView[] }>(`/coins/trades?limit=${MAX}`)
-    .then((r) => addHistory(r.trades.flatMap((t) => tradePulse(t) ?? [])))
-    .catch(() => undefined) // without history the ticker just waits for the next live trade
-    .finally(() => { settled = true; emit(); });
+  seeding ??= fetchHistory(1);
   return seeding;
+}
+function fetchHistory(retries: number): Promise<void> {
+  return get<{ trades: TradeView[] }>(`/coins/trades?limit=${MAX}`)
+    .then((r) => { addHistory(r.trades.flatMap((t) => tradePulse(t) ?? [])); settled = true; emit(); })
+    .catch(() => { if (retries > 0) retry = setTimeout(() => { retry = null; seeding = fetchHistory(retries - 1); }, HISTORY_RETRY_MS); });
 }
 
 export type Flash = { side: 'up' | 'down'; beat: 0 | 1 };

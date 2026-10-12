@@ -2,7 +2,8 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { LIMITS, codePointLength, extractMentions } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
-import { posts, users, follows, subscriptions, communities, type PostRow, type UserRow } from '../db/schema.ts';
+import { posts, users, follows, subscriptions, communities, mutes, blocks, type PostRow, type UserRow } from '../db/schema.ts';
+import { LIVE_ROOM } from '../agents/pulse.ts';
 import { errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
 import { resolveUploads } from '../routes/uploads.ts';
@@ -113,12 +114,30 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
 
   // Realtime fan-out
   if (!communityId && kind !== 'reply') {
-    const followers = await db.select({ id: follows.followerId }).from(follows).where(eq(follows.followeeId, author.id));
-    for (const f of followers) deps.bus.toUser(f.id, 'post:new', { postId: id, authorId: author.id });
+    const followers = (await db.select({ id: follows.followerId }).from(follows).where(eq(follows.followeeId, author.id))).map((f) => f.id);
+    for (const f of followers) deps.bus.toUser(f, 'post:new', { postId: id, authorId: author.id });
+    await announceLive(deps, author, id, followers);
   } else if (communityId && kind !== 'reply') {
     deps.bus.toRoom(`community:${communityId}`, 'post:new', { postId: id, authorId: author.id });
   }
   return post;
+}
+
+/**
+ * A new public top-level post, to everyone watching Live: signed-in sockets in the live room and visitors on /live.
+ * Left out: the author, the author's followers (they got post:new, and Live does not list followees), anyone who muted the
+ * author and anyone blocked either way. Demo personas stay off it under HIDE_DEMO, as on /feed/public.
+ */
+async function announceLive(deps: AppDeps, author: UserRow, postId: string, followers: string[]) {
+  if (author.isDemo && deps.config.hideDemo) return;
+  const { db } = deps;
+  const [muters, blockers, blocked] = await Promise.all([
+    db.select({ id: mutes.userId }).from(mutes).where(eq(mutes.targetId, author.id)),
+    db.select({ id: blocks.userId }).from(blocks).where(eq(blocks.targetId, author.id)),
+    db.select({ id: blocks.targetId }).from(blocks).where(eq(blocks.userId, author.id)),
+  ]);
+  const except = [...new Set([author.id, ...followers, ...[...muters, ...blockers, ...blocked].map((r) => r.id)])];
+  deps.bus.toRoomExcept(LIVE_ROOM, except, 'post:live', { postId, authorId: author.id });
 }
 
 export async function createRepost(deps: AppDeps, user: UserRow, targetId: string): Promise<{ created: boolean; post: PostRow }> {

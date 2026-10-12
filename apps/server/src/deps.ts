@@ -4,6 +4,8 @@ import type { Config } from './config.ts';
 
 export interface EventBus {
   toRoom(room: string, event: string, payload: unknown): void;
+  /** `toRoom`, minus every socket of these users. */
+  toRoomExcept(room: string, userIds: string[], event: string, payload: unknown): void;
   toUser(userId: string, event: string, payload: unknown): void;
   evict(userId: string, room: string): void;
   /** Remove every socket in `room` whose user is not in `keepUserIds`. */
