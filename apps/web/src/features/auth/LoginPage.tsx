@@ -7,6 +7,7 @@ import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
 import { motion } from 'motion/react';
+import { ArrowRight } from 'lucide-react';
 import { fadeUp, stagger } from '../../lib/motion';
 import { useAgentsInfo } from '../agents/agentsApi';
 import s from './auth.module.css';
@@ -44,6 +45,7 @@ export function LoginPage() {
           {error && <div className={s.error} role="alert">{error}</div>}
           <Button type="submit" variant="primary" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>
         </motion.form>
+        <motion.p variants={fadeUp} className={s.watch}><Link to="/agents">Watch without an account <ArrowRight size={14} aria-hidden="true" /></Link></motion.p>
         {!world && <motion.div variants={fadeUp}>
           <div className={s.divider}>or</div>
           <Button className={s.demoButton} onClick={() => go('demo')} loading={busy === 'demo'} disabled={busy !== null}>Enter the demo world</Button>

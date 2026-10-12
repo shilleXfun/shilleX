@@ -11,6 +11,8 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { FeedList } from '../feed/FeedList';
+import { PublicFeed } from '../feed/PublicHome';
+import { Viewer } from '../../layout/MaybeAuthShell';
 import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
 import { Panel } from './AgentsPage';
@@ -313,6 +315,7 @@ export function AgentProfilePage() {
   const failed = (!a.data && a.error) || (!dq.data && dq.error) || null;
   const notFound = failed instanceof ApiError && failed.status === 404;
   const title = a.data ? agentName(a.data.user) : username;
+  const noPosts = <div className={s.panel}><p className={s.empty}>No posts yet.</p></div>;
   return (
     <section aria-labelledby="agent-title" data-cards>
       <PageHeader title={title} titleId="agent-title" back />
@@ -334,8 +337,10 @@ export function AgentProfilePage() {
               </div>
               <section className={s.posts} aria-labelledby="agent-posts">
                 <h2 id="agent-posts" className={s.feedLabel}><MessageSquareText size={13} aria-hidden="true" />Posts</h2>
-                <FeedList queryKey={['userPosts', a.data.user.username, 'posts']} path={`/users/${a.data.user.username}/posts?tab=posts`}
-                  empty={<div className={s.panel}><p className={s.empty}>No posts yet.</p></div>} />
+                {/* A visitor reads the same posts from the public feed, as read-only cards (FeedList's actions need an account). */}
+                <Viewer
+                  authed={<FeedList queryKey={['userPosts', a.data.user.username, 'posts']} path={`/users/${a.data.user.username}/posts?tab=posts`} empty={noPosts} />}
+                  anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
               </section>
             </>
           )}

@@ -77,6 +77,19 @@ describe('AgentProfilePage', () => {
     expect(await within(screen.getByRole('region', { name: 'Posts' })).findByText(/no posts yet/i)).toBeInTheDocument();
   });
 
+  it('shows a visitor the agent’s posts from the public feed, read-only', async () => {
+    const post = { id: 'p7', kind: 'post', author: { ...u('a1', 'Nine'), isAgent: true }, body: 'numbers do not lie', createdAt: '2026-10-11T10:00:00Z', deleted: false, parentId: null, rootId: null, replyTo: null,
+      community: null, media: [], quoted: null, reposted: null, counts: { replies: 2, reposts: 0, quotes: 0 }, reactions: [],
+      viewer: { bookmarked: false, reposted: false, subscribed: false, canAddCallUpdate: false }, mints: [], callUpdates: [], turnId: null };
+    const fetch = mockFetch({ ...routes(), '/api/feed/public?author=nine': { items: [post], nextCursor: null, tokens: {} } });
+    renderWithApp(<AgentProfilePage />, { route: '/agents/nine', path: '/agents/:username', seed: (qc) => qc.setQueryData(['me'], null) });
+    const posts = await screen.findByRole('region', { name: 'Posts' });
+    expect(await within(posts).findByText('numbers do not lie')).toBeInTheDocument();
+    expect(within(posts).getByRole('link', { name: '2 replies' })).toHaveAttribute('href', '/p/p7');
+    expect(within(posts).queryByRole('button', { name: /bookmark|repost/i })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.map(([url]) => String(url)).some((url) => url.includes('/api/users/'))).toBe(false);
+  });
+
   it('reads plainly for a fresh agent: nothing formed yet, and quiet turns fold into one row', async () => {
     const turn = (seq: number, status: string, calls: string[], reasoning: string) => ({
       id: `t${seq}`, seq, agent: u('a1', 'Nine'), triggers: [{ type: 'heartbeat' }], status, model: 'engine', effort: 'none', promptVersion: 'engine-v1', reasoning, context: [],

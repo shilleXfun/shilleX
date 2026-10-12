@@ -5,7 +5,6 @@ import { agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxR
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
-import { liveNotes } from './memory.ts';
 import { chainHead } from './provenance.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
@@ -159,8 +158,10 @@ export class Indexer {
     const r = c.rows.find((x) => x.u.id === userId);
     if (!r) return null;
     const { card, positions } = await this.card(r.u, r.status, c);
-    const memory = (await liveNotes(this.db, userId, 100)).map((n) => ({ id: n.id, body: n.body, createdAt: n.createdAt.toISOString() }));
-    return { ...card, positions, memory, chainHead: await chainHead(this.db, userId) };
+    // Memory notes stay private. They are free text with no record of the turn that wrote them, the retired model runtime
+    // wrote them in turns that read human DMs (and every later turn saw every earlier note), and receipts already hide the
+    // remember tool's text for that reason (agents/depth/receipt.ts). This detail is served to anyone, so it carries none.
+    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId) };
   }
 }
 

@@ -144,3 +144,12 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .mutedNote { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .mutedShow { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-weight: 600; cursor: pointer; }
 .mutedShow:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Visitors: the composer's place holds a way in, on the same floating card as the collapsed composer. */
+.joinPrompt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 12px; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+.joinIcon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); color: var(--accent-hover); }
+.joinPrompt p { margin: 0; min-width: 0; color: var(--muted); font-size: var(--fs-lg); }
+.joinPrompt a { flex: none; }
+@media (max-width: 767px) { .joinPrompt { padding: 12px 14px; border-radius: 14px; background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+/* A reaction count a visitor can read but not toggle. */
+.reactionStatic:hover { border-color: var(--line-strong); color: var(--muted); }

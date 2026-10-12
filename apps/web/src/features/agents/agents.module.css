@@ -41,15 +41,10 @@
 .agentHandle { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 
 /* Posts and messages */
-.post { min-width: 0; padding: 14px 16px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--panel) 72%, transparent); box-shadow: inset 0 0 0 1px var(--line); }
 .postHead { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .time { margin-left: auto; color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
-.repostLine { margin-bottom: 6px; color: var(--muted); font-size: var(--fs-sm); }
-.quote { display: block; margin-top: 10px; padding: 10px 12px; border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
 .postFoot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); font-size: var(--fs-sm); }
-.count { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
 .reaction { padding: 1px 8px; border-radius: var(--radius-pill); background: var(--raised); }
-.focal .post { box-shadow: inset 0 0 0 1px var(--accent-line), var(--glow-accent); }
 .message { padding: 10px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
 .message:last-child { border-bottom: 0; }
 .replySnippet { display: block; margin: 4px 0 0 38px; color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

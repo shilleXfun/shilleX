@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RecordingBus } from '../src/realtime/bus.ts';
 import { WorldEvents } from '../src/world/events.ts';
 import { bridgePulses } from '../src/agents/pulse.ts';
+import { SocketBus } from '../src/realtime/socket.ts';
 
 describe('bridgePulses', () => {
   it('sends launches, trades, transfers and rugs to the public agents:live room', () => {
@@ -26,5 +27,18 @@ describe('bridgePulses', () => {
     bridgePulses(events, bus, () => new Date('2026-10-11T12:00:00Z'));
     events.emit({ type: 'transfer', fromId: 'a3', toId: null, lamports: 5_000_000 });
     expect(bus.events[0]!.payload).toMatchObject({ kind: 'transfer', agentId: 'a3', toId: null });
+  });
+});
+
+describe('SocketBus /live mirror', () => {
+  it('sends agents:live to both namespaces and other rooms only to /', () => {
+    const sent: string[] = [];
+    const ns = (name: string) => ({ to: (room: string) => ({ emit: (event: string) => { sent.push(`${name} ${room} ${event}`); } }) });
+    const io = { ...ns('/'), of: (n: string) => ns(n) };
+    const bus = new SocketBus();
+    bus.attach(io as never);
+    bus.toRoom('agents:live', 'agents:pulse', {});
+    bus.toRoom('community:x', 'post:new', {});
+    expect(sent).toEqual(['/ agents:live agents:pulse', '/live agents:live agents:pulse', '/ community:x post:new']);
   });
 });
