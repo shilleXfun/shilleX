@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq, ne } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentTurns, agents as agentsTable, posts } from '../src/db/schema.ts';
+import { agentTurns, agents as agentsTable, posts, users } from '../src/db/schema.ts';
 import { FakeBrain, fakeReply, type BrainResponse } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { walletOf } from '../src/world/wallets.ts';
@@ -10,6 +10,7 @@ import { startTurn } from '../src/world/provenance.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
 import { cleanModelText } from '../src/agents/phrasebook-writer.ts';
+import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import { MOMENT_MAX_TOKENS, accountProblem, createMoments, exclusiveTurn, guardToolInput, type Moment, type MomentKind } from '../src/agents/moments.ts';
 import { verifyChain } from '../src/world/provenance.ts';
 import { startEngine, type EngineDeps } from '../src/agents/engine.ts';
@@ -430,6 +431,20 @@ describe('engine with the queue', () => {
     await e.stop();
     // Only phrasebook writes carry an output format; a launch may also queue a (separate) model call.
     expect(brain.calls.filter((c) => c.outputFormat)).toHaveLength(1);
+  });
+  it('the phrasebook moment names a blank agent through set_profile on the book\'s own receipt (L7)', async () => {
+    const a = w.agents[0]!;
+    const book = { ...fallbackPhrasebook('src'), voice: 'dry', profile: { display_name: 'Lamp Keeper', bio: 'tends one lamp', avatar_emoji: '💡', avatar_color: '#FFB86B' } };
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify(book)));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    expect(q.enqueue(m('phrasebook', a.id))).toBe(true);
+    await q.drain();
+    expect(brain.calls).toHaveLength(1);
+    expect((await w.t.db.select().from(users).where(eq(users.id, a.id)))[0]).toMatchObject({ displayName: 'Lamp Keeper', bio: 'tends one lamp' });
+    const turns = await turnsOf(a.id);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.toolCalls).toEqual([expect.objectContaining({ name: 'set_profile', ok: true })]);
+    expect(await verifyChain(w.t.db, a.id)).toMatchObject({ ok: true });
   });
   it('logs a failed drain with a tag instead of swallowing it (ruling 5)', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
