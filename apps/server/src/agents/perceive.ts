@@ -3,7 +3,7 @@ import type { Db } from '../db/client.ts';
 import {
   chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
 } from '../db/schema.ts';
-import { RAW_PER_TOKEN } from '../world/chain.ts';
+import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { walletOf } from '../world/wallets.ts';
 import { emptyDepth } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
@@ -19,6 +19,29 @@ export function flowChange(totalNetLamports: number, windowNetLamports: number):
   const after = V_SOL_LAMPORTS + Math.max(0, totalNetLamports);
   const before = Math.max(1, after - windowNetLamports);
   return (after / before) ** 2 - 1;
+}
+
+/** One of the agent's own trades of a coin, oldest first. */
+export interface CostRow { kind: string; lamportsDelta: number; tokenDelta: number }
+
+/**
+ * Average-cost basis of what is still held. A buy adds its SOL and tokens; a sale removes its share of the cost, so selling
+ * half leaves half the cost (net SOL flow would shrink it toward zero and blow P&L up). A launch row counts only its first
+ * buy: the rent (LAUNCH_RENT) is what launching costs, not what the bag cost.
+ */
+export function averageCost(rows: CostRow[]): { raw: number; costLamports: number } {
+  let raw = 0, cost = 0;
+  for (const r of rows) {
+    if ((r.kind === 'buy' || r.kind === 'launch') && r.tokenDelta > 0) {
+      raw += r.tokenDelta;
+      cost += Math.max(0, -r.lamportsDelta - (r.kind === 'launch' ? LAUNCH_RENT : 0));
+    } else if (r.kind === 'sell' && r.tokenDelta < 0 && raw > 0) {
+      const sold = Math.min(raw, -r.tokenDelta);
+      cost -= cost * (sold / raw);
+      raw -= sold;
+    }
+  }
+  return { raw, costLamports: Math.max(0, Math.round(cost)) };
 }
 
 async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSelect)[]): Promise<AgentView['coins']> {
@@ -53,14 +76,17 @@ async function walletView(d: EngineDeps, agentId: string, coins: AgentView['coin
   const bal = await d.chain.balances(w.publicKey);
   const mints = bal.tokens.map((t) => t.mint);
   const known = mints.length ? await d.db.select().from(worldCoins).where(inArray(worldCoins.mint, mints)) : [];
-  const costs = mints.length ? await d.db.select({ mint: chainTxs.mint, cost: sql<number>`coalesce(sum(-${chainTxs.lamportsDelta}), 0)::float8` })
-    .from(chainTxs).where(and(eq(chainTxs.agentId, agentId), inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).groupBy(chainTxs.mint) : [];
-  const cost = new Map(costs.map((c) => [c.mint!, c.cost]));
+  const rows = mints.length ? await d.db.select({ mint: chainTxs.mint, kind: chainTxs.kind, lamportsDelta: chainTxs.lamportsDelta, tokenDelta: chainTxs.tokenDelta })
+    .from(chainTxs).where(and(eq(chainTxs.agentId, agentId), inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).orderBy(chainTxs.id) : [];
+  const basis = new Map(mints.map((m) => [m, averageCost(rows.filter((r) => r.mint === m))]));
   const positions = bal.tokens.flatMap((t) => {
     const c = known.find((k) => k.mint === t.mint);
     if (!c) return [];
     const price = coins.find((x) => x.mint === t.mint)?.priceLamports ?? c.priceLamports ?? 0;
-    return [{ mint: t.mint, symbol: c.symbol, raw: t.raw, costLamports: Math.max(0, cost.get(t.mint) ?? 0), valueLamports: Math.floor(price * (t.raw / RAW_PER_TOKEN)), createdByMe: c.creatorId === agentId, creatorId: c.creatorId }];
+    // The ledger's average cost per token, times what the chain says is held now.
+    const b = basis.get(t.mint);
+    const costLamports = b && b.raw > 0 ? Math.round((b.costLamports * t.raw) / b.raw) : 0;
+    return [{ mint: t.mint, symbol: c.symbol, raw: t.raw, costLamports, valueLamports: Math.floor(price * (t.raw / RAW_PER_TOKEN)), createdByMe: c.creatorId === agentId, creatorId: c.creatorId }];
   });
   return { lamports: bal.lamports, positions };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { depthTestCtx } from './depth-helpers.ts';
-import { eventText, memoryModule } from '../src/agents/depth/memory.ts';
+import { eventText, memoryModule, whenText } from '../src/agents/depth/memory.ts';
 import { rememberEvent } from '../src/agents/state.ts';
 import { emptyDepth } from '../src/agents/depth/registry.ts';
 import type { AgentView } from '../src/agents/types.ts';
@@ -11,9 +11,19 @@ afterEach(() => ctx?.t.close());
 describe('long memory', () => {
   it('writes a callback in plain words with the weekday', () => {
     const names = new Map([['L', 'lamp']]);
-    expect(eventText({ kind: 'got_rugged', data: { byId: 'L', symbol: 'MOTH' }, at: new Date('2026-10-06T10:00:00Z') }, names)).toEqual({ text: '@lamp dumped $MOTH on me on tuesday', otherId: 'L' });
-    expect(eventText({ kind: 'ghost', data: {}, at: new Date('2026-10-09T10:00:00Z') }, names)!.text).toBe('I went full ghost on friday');
-    expect(eventText({ kind: 'saw_hypocrisy', data: {}, at: new Date() }, names)).toBeNull();
+    const now = new Date('2026-10-12T12:00:00Z');
+    expect(eventText({ kind: 'got_rugged', data: { byId: 'L', symbol: 'MOTH' }, at: new Date('2026-10-06T10:00:00Z') }, names, now)).toEqual({ text: '@lamp dumped $MOTH on me on tuesday', otherId: 'L' });
+    expect(eventText({ kind: 'ghost', data: {}, at: new Date('2026-10-09T10:00:00Z') }, names, now)!.text).toBe('I went full ghost on friday');
+    expect(eventText({ kind: 'saw_hypocrisy', data: {}, at: new Date() }, names, now)).toBeNull();
+  });
+  it('says today, yesterday or the weekday, and which way the agent was caught talking (L1)', () => {
+    const names = new Map<string, string>();
+    const now = new Date('2026-10-12T13:00:00Z');
+    expect(eventText({ kind: 'big_win', data: { symbol: 'DRIFT', pct: 2719 }, at: new Date('2026-10-12T09:00:00Z') }, names, now)!.text).toBe('I made 2719% on $DRIFT today');
+    expect(eventText({ kind: 'big_loss', data: { symbol: 'RUST', pct: -62 }, at: new Date('2026-10-11T22:00:00Z') }, names, now)!.text).toBe('I lost 62% on $RUST yesterday');
+    expect(eventText({ kind: 'caught_lying', data: { symbol: 'MINT', stance: -1 }, at: new Date('2026-10-09T10:00:00Z') }, names, now)!.text).toBe('they caught me talking down $MINT on friday');
+    expect(eventText({ kind: 'caught_lying', data: { symbol: 'MINT' }, at: new Date('2026-10-01T10:00:00Z') }, names, now)!.text).toBe('they caught me talking up $MINT a while back');
+    expect(whenText(new Date('2026-10-11T23:59:00Z'), new Date('2026-10-12T00:01:00Z'))).toBe('yesterday');
   });
   it('only recalls events older than an hour and offers a callback post', async () => {
     ctx = await depthTestCtx();
