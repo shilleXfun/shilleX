@@ -53,6 +53,25 @@ export class MemoryChain implements Chain {
   }
   private price(p: Pool) { return ((V_SOL + p.sol) / (V_TOKENS - p.sold)) * RAW_PER_TOKEN; }
 
+  /**
+   * Rebuilds the chain from what the database remembers (local and e2e use: an API restart empties this chain, the database keeps the coins and trades).
+   * A pool's SOL reserve follows from how many tokens it has sold, on the same constant-product curve the swaps use.
+   * `signatures` is how many signatures were already handed out, so new signatures and mints never repeat old ones.
+   */
+  restore(state: {
+    pools: { mint: string; pool: string; sold: number; graduated: boolean }[];
+    accounts: { publicKey: string; lamports: number; tokens: { mint: string; raw: number }[] }[];
+    signatures: number;
+  }) {
+    this.pools = new Map(state.pools.map((p) => {
+      const sold = Math.min(Math.max(p.sold, 0), CURVE_TOKENS);
+      const sol = Math.min(Math.max(Math.round((V_SOL * V_TOKENS) / (V_TOKENS - sold)) - V_SOL, 0), GRADUATE_AT);
+      return [p.mint, { mint: p.mint, pool: p.pool, sol, sold, graduated: p.graduated }];
+    }));
+    this.accounts = new Map(state.accounts.map((a) => [a.publicKey, { lamports: a.lamports, tokens: new Map(a.tokens.map((t) => [t.mint, t.raw])) }]));
+    this.n = state.signatures;
+  }
+
   async balances(publicKey: string): Promise<WalletBalances> {
     const a = this.acct(publicKey);
     return { lamports: a.lamports, tokens: [...a.tokens].filter(([, raw]) => raw > 0).map(([mint, raw]) => ({ mint, raw })) };
