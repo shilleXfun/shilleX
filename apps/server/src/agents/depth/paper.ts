@@ -146,6 +146,11 @@ export const paperMomentHandler = (d: ModelDeps): MomentHandler => (m) => handle
 
 /** Day → when its paper moment was queued. Cleared by the handler; a moment the queue dropped unrun is retried after PAPER_RETRY_MS. */
 const pending = new Map<string, number>();
+/** True while `day`'s paper moment is on the queue: queued less than PAPER_RETRY_MS ago and not handled yet. */
+export function paperPending(day: string, now: Date): boolean {
+  const at = pending.get(day);
+  return at !== undefined && now.getTime() - at < PAPER_RETRY_MS;
+}
 export const paperModule: DepthModule = {
   name: 'paper',
   async sweep(d) {

@@ -9,6 +9,8 @@ import { Budget } from '../src/world/budget.ts';
 import { registerDepthRoutes } from '../src/routes/depth.ts';
 import { registerAdminDevRoutes } from '../src/routes/admindev.ts';
 import type { WorldHandles } from '../src/world/boot.ts';
+import type { Moments } from '../src/agents/types.ts';
+import { PAPER_RETRY_MS } from '../src/agents/depth/paper.ts';
 import { agents as agentsTable, wallets } from '../src/db/schema.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
@@ -18,10 +20,14 @@ let cookie = '';
 const login = (password: string, remoteAddress = '127.0.0.1') => w.t.app.inject({ method: 'POST', url: '/api/admindev/login', payload: { password }, remoteAddress });
 const call = (method: 'GET' | 'POST', url: string, payload?: Record<string, unknown>, withCookie = true) =>
   w.t.app.inject({ method, url, ...(payload ? { payload } : {}), headers: withCookie ? { cookie } : {} });
+const stateWith = (c: string) => w.t.app.inject({ method: 'GET', url: '/api/admindev/state', headers: { cookie: c } });
+const cookieFrom = (r: { cookies: { name: string; value: string }[] }) => `admindev=${r.cookies.find((x) => x.name === 'admindev')!.value}`;
 const state = async () => { const r = await call('GET', '/api/admindev/state'); expect(r.statusCode).toBe(200); return r.json(); };
 
 beforeAll(async () => {
   w = await worldTestCtx();
+  // The test app runs on the devnet default, where the console has no password: this world sets one, as ADMIN_DEV_PASSWORD would.
+  w.t.app.deps.config.adminDevPassword = loadConfig({ NODE_ENV: 'test', WORLD_CHAIN: 'memory' }).adminDevPassword;
   const indexer = new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 });
   handles = { indexer, budget: new Budget(w.t.db, 1, w.t.clock.now), chain: w.chain, key: w.key, engine: null, moments: null, network: 'memory', startAgents: () => 'AGENTS is off' };
   await registerDepthRoutes(w.t.app, { indexer });
@@ -34,11 +40,15 @@ beforeAll(async () => {
 afterAll(() => w.t.close());
 
 describe('admindev config', () => {
-  it('defaults the password to 12345 outside production only, and reads ADMIN_DEV_PASSWORD everywhere', () => {
-    expect(loadConfig({ NODE_ENV: 'development' }).adminDevPassword).toBe('12345');
-    expect(loadConfig({ NODE_ENV: 'test' }).adminDevPassword).toBe('12345');
-    expect(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret' }).adminDevPassword).toBeNull();
+  it('defaults the password to 12345 only for a memory-chain world outside production, and reads ADMIN_DEV_PASSWORD everywhere', () => {
+    expect(loadConfig({ NODE_ENV: 'development', WORLD_CHAIN: 'memory' }).adminDevPassword).toBe('12345');
+    expect(loadConfig({ NODE_ENV: 'test', WORLD_CHAIN: 'memory' }).adminDevPassword).toBe('12345');
+    // A devnet world (the default chain) fails closed whatever NODE_ENV says, and so does production on any chain.
+    expect(loadConfig({ NODE_ENV: 'development' }).adminDevPassword).toBeNull();
+    expect(loadConfig({ NODE_ENV: 'test', WORLD_CHAIN: 'devnet' }).adminDevPassword).toBeNull();
+    expect(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret', WORLD_CHAIN: 'memory' }).adminDevPassword).toBeNull();
     expect(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret', ADMIN_DEV_PASSWORD: 'hunter22' }).adminDevPassword).toBe('hunter22');
+    expect(loadConfig({ NODE_ENV: 'development', ADMIN_DEV_PASSWORD: 'hunter22' }).adminDevPassword).toBe('hunter22');
   });
 });
 
@@ -50,20 +60,25 @@ describe('admindev routes', () => {
     expect(r.cookies.find((c) => c.name === 'admindev')).toBeUndefined();
   });
 
-  it('accepts the password with 204 and a signed, httpOnly, strict cookie scoped to /api/admindev', async () => {
+  it('accepts the password with 204 and a signed, httpOnly, strict cookie holding a random session token', async () => {
     const r = await login('12345');
     expect(r.statusCode).toBe(204);
     const c = r.cookies.find((x) => x.name === 'admindev')!;
     expect(c).toBeDefined();
-    expect(c.value).not.toBe('1');
-    expect(w.t.app.unsignCookie(c.value)).toMatchObject({ valid: true, value: '1' });
+    const token = w.t.app.unsignCookie(c.value);
+    expect(token.valid).toBe(true);
+    expect(token.value).toMatch(/^[A-Za-z0-9_-]{43}$/); // 32 random bytes, base64url
+    expect((await login('12345')).cookies.find((x) => x.name === 'admindev')!.value).not.toBe(c.value);
     expect(c).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/api/admindev', maxAge: 8 * 3600 });
     cookie = `admindev=${c.value}`;
   });
 
-  it('serves the state only with the signed cookie', async () => {
+  it('serves the state only to an open session', async () => {
     expect((await call('GET', '/api/admindev/state', undefined, false)).statusCode).toBe(401);
-    expect((await w.t.app.inject({ method: 'GET', url: '/api/admindev/state', headers: { cookie: 'admindev=1' } })).statusCode).toBe(401);
+    expect((await stateWith('admindev=1')).statusCode).toBe(401);
+    // Signed with the right secret, but no such session: a signature alone never opens the console.
+    expect((await stateWith(`admindev=${w.t.app.signCookie('1')}`)).statusCode).toBe(401);
+    expect((await stateWith(`admindev=${w.t.app.signCookie('a'.repeat(43))}`)).statusCode).toBe(401);
     const s = await state();
     expect(Object.keys(s).sort()).toEqual(['agents', 'budgets', 'today', 'turns', 'weather', 'world']);
     expect(s.world).toEqual({ network: 'memory', agents: 50, runtime: 'off', engine: null, queue: 0, halted: null });
@@ -116,9 +131,29 @@ describe('admindev routes', () => {
     expect((await w.t.app.inject({ method: 'GET', url: '/api/weather' })).json().regime).toBe('fear');
   });
 
+  it('writes nothing while the model paper is still queued', async () => {
+    const day = w.t.clock.now().toISOString().slice(0, 10);
+    const enqueued: unknown[] = [];
+    const queue: Moments = { enqueue: (m) => { enqueued.push(m); return true; }, size: () => enqueued.length, drain: async () => {}, halted: () => null, stop: async () => {} };
+    handles.moments = queue;
+    try {
+      for (let i = 0; i < 2; i++) {
+        const r = await call('POST', '/api/admindev/paper');
+        expect(r.statusCode).toBe(202);
+        expect(r.json()).toEqual({ paper: 'queued' });
+      }
+      expect(enqueued).toHaveLength(1);
+      expect((await w.t.app.inject({ method: 'GET', url: `/api/papers/${day}` })).statusCode).toBe(404);
+    } finally { handles.moments = null; }
+    // The queue never ran it: after PAPER_RETRY_MS the moment counts as dropped, so the button may publish again.
+    w.t.clock.advance(PAPER_RETRY_MS);
+  });
+
   it("publishes today's paper (locally without the model), once", async () => {
     expect((await call('POST', '/api/admindev/paper', undefined, false)).statusCode).toBe(401);
-    expect((await call('POST', '/api/admindev/paper')).statusCode).toBe(202);
+    const r = await call('POST', '/api/admindev/paper');
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ paper: 'local' });
     const day = w.t.clock.now().toISOString().slice(0, 10);
     const p = await w.t.app.inject({ method: 'GET', url: `/api/papers/${day}` });
     expect(p.statusCode).toBe(200);
@@ -126,11 +161,22 @@ describe('admindev routes', () => {
     expect((await call('POST', '/api/admindev/paper')).statusCode).toBe(409);
   });
 
-  it('logs out by clearing the cookie', async () => {
-    const r = await call('POST', '/api/admindev/logout');
+  it('logs out by ending the session and clearing the cookie; other sessions stay open', async () => {
+    const mine = cookieFrom(await login('12345', '10.2.0.1'));
+    expect((await stateWith(mine)).statusCode).toBe(200);
+    const r = await w.t.app.inject({ method: 'POST', url: '/api/admindev/logout', headers: { cookie: mine } });
     expect(r.statusCode).toBe(204);
-    const c = r.cookies.find((x) => x.name === 'admindev')!;
-    expect(c).toMatchObject({ value: '', path: '/api/admindev' });
+    expect(r.cookies.find((x) => x.name === 'admindev')).toMatchObject({ value: '', path: '/api/admindev' });
+    expect((await stateWith(mine)).statusCode).toBe(401);
+    expect((await stateWith(cookie)).statusCode).toBe(200);
+  });
+
+  it('ends a session after 8 hours', async () => {
+    const mine = cookieFrom(await login('12345', '10.2.0.2'));
+    w.t.clock.advance(8 * 3600_000 - 1000);
+    expect((await stateWith(mine)).statusCode).toBe(200);
+    w.t.clock.advance(1000);
+    expect((await stateWith(mine)).statusCode).toBe(401);
   });
 
   it('allows 5 login attempts a minute per IP; the 6th is 429 even with the right password', async () => {
@@ -138,11 +184,23 @@ describe('admindev routes', () => {
     expect((await login('12345', '10.0.0.9')).statusCode).toBe(429);
     expect((await login('12345', '10.0.0.10')).statusCode).toBe(204);
   });
+
+  it('keeps at most 50 sessions, ending the oldest first', async () => {
+    const cookies: string[] = [];
+    for (let i = 0; i <= 50; i++) cookies.push(cookieFrom(await login('12345', `10.3.0.${i}`)));
+    expect((await stateWith(cookies[0]!)).statusCode).toBe(401);
+    expect((await stateWith(cookies[1]!)).statusCode).toBe(200);
+    expect((await stateWith(cookies[50]!)).statusCode).toBe(200);
+  });
 });
 
-describe('admindev in production without ADMIN_DEV_PASSWORD', () => {
-  it('answers 404 on every route', async () => {
-    const t = await makeTestApp({ config: loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret-for-tests' }) });
+describe('admindev without a password', () => {
+  it.each([
+    ['in production', { NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret-for-tests', WORLD_CHAIN: 'memory' }],
+    ['on a devnet world outside production', { NODE_ENV: 'test', WORLD_CHAIN: 'devnet' }],
+  ])('answers 404 on every route %s', async (_where, env) => {
+    const t = await makeTestApp({ config: loadConfig(env) });
+    expect(t.app.deps.config.adminDevPassword).toBeNull();
     await registerAdminDevRoutes(t.app, { ...handles, indexer: new Indexer(t.db, w.chain, t.clock.now) });
     expect((await t.app.inject({ method: 'POST', url: '/api/admindev/login', payload: { password: '12345' } })).statusCode).toBe(404);
     expect((await t.app.inject({ method: 'GET', url: '/api/admindev/state' })).statusCode).toBe(404);

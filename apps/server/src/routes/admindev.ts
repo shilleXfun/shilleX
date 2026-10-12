@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { AdminDevState } from '@shillex/shared';
@@ -11,12 +11,14 @@ import { toTurnView } from '../world/provenance.ts';
 import { rugSales } from '../agents/overview.ts';
 import { imageSpendOn } from '../agents/image-budget.ts';
 import { overrideWeather, weatherView } from '../agents/depth/weather.ts';
-import { publishPaper } from '../agents/depth/paper.ts';
+import { paperPending, publishPaper } from '../agents/depth/paper.ts';
 import type { WorldHandles } from '../world/boot.ts';
 
 const COOKIE = 'admindev';
 const COOKIE_PATH = '/api/admindev';
 const SESSION_S = 8 * 3600;
+/** Open console sessions per process; past this many, a new login ends the oldest. */
+const SESSIONS_MAX = 50;
 const RECENT_TURNS = 25;
 const Login = z.object({ password: z.string().max(200) });
 const Weather = z.object({ regime: z.enum(['euphoria', 'grind', 'fear', 'chaos']) });
@@ -27,18 +29,37 @@ const samePassword = (given: string, expected: string) => timingSafeEqual(digest
 
 /**
  * The developer console (/admindev): the running world on one read, plus pause/resume, the weather and the paper. Gated by
- * ADMIN_DEV_PASSWORD and a signed cookie, not by a human account. Shows only public agent views (cards, receipts) and world
+ * ADMIN_DEV_PASSWORD and a session cookie, not by a human account. Shows only public agent views (cards, receipts) and world
  * internals: never a human's DMs, private-community content or a wallet secret.
  */
 export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandles) {
   const { db, config, now } = app.deps;
   const password = config.adminDevPassword;
-  // Production without ADMIN_DEV_PASSWORD: the routes do not exist, so every /api/admindev/* answers 404.
+  // No password (production or a devnet world without ADMIN_DEV_PASSWORD): the routes do not exist, so every /api/admindev/* answers 404.
   if (password === null) return;
-  const requireDev = (req: FastifyRequest) => {
+
+  // Random session tokens, kept in memory: each expires after 8 hours, logout ends it, and a restart ends them all.
+  // The cookie is signed too, but a signature alone (the secret may be the public dev default) never opens the console.
+  const sessions = new Map<string, number>(); // token → expires at (ms)
+  const openSession = () => {
+    const t = now().getTime();
+    for (const [token, exp] of sessions) if (exp <= t) sessions.delete(token);
+    while (sessions.size >= SESSIONS_MAX) sessions.delete(sessions.keys().next().value!);
+    const token = randomBytes(32).toString('base64url');
+    sessions.set(token, t + SESSION_S * 1000);
+    return token;
+  };
+  const tokenOf = (req: FastifyRequest) => {
     const raw = req.cookies[COOKIE];
     const c = raw ? req.unsignCookie(raw) : null;
-    if (!c?.valid || c.value !== '1') throw errors.unauthorized();
+    return c?.valid && c.value ? c.value : null;
+  };
+  const requireDev = (req: FastifyRequest) => {
+    const token = tokenOf(req);
+    const exp = token ? sessions.get(token) : undefined;
+    if (token && exp !== undefined && exp > now().getTime()) return;
+    if (token && exp !== undefined) sessions.delete(token);
+    throw errors.unauthorized();
   };
 
   async function today(): Promise<AdminDevState['today']> {
@@ -59,10 +80,12 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
     r.post('/admindev/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
       const { password: given } = parse(Login, req.body);
       if (!samePassword(given, password)) throw new AppError(401, 'BAD_PASSWORD', 'Wrong password');
-      reply.setCookie(COOKIE, '1', { signed: true, httpOnly: true, sameSite: 'strict', path: COOKIE_PATH, secure: config.nodeEnv === 'production', maxAge: SESSION_S });
+      reply.setCookie(COOKIE, openSession(), { signed: true, httpOnly: true, sameSite: 'strict', path: COOKIE_PATH, secure: config.nodeEnv === 'production', maxAge: SESSION_S });
       return reply.status(204).send();
     });
-    r.post('/admindev/logout', async (_req, reply) => {
+    r.post('/admindev/logout', async (req, reply) => {
+      const token = tokenOf(req);
+      if (token) sessions.delete(token);
       reply.clearCookie(COOKIE, { path: COOKIE_PATH });
       return reply.status(204).send();
     });
@@ -123,6 +146,8 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
       const day = now().toISOString().slice(0, 10);
       const [done] = await db.select({ day: papers.day }).from(papers).where(eq(papers.day, day));
       if (done) throw errors.conflict('PAPER_EXISTS', 'Today’s paper is already out');
+      // Already on the queue (an earlier press, or the sweep): the agents are writing it, so nothing is written now.
+      if (paperPending(day, now())) return reply.status(202).send({ paper: 'queued' });
       return reply.status(202).send({ paper: await publishPaper({ db, now, moments: w.moments ?? undefined }, day) });
     });
   }, { prefix: '/api' });
