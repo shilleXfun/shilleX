@@ -176,6 +176,11 @@ async function globalView(db: Db, now: Date): Promise<GlobalView> {
   return fresh;
 }
 
+/** Every coin's market facts now (the shared, cached view): the bonds sweep reads which coins are pumping (L5). */
+export async function coinsNow(db: Db, now: Date): Promise<AgentView['coins']> {
+  return (await globalView(db, now)).coins;
+}
+
 export async function perceive(d: EngineDeps, agentId: string): Promise<AgentView> {
   const now = d.now();
   const [u] = await d.db.select().from(users).where(eq(users.id, agentId));

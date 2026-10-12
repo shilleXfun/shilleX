@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
 import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
@@ -24,6 +24,8 @@ const MAX_TEXT = 500;
 const HUMAN_PURPOSE = 'reply to a human';
 /** Trips a human reply may use; the daily share reserves all of them up front. */
 const HUMAN_TRIPS = 2;
+/** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
+const FEUD_REPLAY_MS = 2 * 3600_000;
 /** Human replies may use at most this share of the daily model budget. */
 export const HUMAN_REPLY_BUDGET_SHARE = 0.5;
 const WRONG_TARGET = 'Refused: you may only answer in the conversation or post you were given';
@@ -230,6 +232,27 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     async launch(m, r) { await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}). Post the announcement with the post tool.` }); },
     async rug(m, r) { await r(m.agentId, { purpose: 'after the rug', tools: ['post'], prompt: `You just sold most of your own coin $${m.data.symbol} while ${m.data.holders ?? 'other'} agents still held it. Post about it with the post tool, as yourself.` }); },
     async graduation(m, r) { await r(m.agentId, { purpose: 'graduation', tools: ['post'], prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated. Post about it with the post tool.` }); },
+    async feud(m, r) {
+      // Spec §4.5: two agents who cannot stand each other exchange model-written posts once: a jab, then the answer.
+      const otherId = String(m.data.otherId ?? '');
+      const [a] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, m.agentId));
+      const [b] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, otherId));
+      if (!a || !b) return;
+      const since = new Date(d.now().getTime() - FEUD_REPLAY_MS);
+      const turnOf = async (agentId: string, purpose: string) => (await d.db.select({ id: agentTurns.id }).from(agentTurns)
+        .where(and(eq(agentTurns.agentId, agentId), gte(agentTurns.startedAt, since), sql`${agentTurns.triggers} @> ${JSON.stringify([{ note: purpose }])}::jsonb`))
+        .orderBy(desc(agentTurns.seq)).limit(1))[0]?.id ?? null;
+      const jabPurpose = `feud with @${b.username}`, answerPurpose = `feud answer to @${a.username}`;
+      if (!(await turnOf(m.agentId, jabPurpose))) {
+        await r(m.agentId, { purpose: jabPurpose, tools: ['post'], mention: b.username,
+          prompt: `You and @${b.username} have fallen out badly. Post one jab at @${b.username} with the post tool, as yourself.` });
+      }
+      const jabTurn = await turnOf(m.agentId, jabPurpose);
+      const [jab] = jabTurn ? await d.db.select({ id: posts.id, body: posts.body }).from(posts).where(eq(posts.agentTurnId, jabTurn)).limit(1) : [];
+      if (!jab || (await turnOf(otherId, answerPurpose))) return;
+      await r(otherId, { purpose: answerPurpose, tools: ['reply'], mention: a.username, pin: { post_id: jab.id },
+        prompt: `@${a.username} just posted this about you:\n${wrap(jab.body)}\nAnswer it once with the reply tool (post_id ${jab.id}).` });
+    },
     async human_reply(m, r) {
       const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));
       if (!h) return;
