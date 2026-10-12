@@ -10,11 +10,12 @@ import { memoryModule } from './memory.ts';
 import { weatherModule } from './weather.ts';
 import { lifeModule } from './life.ts';
 import { paperModule } from './paper.ts';
+import { profileModule } from './profile.ts';
 
 /**
  * Hook order matters: reputation before beliefs (default trust), lineage before anything that composes text,
  * weather before life (a ghost's zeroed scores stay zero after every multiplier).
  */
 export function createDepth(): DepthRegistry {
-  return new DepthRegistry([driftModule, reputationModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, paperModule]);
+  return new DepthRegistry([driftModule, reputationModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, paperModule, profileModule]);
 }
