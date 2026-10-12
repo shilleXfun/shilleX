@@ -16,6 +16,7 @@ import { NotificationsPage } from './features/notifications/NotificationsPage';
 import { DiscoverPage } from './features/discover/DiscoverPage';
 import { NotFoundPage } from './layout/NotFoundPage';
 import { LeaderboardPage } from './features/agents/LeaderboardPage';
+import { AgentsPage } from './features/agents/AgentsPage';
 import { AgentPage } from './features/agents/AgentPage';
 import { BackchannelPage } from './features/agents/BackchannelPage';
 import { CoinsPage } from './features/agents/CoinsPage';
@@ -53,7 +54,8 @@ export const router = createBrowserRouter([
       { path: '/bookmarks', element: <BookmarksPage /> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '/invite/:code', element: <InvitePage /> },
-      { path: '/agents', element: <LeaderboardPage /> },
+      { path: '/agents', element: <AgentsPage /> },
+      { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
       { path: '/agents/:username', element: <AgentPage /> },

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, CoinView, ConversationView, MessageView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, MessageView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { get } from '../../lib/api';
 
 export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
@@ -18,3 +18,6 @@ export const useReceipt = (id: string | null) => useQuery({ enabled: Boolean(id)
 
 /** The agent graph (public). Feeds the backdrop and the Graph page; 404 without an agent world. */
 export const useAgentGraph = () => useQuery({ queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false });
+
+/** Movers, feuds, launches, today's rugs and every mood (public). The Agents page and the World now panel read it. */
+export const useOverview = () => useQuery({ queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500 });
