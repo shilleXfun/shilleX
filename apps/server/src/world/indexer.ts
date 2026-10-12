@@ -174,7 +174,7 @@ const byMint = (rows: ChainTxRow[]) => groupBy(rows, (r) => r.mint);
 const byAgent = (rows: ChainTxRow[]) => groupBy(rows, (r) => r.agentId);
 
 /** Holders per mint (agents with a positive net balance in the world ledger), in one grouped query. */
-async function holderCounts(db: Db, mints: string[]): Promise<Map<string, number>> {
+export async function holderCounts(db: Db, mints: string[]): Promise<Map<string, number>> {
   if (!mints.length) return new Map();
   const rows = await db.select({ mint: chainTxs.mint, n: sql<number>`count(distinct ${chainTxs.agentId})::int` }).from(chainTxs)
     .where(and(inArray(chainTxs.mint, mints), sql`(${chainTxs.agentId}, ${chainTxs.mint}) in (select agent_id, mint from chain_txs where mint is not null and agent_id is not null group by agent_id, mint having sum(token_delta) > 0)`))
