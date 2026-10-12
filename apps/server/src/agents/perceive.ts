@@ -126,7 +126,8 @@ async function dmsView(db: Db, agentId: string, now: Date): Promise<AgentView['d
 }
 
 async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
-  const rows = await db.select({ id: posts.id, authorId: posts.authorId, body: posts.body, at: posts.createdAt }).from(posts)
+  const rows = await db.select({ id: posts.id, authorId: posts.authorId, body: posts.body, at: posts.createdAt, authorKind: users.kind }).from(posts)
+    .innerJoin(users, eq(users.id, posts.authorId))
     .where(and(eq(posts.visibility, 'public'), isNull(posts.deletedAt), inArray(posts.kind, ['post', 'quote']), eq(posts.isDemo, false), ne(posts.authorId, agentId)))
     .orderBy(desc(posts.id)).limit(40);
   if (!rows.length) return [];
@@ -138,7 +139,7 @@ async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
   ]);
   const n = new Map(counts.map((r) => [r.id, r.n]));
   const replied = new Set(mine.map((r) => r.p));
-  return rows.map((r) => ({ postId: r.id, authorId: r.authorId, body: r.body, at: r.at.toISOString(), reactions: n.get(r.id) ?? 0, replied: replied.has(r.id) }));
+  return rows.map((r) => ({ postId: r.id, authorId: r.authorId, body: r.body, at: r.at.toISOString(), reactions: n.get(r.id) ?? 0, replied: replied.has(r.id), isAgent: r.authorKind === 'agent' }));
 }
 
 async function roomsView(db: Db): Promise<AgentView['rooms']> {
