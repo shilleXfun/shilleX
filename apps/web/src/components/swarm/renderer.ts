@@ -117,7 +117,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         const x = coinX(i), y = coinY(i), dead = coin.dead || deadNow.has(coin.mint), col = dead ? DOWN : COIN;
         if (pulse[i]! > 0) { const s = 36 + pulse[i]! * 34; c.drawImage(glow(dead ? DOWN : AMBER), x - s / 2, y - s / 2, s, s); pulse[i] = Math.max(0, pulse[i]! - dt * 1.4); }
         c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.globalAlpha = dead ? 0.45 : 0.95; c.fillStyle = col; c.fillRect(-3.5, -3.5, 7, 7); c.restore();
-        c.globalAlpha = dead ? 0.4 : 0.7; c.fillStyle = col; c.fillText(`$${coin.symbol}${dead ? ' ✕' : ''}`, x + 9, y); c.globalAlpha = 1;
+        // Phones keep the diamonds but drop the $TICKER labels: under the cards they only clutter the text.
+        if (W >= 768) { c.globalAlpha = dead ? 0.4 : 0.7; c.fillStyle = col; c.fillText(`$${coin.symbol}${dead ? ' ✕' : ''}`, x + 9, y); c.globalAlpha = 1; }
       });
       m.nodes.forEach((n, i) => {
         const h = hot[i]!, heat = Math.abs(h), col = h < -0.05 ? DOWN : n.colour, size = n.r * (7 + heat * 7);

@@ -41,6 +41,8 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const [focused, setFocused] = useState(false);
   const [done, setDone] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const pressing = useRef(false);
   const file = useRef<HTMLInputElement>(null);
   const len = codePointLength(text);
   const remaining = LIMITS.postMax - len;
@@ -48,6 +50,20 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   const canSubmit = !busy && uploading === 0 && remaining >= 0 && (text.trim().length > 0 || (mode !== 'quote' && uploads.length > 0));
 
   useEffect(() => { if (autoFocus) area.current?.focus(); }, [autoFocus]);
+  // Whether a pointer is pressed anywhere on the page (see leave()).
+  useEffect(() => {
+    const down = () => { pressing.current = true; };
+    const up = () => { pressing.current = false; };
+    window.addEventListener('pointerdown', down, true); window.addEventListener('pointerup', up, true); window.addEventListener('pointercancel', up, true);
+    return () => { window.removeEventListener('pointerdown', down, true); window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true); };
+  }, []);
+  // Focus left the composer. A press elsewhere takes focus on pointerdown, and collapsing right then would slide the page
+  // up under the pointer, so the click would land on whatever moved there. Collapse once the press is over instead.
+  const leave = () => {
+    const settle = () => setFocused(Boolean(root.current?.contains(document.activeElement)));
+    if (pressing.current) window.addEventListener('pointerup', () => setTimeout(settle, 0), { once: true });
+    else settle();
+  };
   useEffect(() => { if (!done) return; const t = setTimeout(() => setDone(false), 1200); return () => clearTimeout(t); }, [done]);
   useEffect(() => { const el = area.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }, [text]);
 
@@ -98,8 +114,8 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
 
   // Focus anywhere inside (the textarea or a tool) keeps it open; leaving the composer collapses it when empty.
   return (
-    <div className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}
-      onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
+    <div ref={root} className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}
+      onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) leave(); }}>
       <Avatar src={me.avatarUrl} size={inDialog ? 36 : 42} me />
       <div className={s.main}>
         {/* Grows on focus (min-height springs open); the auto-size effect handles longer text. */}

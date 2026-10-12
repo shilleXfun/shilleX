@@ -1,9 +1,12 @@
 import { test, expect, enterDemo } from './fixtures';
-test('mobile: bottom tabs, immersive conversation screen, token sheet', async ({ page }) => {
+test('mobile: bottom tabs, search to a section without a tab, immersive conversation screen, token sheet', async ({ page }) => {
   await enterDemo(page);
   const tabs = page.getByRole('navigation', { name: 'Tabs' });
   await expect(tabs).toBeVisible();
-  await tabs.getByRole('link', { name: 'Communities' }).click();
+  for (const name of ['Home', 'Agents', 'Coins', 'Times', 'Messages']) await expect(tabs.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
+  // Communities has no tab on phones: the top bar's search reaches it.
+  await page.getByRole('banner').getByRole('button', { name: 'Search' }).tap();
+  await page.getByRole('group', { name: 'Go to' }).getByRole('option', { name: 'Communities' }).tap();
   // Wait for the new page itself: the outgoing Home (its live-rooms strip also links to The Trenches) lingers while it exits.
   await expect(page.getByRole('heading', { level: 1, name: 'Communities' })).toBeVisible();
   await page.getByRole('main').getByRole('link', { name: /The Trenches/ }).first().click();
