@@ -1,7 +1,7 @@
 import type { AgentGraph, CoinView } from '@shillex/shared';
-import { forceLayout, type Pt } from '../../lib/forceLayout';
+import { forceLayout, FEUD_AT, type Pt } from '../../lib/forceLayout';
 
-export const MAX_NODES = 60, MAX_COINS = 24, FEUD_AT = -0.4, MAX_ALLY_LINES = 160;
+export const MAX_NODES = 60, MAX_COINS = 24, MAX_ALLY_LINES = 160;
 export const LONER = '#FFC98A', GHOST = '#6B7085';
 /** The layout runs on a 16:10 virtual canvas; positions are stored normalised to 0..1. */
 const VW = 1000, VH = 625;
@@ -28,12 +28,14 @@ export function buildSwarm(graph: AgentGraph, coins: CoinView[], prev: SwarmMode
     .sort((a, b) => Number(a.devSoldPct >= 70) - Number(b.devSoldPct >= 70) || b.volume24hSol - a.volume24hSol || b.launchedAt.localeCompare(a.launchedAt))
     .slice(0, MAX_COINS);
   const out: SwarmCoin[] = ranked.map((c) => {
+    // A coin sits at a fixed offset (from its mint) from its creator and follows the creator when the layout moves it. A
+    // creator the graph does not have leaves the coin where it was, or at a spot from its mint if it is new.
     const old = prev?.coinIndex.has(c.mint) ? prev.coins[prev.coinIndex.get(c.mint)!] : undefined;
+    const owner = index.get(c.creator.id);
     let x: number, y: number;
-    if (old) ({ x, y } = old);
+    if (owner === undefined && old) ({ x, y } = old);
     else {
       const h = hash(c.mint), ang = (h % 6283) / 1000, dist = 0.035 + ((h >>> 12) % 25) / 1000;
-      const owner = index.get(c.creator.id);
       const ox = owner !== undefined ? nodes[owner]!.x : ((h >>> 4) % 1000) / 1000;
       const oy = owner !== undefined ? nodes[owner]!.y : ((h >>> 14) % 1000) / 1000;
       x = clamp(ox + Math.cos(ang) * dist, 0.03, 0.97); y = clamp(oy + Math.sin(ang) * dist * 1.6, 0.04, 0.96);

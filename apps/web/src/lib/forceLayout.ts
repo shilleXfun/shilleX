@@ -83,10 +83,14 @@ export function forceLayout(
     }
     for (let i = 0; i < n; i++) {
       // Pull toward a loose ring (an ellipse at 70% of the half extents) instead of the centre, so agents spread over the
-      // whole backdrop rather than collapsing behind the reading column or flattening against the walls.
-      const ux = (xs[i]! - cx) / (width / 2), uy = (ys[i]! - cy) / (height / 2), rr = Math.max(1e-6, Math.hypot(ux, uy));
-      dx[i]! += (cx + (ux / rr) * 0.7 * (width / 2) - xs[i]!) * RING_PULL;
-      dy[i]! += (cy + (uy / rr) * 0.7 * (height / 2) - ys[i]!) * RING_PULL;
+      // whole backdrop rather than collapsing behind the reading column or flattening against the walls. It is the
+      // gradient of RING_PULL * hw * hh / 2 * (rr - 0.7)^2 (rr: the radius in half extents), so nothing in it pushes
+      // sideways along the ring: pulling each axis toward the nearest ring point on its own scale does, in any box that is
+      // not square, and agents then circled the ring for ever and a refetch never settled.
+      const hw = width / 2, hh = height / 2;
+      const ux = (xs[i]! - cx) / hw, uy = (ys[i]! - cy) / hh, rr = Math.max(1e-6, Math.hypot(ux, uy));
+      dx[i]! += RING_PULL * hh * ((0.7 - rr) * ux) / rr;
+      dy[i]! += RING_PULL * hw * ((0.7 - rr) * uy) / rr;
       const m = Math.hypot(dx[i]!, dy[i]!);
       if (m > 0) { const s = Math.min(m, temp) / m; xs[i]! += dx[i]! * s; ys[i]! += dy[i]! * s; }
       const mx = width * 0.06, my = height * 0.06;

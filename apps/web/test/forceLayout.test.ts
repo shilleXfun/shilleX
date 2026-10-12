@@ -1,12 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { forceLayout, mulberry32, FEUD_AT } from '../src/lib/forceLayout';
-import { FEUD_AT as SWARM_FEUD_AT } from '../src/components/swarm/model';
+import { forceLayout, mulberry32 } from '../src/lib/forceLayout';
 
 const nodes = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, r: 10 }));
 const edges = [{ a: 'a', b: 'b', w: 0.9 }, { a: 'c', b: 'd', w: -0.9 }];
 const dist = (m: Map<string, { x: number; y: number }>, p: string, q: string) => Math.hypot(m.get(p)!.x - m.get(q)!.x, m.get(p)!.y - m.get(q)!.y);
 /** Nodes within 2.5% of a wall of the 1000x625 box the density tests lay out in. */
 const inWallBand = (m: Map<string, { x: number; y: number }>) => [...m.values()].filter((p) => p.x < 25 || p.x > 975 || p.y < 19 || p.y > 606);
+/** 50 agents named n0..n49 in a world full of feuds: 300 deterministic feuds (w from -1 to -0.4) and 20 allies. */
+const feudHeavy = () => {
+  const rnd = mulberry32(3);
+  const links: { a: string; b: string; w: number }[] = [];
+  while (links.length < 300) {
+    const i = Math.floor(rnd() * 50), j = Math.floor(rnd() * 50);
+    if (i !== j) links.push({ a: `n${i}`, b: `n${j}`, w: -1 + rnd() * 0.6 });
+  }
+  for (let i = 0; i < 20; i++) links.push({ a: `n${i}`, b: `n${(i * 7 + 3) % 50}`, w: 0.4 + (i % 5) * 0.1 });
+  return links;
+};
 /** The median distance over all pairs of nodes. */
 const medianGap = (m: Map<string, { x: number; y: number }>) => {
   const pts = [...m.values()], gaps: number[] = [];
@@ -61,14 +71,7 @@ describe('forceLayout', () => {
   });
   it('stays organic in a feud-heavy world', () => {
     const many = Array.from({ length: 50 }, (_, i) => ({ id: `n${i}`, r: 12 }));
-    const rnd = mulberry32(3);
-    const links: { a: string; b: string; w: number }[] = [];
-    while (links.length < 300) {
-      const i = Math.floor(rnd() * 50), j = Math.floor(rnd() * 50);
-      if (i !== j) links.push({ a: `n${i}`, b: `n${j}`, w: -1 + rnd() * 0.6 });
-    }
-    for (let i = 0; i < 20; i++) links.push({ a: `n${i}`, b: `n${(i * 7 + 3) % 50}`, w: 0.4 + (i % 5) * 0.1 });
-    const m = forceLayout(many, links, { width: 1000, height: 625, seed: 7 });
+    const m = forceLayout(many, feudHeavy(), { width: 1000, height: 625, seed: 7 });
     expect(inWallBand(m).length).toBeLessThanOrEqual(5);
   });
   it('a much-hated agent is pushed away but the rest stay spread', () => {
@@ -113,8 +116,34 @@ describe('forceLayout', () => {
       }
     }
   });
-  it('shares its feud threshold with the swarm model', () => {
-    expect(FEUD_AT).toBe(SWARM_FEUD_AT);
+  describe('settles between refreshes', () => {
+    // A refetch lays the same world out again from where agents are (`init`), with a small temperature, a few times over.
+    // It must nudge agents and then leave them alone: no steady drift, no agents circling the ring.
+    const refetches = (width: number, height: number, r: number, seed: number, again: { iterations: number; temperature: number }) => {
+      const people = Array.from({ length: 50 }, (_, i) => ({ id: `n${i}`, r })), links = feudHeavy();
+      let now = forceLayout(people, links, { width, height, seed });
+      const drift: number[] = [];
+      for (let k = 0; k < 5; k++) {
+        const next = forceLayout(people, links, { width, height, seed, init: now, ...again });
+        drift.push([...now].reduce((s, [id, p]) => s + Math.hypot((next.get(id)!.x - p.x) / width, (next.get(id)!.y - p.y) / height), 0) / 50);
+        now = next;
+      }
+      const near = [...now.values()].filter((p) => p.x < width * 0.06 || p.x > width * 0.94 || p.y < height * 0.06 || p.y > height * 0.94);
+      return { drift: drift.slice(1), near: near.length };
+    };
+    it('in the swarm\'s call shape (24 iterations at temperature 2)', () => {
+      const { drift, near } = refetches(1000, 625, 12, 7, { iterations: 24, temperature: 2 });
+      for (const d of drift) expect(d).toBeLessThan(0.01);
+      expect(near).toBeLessThanOrEqual(12);
+    });
+    it('in the Graph page\'s call shape (120 iterations at temperature 12)', () => {
+      for (const ratio of [0.5, 0.8]) {
+        const width = Math.sqrt(625000 / ratio), height = 625000 / width;
+        const { drift, near } = refetches(width, height, 24, 42, { iterations: 120, temperature: 12 });
+        for (const d of drift) expect(d).toBeLessThan(0.02);
+        expect(near).toBeLessThanOrEqual(12);
+      }
+    });
   });
   it('clusters factions', () => {
     const group = (i: number) => Math.floor(i / 10);
