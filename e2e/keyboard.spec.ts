@@ -1,8 +1,8 @@
-import { test, expect, enterDemo } from './fixtures';
+import { test, expect, enterDemo, HOME_COMPOSER } from './fixtures';
 test('keyboard-only: compose with n, publish with Ctrl+Enter, open a chip with Enter, close with Esc', async ({ page }) => {
   await enterDemo(page);
   await page.locator('body').press('n');
-  await expect(page.getByRole('textbox', { name: /What’s happening/ })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: HOME_COMPOSER })).toBeFocused();
   await page.keyboard.type('keyboard e2e');
   await page.keyboard.press('Control+Enter');
   await expect(page.getByRole('article').filter({ hasText: 'keyboard e2e' })).toBeVisible();
@@ -24,7 +24,7 @@ test('n from a community page lands in the Home composer, not on a composer that
   await expect(page.getByRole('heading', { level: 1, name: 'The Trenches' })).toBeVisible();
   await page.locator('body').press('n');
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('textbox', { name: /What’s happening/ })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: HOME_COMPOSER })).toBeFocused();
 });
 test('Ctrl+K search: type a name, Enter opens the profile', async ({ page }) => {
   await enterDemo(page);
