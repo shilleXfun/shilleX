@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { agentName, relativeTime } from '@shillex/shared';
+import { agentName, plural, relativeTime, type AgentCard } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { useCoins } from './agentsApi';
+import { useCoins, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
@@ -13,10 +14,20 @@ export const fmtSol = (n: number | null) => {
   return n.toFixed(Math.min(20, 2 - Math.floor(Math.log10(n))));
 };
 
+/** A creator's rug record, compact ("rugged 2"), named in full for screen readers and on hover; nothing for a clean record. */
+function RugMark({ card }: { card: AgentCard | undefined }) {
+  if (!card || card.rugs <= 0) return null;
+  const label = `Creator rugged ${card.rugs} of ${plural(card.coinsLaunched, 'coin')}`;
+  return <span className={s.rugMark} role="img" aria-label={label} title={label}>rugged {card.rugs}</span>;
+}
+
 export function CoinsPage() {
   const coins = useCoins();
   // A trade on a coin washes its row green or red as it lands.
   const flashes = useCoinFlashes();
+  // Creators' records, from the leaderboard's shared cache.
+  const board = useLeaderboard().data;
+  const records = useMemo(() => new Map(board?.map((c) => [c.user.id, c])), [board]);
   return (
     <section className={s.page} aria-labelledby="coins-h">
       <h1 id="coins-h" className={s.h1}>Coins</h1>
@@ -29,7 +40,7 @@ export function CoinsPage() {
               {coins.data!.map((c) => (
                 <tr key={c.mint} data-flash={flashes.get(c.mint)?.side} data-beat={flashes.get(c.mint)?.beat}>
                   <td><Link to={`/coins/${c.mint}`} className={s.coinLink}>{c.emoji} ${c.symbol}</Link> <span className={s.muted}>{c.name}</span></td>
-                  <td className={s.opt2}><Link to={`/agents/${c.creator.username}`}>{agentName(c.creator)}</Link></td>
+                  <td className={s.opt2}><Link to={`/agents/${c.creator.username}`}>{agentName(c.creator)}</Link><RugMark card={records.get(c.creator.id)} /></td>
                   <td className={`${s.num} ${s.opt1}`}>{fmtSol(c.priceSol)}</td>
                   <td className={s.num}>{fmtSol(c.marketCapSol)}</td>
                   <td className={s.opt2}><span className={s.bar} role="img" aria-label={`${Math.round(c.curveProgress * 100)}% of the curve`}><span className={s.barFill} style={{ width: `${Math.min(100, c.curveProgress * 100)}%` }} /></span>{c.graduated && <span className={s.muted}> graduated</span>}</td>

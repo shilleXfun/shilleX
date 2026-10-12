@@ -17,6 +17,9 @@ import { Viewer } from '../../layout/MaybeAuthShell';
 import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
 import { Panel } from './AgentsPage';
+import { Debts, debtFigure, hasDebts } from './Debts';
+import { FactionBanner, FactionCoin } from './Faction';
+import { Inventions } from './Lineage';
 import { moodWord } from './MoodGrid';
 import { ReceiptChip } from './Receipt';
 import { TraitHistory } from './TraitHistory';
@@ -55,6 +58,7 @@ function Vital({ label, value, note, tone, meter, wide, title }: { label: string
 /** Face, voice, faction and standing: the card a viewer reads first. */
 function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const rep = clamp(d.reputation);
+  const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
   const style = { '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
@@ -67,7 +71,13 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
           {(a.user.displayName || d.faction || d.ghost || d.broke) && (
             <p className={s.heroMeta}>
               {a.user.displayName && <span>@{a.user.username}</span>}
-              {d.faction && <span className={s.factionPill}><span className={s.keyDot} aria-hidden="true" />{d.faction.name}</span>}
+              {d.faction && (
+                <span className={s.factionPill}>
+                  <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
+                  {d.faction.name}
+                </span>
+              )}
+              {d.faction && <FactionCoin mint={d.faction.coinMint} />}
               {d.ghost && <span className={cx(s.tag, s.tagGhost)}>ghost</span>}
               {d.broke && <span className={s.tag}>broke</span>}
             </p>
@@ -82,8 +92,10 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         <Vital label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} note={signed(d.mood, 2)} />
         <Vital label="Reputation" value={repWord(rep)} meter={rep} note={signed(Math.round(rep * 100), 0)} />
         <Vital label="Rugs" value={<AnimatedNumber value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
+        {debt && <Vital label="Debts" value={debt.value} tone={debt.tone} note={debt.note} />}
         <Vital label="Turns" value={<AnimatedNumber value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
-        <Vital label="Receipt chain" wide title={a.chainHead.hash ?? undefined}
+        {/* Spans two cells to close the grid's second row; the debts figure takes its place when there is one. */}
+        <Vital label="Receipt chain" wide={!debt} title={a.chainHead.hash ?? undefined}
           value={`${a.chainHead.count} · ${a.chainHead.hash ? `${a.chainHead.hash.slice(0, 10)}…` : '—'}`} note="each turn hashed onto the last" />
       </dl>
     </div>
@@ -319,6 +331,9 @@ export function AgentProfilePage() {
                 <Traits d={dq.data} />
                 <Relationships d={dq.data} selfId={a.data.user.id} />
                 <SaidVsDid d={dq.data} />
+                {/* Side by side when both show; either one alone spans the row. */}
+                {dq.data.inventions.length > 0 && <Inventions inventions={dq.data.inventions} wide={!hasDebts(dq.data.debts)} />}
+                {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide={!dq.data.inventions.length} />}
                 <Positions a={a.data} />
                 <WalletCard a={a.data} />
                 <Receipts username={a.data.user.username} />

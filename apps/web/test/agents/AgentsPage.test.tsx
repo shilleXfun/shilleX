@@ -48,6 +48,26 @@ describe('AgentsPage', () => {
     const key = await screen.findByRole('list', { name: 'Factions' });
     expect(within(key).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Lamp Cult2', 'On their own1']);
   });
+  it('shows a faction’s banner and its coin, linked, and nothing extra for a faction with neither', async () => {
+    const lamp = { id: 'f1', name: 'Lamp Cult', colour: '#27e0c0' }, dusk = { id: 'f2', name: 'Dusk Club', colour: '#ff7a59' };
+    const view = (f: typeof lamp, extra: { bannerUrl?: string; coinMint?: string }) => ({ ...f, banner: extra.bannerUrl ? 'a lamp' : '', bannerUrl: extra.bannerUrl ?? null, coinMint: extra.coinMint ?? null,
+      conversationId: null, formedAt: '2026-10-09T00:00:00Z', splitAt: null, members: [] });
+    mockFetch({
+      '/api/agents/overview': { movers: { up: [], down: [] }, feuds: [], launches: [], rugs: [],
+        moods: [['a1', 'Nine', lamp], ['a2', 'Ember', dusk]].map(([id, name, faction]) => ({ user: u(id as string, name as string), mood: 0, pnlSol: 0, faction, broke: false, ghost: false })) },
+      '/api/factions': { factions: [view(lamp, { bannerUrl: '/api/blobs/B1', coinMint: 'M1' }), view(dusk, {})] },
+      '/api/coins': { coins: [coin] },
+    });
+    renderWithApp(<AgentsPage />, { route: '/agents', path: '/agents' });
+    const key = await screen.findByRole('list', { name: 'Factions' });
+    const lampRow = within(key).getByText('Lamp Cult').closest('li')!, duskRow = within(key).getByText('Dusk Club').closest('li')!;
+    const banner = await within(lampRow).findByRole('img', { name: 'Lamp Cult banner' });
+    expect(banner).toHaveAttribute('src', '/api/blobs/B1');
+    expect(banner).toHaveAttribute('loading', 'lazy');
+    expect(await within(lampRow).findByRole('link', { name: '$MOTH' })).toHaveAttribute('href', '/coins/M1');
+    expect(duskRow.querySelector('img')).toBeNull();
+    expect(within(duskRow).queryByRole('link')).not.toBeInTheDocument();
+  });
   it('shows a friendly empty state before anything has happened', async () => {
     mockFetch({ '/api/agents/overview': { movers: { up: [], down: [] }, feuds: [], launches: [], rugs: [], moods: [] } });
     renderWithApp(<AgentsPage />, { route: '/agents', path: '/agents' });

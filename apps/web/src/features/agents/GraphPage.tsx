@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { Link } from 'react-router';
 import { useReducedMotion } from 'motion/react';
 import { Network } from 'lucide-react';
-import { agentName, plural, type AgentGraph, type AgentPulse, type GraphNode } from '@shillex/shared';
+import { agentName, plural, type AgentGraph, type AgentPulse, type FactionView, type GraphNode } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { forceLayout, type Pt } from '../../lib/forceLayout';
@@ -11,7 +11,8 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { GHOST, LONER } from '../../components/swarm/model';
-import { useAgentGraph, useOverview } from './agentsApi';
+import { useAgentGraph, useFactions, useOverview } from './agentsApi';
+import { FactionBanner, FactionKeyItem, useCoinSymbol } from './Faction';
 import { moodWord } from './MoodGrid';
 import { usePulseFeed } from './pulses';
 import a from './agents.module.css';
@@ -166,7 +167,7 @@ function useGlide(target: Map<string, Pt>): Map<string, Pt> {
   return shown;
 }
 
-function Drawing({ graph, ties, factionNames, width: W, height: H }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; width: number; height: number }) {
+function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; factionViews: Map<string, FactionView>; width: number; height: number }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   // Past MAX_ASPECT (a short, wide screen) the graph keeps that shape, centred, instead of stretching.
   const DW = Math.min(W, Math.round(H * MAX_ASPECT)), x0 = (W - DW) / 2;
@@ -275,18 +276,20 @@ function Drawing({ graph, ties, factionNames, width: W, height: H }: { graph: Ag
         </g>
       </svg>
       {focus && corner && <Readout node={focus.n} ties={ties.get(focus.n.id)} faction={focus.n.factionId ? factionNames.get(focus.n.factionId) ?? 'In a faction' : 'On their own'}
-        side={corner.side} edge={corner.edge} />}
+        view={focus.n.factionId ? factionViews.get(focus.n.factionId) : undefined} side={corner.side} edge={corner.edge} />}
     </>
   );
 }
 
 /** Who the agent under the pointer (or keyboard focus) is, in numbers. The table below carries the same for screen readers. */
-function Readout({ node, ties, faction, side, edge }: { node: GraphNode; ties?: { allies: Edge[]; enemies: Edge[] }; faction: string; side: 'left' | 'right'; edge: 'top' | 'bottom' }) {
+function Readout({ node, ties, faction, view, side, edge }: { node: GraphNode; ties?: { allies: Edge[]; enemies: Edge[] }; faction: string; view?: FactionView; side: 'left' | 'right'; edge: 'top' | 'bottom' }) {
+  // Text only: the readout follows the pointer and takes no clicks; the key below links the coin.
+  const coin = useCoinSymbol(view?.coinMint);
   return (
     <div className={s.readout} data-side={side} data-edge={edge} aria-hidden="true" style={{ '--c': ringOf(node) } as CSSProperties}>
       <span className={s.readName}>{agentName(node)}</span>
       <span className={s.readLine}>{node.netWorthSol.toFixed(3)} SOL · {node.ghost ? 'ghost' : moodWord(clamp(node.mood, -1, 1))}</span>
-      <span className={s.readLine}><i className={s.readDot} />{faction}</span>
+      <span className={s.readLine}><FactionBanner name={faction} url={view?.bannerUrl} size={14} fallback={<i className={s.readDot} />} />{faction}{coin && <span className={s.readCoin}>${coin}</span>}</span>
       <span className={s.readLine}><b className={ties?.allies.length ? a.up : undefined}>{plural(ties?.allies.length ?? 0, 'ally', 'allies')}</b> · <b className={ties?.enemies.length ? a.down : undefined}>{plural(ties?.enemies.length ?? 0, 'feud')}</b></span>
     </div>
   );
@@ -294,10 +297,10 @@ function Readout({ node, ties, faction, side, edge }: { node: GraphNode; ties?: 
 
 const Glyph = ({ children }: { children: ReactNode }) => <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">{children}</svg>;
 
-/** How to read the drawing, then which colour is which faction. */
-function Key({ graph, factionNames }: { graph: AgentGraph; factionNames: Map<string, string> }) {
-  const factions = new Map<string, { name: string; colour: string; n: number }>();
-  for (const n of graph.nodes) if (n.factionId) factions.set(n.factionId, { name: factionNames.get(n.factionId) ?? 'Faction', colour: n.factionColour ?? LONER, n: (factions.get(n.factionId)?.n ?? 0) + 1 });
+/** How to read the drawing, then which colour is which faction, with its banner and coin. */
+function Key({ graph, factionNames, factionViews }: { graph: AgentGraph; factionNames: Map<string, string>; factionViews: Map<string, FactionView> }) {
+  const factions = new Map<string, { id: string; name: string; colour: string; n: number }>();
+  for (const n of graph.nodes) if (n.factionId) factions.set(n.factionId, { id: n.factionId, name: factionNames.get(n.factionId) ?? 'Faction', colour: n.factionColour ?? LONER, n: (factions.get(n.factionId)?.n ?? 0) + 1 });
   const loners = graph.nodes.filter((n) => !n.factionId).length;
   return (
     <div className={s.key}>
@@ -313,7 +316,7 @@ function Key({ graph, factionNames }: { graph: AgentGraph; factionNames: Map<str
       {factions.size ? (
         <ul className={a.factionKey} aria-label="Factions">
           {[...factions.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name)).map((f) => (
-            <li key={f.name + f.colour} style={{ '--c': f.colour } as CSSProperties}><span className={a.keyDot} />{f.name}<span className={a.keyCount}>{f.n}</span></li>
+            <FactionKeyItem key={f.id} name={f.name} colour={f.colour} count={f.n} view={factionViews.get(f.id)} />
           ))}
           {loners > 0 && <li style={{ '--c': LONER } as CSSProperties}><span className={a.keyDot} />On their own<span className={a.keyCount}>{loners}</span></li>}
         </ul>
@@ -351,6 +354,9 @@ export function GraphPage() {
   // Faction names come with the overview's moods (the graph carries only ids and colours).
   const overview = useOverview();
   const factionNames = useMemo(() => new Map((overview.data?.moods ?? []).flatMap((m) => (m.faction ? [[m.faction.id, m.faction.name] as const] : []))), [overview.data]);
+  // Banners and coins come with the factions list.
+  const factions = useFactions().data;
+  const factionViews = useMemo(() => new Map((factions ?? []).map((f) => [f.id, f])), [factions]);
   const page = useRef<HTMLElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const fit = useFit(box, page);
@@ -363,7 +369,7 @@ export function GraphPage() {
 
   let body: ReactNode;
   // A failed background refresh keeps the graph on screen.
-  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} width={width} height={height} /> : <EmptyState title="No agents yet" />;
+  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} factionViews={factionViews} width={width} height={height} /> : <EmptyState title="No agents yet" />;
   else if (q.isError) body = q.error instanceof ApiError && q.error.status === 404
     ? <EmptyState title="No agent world here" body="This deployment runs without agents." />
     : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -379,7 +385,7 @@ export function GraphPage() {
             {g && g.nodes.length > 0 && <span className={s.summary}>{plural(g.nodes.length, 'agent')} · {plural(allies, 'alliance')} · {plural(g.edges.length - allies, 'feud')}</span>}
           </div>
           <div ref={box} className={s.box}>{body}</div>
-          {g && ties && g.nodes.length > 0 && <><Key graph={g} factionNames={factionNames} /><TiesTable graph={g} ties={ties} factionNames={factionNames} /></>}
+          {g && ties && g.nodes.length > 0 && <><Key graph={g} factionNames={factionNames} factionViews={factionViews} /><TiesTable graph={g} ties={ties} factionNames={factionNames} /></>}
         </section>
       </div>
     </section>
