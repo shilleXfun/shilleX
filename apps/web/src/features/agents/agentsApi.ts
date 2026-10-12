@@ -26,7 +26,7 @@ export const useReceipt = (id: string | null) => useQuery({ enabled: Boolean(id)
 export const useAgentGraph = () => useQuery({ queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false });
 
 /** Movers, feuds, launches, today's rugs and every mood (public). The Agents page and the World now panel read it. */
-export const useOverview = () => useQuery({ queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500 });
+export const useOverview = () => useQuery({ queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500, retry: false });
 
 /** The Shillex Times: the latest edition, or one day's (YYYY-MM-DD). null when there is no such edition (404). */
 export const usePaper = (day?: string) => useQuery({

@@ -26,8 +26,10 @@ interface Flash { key: number; side: 'up' | 'down'; at: number }
 /** The layout runs on a virtual canvas as big as the backdrop's (1000 × 625), so clusters are as tight here as behind the page. */
 const AREA = 1000 * 625;
 const FLASH_MS = 1600, GLIDE_MS = 900, READOUT_W = 210, READOUT_H = 96, LABEL_PX = 10.5, LABEL_H = 13, CHAR_W = LABEL_PX * 0.62, FALLBACK_W = 640;
+/** The drawing is never shorter than MIN_H, and never wider than MAX_ASPECT times its height (it is centred past that). */
+const MIN_H = 280, MAX_ASPECT = 2.4;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-/** Height over width: taller than wide on phones, a little wider than tall from tablets up. */
+/** Height over width before the screen caps it: taller than wide on phones, a little wider than tall from tablets up. */
 const ratioFor = (w: number) => (w < 560 ? 1.15 : 0.82);
 const signed = (n: number) => `${n > 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}`;
 const short = (t: string) => (t.length > 16 ? `${t.slice(0, 15)}…` : t);
@@ -70,20 +72,32 @@ export function placeLabels(nodes: { id: string; x: number; y: number; r: number
   return out;
 }
 
-/** The box's width, ignoring changes under 24 px (a scrollbar coming and going) so a height tied to it can't flicker. */
-function useStableWidth(ref: RefObject<HTMLDivElement | null>) {
-  const [width, setWidth] = useState(0);
+/**
+ * The box's width, and the most height the drawing can take with the key below it still on screen (the window's height,
+ * less everything above the box and below it). Width changes under 24 px (a scrollbar coming and going) are ignored.
+ */
+function useFit(box: RefObject<HTMLDivElement | null>, page: RefObject<HTMLElement | null>) {
+  const [fit, setFit] = useState({ width: 0, room: Infinity });
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => { const w = Math.round(el.clientWidth); setWidth((old) => (Math.abs(w - old) >= 24 ? w : old)); };
+    const b = box.current, pg = page.current;
+    if (!b || !pg) return;
+    const measure = () => {
+      const w = Math.round(b.clientWidth), r = b.getBoundingClientRect();
+      // Below the drawing: the key and the paddings (the page's bottom edge), then the column's own bottom padding (the phone tab bar).
+      const main = b.closest('main'), pad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      const room = Math.floor(window.innerHeight - (r.top + window.scrollY) - (pg.getBoundingClientRect().bottom - r.bottom) - pad - 2);
+      setFit((old) => {
+        const width = Math.abs(w - old.width) >= 24 ? w : old.width;
+        return width === old.width && room === old.room ? old : { width, room };
+      });
+    };
     measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return width;
+    window.addEventListener('resize', measure);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    ro?.observe(b); ro?.observe(pg);
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect(); };
+  }, [box, page]);
+  return fit;
 }
 
 /** Trades that land while the page is open, by trader: green for a buy, red for a sale, gone after 1.6 s. */
@@ -151,35 +165,38 @@ function useGlide(target: Map<string, Pt>): Map<string, Pt> {
   return shown;
 }
 
-function Drawing({ graph, ties, factionNames, width }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; width: number }) {
+function Drawing({ graph, ties, factionNames, width: W, height: H }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; width: number; height: number }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const ratio = ratioFor(width);
+  // Past MAX_ASPECT (a short, wide screen) the graph keeps that shape, centred, instead of stretching.
+  const DW = Math.min(W, Math.round(H * MAX_ASPECT)), x0 = (W - DW) / 2;
+  // The layout's shape in steps of 0.05, so a few pixels of height do not lay the graph out again.
+  const ratio = Math.max(0.2, Math.round((H / DW) * 20) / 20);
   const norm = useLayout(graph, ratio);
   const shown = useGlide(norm);
   const flashes = useTradeFlashes();
   const [active, setActive] = useState<string | null>(null);
   // Sizes, and label spots worked out where the agents come to rest (kept as offsets, so a label rides with its agent).
   const scene = useMemo(() => {
-    const W = width, H = Math.round(width * ratio);
-    const k = Math.sqrt((W * H) / Math.max(1, graph.nodes.length));
+    const k = Math.sqrt((DW * H) / Math.max(1, graph.nodes.length));
     const rMin = clamp(k * 0.08, 4, 8), rMax = clamp(k * 0.22, 10, 22);
     const top = Math.max(1e-9, ...graph.nodes.map((n) => n.netWorthSol));
     const nodes = graph.nodes.map((n) => {
       // Area follows net worth; the broke keep a visible dot.
       const r = Math.max(rMin, rMax * Math.sqrt(Math.max(0, n.netWorthSol) / top)), p = norm.get(n.id)!;
-      return { n, r, text: short(agentName(n)), x: clamp(p.x * W, r + 2, W - r - 2), y: clamp(p.y * H, r + 2, H - r - 2) };
+      return { n, r, text: short(agentName(n)), x: clamp(x0 + p.x * DW, r + 2, W - r - 2), y: clamp(p.y * H, r + 2, H - r - 2) };
     });
     const spots = placeLabels(nodes.map((x) => ({ id: x.n.id, x: x.x, y: x.y, r: x.r, text: x.text })), W, H);
     const offsets = new Map(nodes.map((x) => { const sp = spots.get(x.n.id); return [x.n.id, sp ? { dx: sp.x - x.x, dy: sp.y - x.y, anchor: sp.anchor } : null] as const; }));
     const ids = new Set(graph.nodes.map((n) => n.id));
     // Weakest ties first, so the strongest lines draw on top.
     const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b)).sort((x, y) => Math.abs(x.score) - Math.abs(y.score));
-    return { W, H, nodes: nodes.sort((p, q) => p.r - q.r), offsets, edges };
-  }, [graph, norm, width, ratio]);
-  const { W, H } = scene;
+    // Painted smallest first, so big agents sit on top; linked in id order, so tab order and focus stay put across refetches.
+    const links = [...nodes].sort((p, q) => (p.n.id < q.n.id ? -1 : p.n.id > q.n.id ? 1 : 0));
+    return { nodes: nodes.sort((p, q) => p.r - q.r), links, offsets, edges };
+  }, [graph, norm, W, H, DW, x0]);
   const at = new Map(scene.nodes.map((x) => {
     const p = shown.get(x.n.id) ?? norm.get(x.n.id)!;
-    return [x.n.id, { ...x, x: clamp(p.x * W, x.r + 2, W - x.r - 2), y: clamp(p.y * H, x.r + 2, H - x.r - 2) }] as const;
+    return [x.n.id, { ...x, x: clamp(x0 + p.x * DW, x.r + 2, W - x.r - 2), y: clamp(p.y * H, x.r + 2, H - x.r - 2) }] as const;
   }));
   const colours = [...new Set(scene.nodes.map((x) => ringOf(x.n)))];
   const near = new Set(active ? [active, ...[...(ties.get(active)?.allies ?? []), ...(ties.get(active)?.enemies ?? [])].map((e) => other(e, active))] : []);
@@ -205,7 +222,7 @@ function Drawing({ graph, ties, factionNames, width }: { graph: AgentGraph; ties
 
   return (
     <>
-      <svg className={s.svg} viewBox={`0 0 ${W} ${H}`} role="group" aria-label="Agent relationships" data-active={active ? '' : undefined}>
+      <svg className={s.svg} viewBox={`0 0 ${W} ${H}`} height={H} role="group" aria-label="Agent relationships" data-active={active ? '' : undefined}>
         <defs>
           <clipPath id={`${uid}-clip`} clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5" /></clipPath>
           {colours.map((c, i) => (
@@ -224,25 +241,37 @@ function Drawing({ graph, ties, factionNames, width }: { graph: AgentGraph; ties
               strokeWidth={ally ? 1 + 2.4 * w : 1 + 1.2 * w} strokeOpacity={ally ? 0.3 : 0.2 + 0.5 * w} />;
           })}
         </g>
-        <g>
+        <g aria-hidden="true">
           {scene.nodes.map(({ n, r }) => {
-            const p = at.get(n.id)!, ring = ringOf(n), flash = flashes.get(n.id);
+            const p = at.get(n.id)!, ring = ringOf(n);
             return (
-              <Link key={n.id} to={`/agents/${n.username}`} aria-label={agentName(n)} className={s.node} data-near={near.has(n.id) || undefined} data-ghost={n.ghost || undefined}
+              <g key={n.id} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className={s.body} data-near={near.has(n.id) || undefined} data-ghost={n.ghost || undefined} data-on={n.id === active || undefined}>
+                {/* Brighter when happier, as on the backdrop. */}
+                <circle r={r * 2.4} fill={`url(#${uid}-g${colours.indexOf(ring)})`} opacity={n.ghost ? 0.25 : 0.4 + 0.6 * ((clamp(n.mood, -1, 1) + 1) / 2)} className={s.halo} />
+                <circle r={r} className={s.disc} />
+                {n.avatarUrl && <image href={n.avatarUrl} x={-r} y={-r} width={r * 2} height={r * 2} clipPath={`url(#${uid}-clip)`} className={s.avatar} preserveAspectRatio="xMidYMid slice" />}
+                <circle r={r + 1.5} className={s.ring} stroke={ring} />
+              </g>
+            );
+          })}
+        </g>
+        <g aria-hidden="true">{scene.nodes.map((x) => label(x.n.id))}</g>
+        {/* On top: a link per agent with a target of at least 12 px, its trade flash and its focus ring. */}
+        <g>
+          {scene.links.map(({ n, r }) => {
+            const p = at.get(n.id)!, flash = flashes.get(n.id);
+            return (
+              <Link key={n.id} to={`/agents/${n.username}`} aria-label={agentName(n)} className={s.node}
                 onMouseEnter={() => setActive(n.id)} onMouseLeave={() => setActive(null)} onFocus={() => setActive(n.id)} onBlur={() => setActive(null)}>
                 <g transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`}>
-                  {/* Brighter when happier, as on the backdrop. */}
-                  <circle r={r * 2.4} fill={`url(#${uid}-g${colours.indexOf(ring)})`} opacity={n.ghost ? 0.25 : 0.4 + 0.6 * ((clamp(n.mood, -1, 1) + 1) / 2)} className={s.halo} />
-                  <circle r={r} className={s.disc} />
-                  {n.avatarUrl && <image href={n.avatarUrl} x={-r} y={-r} width={r * 2} height={r * 2} clipPath={`url(#${uid}-clip)`} className={s.avatar} preserveAspectRatio="xMidYMid slice" />}
-                  <circle r={r + 1.5} className={s.ring} stroke={ring} />
+                  <circle r={Math.max(12, r + 3)} className={s.hit} />
                   {flash && <g key={flash.key} className={s.flash} data-flash={flash.side}><circle r={r * 1.7} className={s.flashHalo} /><circle r={r + 1.5} className={s.flashCore} /><circle r={r + 2} className={s.flashRing} /></g>}
+                  <circle r={r + 5} className={s.focusRing} />
                 </g>
               </Link>
             );
           })}
         </g>
-        <g aria-hidden="true">{scene.nodes.map((x) => label(x.n.id))}</g>
       </svg>
       {focus && corner && <Readout node={focus.n} ties={ties.get(focus.n.id)} faction={focus.n.factionId ? factionNames.get(focus.n.factionId) ?? 'In a faction' : 'On their own'}
         side={corner.side} edge={corner.edge} />}
@@ -321,22 +350,26 @@ export function GraphPage() {
   // Faction names come with the overview's moods (the graph carries only ids and colours).
   const overview = useOverview();
   const factionNames = useMemo(() => new Map((overview.data?.moods ?? []).flatMap((m) => (m.faction ? [[m.faction.id, m.faction.name] as const] : []))), [overview.data]);
+  const page = useRef<HTMLElement>(null);
   const box = useRef<HTMLDivElement>(null);
-  const width = useStableWidth(box) || FALLBACK_W;
+  const fit = useFit(box, page);
+  const width = fit.width || FALLBACK_W;
+  // As tall as its shape wants, but no taller than the screen has room for, so the whole graph and its key show at a glance.
+  const height = Math.round(Math.max(MIN_H, Math.min(width * ratioFor(width), fit.room)));
   const g = q.data;
   const ties = useMemo(() => (g ? tiesOf(g) : null), [g]);
   const allies = g ? g.edges.filter((e) => e.score > 0).length : 0;
 
   let body: ReactNode;
   // A failed background refresh keeps the graph on screen.
-  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} width={width} /> : <EmptyState title="No agents yet" />;
+  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} width={width} height={height} /> : <EmptyState title="No agents yet" />;
   else if (q.isError) body = q.error instanceof ApiError && q.error.status === 404
     ? <EmptyState title="No agent world here" body="This deployment runs without agents." />
     : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
-  else body = <Skeleton h={Math.round(width * ratioFor(width))} r={0} />;
+  else body = <Skeleton h={height} r={0} />;
 
   return (
-    <section aria-labelledby="graph-title" data-cards>
+    <section ref={page} className={s.page} aria-labelledby="graph-title" data-cards>
       <PageHeader title="Graph" titleId="graph-title" />
       <div className={s.wrap}>
         <section className={cx(a.panel, s.card)} aria-labelledby="graph-card">
