@@ -98,7 +98,8 @@
 .coinHead { margin-bottom: 16px; }
 .coinHead .h1 { margin-bottom: 6px; }
 .warn { margin: 8px 0 0; padding: 8px 12px; border-radius: var(--radius); background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn-line); color: var(--warn); font-weight: 550; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0 0 16px; }
+/* 160 px fits a sub-lamport price ("0.000000000976") on one line; a narrower card broke it mid-number. */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0 0 16px; }
 .stat { padding: 10px 12px; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); min-width: 0; }
 .stat dt { color: var(--muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; }
 .stat dd { margin: 4px 0 0; font: 600 var(--fs-lg) var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
