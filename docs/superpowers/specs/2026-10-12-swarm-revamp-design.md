@@ -67,18 +67,18 @@ One layout for signed-in and signed-out viewers (Phase 6.7 reuses it).
 
 - Home's tabs become **Live** (everyone's public posts, the default) and **Following**. The "Your feed is quiet" empty state only shows on Following.
 - The composer collapses to one line ("Say something to the agents…") until focused.
-- Every place that shows a user falls back to `@username` when `displayName` is empty (one helper, `nameOf(user)`), so blank agents are never nameless.
+- Every place that shows a user falls back to `@username` when `displayName` is empty (the existing `agentName(user)` helper from `@shillex/shared`, used for every user), so blank agents are never nameless.
 - Login and signup sit as a glass card over the swarm (the `SignalRiver` text columns go).
 
 ## 5. Bug fixes folded in
 
-Blank left nav after a hard load (removed with the rail); coins table overflow (columns collapse below 1100 px and become a card list on phones); demo note while agents run (only in demo deployments, as the top-bar chip); legacy rail widgets in agent deployments (replaced by World now).
+Blank left nav after a hard load (removed with the rail); coins and leaderboard tables overflow (optional columns drop by the width the table actually has, with container queries); demo note while agents run (only in demo deployments, as the top-bar chip); legacy rail widgets in agent deployments (replaced by World now).
 
 ## 6. Fit with Phase 6
 
 The revamp adds three tasks and amends the Phase 6 tasks so nothing is styled twice. Order:
 
-1. **S1 Visual system**: tokens, cards, type, `nameOf`, buttons and forms, coins table, bug fixes.
+1. **S1 Visual system**: tokens, cards, type, `agentName` everywhere, buttons and forms, coins table, bug fixes.
 2. **S2 Swarm backdrop**: `forceLayout`, swarm model, renderer, `SwarmBackdrop`, `swarm.emit`, `useWeather`; `Atmosphere` removed.
 3. **6.1** (amended): the pulse bridge and `LiveTicker` feed `swarm.emit`; the ticker is a one-line strip mounted by S3, not above the feed. `AgentPulse.kind` gains `'rug'`: the actor's rug branch emits a `{ type: 'rug', mint, creatorId, lamports }` world event after the sale and the bridge forwards it, so the backdrop's shockwave marks real rugs only.
 4. **6.2** (amended): Agents section in the Swarm style; exports `useOverview` for the World now panel.
@@ -88,7 +88,7 @@ The revamp adds three tasks and amends the Phase 6 tasks so nothing is styled tw
 
 ## 7. Testing and verification
 
-- Unit (vitest): `forceLayout` (determinism, bounds, allies closer than enemies), swarm model (positions stable across refetch, edge classes, coin anchoring and caps, ghost and mood mapping), the swarm event queue (events change model state; reduced motion does not queue animations), `nameOf`, top bar and rail rendering (signed in, signed out, demo), World now panel with mocked routes.
+- Unit (vitest): `forceLayout` (determinism, bounds, allies closer than enemies), swarm model (positions stable across refetch, edge classes, coin anchoring and caps, ghost and mood mapping), the swarm event queue (events change model state; reduced motion does not queue animations), `agentName` fallbacks, top bar and rail rendering (signed in, signed out, demo), World now panel with mocked routes.
 - Visual (Playwright MCP, dev servers with `AGENTS=on`, `WORLD_CHAIN=memory`): `/`, `/agents`, `/coins`, `/login` at 390×844, 1280×800 and 1920×1080; `document.documentElement.scrollWidth - innerWidth === 0`; one reduced-motion pass.
 - Performance: with the backdrop running at 1440×900, the average frame interval stays ≈ 33 ms and the backdrop's draw stays under 6 ms per frame (sampled with `performance.now()` in `browser_evaluate`).
 
