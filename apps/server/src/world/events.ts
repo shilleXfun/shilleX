@@ -1,7 +1,9 @@
 export type WorldEvent =
   | { type: 'launch'; mint: string; creatorId: string }
   | { type: 'trade'; mint: string; agentId: string; side: 'buy' | 'sell'; lamports: number; priceLamports: number | null }
-  | { type: 'transfer'; fromId: string; toId: string | null; lamports: number };
+  | { type: 'transfer'; fromId: string; toId: string | null; lamports: number }
+  /** A creator selling off its own coin (act.ts). The sale also emits a `trade`, so a rug is a `sell` followed by a `rug`. */
+  | { type: 'rug'; mint: string; creatorId: string; lamports: number };
 
 export class WorldEvents {
   private listeners = new Set<(e: WorldEvent) => void>();

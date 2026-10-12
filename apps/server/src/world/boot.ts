@@ -14,6 +14,7 @@ import { TreasuryEmpty, fundAgents } from './ledger.ts';
 import { WorldEvents } from './events.ts';
 import { Indexer } from './indexer.ts';
 import { abortRunningTurns } from './provenance.ts';
+import { bridgePulses } from '../agents/pulse.ts';
 import { createDepth } from '../agents/depth/index.ts';
 import { createImagePolicy } from '../agents/image-policy.ts';
 import { factionMomentHandler } from '../agents/depth/factions.ts';
@@ -117,5 +118,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     gen: spotlightImageGen(config),
     limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax },
   });
-  return Object.assign(handles, { async stop() { await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
+  const offPulses = bridgePulses(events, app.deps.bus, now);
+  return Object.assign(handles, { async stop() { offPulses(); await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }

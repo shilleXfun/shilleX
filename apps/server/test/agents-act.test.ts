@@ -7,6 +7,7 @@ import { renderSvg } from '../src/agents/cards.ts';
 import { blobUpload, storeBlob } from '../src/agents/images.ts';
 import { createImagePolicy } from '../src/agents/image-policy.ts';
 import { ChainError, MemoryChain } from '../src/world/chain.ts';
+import type { WorldEvent } from '../src/world/events.ts';
 import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
@@ -65,8 +66,15 @@ describe('act', () => {
     clearPerceptionCache(w.t.db);
     const v = await perceive(d, maker!.id);
     const pos = v.wallet.positions.find((p) => p.mint === mint)!;
+    const seen: WorldEvent[] = [];
+    const off = w.events.on((e) => seen.push(e));
     const r = await act(d, v, { kind: 'rug', score: 1, raw: Math.floor(pos.raw * 0.9), situation: 'rugged_someone', target: { mint }, reason: 'dumped my own $RUGG: test' });
+    off();
     expect(r.ok).toBe(true);
+    // The sale is a sell trade first, then the rug with the same real amount.
+    expect(seen.map((e) => e.type)).toEqual(['trade', 'rug']);
+    expect(seen[0]).toMatchObject({ type: 'trade', side: 'sell', mint, agentId: maker!.id });
+    expect(seen[1]).toMatchObject({ type: 'rug', mint, creatorId: maker!.id, lamports: expect.any(Number) });
     for (const h of [h1!, h2!]) {
       expect((await affinitiesOf(w.t.db, h.id))[maker!.id]).toBeCloseTo(-0.5);
       expect((await recentEvents(w.t.db, h.id))[0]).toMatchObject({ kind: 'got_rugged', data: { byId: maker!.id, mint, symbol: 'RUGG' } });
