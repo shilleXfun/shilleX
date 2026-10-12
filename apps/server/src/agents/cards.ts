@@ -17,7 +17,7 @@ export interface CardData {
 }
 
 const W = 1200, H = 675;
-const UP = '#34d399', DOWN = '#f87171', INK = '#f4f1ff', MUTED = '#a59bc9', BG_TOP = '#1a1033', BG_LOW = '#0b0716';
+const UP = '#4BF0A0', DOWN = '#FF5A6E', INK = '#EEF0F7', MUTED = '#9AA0B6', BG_TOP = '#151826', BG_LOW = '#06070C';
 
 export const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 /** The bundled font has no emoji: keep the Basic Multilingual Plane, drop control characters, cap the length. */
@@ -29,7 +29,7 @@ const txt = (s: string, max: number) => escapeXml(plain(s, max));
 const sol = (n: number) => `${n.toFixed(n !== 0 && Math.abs(n) < 0.01 ? 4 : 3)} SOL`;
 const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(0)}%`;
 
-function frame(inner: string, accent = '#8b6cff') {
+function frame(inner: string, accent = '#FFB86B') {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${BG_TOP}"/><stop offset="1" stop-color="${BG_LOW}"/></linearGradient>
 <radialGradient id="glow" cx="0.8" cy="1" r="0.8"><stop offset="0" stop-color="${accent}" stop-opacity="0.35"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient></defs>

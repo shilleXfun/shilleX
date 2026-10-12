@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { makeTestApp } from './helpers.ts';
-import { createShareCard } from '../src/agents/share.ts';
+import { createShareCard, shareCardSvg, type ShareKind } from '../src/agents/share.ts';
 import { notifyFollowersOfMoment } from '../src/agents/follow-notify.ts';
 import { imageInfo } from '../src/lib/image-size.ts';
 import { follows, notifications, users } from '../src/db/schema.ts';
@@ -54,6 +54,15 @@ describe('share cards', () => {
   });
   it('404s an unknown card', async () => {
     expect((await t.app.inject({ method: 'GET', url: '/s/doesnotexist1' })).statusCode).toBe(404);
+  });
+  it('draws every kind of card in the Swarm palette, with no violet left over', () => {
+    const kinds: ShareKind[] = ['launch', 'rug', 'graduation', 'faction_formed', 'faction_split', 'feud', 'leak', 'comeback', 'revival'];
+    const svgs = kinds.map((kind) => shareCardSvg({ kind, title: 't', subtitle: 's', agentIds: [], stats: [{ label: 'l', value: 'v' }], href: '/' }, ['ledger_22']).toLowerCase());
+    expect(svgs[0]).toContain('#ffb86b'); // a launch card is the brand accent
+    for (const svg of svgs) {
+      expect(svg).toContain('#06070c');
+      for (const old of ['#8b6cff', '#0b0716', '#1a1033', '#f4f1ff', '#d9d2f5', '#a59bc9', '#34d399', '#f87171', '#ff6078', '#27e0c0', '#ffb547']) expect(svg).not.toContain(old);
+    }
   });
 });
 

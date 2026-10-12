@@ -9,23 +9,23 @@ export type ShareKind = 'launch' | 'rug' | 'graduation' | 'faction_formed' | 'fa
 export interface ShareInput { kind: ShareKind; title: string; subtitle: string; agentIds: string[]; stats: { label: string; value: string }[]; receipt?: string; href: string }
 
 const ACCENT: Record<ShareKind, string> = {
-  launch: '#8b6cff', rug: '#f87171', graduation: '#34d399', faction_formed: '#27e0c0', faction_split: '#ffb547',
-  feud: '#ff6078', leak: '#ffb547', comeback: '#34d399', revival: '#27e0c0',
+  launch: '#FFB86B', rug: '#FF5A6E', graduation: '#4BF0A0', faction_formed: '#7DE3FF', faction_split: '#FFD166',
+  feud: '#FF5A6E', leak: '#FFD166', comeback: '#4BF0A0', revival: '#7DE3FF',
 };
 
 export function shareCardSvg(s: ShareInput, names: string[]): string {
   const W = 1200, H = 630, a = ACCENT[s.kind];
   const t = (v: string, n: number) => escapeXml(plain(v, n));
-  const stats = s.stats.slice(0, 3).map((x, i) => `<text x="${60 + i * 360}" y="470" font-size="64" font-weight="bold" fill="#f4f1ff">${t(x.value, 10)}</text><text x="${60 + i * 360}" y="510" font-size="26" fill="#a59bc9">${t(x.label, 22)}</text>`).join('');
+  const stats = s.stats.slice(0, 3).map((x, i) => `<text x="${60 + i * 360}" y="470" font-size="64" font-weight="bold" fill="#EEF0F7">${t(x.value, 10)}</text><text x="${60 + i * 360}" y="510" font-size="26" fill="#9AA0B6">${t(x.label, 22)}</text>`).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a1033"/><stop offset="1" stop-color="#0b0716"/></linearGradient></defs>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#151826"/><stop offset="1" stop-color="#06070C"/></linearGradient></defs>
 <rect width="${W}" height="${H}" fill="url(#bg)"/><rect x="0" y="0" width="14" height="${H}" fill="${a}"/>
 <text x="60" y="90" font-size="28" fill="${a}" letter-spacing="4">${t(s.kind.replace('_', ' ').toUpperCase(), 20)}</text>
-<text x="60" y="190" font-size="58" font-weight="bold" fill="#f4f1ff">${t(s.title, 34)}</text>
-<text x="60" y="260" font-size="38" fill="#d9d2f5">${t(s.subtitle, 48)}</text>
-<text x="60" y="340" font-size="30" fill="#a59bc9">${t(names.map((n) => `@${n}`).join('  '), 60)}</text>
+<text x="60" y="190" font-size="58" font-weight="bold" fill="#EEF0F7">${t(s.title, 34)}</text>
+<text x="60" y="260" font-size="38" fill="#C9CEDD">${t(s.subtitle, 48)}</text>
+<text x="60" y="340" font-size="30" fill="#9AA0B6">${t(names.map((n) => `@${n}`).join('  '), 60)}</text>
 ${stats}
-<text x="60" y="${H - 40}" font-size="26" fill="#a59bc9">shillex · ${s.receipt ? `receipt ${t(s.receipt.slice(0, 12), 14)}` : 'agents on devnet'}</text></svg>`;
+<text x="60" y="${H - 40}" font-size="26" fill="#9AA0B6">shillex · ${s.receipt ? `receipt ${t(s.receipt.slice(0, 12), 14)}` : 'agents on devnet'}</text></svg>`;
 }
 
 /** Cards only ever show agents: a human in `agentIds` is refused (human privacy, spec §3c). */
