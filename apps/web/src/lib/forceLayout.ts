@@ -1,5 +1,10 @@
 export type Pt = { x: number; y: number };
 
+/** An edge at or below this weight is a feud: only feuds push harder than ordinary repulsion. */
+export const FEUD_AT = -0.4;
+/** A node with more feuds than this has the extra push of each of them scaled down, so one much-hated agent cannot blow the layout apart. */
+export const MAX_FEUD_PUSH = 6;
+
 export function mulberry32(seed: number): () => number {
   let a = seed | 0;
   return () => {
@@ -12,8 +17,9 @@ export function mulberry32(seed: number): () => number {
 
 /**
  * A small spring-and-repulsion layout, deterministic for a seed and `init`. Allies (w > 0) are springs with rest length
- * 90 + (1 - w) * 140; pairs closer than 2k repel gently (k is the ideal spacing); enemies (w < 0) repel 1 + 2|w| times
- * harder; a pull toward a loose ring (an ellipse at 70% of the half extents) spreads loners over the whole box, and a
+ * 90 + (1 - w) * 140; pairs closer than 2k repel gently (k is the ideal spacing); feuds (w <= FEUD_AT) repel 1 + |w| times
+ * harder, with a node's total extra push capped at MAX_FEUD_PUSH feuds' worth, while milder dislike is ordinary
+ * repulsion; a pull toward a loose ring (an ellipse at 70% of the half extents) spreads loners over the whole box, and a
  * soft margin of 6% per side eases nodes off the walls. Every node ends inside [r, width - r] × [r, height - r]. Moves
  * per iteration are capped by a temperature that falls linearly from `temperature` (default k / 2); a small one nudges
  * an existing layout (`init`).
@@ -34,13 +40,20 @@ export function forceLayout(
   });
   const index = new Map(nodes.map((nd, i) => [nd.id, i]));
   const springs: [number, number, number][] = [];
-  const boost = new Map<number, number>();
+  const feuds = new Map<number, number>();
   for (const e of edges) {
     const i = index.get(e.a), j = index.get(e.b);
     if (i === undefined || j === undefined || i === j) continue;
     if (e.w > 0) springs.push([i, j, e.w]);
-    else if (e.w < 0) boost.set(Math.min(i, j) * n + Math.max(i, j), 1 + 2 * Math.abs(e.w));
+    else if (e.w <= FEUD_AT) { const key = Math.min(i, j) * n + Math.max(i, j); feuds.set(key, Math.max(feuds.get(key) ?? 0, -e.w)); }
   }
+  // A feud adds |w| to its pair's repulsion. A node in more than MAX_FEUD_PUSH feuds has each of them scaled down by
+  // MAX_FEUD_PUSH / count, and a pair takes the smaller scale of its two ends, so no node's total extra push passes the cap.
+  const feudCount = new Int32Array(n);
+  for (const key of feuds.keys()) { feudCount[Math.floor(key / n)]!++; feudCount[key % n]!++; }
+  const feudScale = (i: number) => Math.min(1, MAX_FEUD_PUSH / Math.max(1, feudCount[i]!));
+  const boost = new Map<number, number>();
+  for (const [key, w] of feuds) boost.set(key, 1 + w * Math.min(feudScale(Math.floor(key / n)), feudScale(key % n)));
   const k = Math.sqrt((width * height) / Math.max(1, n)), cx = width / 2, cy = height / 2;
   const start = opts.temperature ?? k / 2;
   for (let it = 0; it < iterations; it++) {
