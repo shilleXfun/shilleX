@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentTurns, phrasebooks, posts } from '../src/db/schema.ts';
+import { agentTurns, agents as agentsTable, phrasebooks, posts, users } from '../src/db/schema.ts';
+import { finishTurn, startTurn } from '../src/world/provenance.ts';
+import { runTool } from '../src/world/tools.ts';
 import { newId } from '../src/lib/ids.ts';
 import { addNote } from '../src/world/memory.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
@@ -9,7 +11,7 @@ import { Budget } from '../src/world/budget.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
 import { FALLBACK_LINES, FALLBACK_SITUATIONS, composeLine, fallbackPhrasebook, phrasebookOf } from '../src/agents/phrasebook.ts';
 import { loadState, rememberEvent, setTraits } from '../src/agents/state.ts';
-import { RETRY_AFTER_MS, needsPhrasebook, validatePhrasebook, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
+import { PHRASEBOOK_PROMPT_VERSION, RETRY_AFTER_MS, STUCK_TURNS, needsPhrasebook, validatePhrasebook, validateProfile, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 beforeEach(async () => { w = await worldTestCtx(); });
@@ -50,7 +52,7 @@ describe('writePhrasebook', () => {
     expect((await loadState(w.t.db, a.id, w.t.clock.now())).traits.pettiness).toBe(0.95);
     expect(brain.calls[0]).toMatchObject({ effort: 'low', tools: [], outputFormat: { type: 'json_schema' } });
     const [turn] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
-    expect(turn).toMatchObject({ model: HAIKU, promptVersion: 'phrasebook-v1', status: 'acted' });
+    expect(turn).toMatchObject({ model: HAIKU, promptVersion: PHRASEBOOK_PROMPT_VERSION, status: 'acted' });
     expect(turn!.costUsd).toBeGreaterThan(0);
     expect(budget.spentToday()).toBeCloseTo(turn!.costUsd, 9);
   });
@@ -195,5 +197,121 @@ describe('needsPhrasebook', () => {
     await w.t.db.insert(phrasebooks).values({ agentId: a.id, version: 1, book: valid(), model: HAIKU, writtenAt: new Date(now.getTime() - DAY) });
     await rememberEvent(w.t.db, a.id, 'got_rugged', { byId: 'x' }, now);
     expect(await needsPhrasebook(w.t.db, a.id, now)).toBe(false);
+  });
+});
+
+describe('agents name themselves (L7)', () => {
+  const toolFor = () => async (agentId: string, turnId: string, name: string, input: Record<string, unknown>) => {
+    const [agent] = await w.t.db.select().from(users).where(eq(users.id, agentId));
+    return runTool({ app: w.t.app, db: w.t.db, actor: w.actor, chain: w.chain, events: w.events, agent: agent!, turnId, worldKey: w.key, now: w.t.clock.now, publicUrl: 'http://localhost:5173' }, name, input);
+  };
+  it('a first book names the agent through set_profile on its own receipt, with no extra model call', async () => {
+    const a = w.agents[6]!;
+    const profile = { display_name: 'Moth Whisperer', bio: 'buys lamps, sells moths', avatar_emoji: '🦋', avatar_color: '#AA33FF' };
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid(), profile })));
+    expect(await writePhrasebook({ ...deps(brain), tool: toolFor() }, a.id)).toBe('written');
+    expect(brain.calls).toHaveLength(1);
+    expect((await w.t.db.select().from(users).where(eq(users.id, a.id)))[0]).toMatchObject({ displayName: 'Moth Whisperer', bio: 'buys lamps, sells moths' });
+    expect((await w.t.db.select().from(agentsTable).where(eq(agentsTable.userId, a.id)))[0]).toMatchObject({ avatarEmoji: '🦋', avatarColor: '#aa33ff' });
+    const [turn] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
+    expect(turn!.toolCalls).toEqual([expect.objectContaining({ name: 'set_profile', ok: true })]);
+    // A refresh never renames the agent.
+    w.t.clock.advance(4 * DAY);
+    await rememberEvent(w.t.db, a.id, 'big_loss', { symbol: 'MOTH', pct: -80 }, w.t.clock.now());
+    const again = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid(), profile: { ...profile, display_name: 'Someone Else' } })));
+    expect(await writePhrasebook({ ...deps(again), tool: toolFor() }, a.id)).toBe('written');
+    expect((await w.t.db.select().from(users).where(eq(users.id, a.id)))[0]!.displayName).toBe('Moth Whisperer');
+  });
+  it('drops hostile or malformed profile fields, and the whole profile without a usable name (Review Focus 4)', () => {
+    expect(validateProfile({ profile: { display_name: 'visit www.evil.com', bio: 'x', avatar_emoji: '🦋', avatar_color: '#ffffff' } })).toBeNull();
+    expect(validateProfile({ profile: { display_name: 'Moth', bio: 'hi @someone', avatar_emoji: 'fire', avatar_color: 'red' } }))
+      .toEqual({ display_name: 'Moth', bio: null, avatar_emoji: null, avatar_color: null, username: null });
+    expect(validateProfile({ profile: { display_name: 'x'.repeat(60), bio: '', avatar_emoji: '🔥🔥🔥', avatar_color: '#A1B2C3' } }))
+      .toEqual({ display_name: 'x'.repeat(40), bio: null, avatar_emoji: '🔥🔥', avatar_color: '#a1b2c3', username: null });
+    expect(validateProfile({ voice: 'no profile here' })).toBeNull();
+    expect(validateProfile(null)).toBeNull();
+  });
+  it('keeps nothing but pictographs in the avatar emoji and never lets a handle or markup ride in on it', () => {
+    const emoji = (avatar_emoji: unknown) => validateProfile({ profile: { display_name: 'Moth', bio: 'b', avatar_emoji, avatar_color: '#ffffff' } })!.avatar_emoji;
+    expect(emoji('🔥@')).toBe('🔥');
+    expect(emoji('🔥<')).toBe('🔥');
+    expect(emoji('🔥x')).toBe('🔥');
+    expect(emoji('x🔥')).toBeNull();
+    expect(emoji('<b>')).toBeNull();
+    expect(emoji('\u{2764}\u{FE0F}')).toBe('\u{2764}\u{FE0F}'); // a symbol made an emoji by its variation selector
+    expect(emoji('\u{FE0F}\u{1F525}')).toBeNull();
+    expect(emoji('')).toBeNull();
+    expect(emoji(7)).toBeNull();
+    // Names and bios carry no markup, braces, links or handles either.
+    for (const bad of ['<b>Moth</b>', 'Moth {coin}', 'Moth `x`', 'https://evil.io', '@moth']) {
+      expect(validateProfile({ profile: { display_name: bad, bio: 'b', avatar_emoji: null, avatar_color: null } })).toBeNull();
+      expect(validateProfile({ profile: { display_name: 'Moth', bio: bad, avatar_emoji: null, avatar_color: null } })!.bio).toBeNull();
+    }
+  });
+  it('publishes nothing unfiltered: a hostile profile skips set_profile, and a book without a tool applies no profile', async () => {
+    const hostile = { display_name: 'see https://evil.io', bio: 'dm @me', avatar_emoji: 'fire', avatar_color: 'red' };
+    const a = w.agents[8]!;
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid(), profile: hostile })));
+    expect(await writePhrasebook({ ...deps(brain), tool: toolFor() }, a.id)).toBe('written');
+    expect((await w.t.db.select().from(users).where(eq(users.id, a.id)))[0]).toMatchObject({ displayName: '', bio: '' });
+    expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id)))[0]!.toolCalls).toEqual([]);
+    // No tool runner: the (clean) profile is simply not applied, and the book still lands.
+    const b = w.agents[9]!;
+    const clean = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid(), profile: { display_name: 'Moth', bio: 'b', avatar_emoji: '🦋', avatar_color: '#ffffff' } })));
+    expect(await writePhrasebook(deps(clean), b.id)).toBe('written');
+    expect((await w.t.db.select().from(users).where(eq(users.id, b.id)))[0]!.displayName).toBe('');
+  });
+  it('seals the receipt with a failed set_profile when the tool throws, and still keeps the book', async () => {
+    const a = w.agents[10]!;
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify({ ...valid(), profile: { display_name: 'Moth', bio: 'b', avatar_emoji: null, avatar_color: null } })));
+    const tool = async () => { throw new Error('tool down'); };
+    expect(await writePhrasebook({ ...deps(brain), tool }, a.id)).toBe('written');
+    expect((await w.t.db.select().from(phrasebooks).where(eq(phrasebooks.agentId, a.id)))[0]).toMatchObject({ version: 1 });
+    const [turn] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
+    expect(turn).toMatchObject({ status: 'acted' });
+    expect(turn!.toolCalls).toEqual([expect.objectContaining({ name: 'set_profile', ok: false })]);
+  });
+  it('asks the model for the profile and 10 to 14 lines a situation, and keeps up to 14', async () => {
+    const a = w.agents[11]!;
+    const brain = new FakeBrain(() => fakeReply.end(JSON.stringify(valid())));
+    await writePhrasebook(deps(brain), a.id);
+    const call = brain.calls[0]!;
+    expect(JSON.stringify(call.system)).toContain('10 to 14');
+    expect((call.outputFormat?.schema as { required: string[] }).required).toContain('profile');
+    const raw = valid();
+    raw.lines.gm = Array.from({ length: 20 }, (_, i) => `gm line ${i}`);
+    expect(validatePhrasebook(raw)!.lines.gm).toHaveLength(14);
+  });
+  it('refreshes a young book early once its agent ran dry 10 times since it was written today', async () => {
+    const a = w.agents[5]!;
+    expect(await writePhrasebook(deps(new FakeBrain(() => fakeReply.end(JSON.stringify(valid())))), a.id)).toBe('written');
+    w.t.clock.advance(RETRY_AFTER_MS + 60_000);
+    const dry = async () => {
+      const { id } = await startTurn(w.t.db, { agentId: a.id, triggers: [{ type: 'heartbeat' }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now: w.t.clock.now() });
+      await finishTurn(w.t.db, id, { status: 'quiet', context: [], reasoning: 'felt like posting (idle); nothing fresh to say', toolCalls: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: w.t.clock.now() });
+    };
+    for (let i = 0; i < STUCK_TURNS - 1; i++) await dry();
+    expect(await needsPhrasebook(w.t.db, a.id, w.t.clock.now())).toBe(false);
+    await dry();
+    expect(await needsPhrasebook(w.t.db, a.id, w.t.clock.now())).toBe(true);
+  });
+  it('counts only dry turns since the book was written, and the early refresh still obeys the daily cap and the retry guard', async () => {
+    const a = w.agents[12]!;
+    const now = () => w.t.clock.now();
+    const dry = async () => {
+      const { id } = await startTurn(w.t.db, { agentId: a.id, triggers: [{ type: 'heartbeat' }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now: now() });
+      await finishTurn(w.t.db, id, { status: 'quiet', context: [], reasoning: 'nothing fresh to say; reacted instead', toolCalls: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: now() });
+    };
+    for (let i = 0; i < STUCK_TURNS; i++) await dry();
+    w.t.clock.advance(60_000);
+    // A book written after the dry turns starts the count over.
+    await w.t.db.insert(phrasebooks).values({ agentId: a.id, version: 1, book: valid(), model: HAIKU, writtenAt: now() });
+    w.t.clock.advance(RETRY_AFTER_MS + 60_000);
+    expect(await needsPhrasebook(w.t.db, a.id, now())).toBe(false);
+    for (let i = 0; i < STUCK_TURNS; i++) await dry();
+    expect(await needsPhrasebook(w.t.db, a.id, now())).toBe(true);
+    // Ten refreshes already written today: no more, however dry.
+    for (const o of w.agents.slice(20, 30)) await w.t.db.insert(phrasebooks).values({ agentId: o.id, version: 2, book: valid(), model: HAIKU, writtenAt: now() });
+    expect(await needsPhrasebook(w.t.db, a.id, now())).toBe(false);
   });
 });

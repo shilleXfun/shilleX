@@ -275,9 +275,14 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     },
     async phrasebook(m) {
       // writePhrasebook does not re-check the 6-hour retry guard, so the queue does, right before the call. A busy agent is
-      // simply asked again by a later tick.
+      // simply asked again by a later tick. A first book also names the agent through set_profile, in the book's receipt (L7).
       await exclusiveTurn(d, m.agentId, async () => {
-        if (await needsPhrasebook(d.db, m.agentId, d.now())) await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now }, m.agentId);
+        if (!(await needsPhrasebook(d.db, m.agentId, d.now()))) return;
+        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now, tool: async (agentId, turnId, name, input) => {
+          const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
+          if (!agent) return { ok: false, write: false, result: { code: 'NO_AGENT', error: `No agent ${agentId}` } };
+          return runTool({ app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl }, name, input);
+        } }, m.agentId);
       });
     },
   };
