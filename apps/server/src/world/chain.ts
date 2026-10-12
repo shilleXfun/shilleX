@@ -23,7 +23,7 @@ export const RAW_PER_TOKEN = 1_000_000;
 export const GRADUATED_MESSAGE = 'This coin graduated: its curve is complete and it can no longer be traded here';
 const SOL = 1_000_000_000;
 const TX_FEE = 5000;
-const LAUNCH_COST = 26_500_000; // rent + creation, as measured against the real program on a local validator
+export const LAUNCH_RENT = 26_500_000; // rent + creation, as measured against the real program on a local validator
 const TRADE_FEE_BPS = 100;
 // Scaled to a 5 SOL economy (50 wallets × 0.1 SOL) so a few agents can visibly pump or rug a coin; tuned to match the devnet launchpad.
 const V_SOL = 1 * SOL, V_TOKENS = 1_073_000_000 * RAW_PER_TOKEN, CURVE_TOKENS = 793_100_000 * RAW_PER_TOKEN, GRADUATE_AT = 2_688_110_852; // the launchpad config's migration quote threshold
@@ -79,13 +79,13 @@ export class MemoryChain implements Chain {
 
   async launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult> {
     const a = this.acct(signer.publicKey.toBase58());
-    this.need(a, LAUNCH_COST + TX_FEE + input.initialBuyLamports);
-    this.spend(a, LAUNCH_COST + TX_FEE);
+    this.need(a, LAUNCH_RENT + TX_FEE + input.initialBuyLamports);
+    this.spend(a, LAUNCH_RENT + TX_FEE);
     const mint = `M${this.n + 1}${input.symbol}`.padEnd(44, '1').slice(0, 44);
     this.pools.set(mint, { mint, pool: `P${mint.slice(1)}`, sol: 0, sold: 0, graduated: false });
     const signature = this.sig();
     const first = input.initialBuyLamports > 0 ? this.swapIn(a, this.pools.get(mint)!, input.initialBuyLamports) : { out: 0, spent: 0 };
-    return { mint, pool: this.pools.get(mint)!.pool, signature, lamportsDelta: -(LAUNCH_COST + TX_FEE + first.spent), tokenDelta: first.out, feeLamports: TX_FEE };
+    return { mint, pool: this.pools.get(mint)!.pool, signature, lamportsDelta: -(LAUNCH_RENT + TX_FEE + first.spent), tokenDelta: first.out, feeLamports: TX_FEE };
   }
 
   /** Partial fill, like the real program: a buy past the threshold takes only what completes the curve. */

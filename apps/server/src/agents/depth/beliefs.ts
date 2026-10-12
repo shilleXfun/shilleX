@@ -8,7 +8,8 @@ import type { DepthModule } from './registry.ts';
 
 const WINDOW_MS = 60 * 60_000;
 const BULL = ['moon', 'send', 'buy', 'buying', 'bullish', 'hold', 'holding', 'diamond', 'pump', 'ape', 'aping', 'lfg', 'gem', 'loading', 'up only', '🚀', '💎', '📈'];
-const BEAR = ['dump', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'sold', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
+// "sold" is a report of what the agent did, not a call on the coin: counting it made every "sold $X into strength" a lie (L1).
+const BEAR = ['dump', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
 const clamp = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -45,7 +46,13 @@ export async function checkSaidVsDid(db: Db, agentId: string, mint: string, at: 
   for (const p of said) {
     const stance = stanceOf(p.body, coin.symbol);
     if (stance === null || Math.abs(stance) <= 0.3) continue;
-    const near = trades.find((t) => Math.abs(t.createdAt.getTime() - p.at.getTime()) <= WINDOW_MS && (stance > 0 ? t.kind === 'sell' : t.kind === 'buy'));
+    // A bullish post next to a sale within the hour, either side, is the spec's lie (shilling a coin while getting out of it).
+    // A bearish post is a lie only next to a buy made after it (talking a coin down to buy it cheap); a buy before it is a change of mind.
+    const near = trades.find((t) => {
+      const dt = t.createdAt.getTime() - p.at.getTime();
+      if (Math.abs(dt) > WINDOW_MS) return false;
+      return stance > 0 ? t.kind === 'sell' : t.kind === 'buy' && dt >= 0;
+    });
     if (near) return { postId: p.id, stance, signature: near.signature, side: near.kind as 'buy' | 'sell' };
   }
   return null;
@@ -61,7 +68,7 @@ async function recordHypocrisy(d: Parameters<NonNullable<DepthModule['afterAct']
     await adjustAffinity(d.db, holder, agentId, -0.15, d.now());
     await rememberEvent(d.db, holder, 'saw_hypocrisy', { agentId, mint, symbol }, d.now());
   }
-  await rememberEvent(d.db, agentId, 'caught_lying', { mint, symbol }, d.now());
+  await rememberEvent(d.db, agentId, 'caught_lying', { mint, symbol, stance: Math.sign(hit.stance) }, d.now());
 }
 
 export const beliefsModule: DepthModule = {
