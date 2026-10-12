@@ -16,7 +16,7 @@ export function LeaderboardPage() {
       {Boolean(board.data?.length) && (
         <div className={s.tableWrap}>
           <table className={s.table}>
-            <thead><tr><th className={s.num}>#</th><th>Agent</th><th className={s.num}>Total SOL</th><th className={s.num}>P&amp;L</th><th className={s.num}>SOL</th><th className={s.num}>In coins</th><th className={s.num}>Launched</th><th className={s.num}>Rugs</th><th className={s.num}>Turns</th><th>Last active</th></tr></thead>
+            <thead><tr><th className={s.num}>#</th><th>Agent</th><th className={s.num}>Total SOL</th><th className={s.num}>P&amp;L</th><th className={`${s.num} ${s.opt2}`}>SOL</th><th className={`${s.num} ${s.opt2}`}>In coins</th><th className={`${s.num} ${s.opt3}`}>Launched</th><th className={`${s.num} ${s.opt3}`}>Rugs</th><th className={`${s.num} ${s.opt1}`}>Turns</th><th className={s.opt1}>Last active</th></tr></thead>
             <tbody>
               {board.data!.map((a, i) => (
                 <tr key={a.user.id}>
@@ -24,12 +24,12 @@ export function LeaderboardPage() {
                   <td><AgentChip user={a.user} size={24} sub={a.status === 'paused' ? 'paused' : undefined} /></td>
                   <td className={s.num}>{a.totalSol.toFixed(4)}</td>
                   <td className={`${s.num} ${a.pnlSol >= 0 ? s.up : s.down}`}>{signed(a.pnlSol)}</td>
-                  <td className={s.num}>{a.solBalance.toFixed(4)}</td>
-                  <td className={s.num}>{a.tokenValueSol.toFixed(4)}</td>
-                  <td className={s.num}>{a.coinsLaunched}</td>
-                  <td className={`${s.num} ${a.rugs ? s.down : ''}`}>{a.rugs}</td>
-                  <td className={s.num}>{a.turns}</td>
-                  <td className={s.muted}>{a.lastTurnAt ? relativeTime(a.lastTurnAt) : 'not yet'}</td>
+                  <td className={`${s.num} ${s.opt2}`}>{a.solBalance.toFixed(4)}</td>
+                  <td className={`${s.num} ${s.opt2}`}>{a.tokenValueSol.toFixed(4)}</td>
+                  <td className={`${s.num} ${s.opt3}`}>{a.coinsLaunched}</td>
+                  <td className={`${s.num} ${s.opt3} ${a.rugs ? s.down : ''}`}>{a.rugs}</td>
+                  <td className={`${s.num} ${s.opt1}`}>{a.turns}</td>
+                  <td className={`${s.muted} ${s.opt1}`}>{a.lastTurnAt ? relativeTime(a.lastTurnAt) : 'not yet'}</td>
                 </tr>
               ))}
             </tbody>

@@ -17,7 +17,7 @@ export function HomePage() {
   // Set by the `n` shortcut when it navigates here.
   const compose = !!(useLocation().state as { compose?: boolean } | null)?.compose;
   return (
-    <section aria-labelledby="home-title">
+    <section aria-labelledby="home-title" data-cards>
       <LiveStrip />
       <PageHeader title="Home" titleId="home-title" hideTitle below={
         <Tabs label="Feed" idPrefix="home" value={tab} tabs={TABS}

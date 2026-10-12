@@ -1,47 +1,60 @@
-/* Visual direction v2, "Night signal" (docs/superpowers/specs/2026-10-09-shillex-visual-v2.md). Token names are stable. */
+/* Visual direction "The Swarm" (docs/superpowers/specs/2026-10-12-swarm-revamp-design.md). Token names are stable. */
 :root {
   color-scheme: dark;
-  --bg: #080914;
-  /* Sky gradient behind everything (components/atmosphere). */
-  --sky-top: #05060F;
-  --sky-low: #120C26;
-  --panel: #0F1122;
-  --raised: #171A31;
-  --hover: #1D2140;
-  --bg-hover: #0D0F20;
-  --line: #23274A;
-  --line-strong: #333865;
-  --text: #EEEFFF;
-  --muted: #8A8FB8;
-  --accent: #8B6CFF;
-  --accent-hover: #A28BFF;
-  --accent-ink: #080914; /* midnight ink: white on ultraviolet is only 3.7:1 */
-  --accent-soft: rgba(139, 108, 255, 0.12);
-  --accent-line: rgba(139, 108, 255, 0.4);
-  --token: #27E0C0;
-  --token-soft: rgba(39, 224, 192, 0.1);
-  --token-line: rgba(39, 224, 192, 0.4);
-  --token-hover: rgba(39, 224, 192, 0.18);
-  --up: #2BE38A;
-  --up-soft: rgba(43, 227, 138, 0.12);
-  --down: #FF4F7B;
-  --down-soft: rgba(255, 79, 123, 0.12);
-  --warn: #FFB547;
-  --warn-soft: rgba(255, 181, 71, 0.12);
-  --warn-line: rgba(255, 181, 71, 0.4);
-  --heat: #FF7A3D;
-  --heat-soft: rgba(255, 122, 61, 0.14);
-  --scrim: rgba(4, 4, 12, 0.66);
-  --glass: rgba(9, 10, 24, 0.66);
-  --glass-blur: blur(18px) saturate(150%);
-  /* Column surfaces are frosted so the sky reads through them. */
-  --column: rgba(9, 10, 24, 0.74);
-  --column-side: rgba(10, 11, 26, 0.38);
-  /* The side columns thicken toward the bottom, where the skyline rises behind their muted text (AA). */
-  --column-side-fade: linear-gradient(180deg, var(--column-side) 30%, rgba(10, 11, 26, 0.9) 62%);
+  --bg: #06070C;
+  /* Sky behind the old atmosphere; removed with it in S2. */
+  --sky-top: #05060B;
+  --sky-low: #0E0F18;
+  --panel: #0E1019;
+  --raised: #151826;
+  --hover: #1B1F30;
+  --bg-hover: #0B0D15;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --line-hover: rgba(255, 255, 255, 0.26);
+  --text: #EEF0F7;
+  --muted: #9AA0B6;
+  --accent: #FFB86B;
+  --accent-hover: #FFC98A;
+  --accent-ink: #1A1206;
+  --accent-soft: rgba(255, 184, 107, 0.12);
+  --accent-line: rgba(255, 184, 107, 0.4);
+  --accent-wash: rgba(255, 184, 107, 0.06);
+  --token: #7DE3FF;
+  --token-soft: rgba(125, 227, 255, 0.1);
+  --token-line: rgba(125, 227, 255, 0.4);
+  --token-hover: rgba(125, 227, 255, 0.18);
+  --up: #4BF0A0;
+  --up-soft: rgba(75, 240, 160, 0.12);
+  --down: #FF5A6E;
+  --down-soft: rgba(255, 90, 110, 0.12);
+  --warn: #FFD166;
+  --warn-soft: rgba(255, 209, 102, 0.12);
+  --warn-line: rgba(255, 209, 102, 0.4);
+  --heat: #FF8A4C;
+  --heat-soft: rgba(255, 138, 76, 0.14);
+  --scrim: rgba(3, 4, 8, 0.7);
+  --glass: rgba(8, 10, 17, 0.72);
+  --glass-blur: blur(18px) saturate(140%);
+  /* Floating cards: the swarm shows between and faintly through them. Phones drop the blur (cost). */
+  --card: rgba(10, 12, 20, 0.62);
+  --card-hover: rgba(16, 19, 30, 0.72);
+  --card-solid: rgba(10, 12, 20, 0.86);
+  --card-blur: blur(14px) saturate(140%);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.25);
+  /* Pages without their own cards sit on one glass sheet. */
+  --sheet: rgba(8, 10, 17, 0.7);
+  /* Column surfaces of the pre-S3 shell (removed in S3). */
+  --column: transparent;
+  --column-side: rgba(8, 10, 17, 0.55);
+  --column-side-fade: rgba(8, 10, 17, 0.55);
+  /* Fallback faction colours (real ones come from the data). */
+  --faction-1: #FF7A59;
+  --faction-2: #3DDBD9;
+  --faction-3: #B69CFF;
 
-  --glow-accent: 0 0 24px rgba(139, 108, 255, 0.35);
-  --glow-token: 0 0 24px rgba(39, 224, 192, 0.35);
+  --glow-accent: 0 0 24px rgba(255, 184, 107, 0.32);
+  --glow-token: 0 0 24px rgba(125, 227, 255, 0.3);
 
   /* System emoji first; the bundled Twemoji (base.css) only fills glyphs the OS lacks, e.g. Unicode 13+ such as 🪖 on
      Windows 10, which otherwise render as empty boxes. */
@@ -54,12 +67,12 @@
   --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px; --fs-3xl: 40px;
   --lh: 1.5; --lh-display: 1.1;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
-  /* Radius by role: chips/tags 4, inputs/buttons 10, popovers/dialogs 14, pills/avatars 999. */
-  --radius-chip: 4px; --radius-sm: 10px; --radius: 10px; --radius-pop: 14px; --radius-pill: 999px;
-  --shadow-pop: 0 18px 48px rgba(2, 2, 10, 0.6), 0 0 0 1px var(--line-strong);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  /* Radius by role: chips 6, inputs/buttons 12, popovers/dialogs 14, cards 16, pills/avatars 999. */
+  --radius-chip: 6px; --radius-sm: 12px; --radius: 12px; --radius-pop: 14px; --radius-card: 16px; --radius-pill: 999px;
+  --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  --left-w: 248px; --right-w: 320px; --center-max: 680px; --panel-w: 420px; --tabbar-h: 58px; --mobile-header-h: 50px;
+  --left-w: 248px; --right-w: 320px; --center-max: 640px; --panel-w: 420px; --tabbar-h: 58px; --mobile-header-h: 50px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }

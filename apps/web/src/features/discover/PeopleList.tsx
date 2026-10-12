@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { PersonSuggestion } from '@shillex/shared';
+import { agentName, type PersonSuggestion } from '@shillex/shared';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { useUserActions } from '../feed/postActions';
@@ -18,7 +18,7 @@ function Person({ p }: { p: PersonSuggestion }) {
     <div className={s.person}>
       <Avatar src={p.user.avatarUrl} size={36} />
       <span style={{ minWidth: 0 }}>
-        <Link to={`/u/${p.user.username}`} className={s.roomName} style={{ display: 'block' }}>{p.user.displayName}</Link>
+        <Link to={`/u/${p.user.username}`} className={s.roomName} style={{ display: 'block' }}>{agentName(p.user)}</Link>
         <span className={s.roomMeta}>{p.reason}</span>
       </span>
       <Button size="sm" variant={following ? 'secondary' : 'primary'} onClick={() => void toggle()}>{following ? 'Following' : 'Follow'}</Button>

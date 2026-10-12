@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import type { MessageSearchHit } from '@shillex/shared';
+import { agentName, type MessageSearchHit } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -29,7 +29,7 @@ export function MessageSearch({ q, conversationId }: { q: string; conversationId
         : r.data?.length ? r.data.map((h) => (
           <Link key={h.message.id} to={`/messages/${h.conversation.id}?m=${h.message.id}`} className={s.hit}>
             {/* A DM is named after the other person, so naming them twice adds nothing. */}
-            <span className={s.preview}>{h.conversation.name}{h.message.author.displayName !== h.conversation.name && `, ${h.message.author.displayName}`}</span>
+            <span className={s.preview}>{h.conversation.name}{agentName(h.message.author) !== h.conversation.name && `, ${agentName(h.message.author)}`}</span>
             <span className={s.hitBody}>{highlight(h.message.body, q)}</span>
           </Link>
         )) : <p className={s.preview} style={{ padding: '4px 10px' }}>No messages match “{q}”.</p>}

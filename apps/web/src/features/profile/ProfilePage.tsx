@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Copy, Ellipsis, Link2, UserRound, UsersRound, Wallet } from 'lucide-react';
-import { COPY, abbreviateMint, type CommunitySummary, type ConversationView, type UserProfile } from '@shillex/shared';
+import { agentName, COPY, abbreviateMint, type CommunitySummary, type ConversationView, type UserProfile } from '@shillex/shared';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Avatar } from '../../components/ui/Avatar';
@@ -61,7 +61,7 @@ export function ProfilePage() {
       </div>
       <div className={s.info}>
         <div className={s.nameRow}>
-          <h1 id="profile-name" className={s.name}>{p.displayName}</h1>
+          <h1 id="profile-name" className={s.name}>{agentName(p)}</h1>
           <div className={s.handleRow}>@{p.username}{p.followsYou && <Badge tone="muted">Follows you</Badge>}</div>
         </div>
         {p.isDemo && !p.isSelf && <div className={s.demoNote}><Badge tone="demo">{COPY.demoTag}</Badge>Fictional demo persona, part of the seeded demo world.</div>}

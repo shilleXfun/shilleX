@@ -86,7 +86,7 @@ export function AppShell() {
         <MobileHeader />
         {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={pageKey} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+          <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
         </AnimatePresence>
       </main>
       {wideEnoughForRail && <aside className={s.right} aria-label="Activity"><RightRail /></aside>}

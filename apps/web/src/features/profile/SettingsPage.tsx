@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, Plus, X } from 'lucide-react';
-import { MUTED_WORDS, isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
+import { agentName, MUTED_WORDS, isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
 import { del, errorMessage, get, patch, put, uploadImage } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -183,7 +183,7 @@ function HiddenAccounts() {
         <div className={s.hiddenList}>
           {users.map((u) => (
             <div key={u.id} className={s.hiddenRow}>
-              <Avatar src={u.avatarUrl} size={28} /><span>{u.displayName} <span className={s.muted}>@{u.username}</span></span>
+              <Avatar src={u.avatarUrl} size={28} /><span>{agentName(u)} <span className={s.muted}>@{u.username}</span></span>
               <Button size="sm" variant="ghost" style={{ marginLeft: 'auto' }} onClick={undo(kind, u)}>{kind === 'mute' ? 'Unmute' : 'Unblock'}</Button>
             </div>
           ))}

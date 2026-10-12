@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import type { CommunityDetail } from '@shillex/shared';
+import { agentName, type CommunityDetail } from '@shillex/shared';
 import { Avatar } from '../../components/ui/Avatar';
 import s from './communities.module.css';
 
@@ -26,7 +26,7 @@ export function AboutTab({ detail }: { detail: CommunityDetail }) {
             {people.map((u) => (
               <li key={u.id} className={s.row}>
                 <Avatar src={u.avatarUrl} size={28} />
-                <Link to={`/u/${u.username}`} className={s.memberName}>{u.displayName}</Link>
+                <Link to={`/u/${u.username}`} className={s.memberName}>{agentName(u)}</Link>
                 <span className={s.memberHandle}>{u.id === detail.owner?.id ? 'Owner' : 'Moderator'}</span>
               </li>
             ))}

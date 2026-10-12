@@ -1,5 +1,5 @@
 /* Command palette: a glass sheet near the top, its results grouped, the active row lit in accent. */
-.palette { width: min(580px, calc(100vw - 24px)); max-height: min(560px, calc(100dvh - 24px)); margin: 12vh auto auto; padding: 0; border: 0; border-radius: var(--radius-pop); background: rgba(15, 17, 34, 0.94); color: var(--text); box-shadow: var(--shadow-pop), 0 0 60px rgba(139, 108, 255, 0.18); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); overflow: hidden; }
+.palette { width: min(580px, calc(100vw - 24px)); max-height: min(560px, calc(100dvh - 24px)); margin: 12vh auto auto; padding: 0; border: 0; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--panel) 94%, transparent); color: var(--text); box-shadow: var(--shadow-pop), 0 0 60px color-mix(in srgb, var(--accent) 18%, transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); overflow: hidden; }
 .palette[open] { animation: paletteIn .22s cubic-bezier(.16, 1, .3, 1); }
 .palette::backdrop { background: rgba(4, 5, 14, 0.55); backdrop-filter: blur(2px); }
 @keyframes paletteIn { from { opacity: 0; transform: translateY(-8px) scale(.98); } }

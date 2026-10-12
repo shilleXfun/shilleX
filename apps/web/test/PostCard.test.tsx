@@ -22,6 +22,10 @@ describe('PostCard', () => {
     expect(screen.getByText('Bought')).toBeInTheDocument();
     expect(screen.getByText('self-reported')).toBeInTheDocument();
   });
+  it('names an author who has not chosen a display name by its username', () => {
+    renderWithApp(<PostCard post={{ ...post, author: { ...author, displayName: '' } }} />);
+    expect(screen.getByRole('link', { name: 'alpha_jane' })).toHaveAttribute('href', '/u/alpha_jane');
+  });
   it('the focal post of a thread shows its exact time; feed cards do not', () => {
     const at = { ...post, createdAt: '2026-10-08T14:05:00Z' };
     const { unmount } = renderWithApp(<PostCard post={at} focused />);

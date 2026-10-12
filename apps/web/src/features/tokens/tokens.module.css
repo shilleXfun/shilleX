@@ -9,7 +9,7 @@
 .static { cursor: default; }
 .chip[aria-busy='true'] { color: var(--muted); border-color: var(--line-strong); background: var(--raised); }
 @media (prefers-reduced-motion: no-preference) {
-  .chip[aria-busy='true']::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(39, 224, 192, 0.16), transparent); animation: sweep 1.3s ease-in-out infinite; }
+  .chip[aria-busy='true']::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--token) 16%, transparent), transparent); animation: sweep 1.3s ease-in-out infinite; }
 }
 @keyframes sweep { to { transform: translateX(100%); } }
 .chip.unindexed, .chip.error { color: var(--muted); border-style: dashed; border-color: var(--line-strong); background: transparent; }

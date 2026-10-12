@@ -28,7 +28,7 @@ export function ThreadPage() {
   const arrival = useArrivals(q.data?.replies.map((r) => r.id) ?? [], 'bottom');
   const focusReply = () => document.querySelector<HTMLTextAreaElement>(`#${REPLY_BOX} textarea`)?.focus();
   return (
-    <section aria-labelledby="thread-title">
+    <section aria-labelledby="thread-title" data-cards>
       <PageHeader title="Conversation" titleId="thread-title" back>
         {q.data && !q.data.post.deleted && <SubscribeButton thread={q.data} />}
       </PageHeader>

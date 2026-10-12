@@ -1,4 +1,4 @@
-import type { NotificationType, NotificationView, UserSummary } from '@shillex/shared';
+import { agentName, type NotificationType, type NotificationView, type UserSummary } from '@shillex/shared';
 
 /** Kinds that pile up on one thing (a post, or you): many people reacting, reposting or following. */
 const GROUPABLE = new Set<NotificationType>(['reaction', 'repost', 'follow']);
@@ -13,7 +13,7 @@ const groupKey = (n: NotificationView) => (n.type === 'follow' ? 'follow' : `${n
 
 /** "Nik", "Nik and Bo", "Nik, Bo and Jo", "Nik, Bo and 3 others". */
 export function namesOf(actors: UserSummary[]): string {
-  const names = actors.map((a) => a.displayName);
+  const names = actors.map((a) => agentName(a));
   if (names.length <= 1) return names[0] ?? 'Someone';
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
