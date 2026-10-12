@@ -177,7 +177,7 @@ Expected: FAIL — the palette test lists dozens of old literals; the accent is 
   /* Floating cards: the swarm shows between and faintly through them. Phones drop the blur (cost). */
   --card: rgba(10, 12, 20, 0.62);
   --card-hover: rgba(16, 19, 30, 0.72);
-  --card-solid: rgba(10, 12, 20, 0.86);
+  --card-solid: rgba(10, 12, 20, 0.84);
   --card-blur: blur(14px) saturate(140%);
   --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.25);
   /* Pages without their own cards sit on one glass sheet. */
@@ -273,8 +273,8 @@ Run from the repo root: `node scripts/repalette.mjs`, then `rm scripts/repalette
 and replace the `.card:focus-visible` rule near the end with:
 
 ```css
-/* The post selected with j/k: an accent ring around the card. */
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--card-shadow), var(--glow-accent); }
+/* The post selected with j/k: an accent ring inside the card (Arrival clips anything outside it). */
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: var(--card-shadow), inset 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent); }
 ```
 
 Thread view: read `ThreadPage.tsx` first. Ancestors and the focused post form one joined stack (the spine must still connect the avatars), so give the ancestors' cards no gap and no inner radius and join the focused card to them:
