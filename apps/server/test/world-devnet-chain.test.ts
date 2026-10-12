@@ -57,7 +57,7 @@ describe('DevnetChain sending (review fix)', () => {
 });
 
 import { MAINNET_GENESIS, makeChain, toChainError } from '../src/world/devnet-chain.ts';
-import { MemoryChain } from '../src/world/chain.ts';
+import { ChainError, MemoryChain } from '../src/world/chain.ts';
 import { loadConfig } from '../src/config.ts';
 import type { DbHandle } from '../src/db/client.ts';
 import { testDb } from './helpers.ts';
@@ -137,6 +137,14 @@ describe('makeChain refuses Solana mainnet (defence in depth for devnet only)', 
       await expect(chain.sendSol(Keypair.generate(), Keypair.generate().publicKey.toBase58(), 1000)).rejects.toMatchObject({ code: 'WRONG_NETWORK' });
       expect(r.sent).toEqual([]);
     } finally { warn.mockRestore(); }
+  });
+  it('a hanging RPC times out as "could not answer", so boot never stalls on it', async () => {
+    const hang = { getGenesisHash: () => new Promise<string>(() => undefined) } as unknown as Connection;
+    const chain = new DevnetChain(hang, null);
+    const err = await chain.assertNotMainnet(20).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(ChainError);
+    expect((err as Error).message).toMatch(/no genesis hash within 20 ms/);
   });
   it('asks once: a checked devnet RPC is not asked again on every send', async () => {
     const r = rpc(DEVNET_GENESIS, MAINNET_GENESIS);
