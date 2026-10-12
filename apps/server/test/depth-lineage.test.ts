@@ -54,8 +54,8 @@ describe('lineage', () => {
     ctx = await depthTestCtx();
     const a = ctx.agents[0]!;
     const v = { agent: { id: a.id }, depth: emptyDepth() } as never;
-    await lineageModule.afterAct!(ctx.d, v, { kind: 'post', score: 1, reason: 'r', situation: 'gm' }, { ok: true, turnId: 't', postId: 'p1', text: 'gm frens', line: { key: 'gm:0', template: 'gm frens', situation: 'gm' } });
-    const [row] = await ctx.t.db.select().from(lineage).where(eq(lineage.id, lineageId('line', 'gm frens')));
+    await lineageModule.afterAct!(ctx.d, v, { kind: 'post', score: 1, reason: 'r', situation: 'gm' }, { ok: true, turnId: 't', postId: 'p1', text: 'gm from my own corner', line: { key: 'gm:0', template: 'gm from my own corner', situation: 'gm' } });
+    const [row] = await ctx.t.db.select().from(lineage).where(eq(lineage.id, lineageId('line', 'gm from my own corner')));
     expect(row).toMatchObject({ inventorId: a.id, uses: 1, situation: 'gm' });
   });
   it('does not credit an inventor for stock fallback templates', async () => {

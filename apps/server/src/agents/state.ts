@@ -84,7 +84,7 @@ export async function rememberEvent(db: Db, agentId: string, kind: string, data:
 
 export async function recentEvents(db: Db, agentId: string, limit = EVENTS_KEPT) {
   const rows = await db.select().from(agentEvents).where(eq(agentEvents.agentId, agentId)).orderBy(desc(agentEvents.at), desc(agentEvents.id)).limit(limit);
-  return rows.map((r) => ({ kind: r.kind, data: r.data, at: r.at }));
+  return rows.map((r) => ({ id: r.id, kind: r.kind, data: r.data, at: r.at }));
 }
 
 /**

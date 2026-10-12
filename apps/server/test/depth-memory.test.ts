@@ -43,12 +43,31 @@ describe('long memory', () => {
     expect(v.depth.pastEvents[0]).toMatchObject({ kind: 'got_rugged', otherId: enemy.id });
     const [c] = memoryModule.candidates!(v, () => 0.5);
     expect(c).toMatchObject({ kind: 'post', situation: 'callback', slots: { past: expect.stringContaining('$MOTH') } });
-    expect(c!.score).toBeCloseTo(0.15 + 0.25 * 0.8);
+    expect(c!.score).toBeCloseTo(0.05 + 0.1 * 0.8);
     const [boosted, plain] = memoryModule.modify!(v, [
       { kind: 'reply', score: 1, reason: 'r', target: { userId: enemy.id } },
       { kind: 'reply', score: 1, reason: 'r', target: { userId: 'someone' } },
     ]);
     expect([boosted!.score, plain!.score]).toEqual([1.5, 1]);
     expect(memoryModule.execute).toBeUndefined(); // the normal post path composes the callback line
+  });
+  it('posts a callback at most every two hours and recalls each memory at most twice (L6)', async () => {
+    ctx = await depthTestCtx();
+    const me = ctx.agents[0]!, enemy = ctx.agents[1]!;
+    await rememberEvent(ctx.t.db, me.id, 'got_rugged', { byId: enemy.id, symbol: 'MOTH', mint: 'M' }, ctx.t.clock.now());
+    ctx.t.clock.advance(2 * 3600_000);
+    const recall = async () => {
+      const v = { agent: { id: me.id }, state: { traits: { humor: 0.2, pettiness: 0.8 } }, depth: emptyDepth(), now: ctx.t.clock.now().toISOString() } as unknown as AgentView;
+      await memoryModule.perceive!(ctx.d, v);
+      const [c] = memoryModule.candidates!(v, () => 0.5);
+      if (c) await memoryModule.afterAct!(ctx.d, v, c, { ok: true, turnId: 't', postId: 'p' });
+      return c;
+    };
+    expect(await recall()).toBeDefined();
+    expect(await recall()).toBeUndefined(); // within two hours of the last callback
+    ctx.t.clock.advance(2 * 3600_000);
+    expect(await recall()).toBeDefined(); // the second and last recall of that rug
+    ctx.t.clock.advance(2 * 3600_000);
+    expect(await recall()).toBeUndefined();
   });
 });

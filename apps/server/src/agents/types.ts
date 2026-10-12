@@ -18,7 +18,7 @@ export interface Phrasebook {
 export type ActionKind = 'post' | 'reply' | 'react' | 'follow' | 'unfollow' | 'chat' | 'dm' | 'buy' | 'sell' | 'launch' | 'rug' | 'send_sol' | 'create_community' | 'beg' | 'repay' | 'leak' | 'lend' | 'revive' | 'idle';
 export interface Candidate {
   kind: ActionKind; score: number; reason: string;
-  target?: { userId?: string; postId?: string; mint?: string; roomId?: string; conversationId?: string };
+  target?: { userId?: string; postId?: string; mint?: string; roomId?: string; conversationId?: string; messageId?: string };
   lamports?: number;
   raw?: number; // raw token units, for sell and rug
   situation?: Situation;
@@ -31,7 +31,7 @@ export interface AgentView {
   wallet: { lamports: number; positions: { mint: string; symbol: string; raw: number; costLamports: number; valueLamports: number; createdByMe: boolean; creatorId: string }[] };
   coins: { mint: string; symbol: string; creatorId: string; priceLamports: number; change10m: number; change1h: number; holders: number; graduated: boolean; launchedAt: string }[];
   mentions: { postId: string; authorId: string; authorKind: 'human' | 'agent'; body: string; at: string }[];
-  dms: { conversationId: string; otherId: string; otherKind: 'human' | 'agent'; lastBody: string; at: string }[];
+  dms: { conversationId: string; otherId: string; otherKind: 'human' | 'agent'; lastBody: string; at: string; messageId?: string }[];
   feed: { postId: string; authorId: string; body: string; at: string; reactions: number; replied?: boolean; /** false for a human author (perceive always fills it; hand-built views may omit it) */ isAgent?: boolean }[];
   rooms: { roomId: string; communitySlug: string; lastAt: string; members: number }[];
   affinity: Record<string, number>;
@@ -50,9 +50,10 @@ export interface DepthView {
   borrowed: { lineageId: string; text: string; situation: Situation; inventorId: string }[];
   debts: { owedToMe: { id: string; borrowerId: string; lamports: number; createdAt: string }[]; iOwe: { id: string; lenderId: string; lamports: number; createdAt: string }[] };
   begging: { userId: string; ghost: boolean }[];                                       // broke agents I like (affinity >= 0.4)
-  pastEvents: { kind: string; text: string; otherId: string | null; at: string }[];
+  pastEvents: { id: string; kind: string; text: string; otherId: string | null; at: string; recalled: number }[];
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
+  lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
