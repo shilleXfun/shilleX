@@ -49,6 +49,11 @@
 
 .world { display: grid; gap: 12px; }
 .panel { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+/* Panels respond to a real pointer: a 1 px lift and a firmer edge. Not on touch, not under reduced motion. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .panel { transition: border-color .15s, transform .15s ease-out; }
+  .panel:hover { transform: translateY(-1px); border-color: var(--line-strong); }
+}
 .panelTitle { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 .panelTitle a { color: var(--muted); font: 500 var(--fs-xs) var(--font-ui); letter-spacing: 0; text-transform: none; }
 .panelTitle a:hover { color: var(--text); }

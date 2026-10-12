@@ -1,21 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
-import { renderWithApp } from '../utils';
+import { renderWithApp, mockFetch } from '../utils';
 
 const handlers = new Map<string, (p: unknown) => void>();
 vi.mock('../../src/lib/socket', () => ({ useSocketEvent: (e: string, h: (p: unknown) => void) => { handlers.set(e, h); } }));
 const pulse = vi.fn();
 const emitted: object[] = [];
-vi.mock('../../src/components/swarm/bus', () => ({ swarm: { emit: (e: { kind: string }) => { emitted.push(e); pulse(e.kind); } } }));
+vi.mock('../../src/components/swarm/bus', () => ({ swarm: { emit: (e: { kind: string }) => { emitted.push(e); pulse(e.kind); }, on: () => () => undefined } }));
 
 import { useAgentPulses, resetPulses } from '../../src/features/agents/pulses';
 import { LiveTicker } from '../../src/features/agents/LiveTicker';
 
 function Harness({ compact = false }: { compact?: boolean }) { useAgentPulses(); return <LiveTicker compact={compact} names={{ a1: 'Nine', a2: 'Ember' }} symbols={{ M1: 'MOTH' }} />; }
 const send = (p: object) => act(() => handlers.get('agents:pulse')!(p));
+const agent = (id: string) => ({ id, username: id, displayName: '', avatarUrl: '/a.svg', isDemo: false, isAgent: true, createdAt: '2026-10-11T00:00:00Z' });
+const trade = (kind: string, agentId: string, sol: number, at: string, mint: string | null = 'M1') =>
+  ({ signature: `sig-${at}`, agent: agent(agentId), kind, mint, symbol: mint ? 'MOTH' : null, sol, tokens: 0, counterparty: null, createdAt: at, turnId: null });
 
 describe('LiveTicker', () => {
-  beforeEach(() => { resetPulses(); pulse.mockClear(); emitted.length = 0; });
+  beforeEach(() => { resetPulses(); pulse.mockClear(); emitted.length = 0; mockFetch({ '/api/coins/trades': { trades: [] } }); });
   it('lists the newest pulses first and moves the swarm', () => {
     renderWithApp(<Harness />);
     send({ kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.02, at: '2026-10-11T12:00:00Z' });
@@ -46,9 +49,45 @@ describe('LiveTicker', () => {
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(20));
     expect(screen.getAllByRole('listitem')[0]!.textContent).toMatch(/0\.24 SOL/);
   });
-  it('says the ticker is quiet before anything happens', () => {
+  it('keys each pulse uniquely, so two identical pulses are two items', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     renderWithApp(<Harness />);
-    expect(screen.getByText(/waiting for the first trade/i)).toBeInTheDocument();
+    const same = { kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.02, at: '2026-10-11T12:00:00Z' };
+    send(same); send(same);
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(err).not.toHaveBeenCalled(); // no duplicate-key warning
+  });
+  it('names an agent it does not know “An agent”, not a slice of its id', () => {
+    renderWithApp(<Harness />);
+    send({ kind: 'buy', agentId: '01M4R7YNSKZY29NSKYY4T5JJ2K', mint: 'M1', sol: 0.02, at: '2026-10-11T12:00:00Z' });
+    expect(screen.getByRole('listitem')).toHaveTextContent(/^An agent bought \$MOTH/);
+  });
+  it('starts full: the latest trades load with the page, without moving the swarm', async () => {
+    const f = mockFetch({ '/api/coins/trades': { trades: [
+      trade('sell', 'a2', 0.05, '2026-10-11T12:00:03Z'),
+      trade('receive', 'a1', 0.01, '2026-10-11T12:00:02Z', null),
+      trade('buy', 'a1', -0.02, '2026-10-11T12:00:01Z'),
+      trade('fund', 'a1', 1, '2026-10-11T12:00:00Z', null),
+    ] } });
+    renderWithApp(<Harness />);
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
+    const items = screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(items[0]).toMatch(/Ember sold \$MOTH · 0\.05 SOL/);
+    expect(items[1]).toMatch(/Nine bought \$MOTH · 0\.02 SOL/);
+    expect(emitted).toEqual([]);
+    expect(f.mock.calls.filter(([u]) => String(u).includes('/api/coins/trades?limit=20'))).toHaveLength(1);
+    // A live trade lands above the history.
+    send({ kind: 'buy', agentId: 'a2', mint: 'M1', sol: 0.3, at: '2026-10-11T12:00:09Z' });
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent(/Ember bought \$MOTH · 0\.30 SOL/);
+    expect(emitted).toHaveLength(1);
+  });
+  it('says it is waiting only once it knows there are no trades', async () => {
+    let answer: (r: Response) => void = () => undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise((r) => { answer = r; }));
+    renderWithApp(<Harness />);
+    expect(screen.queryByText(/waiting for the first trade/i)).not.toBeInTheDocument();
+    await act(async () => answer(new Response(JSON.stringify({ trades: [] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    expect(await screen.findByText(/waiting for the first trade/i)).toBeInTheDocument();
   });
   it('announces the full list politely and keeps the one-line strip silent', () => {
     const { unmount } = renderWithApp(<Harness />);

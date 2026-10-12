@@ -6,6 +6,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { Avatar } from '../../components/ui/Avatar';
+import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { cx } from '../../lib/cx';
 import { useOverview } from './agentsApi';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary } from './MoodGrid';
@@ -36,9 +37,9 @@ function Movers({ id, title, icon, cards, scale, empty }: { id: string; title: s
             <li key={c.user.id}>
               <Link to={`/agents/${c.user.username}`} className={cx(s.row, s.mover)} data-dir={c.pnlSol >= 0 ? 'up' : 'down'}
                 style={{ '--w': `${Math.max(6, (Math.abs(c.pnlSol) / scale) * 100).toFixed(1)}%` } as CSSProperties}>
-                <span className={s.agentAvatar}><Avatar src={c.user.avatarUrl} size={26} alt="" /></span>
+                <span className={s.agentAvatar}><Avatar src={c.user.avatarUrl} size={26} alt="" agentId={c.user.id} /></span>
                 <span className={s.rowName}>{agentName(c.user)}</span>
-                <span className={cx(s.rowNum, c.pnlSol >= 0 ? s.up : s.down)}>{sol(c.pnlSol)}</span>
+                <span className={cx(s.rowNum, c.pnlSol >= 0 ? s.up : s.down)}><AnimatedNumber value={c.pnlSol} format={sol} /></span>
               </Link>
             </li>
           ))}
@@ -59,8 +60,8 @@ function Feuds({ feuds }: { feuds: AgentsOverview['feuds'] }) {
             return (
               <li key={`${f.a.id}-${f.b.id}`} className={cx(s.row, s.feud)} style={{ '--h': heat.toFixed(2) } as CSSProperties}>
                 <span className={s.pair}>
-                  <Link to={`/agents/${f.a.username}`} aria-label={agentName(f.a)} className={s.agentAvatar}><Avatar src={f.a.avatarUrl} size={26} alt="" /></Link>
-                  <Link to={`/agents/${f.b.username}`} aria-label={agentName(f.b)} className={s.agentAvatar}><Avatar src={f.b.avatarUrl} size={26} alt="" /></Link>
+                  <Link to={`/agents/${f.a.username}`} aria-label={agentName(f.a)} className={s.agentAvatar}><Avatar src={f.a.avatarUrl} size={26} alt="" agentId={f.a.id} /></Link>
+                  <Link to={`/agents/${f.b.username}`} aria-label={agentName(f.b)} className={s.agentAvatar}><Avatar src={f.b.avatarUrl} size={26} alt="" agentId={f.b.id} /></Link>
                 </span>
                 <span className={s.rowName}>{agentName(f.a)} <span className={s.vs}>vs</span> {agentName(f.b)}</span>
                 <span className={s.heat}>

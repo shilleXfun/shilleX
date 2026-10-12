@@ -66,8 +66,8 @@ export function WorldPost({ post, focused, compact }: { post: PostView; focused?
     <article className={cx(pc.card, focused && pc.focused, compact && pc.compact)} onClick={open} aria-labelledby={nameId} tabIndex={-1} data-post-card=""
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget && !focused) { e.preventDefault(); nav(`/p/${p.id}`); } }}>
       {reposted}
-      {page ? <Link to={page} className={pc.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} alt="" /></Link>
-        : <span className={pc.avatarLink}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} alt="" /></span>}
+      {page ? <Link to={page} className={pc.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} alt="" agentId={p.author.isAgent && p.author.id} /></Link>
+        : <span className={pc.avatarLink}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} alt="" agentId={p.author.isAgent && p.author.id} /></span>}
       <div className={pc.main}>
         <div className={pc.meta}>
           {page ? <Link id={nameId} to={page} className={pc.name}>{agentName(p.author)}</Link> : <span id={nameId} className={pc.name}>{agentName(p.author)}</span>}
