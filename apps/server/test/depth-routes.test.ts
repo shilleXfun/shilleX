@@ -49,6 +49,9 @@ describe('depth routes', () => {
     await writePaper(ctx.d, '2026-10-08', { headline: 'H', stories: [{ title: 't', body: 'b' }], memeBrief: null }, 'local');
     expect((await get('/api/papers/latest')).json()).toMatchObject({ day: '2026-10-08', headline: 'H', source: 'local', memeUrl: null });
     expect((await get('/api/papers/2026-10-08')).statusCode).toBe(200);
+    expect((await get('/api/weather')).json().regime).toMatch(/^(euphoria|grind|fear|chaos)$/);
+    const id = await recordLineage(ctx.t.db, { kind: 'line', text: 'ngmi {user}', situation: 'roast', inventorId: trio[0]!.id }, ctx.t.clock.now());
+    expect((await get(`/api/lineage/${id}`)).json()).toMatchObject({ text: 'ngmi {user}', inventor: { username: trio[0]!.username }, uses: 1 });
   });
   it('lists a faction that split this week with the members it had when it split', async () => {
     const get = await setup();
@@ -75,9 +78,6 @@ describe('depth routes', () => {
     expect((await get('/api/factions')).json().factions).toEqual([]);
     ctx.t.clock.advance(1_000);
     expect((await get('/api/factions')).json().factions).toHaveLength(1);
-    expect((await get('/api/weather')).json().regime).toMatch(/^(euphoria|grind|fear|chaos)$/);
-    const id = await recordLineage(ctx.t.db, { kind: 'line', text: 'ngmi {user}', situation: 'roast', inventorId: trio[0]!.id }, ctx.t.clock.now());
-    expect((await get(`/api/lineage/${id}`)).json()).toMatchObject({ text: 'ngmi {user}', inventor: { username: trio[0]!.username }, uses: 1 });
   });
   it('serves an agent’s depth page data', async () => {
     const get = await setup();

@@ -48,9 +48,13 @@ export class DevnetChain implements Chain {
    * Fails with WRONG_NETWORK if the RPC serves mainnet-beta (a mainnet URL pasted into DEVNET_RPC_URL). Asked once; an RPC
    * that could not answer is asked again before the next transaction, so nothing is ever signed for an unchecked network.
    */
-  async assertNotMainnet() {
+  async assertNotMainnet(timeoutMs = 10_000) {
     if (this.networkChecked) return;
-    if ((await this.conn.getGenesisHash()) === MAINNET_GENESIS) throw new ChainError('WRONG_NETWORK', 'DEVNET_RPC_URL points at Solana mainnet-beta; the agents only use devnet or a local validator');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // A hanging RPC must not stall boot: a timeout counts as "could not answer", like a network error.
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`no genesis hash within ${timeoutMs} ms`)), timeoutMs); });
+    const genesis = await Promise.race([this.conn.getGenesisHash(), timeout]).finally(() => clearTimeout(timer));
+    if (genesis === MAINNET_GENESIS) throw new ChainError('WRONG_NETWORK', 'DEVNET_RPC_URL points at Solana mainnet-beta; the agents only use devnet or a local validator');
     this.networkChecked = true;
   }
   /** `config` is null until the launchpad exists (a fresh deploy with an unfunded treasury); coin actions then fail with NO_LAUNCHPAD. */
