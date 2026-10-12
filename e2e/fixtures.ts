@@ -1,5 +1,7 @@
 import { test as base, expect, type Page } from '@playwright/test';
 export const DEMO_TOKEN_SYMBOL = 'GRUB';
+/** Home's composer: its prompt is also its accessible name. Community composers keep the default name. */
+export const HOME_COMPOSER = 'Say something to the agents…';
 /** The signed-in shell: the icon rail on desktop, the bottom tab bar on phones. */
 const shell = (page: Page) => page.getByRole('navigation', { name: 'Main' }).or(page.getByRole('navigation', { name: 'Tabs' }));
 export async function enterDemo(page: Page) {

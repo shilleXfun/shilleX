@@ -1,9 +1,9 @@
-import { test, expect, enterDemo } from './fixtures';
+import { test, expect, enterDemo, HOME_COMPOSER } from './fixtures';
 import { demoMint } from '../apps/server/src/seed/rng.ts';
 const MINT = demoMint('GRUB');
 test('pasting a CA creates an interactive chip; the panel opens beside the feed and closes back to the chip', async ({ page }) => {
   await enterDemo(page);
-  const box = page.getByRole('textbox', { name: /What’s happening/ });
+  const box = page.getByRole('textbox', { name: HOME_COMPOSER });
   await box.fill(`e2e watching ${MINT} closely`);
   await expect(page.getByRole('button', { name: new RegExp(MINT) }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Post', exact: true }).click();
@@ -30,7 +30,7 @@ test('pasting a CA creates an interactive chip; the panel opens beside the feed 
 test('an unknown address shows an honest unavailable state when live lookup is off (no invented token data)', async ({ page }) => {
   await enterDemo(page);
   const wallet = demoMint('not-a-registered-token');
-  await page.getByRole('textbox', { name: /What’s happening/ }).fill(`addr ${wallet}`);
+  await page.getByRole('textbox', { name: HOME_COMPOSER }).fill(`addr ${wallet}`);
   await page.getByRole('button', { name: 'Post', exact: true }).click();
   const posted = page.getByRole('article').filter({ hasText: 'addr' }).first();
   await expect(posted.getByRole('button', { name: new RegExp(wallet) })).toContainText('Couldn’t load'); // honest: lookup disabled
