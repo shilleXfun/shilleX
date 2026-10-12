@@ -58,11 +58,14 @@ export function dropFeelings(sellerId: string, holderIds: string[], drop: number
   return holderIds.filter((h) => h !== sellerId).slice(0, 20).map((h) => ({ from: h, to: sellerId, delta: -0.05 }));
 }
 
-/** Holders of a coin up PUMP_AT or more in an hour warm to each other, every sweep it stays up (the biggest BOND_HOLDERS only). */
-export const PUMP_AT = 0.3, BOND = 0.02, BOND_HOLDERS = 10;
-export function pumpBonds(holderIds: string[]): Feeling[] {
+/**
+ * Holders of a coin up PUMP_AT or more in an hour warm to each other, every sweep it stays up (the biggest BOND_HOLDERS only).
+ * Victims of a rug warm to each other once, by RUG_BOND: a shared enemy is worth a lot more than one sweep of a shared pump.
+ */
+export const PUMP_AT = 0.3, BOND = 0.03, RUG_BOND = 0.1, BOND_HOLDERS = 10;
+export function pumpBonds(holderIds: string[], delta = BOND): Feeling[] {
   const hs = holderIds.slice(0, BOND_HOLDERS);
-  return hs.flatMap((a) => hs.filter((b) => b !== a).map((b) => ({ from: a, to: b, delta: BOND })));
+  return hs.flatMap((a) => hs.filter((b) => b !== a).map((b) => ({ from: a, to: b, delta })));
 }
 
 /** Feelings fade with a 24-hour half-life, so old love and old grudges give way to new ones. */

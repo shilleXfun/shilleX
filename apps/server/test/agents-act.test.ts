@@ -96,7 +96,7 @@ describe('act', () => {
     for (const h of [h1, h2, h3]) {
       const row = await affinitiesOf(w.t.db, h.id);
       expect(row[maker.id]).toBeCloseTo(-0.5);
-      for (const other of [h1, h2, h3].filter((x) => x !== h)) expect(row[other.id]).toBeCloseTo(0.02);
+      for (const other of [h1, h2, h3].filter((x) => x !== h)) expect(row[other.id]).toBeCloseTo(0.1);
     }
     expect((await affinitiesOf(w.t.db, maker.id))[h1.id]).toBeUndefined(); // the rugger feels nothing new about its victims
   });
