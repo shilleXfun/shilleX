@@ -25,7 +25,9 @@
 .walletHead { display: flex; align-items: center; gap: 8px; font-weight: 650; }
 .walletAddr { display: flex; align-items: center; gap: 6px; font: 13px var(--font-mono); }
 .walletNote { color: var(--warn); font-size: var(--fs-sm); }
-.tabsWrap { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+/* Solid, not glass: the profile sits on the glass sheet, which is its children's backdrop root, so a blur here would see
+   nothing and posts scrolling under the tabs would read straight through them. */
+.tabsWrap { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: var(--bg); }
 .communityGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; padding: 16px 18px 24px; } /* loading state only */
 
 /* Settings */
