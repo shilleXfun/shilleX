@@ -281,3 +281,11 @@ describe('launches that mean something (L3)', () => {
     expect(isDeadCoin({ ...mine, holders: 2 }, Date.parse(NOW))).toBe(false);
   });
 });
+
+describe('talk (L4)', () => {
+  it('does not answer a post it already replied to', () => {
+    const post = { postId: 'p1', authorId: 'pal', body: 'gm', at: NOW, reactions: 0 };
+    expect(of(view({ affinity: { pal: 0.8 }, feed: [post] }), 'reply')).toHaveLength(1);
+    expect(of(view({ affinity: { pal: 0.8 }, feed: [{ ...post, replied: true }] }), 'reply')).toEqual([]);
+  });
+});

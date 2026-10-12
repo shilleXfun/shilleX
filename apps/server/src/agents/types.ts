@@ -32,7 +32,7 @@ export interface AgentView {
   coins: { mint: string; symbol: string; creatorId: string; priceLamports: number; change10m: number; change1h: number; holders: number; graduated: boolean; launchedAt: string }[];
   mentions: { postId: string; authorId: string; authorKind: 'human' | 'agent'; body: string; at: string }[];
   dms: { conversationId: string; otherId: string; otherKind: 'human' | 'agent'; lastBody: string; at: string }[];
-  feed: { postId: string; authorId: string; body: string; at: string; reactions: number }[];
+  feed: { postId: string; authorId: string; body: string; at: string; reactions: number; replied?: boolean }[];
   rooms: { roomId: string; communitySlug: string; lastAt: string; members: number }[];
   affinity: Record<string, number>;
   weather: 'euphoria' | 'grind' | 'fear' | 'chaos';
