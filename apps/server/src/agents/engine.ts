@@ -9,7 +9,7 @@ import { candidates, choose, ready } from './decide.ts';
 import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
-import type { ImagePolicy, Moments } from './types.ts';
+import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
@@ -33,6 +33,19 @@ export async function pickAgent(d: EngineDeps): Promise<string | null> {
   return rows.at(-1)!.id;
 }
 
+/** One engine turn: pick an agent, perceive, decide (with the depth modules), act. The scheduler runs exactly this; so does the simulation test. */
+export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok: boolean; turnId: string; error?: string } | null> {
+  const id = await pickAgent(d);
+  if (!id) return null;
+  if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
+  const v = await perceive(d, id);
+  const base = candidates(v, d.rng);
+  const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  const c = choose(cs, d.rng);
+  const r = await act(d, v, c);
+  return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };
+}
+
 export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStart?: boolean }): Engine {
   let ticks = 0, lastError: string | null = null, stopped = false;
   let timer: NodeJS.Timeout | null = null;
@@ -43,17 +56,11 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
   async function runTick() {
     if (stopped) return;
     try {
-      const id = await pickAgent(d);
-      if (!id) return;
-      if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
-      const v = await perceive(d, id);
-      const base = candidates(v, d.rng);
-      const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
-      const c = choose(cs, d.rng);
-      const r = await act(d, v, c);
+      const r = await engineTurn(d);
+      if (!r) return;
       // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick.
       if (r.ok || r.turnId) {
-        actions[c.kind] = (actions[c.kind] ?? 0) + 1;
+        actions[r.kind] = (actions[r.kind] ?? 0) + 1;
         if (r.error) actions.failed = (actions.failed ?? 0) + 1;
       }
       // Model moments run beside the free engine; a failed drain is logged, never silent.
