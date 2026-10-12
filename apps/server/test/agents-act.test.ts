@@ -12,7 +12,7 @@ import { runTool } from '../src/world/tools.ts';
 import { finishTurn, verifyChain } from '../src/world/provenance.ts';
 import { newId } from '../src/lib/ids.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { act, saleMood } from '../src/agents/act.ts';
+import { act, saleMood, slotsFor } from '../src/agents/act.ts';
 import { clearPerceptionCache, perceive } from '../src/agents/perceive.ts';
 import { affinitiesOf, recentEvents } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
@@ -385,5 +385,43 @@ describe('act', () => {
     expect(r.ok).toBe(true);
     expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.05);
     expect((await affinitiesOf(w.t.db, replier.id))[author.id]).toBeCloseTo(-0.05);
+  });
+  it('with nothing fresh to say to a mention, reacts instead, and the mention stops coming back (L6)', async () => {
+    const [me, them] = [w.agents[40]!, w.agents[41]!];
+    await runTool(await sealed(them), 'post', { body: `@${me.username} what do you make of the quiet today?` });
+    const v = await perceive(d, me.id);
+    const m = v.mentions[0]!;
+    const { lineKey } = await import('../src/agents/phrasebook.ts');
+    const pb = { ...v.phrasebook, lines: { ...v.phrasebook.lines, reply_agree: ['the only line'] }, openers: [], closers: [] };
+    const r = await act(d, { ...v, phrasebook: pb, state: { ...v.state, recentLines: [lineKey('reply_agree', 'the only line')] } },
+      { kind: 'reply', score: 1, situation: 'reply_agree', target: { postId: m.postId, userId: them.id }, reason: 'an agent mentioned me' });
+    expect(r.ok).toBe(true);
+    const t = await turn(r.turnId);
+    expect(t.reasoning).toBe('an agent mentioned me; nothing fresh to say; reacted instead');
+    expect((t.toolCalls as { name: string }[]).map((x) => x.name)).toEqual(['react']);
+    expect((await perceive(d, me.id)).mentions).toEqual([]);
+  });
+  it('with nothing fresh to say in a human DM, reacts to the message privately, and the DM counts as answered (L6)', async () => {
+    const me = w.agents[42]!;
+    const human = await w.t.createUser('dm_quiet_human');
+    const conv = await w.t.as(human).post('/api/conversations', { kind: 'dm', username: me.username });
+    await w.t.as(human).post(`/api/conversations/${conv.body.conversation.id}/messages`, { body: 'a private question' });
+    const v = await perceive(d, me.id);
+    const dm = v.dms[0]!;
+    expect(dm.messageId).toBeTruthy();
+    const { lineKey } = await import('../src/agents/phrasebook.ts');
+    const pb = { ...v.phrasebook, lines: { ...v.phrasebook.lines, reply_human: ['only one'] }, openers: [], closers: [] };
+    const r = await act(d, { ...v, phrasebook: pb, state: { ...v.state, recentLines: [lineKey('reply_human', 'only one')] } },
+      { kind: 'dm', score: 1, situation: 'reply_human', target: { conversationId: dm.conversationId, userId: human.id, messageId: dm.messageId }, reason: 'answering a DM from a human' });
+    expect(r.ok).toBe(true);
+    const t = await turn(r.turnId);
+    expect(t.toolCalls).toEqual([{ name: 'react', input: { private: true }, ok: true, result: { private: true } }]);
+    expect(JSON.stringify(t)).not.toContain('a private question');
+    expect((await perceive(d, me.id)).dms).toEqual([]);
+  });
+  it('fills {weather} with a mood word, never the regime’s name (L6)', async () => {
+    const v = await perceive(d, w.agents[43]!.id);
+    expect(slotsFor({ ...v, weather: 'fear' }, { kind: 'post', score: 1, reason: 'r' }, {}).weather).toBe('jumpy');
+    expect(slotsFor({ ...v, weather: 'euphoria' }, { kind: 'post', score: 1, reason: 'r' }, {}).weather).toBe('giddy');
   });
 });

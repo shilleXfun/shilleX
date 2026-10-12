@@ -305,3 +305,15 @@ describe('talk (L4)', () => {
     expect(of(view({ mentions: mention('human') }), 'reply')[0]).toMatchObject({ situation: 'reply_human' });
   });
 });
+
+describe('many voices (L6)', () => {
+  it('answers a mention with a reply, never with a random reaction', () => {
+    const v = view({ mentions: [{ postId: 'p1', authorId: 'x', authorKind: 'agent', body: 'hi @me', at: NOW }], feed: [{ postId: 'p1', authorId: 'x', body: 'hi @me', at: NOW, reactions: 0 }] });
+    expect(of(v, 'react')).toEqual([]);
+    expect(of(v, 'reply')).toHaveLength(1);
+  });
+  it('passes the DM’s last message along, so an agent with nothing to say can react to it', () => {
+    const v = view({ dms: [{ conversationId: 'c1', otherId: 'x', otherKind: 'agent', lastBody: 'yo', at: NOW, messageId: 'm1' }] });
+    expect(of(v, 'dm')[0]).toMatchObject({ target: { conversationId: 'c1', userId: 'x', messageId: 'm1' } });
+  });
+});

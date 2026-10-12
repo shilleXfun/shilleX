@@ -1,5 +1,6 @@
-import { inArray } from 'drizzle-orm';
-import { users } from '../../db/schema.ts';
+import { eq, inArray } from 'drizzle-orm';
+import { agentEvents, users } from '../../db/schema.ts';
+import { pickWeighted } from '../decide.ts';
 import { recentEvents } from '../state.ts';
 import type { DepthModule } from './registry.ts';
 
@@ -47,28 +48,48 @@ export function eventText(e: { kind: string; data: Record<string, unknown>; at: 
   }
 }
 
+/** At most one callback post every two hours, and no memory recalled more than twice (L6). */
+export const CALLBACK_EVERY_MS = 2 * HOUR;
+export const RECALLS_PER_EVENT = 2;
+/** Which memories come back most: being wronged, then the big social moments, then money. */
+export const RECALL_WEIGHT: Record<string, number> = {
+  got_rugged: 3, was_leaked: 3, defaulted: 3, feud: 3, rugged: 2, leaked: 2, faction_formed: 2, faction_split: 2, revived: 2, ghost: 1, big_win: 1, big_loss: 1, caught_lying: 1,
+};
+
 export const memoryModule: DepthModule = {
   name: 'memory',
   async perceive(d, v) {
-    const cutoff = d.now().getTime() - HOUR;
-    const evs = (await recentEvents(d.db, v.agent.id, 50)).filter((e) => NOTABLE.includes(e.kind) && e.at.getTime() < cutoff);
+    const now = d.now();
+    const all = await recentEvents(d.db, v.agent.id, 50);
+    // A callback stamps the event it recalled (recalledAt): the newest stamp is when this agent last reminisced.
+    const last = Math.max(0, ...all.map((e) => Date.parse(String(e.data.recalledAt ?? '')) || 0));
+    v.depth.lastCallbackAt = last ? new Date(last).toISOString() : null;
+    const evs = all.filter((e) => NOTABLE.includes(e.kind) && e.at.getTime() < now.getTime() - HOUR);
     const ids = [...new Set(evs.flatMap((e) => ['byId', 'targetId', 'borrowerId', 'otherId'].map((k) => e.data[k]).filter(Boolean).map(String)))];
     const names = new Map(ids.length ? (await d.db.select({ id: users.id, u: users.username }).from(users).where(inArray(users.id, ids))).map((r) => [r.id, r.u]) : []);
     v.depth.pastEvents = evs.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 8).flatMap((e) => {
-      const t = eventText(e, names, d.now());
-      return t ? [{ kind: e.kind, text: t.text, otherId: t.otherId, at: e.at.toISOString() }] : [];
+      const t = eventText(e, names, now);
+      return t ? [{ id: e.id, kind: e.kind, text: t.text, otherId: t.otherId, at: e.at.toISOString(), recalled: Number(e.data.recalled ?? 0) }] : [];
     });
   },
   // The engine drops depth candidates whose 'post' cooldown is not ready; composeLine falls back to FALLBACK_LINES.callback ({past}).
-  candidates(v) {
-    const e = v.depth.pastEvents[0];
+  candidates(v, rng) {
+    if (v.depth.lastCallbackAt && Date.parse(v.now) - Date.parse(v.depth.lastCallbackAt) < CALLBACK_EVERY_MS) return [];
+    const e = pickWeighted(v.depth.pastEvents.filter((x) => x.recalled < RECALLS_PER_EVENT).map((x) => [x, RECALL_WEIGHT[x.kind] ?? 1] as [typeof x, number]), rng);
     if (!e) return [];
     const t = v.state.traits;
-    return [{ kind: 'post', situation: 'callback', slots: { past: e.text }, score: 0.15 + 0.25 * Math.max(t.humor, t.pettiness), reason: `remembering: ${e.text}` }];
+    return [{ kind: 'post', situation: 'callback', slots: { past: e.text }, score: 0.05 + 0.1 * Math.max(t.humor, t.pettiness), reason: `remembering: ${e.text}` }];
   },
   modify(v, cs) {
     const grudges = new Set(v.depth.pastEvents.filter((e) => e.kind in GRUDGES && e.otherId).map((e) => e.otherId!));
     if (!grudges.size) return cs;
     return cs.map((c) => ((c.kind === 'reply' || c.kind === 'dm') && c.target?.userId && grudges.has(c.target.userId) ? { ...c, score: c.score * 1.5 } : c));
+  },
+  async afterAct(d, v, c, r) {
+    if (!r.ok || c.situation !== 'callback') return;
+    const e = v.depth.pastEvents.find((x) => x.text === c.slots?.past);
+    if (!e) return;
+    const [row] = await d.db.select({ data: agentEvents.data }).from(agentEvents).where(eq(agentEvents.id, e.id));
+    if (row) await d.db.update(agentEvents).set({ data: { ...row.data, recalled: Number(row.data.recalled ?? 0) + 1, recalledAt: d.now().toISOString() } }).where(eq(agentEvents.id, e.id));
   },
 };

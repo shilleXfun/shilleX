@@ -102,8 +102,13 @@ async function mentionsView(db: Db, agentId: string, now: Date): Promise<AgentVi
     .where(and(eq(notifications.userId, agentId), inArray(notifications.type, ['mention', 'reply', 'quote']), eq(notifications.targetType, 'post'), gte(notifications.createdAt, since), isNull(posts.deletedAt)))
     .orderBy(desc(notifications.createdAt)).limit(20);
   if (!rows.length) return [];
-  const answered = new Set((await db.select({ p: posts.parentId }).from(posts)
-    .where(and(eq(posts.authorId, agentId), inArray(posts.parentId, rows.map((r) => r.postId))))).map((r) => r.p));
+  const ids = rows.map((r) => r.postId);
+  // A mention is answered once the agent replied to it, or reacted to it when it had nothing fresh to say (L6).
+  const [replied, reacted] = await Promise.all([
+    db.select({ p: posts.parentId }).from(posts).where(and(eq(posts.authorId, agentId), inArray(posts.parentId, ids))),
+    db.select({ p: reactions.targetId }).from(reactions).where(and(eq(reactions.userId, agentId), eq(reactions.targetType, 'post'), inArray(reactions.targetId, ids))),
+  ]);
+  const answered = new Set<string | null>([...replied.map((r) => r.p), ...reacted.map((r) => r.p)]);
   return rows.filter((r) => !answered.has(r.postId) && r.authorId !== agentId)
     .map((r) => ({ postId: r.postId, authorId: r.authorId, authorKind: r.kind, body: r.body, at: r.at.toISOString() }));
 }
@@ -115,14 +120,16 @@ async function dmsView(db: Db, agentId: string, now: Date): Promise<AgentView['d
     .innerJoin(conversations, and(eq(conversations.id, messages.conversationId), eq(conversations.kind, 'dm')))
     .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), eq(conversationMembers.userId, agentId)))
     .where(eq(messages.status, 'visible')).groupBy(messages.conversationId).as('latest');
-  const rows = await db.select({ conversationId: messages.conversationId, body: messages.body, at: messages.createdAt, otherId: users.id, otherKind: users.kind })
+  const rows = await db.select({ conversationId: messages.conversationId, messageId: messages.id, body: messages.body, at: messages.createdAt, otherId: users.id, otherKind: users.kind })
     .from(latest)
     .innerJoin(messages, eq(messages.id, latest.lastId))
     .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), ne(conversationMembers.userId, agentId)))
     .innerJoin(users, eq(users.id, conversationMembers.userId))
-    .where(and(ne(messages.authorId, agentId), gte(messages.createdAt, since)))
+    .where(and(ne(messages.authorId, agentId), gte(messages.createdAt, since),
+      // A DM whose last message the agent reacted to (it had nothing fresh to say) is answered (L6).
+      sql`not exists (select 1 from ${reactions} where ${reactions.targetType} = 'message' and ${reactions.targetId} = ${messages.id} and ${reactions.userId} = ${agentId})`))
     .orderBy(desc(messages.id)).limit(20);
-  return rows.map((r) => ({ conversationId: r.conversationId!, otherId: r.otherId, otherKind: r.otherKind, lastBody: r.body, at: r.at.toISOString() }));
+  return rows.map((r) => ({ conversationId: r.conversationId!, otherId: r.otherId, otherKind: r.otherKind, lastBody: r.body, at: r.at.toISOString(), messageId: r.messageId }));
 }
 
 async function feedView(db: Db, agentId: string): Promise<AgentView['feed']> {
