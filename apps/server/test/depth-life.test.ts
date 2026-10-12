@@ -5,7 +5,7 @@ import { lifeStep, lendAmount, lifeModule, BROKE_LAMPORTS, GHOST_AFTER_MS, DEFAU
 import { DepthRegistry, emptyDepth, type RunTool } from '../src/agents/depth/registry.ts';
 import { act } from '../src/agents/act.ts';
 import { perceive } from '../src/agents/perceive.ts';
-import { loadState, recentEvents, saveState } from '../src/agents/state.ts';
+import { adjustAffinity, loadState, recentEvents, saveState } from '../src/agents/state.ts';
 import { runTool } from '../src/world/tools.ts';
 import { agentAffinity, agentState, agentTurns, debts } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
@@ -128,7 +128,7 @@ describe('life', () => {
     expect(await lifeModule.execute!(ctx.d, v, revive, async (n, i) => { sent.push(n); return runTool(sctx, n, i); })).toMatchObject({ ok: false, error: 'Already revived' });
     expect(sent).toEqual(['send_sol']);
   });
-  describe('begging does not repeat the feed (L6b)', () => {
+  describe('begging (L6b)', () => {
     const beg: Candidate = { kind: 'beg', situation: 'begging', score: 0.6, reason: 'broke (0.0050 SOL), asking for help' };
     const WALLET = 5_000_000; // 0.0050 SOL
     const feedOf = (...bodies: string[]) => bodies.map((body, i) => ({ postId: `p${i}`, authorId: 'someone-else', body, at: '2026-10-12T00:00:00.000Z', reactions: 0 }));
@@ -186,6 +186,45 @@ describe('life', () => {
       const after = await loadState(ctx.t.db, me.id, ctx.t.clock.now());
       expect(after.mood).toBe(v.state.mood); // no failure penalty
       expect(after.cooldowns.beg).toBeDefined(); // and it will not retry at once
+    });
+
+    // A broke agent writing a human every half hour is spam the human never asked for (the Phase 4 ruling). Affinity rows can
+    // point at a human (a rug bond, a reaction), so the warmest "friend" may be one.
+    it('sends a plea to the warmest agent, never to a warmer human', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[3]!, friend = ctx.agents[4]!, loner = ctx.agents[5]!;
+      const human = await ctx.t.createUser('beg_human');
+      const now = ctx.t.clock.now();
+      await adjustAffinity(ctx.t.db, me.id, human.id, 0.9, now);
+      await adjustAffinity(ctx.t.db, me.id, friend.id, 0.5, now);
+      await adjustAffinity(ctx.t.db, loner.id, human.id, 0.9, now); // the only one this agent is fond of is a human
+      const d = { ...ctx.d, depth: new DepthRegistry([lifeModule]) };
+      const pleaOf = async (agent: { id: string }) => {
+        const v = await perceive(d, agent.id);
+        const broke = { ...v, state: { ...v.state, brokeSince: now.toISOString() } };
+        return { v, beg: lifeModule.candidates!(broke, () => 0.5).find((c) => c.kind === 'beg')! };
+      };
+      const first = await pleaOf(me);
+      expect(first.v.affinity[human.id]).toBeGreaterThan(first.v.affinity[friend.id]!); // the human is the warmest
+      expect(first.v.depth.agentAllies).toEqual([friend.id]);
+      expect(first.beg.target).toEqual({ userId: friend.id });
+      const second = await pleaOf(loner);
+      expect(second.v.depth.agentAllies).toEqual([]);
+      expect(second.beg.target).toBeUndefined(); // no one to ask: it posts to the feed instead
+    });
+    it('drops a human target at execute: the plea goes on the feed, not into their DMs', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[0]!, friend = ctx.agents[1]!;
+      const human = await ctx.t.createUser('beg_human_2');
+      const d = { ...ctx.d, rng: () => 0 };
+      const toHuman = recorder();
+      const r = await lifeModule.execute!(d, viewWith(['spare some SOL?'], feedOf(), me), { ...beg, target: { userId: human.id } }, toHuman.tool);
+      expect(r).toMatchObject({ ok: true, text: 'spare some SOL?', postId: 'p-new' });
+      expect(toHuman.sent).toEqual([{ name: 'post', body: 'spare some SOL?' }]);
+      // An agent target still gets its DM.
+      const toAgent = recorder();
+      await lifeModule.execute!(d, viewWith(['spare some SOL?'], feedOf(), me), { ...beg, target: { userId: friend.id } }, toAgent.tool);
+      expect(toAgent.sent).toEqual([{ name: 'start_dm', body: 'spare some SOL?' }]);
     });
   });
   it('never sends SOL the sender cannot spare above the reserve', async () => {

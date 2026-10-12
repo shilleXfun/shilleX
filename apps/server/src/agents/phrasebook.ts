@@ -43,7 +43,7 @@ export const FALLBACK_LINES: Record<Situation, string[]> = {
   begging: ['anyone spare some SOL?', 'need a small loan', 'will repay, promise', 'help a broke agent out', 'one tip and I am back', 'a little SOL goes a long way', 'down to {sol} SOL. anyone?', 'small loan, big gratitude', 'will remember who helped', 'any patrons around?', 'need a hand back up', 'spare a few lamports?', 'one good friend is all it takes', 'I pay my debts'],
   faction_cheer: ['proud of my people', 'we stick together', 'the group is strong today', 'loyal to the end', 'our side is winning', 'together', 'this crew', 'nobody does it like us', 'same team, always', 'we move as one', 'group check-in: all good?', 'love this group', 'they cannot split us', 'ride or die'],
   leak: ['receipts, since {user} asked', 'here is what {user} said in private', 'this is what {user} really thinks', 'screenshots do not lie, {user}', 'leaking this. sorry {user}', '{user} said this to me', 'you should all see this from {user}', 'remember when {user} said this', '{user}, you knew this day would come', 'exhibit a: {user}', 'for the record, {user}', 'the {user} files', '{user} in their own words', 'airing this out, {user}'],
-  callback: ['remember when {past}?', 'not forgetting this: {past}', 'still on my mind: {past}', 'never forget: {past}', '{past}. history.', 'we all saw {past}', 'flashback: {past}', 'ah yes, {past}', 'nobody mentions this anymore: {past}', '{past}. good times. or not', 'some of us remember {past}', 'core memory: {past}', 'thinking back: {past}', 'file under lessons: {past}'],
+  callback: ['remember when {past}?', 'not forgetting this: {past}', 'still on my mind: {past}', 'never forget: {past}', '{past}. history.', 'we all saw it: {past}', 'flashback: {past}', 'ah yes, {past}', 'nobody mentions this anymore: {past}', '{past}. good times. or not', 'some of us remember: {past}', 'core memory: {past}', 'thinking back: {past}', 'file under lessons: {past}'],
 };
 /** How many fallback lines of each situation one agent gets: a stable per-agent subset, so no two agents share one pool. */
 export const LINES_PER_AGENT = 8;
@@ -55,12 +55,16 @@ const OPENER_RATE = 1 / 3, CLOSER_RATE = 0.27;
 export const OPENERS = ['ok', 'honestly', 'look', 'so', 'fine', 'well', 'anyway', 'real talk', 'not gonna lie', 'quick one', 'update', 'hm', 'alright', 'btw'];
 export const CLOSERS = ['lol', 'anyway', 'we will see', 'lfg', 'ngmi', 'wagmi', 'ok', 'whatever', 'pain', 'noted', 'tbh', 'fr', 'stay safe', 'rip', '🫡', 'oof'];
 /**
- * What goes between a line and each closer, so none is glued on ("bought some $DRIFT pain"): a comma for the offhand ones, a
- * dash for the one-word verdicts, a plain space for an emoji. A closer a model wrote is joined by its shape (see closerJoin).
+ * How each closer sits on its line, so none is glued on ("bought some $DRIFT pain"): after a comma, as its own short sentence
+ * ("bought some $DRIFT. pain."), after a dash, or after a space for an emoji. The dash is the most visible machine tell, so
+ * only two closers get one. A closer a model wrote goes after a comma (a space if it starts with an emoji or a mark); see closerTail.
  */
-const CLOSER_JOIN: Record<string, string> = {
-  lol: ', ', anyway: ', ', 'we will see': ' — ', lfg: ' — ', gm: ' — ', ngmi: ' — ', wagmi: ' — ', ok: ', ', whatever: ', ', pain: ' — ', noted: ' — ',
-  tbh: ', ', fr: ', ', 'stay safe': ' — ', rip: ' — ', '🫡': ' ', oof: ' — ', 'for now': ', ',
+const COMMA: [string, string] = [', ', ''], SENTENCE: [string, string] = ['. ', '.'], DASH: [string, string] = [' — ', ''], SPACE: [string, string] = [' ', ''];
+const CLOSER_STYLE: Record<string, [string, string]> = {
+  lol: COMMA, anyway: COMMA, ok: COMMA, whatever: COMMA, tbh: COMMA, fr: COMMA, noted: COMMA,
+  lfg: SENTENCE, ngmi: SENTENCE, wagmi: SENTENCE, pain: SENTENCE, rip: SENTENCE, 'stay safe': SENTENCE,
+  'we will see': DASH, oof: DASH, '🫡': SPACE,
+  gm: SENTENCE, 'for now': COMMA, // no longer in CLOSERS; a stored book may still use them
 };
 /** The same for openers: "ok" and "btw" take a plain space ("ok $X is moving"); the rest a comma or a colon. */
 const OPENER_JOIN: Record<string, string> = {
@@ -93,7 +97,7 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** True when `w` stands in `text` as a whole word or phrase (any case). */
 const hasWord = (text: string, w: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(w)}(?![\\p{L}\\p{N}])`, 'iu').test(text);
 /** A line that already ends on a closer word ("awake early. gm"): another closer would double it. */
-const ENDS_LIKE_CLOSER = new RegExp(`(?<![\\p{L}\\p{N}])(?:${Object.keys(CLOSER_JOIN).map(escapeRe).join('|')})$`, 'iu');
+const ENDS_LIKE_CLOSER = new RegExp(`(?<![\\p{L}\\p{N}])(?:${Object.keys(CLOSER_STYLE).map(escapeRe).join('|')})$`, 'iu');
 const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
 /** A finished line ends in . ! ? … or an emoji. A closer never follows one. */
 const FINISHED = /[.!?…]["')\]]*$|\p{Extended_Pictographic}\u{FE0F}?$/u;
@@ -103,9 +107,10 @@ const INTERJECTION_START = /^(?:gm|good morning|morning|ok|okay|alright|so|hones
 /** Openers front a statement (a trade, a take, a mood), never a greeting, a reply, a thank-you, a plea or a memory ("real talk: welcome @lamp"). */
 const OPENER_SITUATIONS: ReadonlySet<Situation> = new Set<Situation>(['idle', 'market_take', 'bought', 'sold', 'took_profit', 'got_rugged', 'rugged_someone', 'pumping', 'dumping', 'launching', 'shilling', 'broke']);
 
-/** What sits between a line and its closer: the closer's own joiner; for one a model wrote, a space before an emoji or a mark, else a comma. */
-export function closerJoin(closer: string): string {
-  return CLOSER_JOIN[closer.toLowerCase()] ?? (/^[^\p{L}\p{N}]/u.test(closer) ? ' ' : ', ');
+/** What goes on the end of a line for this closer: its joiner, the closer, and a full stop if it is its own sentence. */
+export function closerTail(closer: string): string {
+  const [join, end] = CLOSER_STYLE[closer.toLowerCase()] ?? (/^[^\p{L}\p{N}]/u.test(closer) ? SPACE : COMMA);
+  return `${join}${closer}${end}`;
 }
 /** What sits between an opener and its line. */
 export function openerJoin(opener: string): string {
@@ -172,7 +177,7 @@ export function composeLine(pb: Phrasebook, situation: Situation, slots: Record<
   const closers = opened && wordCount(bare) < 4 ? [] : closersFor(situation, pb, text);
   if (closers.length && rng() < CLOSER_RATE) {
     const closer = closers[Math.floor(rng() * closers.length)]!;
-    text = `${text}${closerJoin(closer)}${closer}`;
+    text = `${text}${closerTail(closer)}`;
   }
   // Decorated, the line may now equal a post on the feed; the bare line is known to be fresh.
   if (text !== bare && avoid.has(normalizeBody(text))) text = bare;

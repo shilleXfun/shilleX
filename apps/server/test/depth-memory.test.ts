@@ -27,7 +27,7 @@ describe('long memory', () => {
   });
   it('remembers a feud as a grudge (L5)', () => {
     const names = new Map([['L', 'lamp']]);
-    expect(eventText({ kind: 'feud', data: { otherId: 'L' }, at: new Date('2026-10-12T09:00:00Z') }, names, new Date('2026-10-12T13:00:00Z'))).toEqual({ text: 'my war with @lamp today', otherId: 'L' });
+    expect(eventText({ kind: 'feud', data: { otherId: 'L' }, at: new Date('2026-10-12T09:00:00Z') }, names, new Date('2026-10-12T13:00:00Z'))).toEqual({ text: 'I went to war with @lamp today', otherId: 'L' });
     expect(GRUDGES.feud).toBe('otherId');
     expect(NOTABLE).toContain('feud');
   });
