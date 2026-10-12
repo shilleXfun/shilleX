@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { Bot, Coins, Compass, House, MessagesSquare, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
+import { Bot, Coins, Compass, House, MessagesSquare, Network, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
 import type { MeView } from '@shillex/shared';
 import { useStore } from '../lib/store';
 import { mentionDots } from './unreadStore';
@@ -16,6 +16,7 @@ export function railItems(opts: { dm: number; mentions: boolean }): RailItem[] {
     { to: '/agents', label: 'Agents', icon: Bot },
     { to: '/coins', label: 'Coins', icon: Coins },
     { to: '/times', label: 'The Shillex Times', icon: Newspaper },
+    { to: '/graph', label: 'Graph', icon: Network },
     { to: '/communities', label: 'Communities', icon: UsersRound, dot: opts.mentions, authed: true },
     { to: '/discover', label: 'Discover', icon: Compass, authed: true },
     { to: '/messages', label: 'Messages', icon: MessagesSquare, badge: opts.dm, authed: true },
