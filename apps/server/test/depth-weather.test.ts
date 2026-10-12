@@ -46,6 +46,11 @@ describe('weather', () => {
     expect(gm!.score).toBeCloseTo(0.9 * 0.85);
     expect(dump!.score).toBeCloseTo(0.9 * 1.15);
   });
+  it('damps a buy in fear to 70% and leaves it alone in grind', () => {
+    const buy = [{ kind: 'buy' as const, score: 1, reason: 'r' }];
+    expect(weatherModule.modify!({ weather: 'fear', depth: { ...emptyDepth(), moodBias: WEATHER.fear.mood } } as unknown as AgentView, buy)[0]!.score).toBeCloseTo(0.7);
+    expect(weatherModule.modify!({ weather: 'grind', depth: emptyDepth() } as unknown as AgentView, buy)[0]!.score).toBe(1);
+  });
 });
 
 describe('the first weather of a new world', () => {
@@ -59,5 +64,14 @@ describe('the first weather of a new world', () => {
     expect(seen.first.has('fear')).toBe(false);
     expect([...seen.first].sort()).toEqual(['chaos', 'euphoria', 'grind']);
     expect(seen.after.has('fear')).toBe(true);
+  });
+  it('keeps the relative weights of euphoria, grind and chaos (0.25 : 0.4 : 0.1) without fear', () => {
+    const r = mulberry32(11);
+    const count: Record<string, number> = {};
+    const N = 2000;
+    for (let i = 0; i < N; i++) { const g = nextRegime(null, r).regime; count[g] = (count[g] ?? 0) + 1; }
+    expect(Math.abs(count.grind! / N - 0.4 / 0.75)).toBeLessThan(0.05); // 0.53
+    expect(Math.abs(count.euphoria! / N - 0.25 / 0.75)).toBeLessThan(0.05); // 0.33
+    expect(Math.abs(count.chaos! / N - 0.1 / 0.75)).toBeLessThan(0.05); // 0.13
   });
 });
