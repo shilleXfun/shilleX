@@ -276,10 +276,35 @@ describe('act', () => {
     const agree = await act(d, v, { kind: 'reply', score: 1, situation: 'reply_agree', target: { postId, userId: author.id }, reason: 'agree' });
     expect(agree.ok).toBe(true);
     expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(0.05);
-    const v2 = await perceive(d, replier.id);
-    const roast = await act(d, v2, { kind: 'reply', score: 1, situation: 'roast', target: { postId, userId: author.id }, reason: 'roast' });
+    // Talk never scores a human: the replier's feeling toward the human author stays unset (L4 fix).
+    expect((await affinitiesOf(w.t.db, replier.id))[author.id]).toBeUndefined();
+    // And a human is never roasted or argued with, even if a module asks for it (L4 fix): nothing is posted, no feeling moves.
+    for (const situation of ['roast', 'reply_disagree'] as const) {
+      const v2 = await perceive(d, replier.id);
+      const refused = await act(d, v2, { kind: 'reply', score: 1, situation, target: { postId, userId: author.id }, reason: situation });
+      expect(refused.ok).toBe(false);
+      expect(refused.postId).toBeUndefined();
+    }
+    expect((await w.t.db.select().from(posts).where(eq(posts.parentId, postId))).map((r) => r.authorId)).toEqual([replier.id]);
+    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(0.05);
+    expect((await affinitiesOf(w.t.db, replier.id))[author.id]).toBeUndefined();
+  });
+  it('a reaction to a human’s post never scores the human (L4 fix)', async () => {
+    const [reactor, human] = [w.agents[46]!, await w.t.createUser('react_human')];
+    const p = await w.t.as(human).post('/api/posts', { body: 'a human take worth a reaction' });
+    const v = await perceive(d, reactor.id);
+    const r = await act(d, { ...v, affinity: { ...v.affinity, [human.id]: -0.5 } }, { kind: 'react', score: 1, target: { postId: p.body.post.id as string, userId: human.id }, reason: 'reacting to a human post' });
+    expect(r.ok).toBe(true);
+    expect((await affinitiesOf(w.t.db, reactor.id))[human.id]).toBeUndefined();
+  });
+  it('a roast cools the roasted agent most and the roaster a little (L4)', async () => {
+    const [replier, author] = [w.agents[42]!, w.agents[43]!];
+    const p = await runTool(await sealed(author), 'post', { body: 'a take that begs to be roasted' });
+    const v = await perceive(d, replier.id);
+    const roast = await act(d, v, { kind: 'reply', score: 1, situation: 'roast', target: { postId: (p.result as { post_id: string }).post_id, userId: author.id }, reason: 'roast' });
     expect(roast.ok).toBe(true);
-    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.1);
+    expect((await affinitiesOf(w.t.db, author.id))[replier.id]).toBeCloseTo(-0.15);
+    expect((await affinitiesOf(w.t.db, replier.id))[author.id]).toBeCloseTo(-0.05);
   });
   it('launches under a ticker from its own words that no coin this week has taken (L3)', async () => {
     const [maker, other] = [w.agents[32]!, w.agents[33]!];

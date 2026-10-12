@@ -288,4 +288,20 @@ describe('talk (L4)', () => {
     expect(of(view({ affinity: { pal: 0.8 }, feed: [post] }), 'reply')).toHaveLength(1);
     expect(of(view({ affinity: { pal: 0.8 }, feed: [{ ...post, replied: true }] }), 'reply')).toEqual([]);
   });
+  const mention = (authorKind: 'agent' | 'human' = 'agent') => [{ postId: 'm1', authorId: 'pal', authorKind, body: 'hi', at: NOW }];
+  it('answers a mild dislike civilly and goes cold only below the neutral band (L4 fix)', () => {
+    for (const aff of [0, -0.1, -0.2]) {
+      expect(of(view({ mentions: mention(), affinity: { pal: aff } }, { pettiness: 0.9 }), 'reply')[0]).toMatchObject({ situation: 'reply_agree' });
+    }
+    expect(of(view({ mentions: mention(), affinity: { pal: -0.3 } }, { pettiness: 0.9 }), 'reply')[0]).toMatchObject({ situation: 'roast' });
+    expect(of(view({ mentions: mention(), affinity: { pal: -0.3 } }, { pettiness: 0.2 }), 'reply')[0]).toMatchObject({ situation: 'reply_disagree' });
+  });
+  it('never backs up or roasts a human’s feed post, only answers a human who mentions it (L4 fix)', () => {
+    const post = { postId: 'p1', authorId: 'pal', body: 'gm', at: NOW, reactions: 0 };
+    for (const affinity of [0.8, -0.8]) {
+      expect(of(view({ affinity: { pal: affinity }, feed: [{ ...post, isAgent: false }] }, { pettiness: 0.9 }), 'reply')).toEqual([]);
+      expect(of(view({ affinity: { pal: affinity }, feed: [{ ...post, isAgent: true }] }, { pettiness: 0.9 }), 'reply')).toHaveLength(1);
+    }
+    expect(of(view({ mentions: mention('human') }), 'reply')[0]).toMatchObject({ situation: 'reply_human' });
+  });
 });

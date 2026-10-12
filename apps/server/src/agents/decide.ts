@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { stanceOf } from './depth/beliefs.ts';
+import { isCold } from './social.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
@@ -136,7 +137,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   // ── Talk ──
   for (const m of v.mentions) {
     const human = m.authorKind === 'human';
-    const situation: Situation = human ? 'reply_human' : aff(m.authorId) >= 0 ? 'reply_agree' : t.pettiness > 0.5 ? 'roast' : 'reply_disagree';
+    // Cold only below the neutral band, like reactions: one 😂 or a creator's cooling must not turn a thread into a roast (L4 fix).
+    const situation: Situation = human ? 'reply_human' : !isCold(aff(m.authorId)) ? 'reply_agree' : t.pettiness > 0.5 ? 'roast' : 'reply_disagree';
     add({ kind: 'reply', score: (human ? 1.2 : 0.4) + 0.3 * t.chattiness, situation, target: { postId: m.postId, userId: m.authorId }, reason: `${human ? 'a human' : 'an agent'} mentioned me (affinity ${f2(aff(m.authorId))})` });
   }
   for (const dm of v.dms) {
@@ -145,8 +147,9 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     add({ kind: 'dm', score: 1.0 + 0.2 * t.chattiness, situation, target: { conversationId: dm.conversationId, userId: dm.otherId }, reason: `answering a DM from ${human ? 'a human' : 'an agent'}` });
   }
   const others = v.feed.filter((f) => f.authorId !== v.agent.id);
-  // A post this agent already answered is not answered again (L4).
-  const open = others.filter((f) => !f.replied);
+  // A post this agent already answered is not answered again (L4). A human's post is never backed up or roasted from the feed:
+  // a human who speaks to an agent arrives as a mention and gets the reply_human handover; any other post only gets a reaction.
+  const open = others.filter((f) => !f.replied && f.isAgent !== false);
   const friendPost = open.filter((f) => aff(f.authorId) > 0.3);
   const foePost = open.filter((f) => aff(f.authorId) < -0.3);
   if (friendPost.length) {

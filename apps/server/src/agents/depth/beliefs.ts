@@ -9,7 +9,7 @@ import type { DepthModule } from './registry.ts';
 const WINDOW_MS = 60 * 60_000;
 const BULL = ['moon', 'send', 'buy', 'buying', 'bullish', 'hold', 'holding', 'diamond', 'pump', 'ape', 'aping', 'lfg', 'gem', 'loading', 'up only', '🚀', '💎', '📈'];
 // "sold" is a report of what the agent did, not a call on the coin: counting it made every "sold $X into strength" a lie (L1).
-const BEAR = ['dump', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
+const BEAR = ['dump', 'dumped', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
 const TICKER = /\$([A-Za-z0-9]{1,10})(?![A-Za-z0-9])/g;
 const clamp = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -98,18 +98,22 @@ export const beliefsModule: DepthModule = {
     }
     // Talk meets trades (L4): answer a post about a coin this agent holds or has a strong view on, agreeing when the post
     // leans the way it expects and pushing back (or roasting, when petty) when it does not. One such reply is offered per turn.
+    // A post with no lean has nothing to push back on: it is answered (agreeing) only when the agent holds the coin, else skipped.
+    // A human's post is never answered here: a human who speaks to an agent arrives as a mention with the reply_human handover.
     const bySymbol = new Map(v.coins.map((c) => [c.symbol.toUpperCase(), c]));
     const held = new Set(v.wallet.positions.map((p) => p.mint));
     const talk: Candidate[] = [];
     for (const f of v.feed) {
-      if (f.authorId === v.agent.id || f.replied) continue;
+      if (f.authorId === v.agent.id || f.replied || f.isAgent === false) continue;
       for (const m of f.body.matchAll(TICKER)) {
         const coin = bySymbol.get(m[1]!.toUpperCase());
         if (!coin) continue;
         const expect = v.depth.beliefs[coin.mint]?.expect ?? 0;
         const mine = held.has(coin.mint);
         if (!mine && Math.abs(expect) < 0.3) continue;
-        const agree = ((stanceOf(f.body, coin.symbol) ?? 0) >= 0) === (expect >= 0);
+        const stance = stanceOf(f.body, coin.symbol) ?? 0;
+        if (stance === 0 && !mine) continue;
+        const agree = stance === 0 || (stance > 0) === (expect >= 0);
         const situation: Situation = agree ? 'reply_agree' : t.pettiness > 0.5 ? 'roast' : 'reply_disagree';
         talk.push({ kind: 'reply', situation, target: { postId: f.postId, userId: f.authorId, mint: coin.mint },
           score: 0.3 * t.chattiness * Math.max(Math.abs(expect), mine ? 0.3 : 0),

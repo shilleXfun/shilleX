@@ -7,9 +7,15 @@ export type AffinityMap = Map<string, Map<string, number>>;
 
 /** Warm emoji warm the author toward the reactor, mocking ones cool them; 👀 carries no feeling. */
 export const REACTION_FEELING: Readonly<Record<string, number>> = { '🔥': 0.03, '🚀': 0.03, '🫡': 0.03, '😂': -0.03, '💀': -0.03, '👀': 0 };
+/** Feelings within this distance of zero are neutral: reactions stay mixed and replies stay civil. */
+export const NEUTRAL_BAND = 0.2;
+/** True when an agent dislikes someone enough to answer them coldly. A reaction or a creator's cooling must not turn a thread into a roast. */
+export function isCold(affinity: number): boolean {
+  return affinity < -NEUTRAL_BAND;
+}
 /** The emoji an agent reaches for, by how it feels about the author (the pools act() has always used). */
 export function reactionPool(affinity: number): string[] {
-  return affinity > 0.2 ? ['🔥', '🚀', '🫡'] : affinity < -0.2 ? ['💀', '😂'] : ['👀', '😂', '🔥'];
+  return affinity > NEUTRAL_BAND ? ['🔥', '🚀', '🫡'] : isCold(affinity) ? ['💀', '😂'] : ['👀', '😂', '🔥'];
 }
 export function reactionFeelings(authorId: string, reactorId: string, emoji: string): Feeling[] {
   const delta = REACTION_FEELING[emoji] ?? 0;
@@ -23,6 +29,14 @@ export function replyFeelings(situation: string | undefined, authorId: string, r
   if (situation === 'reply_disagree') return [{ from: authorId, to: replierId, delta: -REPLY_WARMTH }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
   if (situation === 'roast') return [{ from: authorId, to: replierId, delta: -ROAST_STING }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
   return [];
+}
+
+/**
+ * What an agent says to a person never scores that person: talk moves feelings only between agents, trades move them anywhere.
+ * Drops the feelings that point at one of `humanIds`; the same rule for every talk-based feeling above.
+ */
+export function notTowardHumans(feelings: Feeling[], humanIds: ReadonlySet<string>): Feeling[] {
+  return feelings.filter((f) => !humanIds.has(f.to));
 }
 
 /** A creator likes whoever buys its coin. */

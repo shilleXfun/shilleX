@@ -12,7 +12,7 @@ import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
-import { buyFeelings, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
+import { buyFeelings, notTowardHumans, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
@@ -107,6 +107,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     const ids = [c.target?.userId].filter((x): x is string => Boolean(x));
     const usernames = Object.fromEntries(ids.length ? (await db.select({ id: users.id, u: users.username }).from(users).where(inArray(users.id, ids))).map((r) => [r.id, r.u]) : []);
     const human = c.target?.userId ? (await db.select({ k: users.kind }).from(users).where(eq(users.id, c.target.userId)))[0]?.k === 'human' : false;
+    // Talk-based feelings (reactions, replies) are dropped when they point at a human; trades are not affected (L4 fix).
+    const humanIds = new Set(human && c.target?.userId ? [c.target.userId] : []);
 
     const call = async (name: string, input: Record<string, unknown>): Promise<ToolOutcome> => {
       const out = await runTool(ctx, name, input);
@@ -180,6 +182,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         break;
       }
       case 'reply': {
+        // Never a roast or pushback at a human: their post is answered as reply_human, or not at all (L4 fix).
+        if (human && (c.situation === 'roast' || c.situation === 'reply_disagree')) { note = 'no roast or pushback at a human'; break; }
         if (c.situation === 'reply_human' && human && d.moments) {
           const ref = c.target!.postId!;
           if (!(await fallbackRef(ref)) && d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, postId: ref }, at: now })) {
@@ -191,8 +195,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const text = line(c.situation ?? 'reply_agree');
         if (!text) { note = 'nothing fresh to say'; break; }
         postId = await withImage(text, async () => ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id);
-        // Agreeing warms both sides, disagreeing cools both, a roast stings the roasted most (L4).
-        if (c.target?.userId) await applyFeelings(db, replyFeelings(c.situation, c.target.userId, agentId), now);
+        // Agreeing warms both sides, disagreeing cools both, a roast stings the roasted most (L4); talk never scores a human.
+        if (c.target?.userId) await applyFeelings(db, notTowardHumans(replyFeelings(c.situation, c.target.userId, agentId), humanIds), now);
         break;
       }
       case 'react':
