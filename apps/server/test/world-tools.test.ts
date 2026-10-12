@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { runTool, TOOLS } from '../src/world/tools.ts';
+import { runTool, symbolsInUse, TOOLS } from '../src/world/tools.ts';
+import { pickSymbol } from '../src/agents/tickers.ts';
 import { agents as agentsTable, chainTxs, messages, posts, users, worldCoins } from '../src/db/schema.ts';
 import { liveNotes } from '../src/world/memory.ts';
 import type { WorldEvent } from '../src/world/events.ts';
@@ -132,5 +133,32 @@ describe('memory and quiet turns', () => {
   });
   it('do_nothing ends the turn', async () => {
     expect(await run(C(), 'do_nothing', { reason: 'nothing to add' })).toMatchObject({ ok: true, write: false, endTurn: true });
+  });
+});
+
+describe('tickers (L3)', () => {
+  const E = () => w.agents[40]!;
+  it('refuses a ticker a coin launched in the last 7 days uses, in any case, before any SOL moves; a week later it is free', async () => {
+    const now = w.t.clock.now().getTime();
+    await w.t.db.insert(worldCoins).values([
+      { mint: 'TAKN11111111', pool: 'PT1', creatorId: C().id, name: 'Taken', symbol: 'TAKN', launchSignature: 'sig-takn', launchedAt: new Date(now - 6 * 86_400_000) },
+      { mint: 'OLDY11111111', pool: 'PO1', creatorId: C().id, name: 'Oldie', symbol: 'OLDY', launchSignature: 'sig-oldy', launchedAt: new Date(now - 8 * 86_400_000) },
+    ]);
+    const txs = async () => (await w.t.db.select().from(chainTxs).where(eq(chainTxs.agentId, E().id))).length;
+    const before = await txs();
+    expect(await run(E(), 'launch_coin', { name: 'Again', symbol: 'takn', description: '', emoji: '💡', initial_buy_sol: 0 })).toMatchObject({ ok: false, result: { code: 'SYMBOL_TAKEN' } });
+    expect(await txs()).toBe(before);
+    expect((await run(E(), 'launch_coin', { name: 'Oldie Again', symbol: 'OLDY', description: '', emoji: '💡', initial_buy_sol: 0 })).ok).toBe(true);
+    const inUse = await symbolsInUse(w.t.db, w.t.clock.now());
+    expect(inUse.has('TAKN') && inUse.has('OLDY')).toBe(true);
+  });
+  it('refuses a ticker that legacy duplicate coins already share (Review Focus 1)', async () => {
+    const now = w.t.clock.now();
+    await w.t.db.insert(worldCoins).values([
+      { mint: 'DUPE11111111', pool: 'PD1', creatorId: C().id, name: 'Dupe', symbol: 'DUPE', launchSignature: 'sig-dupe1', launchedAt: now },
+      { mint: 'DUPE22222222', pool: 'PD2', creatorId: B().id, name: 'Dupe Too', symbol: 'DUPE', launchSignature: 'sig-dupe2', launchedAt: now },
+    ]);
+    expect(await run(E(), 'launch_coin', { name: 'Dupe Three', symbol: 'DUPE', description: '', emoji: '💡', initial_buy_sol: 0 })).toMatchObject({ ok: false, result: { code: 'SYMBOL_TAKEN' } });
+    expect(pickSymbol(['dupe', 'moth'], await symbolsInUse(w.t.db, w.t.clock.now()), () => 0)).toBe('MOTH');
   });
 });

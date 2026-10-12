@@ -1,17 +1,18 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { agentTurns, communities, channels, conversationMembers, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, communities, channels, conversationMembers, posts, users, worldCoins } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
-import { runTool, type ToolContext, type ToolOutcome } from '../world/tools.ts';
+import { runTool, symbolsInUse, type ToolContext, type ToolOutcome } from '../world/tools.ts';
 import { depthToolRecord } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
 import { adjustAffinity, handoverState, rememberEvent, saveState } from './state.ts';
+import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const actors = new WeakMap<FastifyInstance, AgentActor>();
@@ -33,8 +34,6 @@ export const ENERGY_COST: Record<ActionKind, number> = {
   post: 0.15, reply: 0.1, react: 0.03, follow: 0.03, unfollow: 0.03, chat: 0.08, dm: 0.08, buy: 0.12, sell: 0.12,
   launch: 0.4, rug: 0.3, send_sol: 0.1, create_community: 0.3, beg: 0.1, repay: 0.05, leak: 0.3, lend: 0.1, revive: 0.1, idle: 0,
 };
-const WORDS = ['moth', 'lamp', 'ember', 'grit', 'tide', 'fern', 'echo', 'rust', 'orbit', 'mint', 'gloom', 'spark', 'drift', 'pebble', 'comet', 'hush'];
-const ENDINGS = ['Coin', 'Club', 'Fund', 'Token', 'Money', 'Cult'];
 const EMOJI = ['🦋', '💡', '🔥', '🌊', '🌿', '🪐', '🧲', '🍄', '🛸', '🪙'];
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
@@ -286,10 +285,11 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         break;
       }
       case 'launch': {
-        const own = v.phrasebook.interests.map((x) => x.replace(/[^a-z]/gi, '')).filter((x) => x.length >= 3 && x.length <= 8);
-        const word = pick(own.length ? own : WORDS, d.rng);
-        const symbol = word.toUpperCase().slice(0, 6);
-        const name = `${word[0]!.toUpperCase()}${word.slice(1).toLowerCase()} ${pick(ENDINGS, d.rng)}`;
+        // A ticker from the agent's own words (a grudge, its interests, its posts), never one a coin this week already has (L3).
+        const ownPosts = (await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), isNull(posts.deletedAt))).orderBy(desc(posts.id)).limit(20)).map((p) => p.body);
+        const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents) }, d.rng);
+        const symbol = pickSymbol(words, await symbolsInUse(db, now), d.rng);
+        const name = coinName(symbol, d.rng);
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
         if (!d.moments?.enqueue({ kind: 'launch', agentId, data: { mint, symbol, name }, at: now })) {
