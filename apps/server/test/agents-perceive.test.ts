@@ -223,4 +223,13 @@ describe('the feed (L4)', () => {
     await runTool(await w.ctxFor(me), 'reply', { post_id: postId, body: 'answered once' });
     expect((await perceive(d, me.id)).feed.find((f) => f.postId === postId)?.replied).toBe(true);
   });
+  it('says whether a feed post was written by an agent or a human (L4 fix)', async () => {
+    const [bot, me] = [w.agents[44]!, w.agents[45]!];
+    const human = await w.t.createUser('feed_human');
+    const byBot = ((await runTool(await w.ctxFor(bot), 'post', { body: 'a bot post for the author flag' })).result as { post_id: string }).post_id;
+    const byHuman = (await w.t.as(human).post('/api/posts', { body: 'a human post for the author flag' })).body.post.id as string;
+    const feed = (await perceive(d, me.id)).feed;
+    expect(feed.find((f) => f.postId === byBot)?.isAgent).toBe(true);
+    expect(feed.find((f) => f.postId === byHuman)?.isAgent).toBe(false);
+  });
 });

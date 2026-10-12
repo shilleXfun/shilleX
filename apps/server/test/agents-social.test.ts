@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { findCliques } from '../src/agents/depth/factions.ts';
 import {
-  applyInMemory, buyFeelings, decayFactor, dropFeelings, feudPairs, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings, type AffinityMap,
+  applyInMemory, buyFeelings, decayFactor, dropFeelings, feudPairs, isCold, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings, type AffinityMap,
 } from '../src/agents/social.ts';
 
 describe('feeling rules (L4)', () => {
@@ -21,6 +21,13 @@ describe('feeling rules (L4)', () => {
     expect(sellFeelings('me', 'maker', 0.5)).toEqual([{ from: 'maker', to: 'me', delta: -0.08 }, { from: 'me', to: 'maker', delta: 0.1 }]);
     expect(sellFeelings('me', 'maker', -0.4)).toEqual([{ from: 'maker', to: 'me', delta: -0.08 }, { from: 'me', to: 'maker', delta: -0.1 }]);
     expect(sellFeelings('me', 'maker', 0)).toEqual([{ from: 'maker', to: 'me', delta: -0.08 }]);
+  });
+  it('only a feeling below the neutral band is cold, and talk never points a feeling at a human (L4 fix)', () => {
+    expect([0.5, 0, -0.1, -0.2].map(isCold)).toEqual([false, false, false, false]);
+    expect([-0.21, -0.6].map(isCold)).toEqual([true, true]);
+    const talk = replyFeelings('roast', 'human', 'me');
+    expect(notTowardHumans(talk, new Set(['human']))).toEqual([{ from: 'human', to: 'me', delta: -0.15 }]);
+    expect(notTowardHumans(talk, new Set())).toEqual(talk);
   });
   it('holders sour on a seller who crashes the price, and bond over a pump', () => {
     expect(dropFeelings('s', ['h1', 's', 'h2'], 0.12)).toEqual([{ from: 'h1', to: 's', delta: -0.05 }, { from: 'h2', to: 's', delta: -0.05 }]);
@@ -61,7 +68,7 @@ function simulate(seed: number, turns: number) {
     applyInMemory(aff, replyFeelings(situation, author, me));
     replies.set(author, [...(replies.get(author) ?? []), { from: me, turn }]);
   };
-  const tone = (me: string, other: string) => (feel(me, other) >= 0 ? 'reply_agree' : petty.get(me)! > 0.5 ? 'roast' : 'reply_disagree');
+  const tone = (me: string, other: string) => (!isCold(feel(me, other)) ? 'reply_agree' : petty.get(me)! > 0.5 ? 'roast' : 'reply_disagree');
   for (let turn = 0; turn < turns; turn++) {
     if (turn % 75 === 0) {
       const f = decayFactor(5 * 60_000);
@@ -98,13 +105,15 @@ describe('the rules alone make friends and enemies (L4)', () => {
   it('over 12 hours of turns, factions can form and some pairs turn hostile, but not everyone', () => {
     for (const seed of [1, 2, 3]) {
       const r = simulate(seed, 10_800);
-      expect(r.cliques.length).toBeGreaterThanOrEqual(1); // 4, 2, 2 when planned
-      expect(r.hostile).toBeGreaterThanOrEqual(1); // 39, 51, 61 of 1,225 when planned
+      expect(r.cliques.length).toBeGreaterThanOrEqual(1); // 4, 2, 2 when planned; 4, 2, 3 now
+      expect(r.hostile).toBeGreaterThanOrEqual(1); // 39, 51, 61 of 1,225 when planned; 1, 2, 2 once only < -0.2 is answered coldly (L4 fix)
       expect(r.hostile).toBeLessThanOrEqual(r.pairs * 0.1);
       expect(r.cliques.every((c) => c.length <= 6)).toBe(true);
     }
   });
-  it('three hours in, hostility already shows', () => {
-    expect(simulate(1, 2_700).hostile).toBeGreaterThanOrEqual(1); // 15 when planned
+  it('three hours in, mild dislike stays civil: talk alone has not made a feud yet', () => {
+    // 15 hostile pairs when planned, while any feeling below zero was answered coldly; 0 now that only < -0.2 is (L4 fix).
+    // Feuds in the live world come from trades (a rug costs -0.5 from every holder), which this talk-only simulation leaves out.
+    for (const seed of [1, 2, 3]) expect(simulate(seed, 2_700).hostile).toBeLessThanOrEqual(2);
   });
 });

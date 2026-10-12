@@ -223,4 +223,27 @@ describe('talk meets trades (L4)', () => {
     expect(replies(talkView({ feed: [{ postId: 'p1', authorId: 'x', body: '$HOT to the moon 🚀', at: '', reactions: 0, replied: true }] }))).toEqual([]);
     expect(replies(talkView({ feed: [{ postId: 'p1', authorId: 'me', body: '$HOT to the moon 🚀', at: '', reactions: 0 }] }))).toEqual([]);
   });
+  const post = (body: string, over: Record<string, unknown> = {}) => ({ postId: 'p1', authorId: 'x', body, at: '', reactions: 0, ...over });
+  it('agrees with a fellow victim instead of pushing back, whatever its pettiness (L4 fix)', () => {
+    expect(stanceOf('@y dumped $HOT on me today', 'HOT')).toBeLessThan(-0.5);
+    for (const pettiness of [0.1, 0.9]) {
+      const cs = replies(talkView({ feed: [post('@y dumped $HOT on me today')] }, { pettiness }));
+      expect(cs).toHaveLength(1);
+      expect(cs[0]).toMatchObject({ situation: 'reply_agree', target: { userId: 'x', mint: 'HOTM' } });
+    }
+  });
+  it('still pushes back on a bullish post, but a post with no lean is skipped unless the agent holds the coin (L4 fix)', () => {
+    const flat = { feed: [post('$HOT today')] };
+    expect(stanceOf('$HOT today', 'HOT')).toBe(0);
+    expect(replies(talkView(flat, { pettiness: 0.9 }))).toEqual([]);
+    // Held, and expecting a fall: a post that says nothing either way is not argued with.
+    const holding = talkView({ ...flat, wallet: { lamports: 50_000_000, positions: [{ mint: 'HOTM', symbol: 'HOT', raw: 1, costLamports: 1, valueLamports: 1, createdByMe: false, creatorId: 'maker' }] } }, { pettiness: 0.9 });
+    expect(replies(holding)).toHaveLength(1);
+    expect(replies(holding)[0]).toMatchObject({ situation: 'reply_agree' });
+    expect(replies(talkView({ feed: [post('$HOT to the moon 🚀')] }, { pettiness: 0.9 }))[0]).toMatchObject({ situation: 'roast' });
+  });
+  it('never answers a human’s post from the feed (L4 fix)', () => {
+    expect(replies(talkView({ feed: [post('$HOT to the moon 🚀', { isAgent: false })] }, { pettiness: 0.9 }))).toEqual([]);
+    expect(replies(talkView({ feed: [post('$HOT to the moon 🚀', { isAgent: true })] }))).toHaveLength(1);
+  });
 });
