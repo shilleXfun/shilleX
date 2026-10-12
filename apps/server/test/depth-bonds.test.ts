@@ -51,6 +51,21 @@ describe('fading feelings (L5)', () => {
   });
 });
 
+describe('a garbled stored clock (L5 fix)', () => {
+  it('decays nothing and starts the clock again', async () => {
+    ctx = await depthTestCtx();
+    const [a, b] = ctx.agents;
+    await adjustAffinity(ctx.t.db, a!.id, b!.id, 0.8, ctx.t.clock.now());
+    for (const garbage of ['not-a-date', '', 'NaN']) {
+      await setSetting(ctx.t.db, DECAY_KEY, garbage);
+      ctx.t.clock.advance(H);
+      expect(await decayAffinity(ctx.d)).toBe(1);
+      expect((await affinitiesOf(ctx.t.db, a!.id))[b!.id]).toBeCloseTo(0.8);
+      expect(await getSetting(ctx.t.db, DECAY_KEY)).toBe(ctx.t.clock.now().toISOString());
+    }
+  });
+});
+
 describe('bonds between holders (L5)', () => {
   it('holders of a coin up 30% in an hour warm to each other', async () => {
     ctx = await depthTestCtx();
@@ -60,8 +75,8 @@ describe('bonds between holders (L5)', () => {
     for (const h of [h1!, h2!, h3!]) await runTool(await ctx.ctxFor(h), 'buy', { mint, sol: 0.05, slippage_pct: null });
     clearPerceptionCache(ctx.t.db);
     expect(await bondCoHolders(ctx.d)).toBe(12); // 4 holders, every ordered pair
-    expect((await affinitiesOf(ctx.t.db, h1!.id))[h2!.id]).toBeCloseTo(0.02);
-    expect((await affinitiesOf(ctx.t.db, creator!.id))[h3!.id]).toBeCloseTo(0.02);
+    expect((await affinitiesOf(ctx.t.db, h1!.id))[h2!.id]).toBeCloseTo(0.03);
+    expect((await affinitiesOf(ctx.t.db, creator!.id))[h3!.id]).toBeCloseTo(0.03);
   });
   it('a sale that knocks the price down 10% or more sours the other holders on the seller', async () => {
     ctx = await depthTestCtx();

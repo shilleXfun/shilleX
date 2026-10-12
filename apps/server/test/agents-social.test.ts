@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { findCliques } from '../src/agents/depth/factions.ts';
 import {
-  applyInMemory, buyFeelings, decayFactor, dropFeelings, feudPairs, isCold, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings, type AffinityMap,
+  BOND, RUG_BOND, applyInMemory, buyFeelings, decayFactor, dropFeelings, feudPairs, isCold, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings, type AffinityMap,
 } from '../src/agents/social.ts';
 
 describe('feeling rules (L4)', () => {
@@ -34,6 +34,10 @@ describe('feeling rules (L4)', () => {
     expect(dropFeelings('s', ['h1'], 0.05)).toEqual([]);
     expect(pumpBonds(['a', 'b', 'c'])).toHaveLength(6);
     expect(pumpBonds(Array.from({ length: 15 }, (_, i) => `h${i}`))).toHaveLength(90);
+    // A pump bonds a little each sweep, a rug a lot once: the same pairs, a different size.
+    expect(pumpBonds(['a', 'b'])).toEqual([{ from: 'a', to: 'b', delta: BOND }, { from: 'b', to: 'a', delta: BOND }]);
+    expect(pumpBonds(['a', 'b'], RUG_BOND).map((f) => f.delta)).toEqual([RUG_BOND, RUG_BOND]);
+    expect([BOND, RUG_BOND]).toEqual([0.03, 0.1]);
   });
   it('feelings halve in a day, a feud needs both sides to mean it, and the map clamps like adjustAffinity', () => {
     expect(decayFactor(24 * 3600_000)).toBeCloseTo(0.5);
@@ -103,13 +107,18 @@ function simulate(seed: number, turns: number) {
 
 describe('the rules alone make friends and enemies (L4)', () => {
   it('over 12 hours of turns, factions can form and some pairs turn hostile, but not everyone', () => {
+    let hostile = 0;
     for (const seed of [1, 2, 3]) {
       const r = simulate(seed, 10_800);
-      expect(r.cliques.length).toBeGreaterThanOrEqual(1); // 4, 2, 2 when planned; 4, 2, 3 now
-      expect(r.hostile).toBeGreaterThanOrEqual(1); // 39, 51, 61 of 1,225 when planned; 1, 2, 2 once only < -0.2 is answered coldly (L4 fix)
+      expect(r.cliques.length).toBeGreaterThanOrEqual(1); // 4, 2, 2 when planned; 4, 2, 3 at BOND 0.02; 4, 4, 2 at BOND 0.03 (L5 fix)
       expect(r.hostile).toBeLessThanOrEqual(r.pairs * 0.1);
       expect(r.cliques.every((c) => c.length <= 6)).toBe(true);
+      hostile += r.hostile;
     }
+    // 39, 51, 61 of 1,225 when planned; 1, 2, 2 once only < -0.2 is answered coldly (L4 fix); 0, 1, 1 once pumps bond at 0.03 (L5 fix):
+    // stronger bonds leave fewer enemies made by talk alone (the live feuds come from rugs, which this simulation leaves out), so the
+    // property is "some pair somewhere still turns hostile", not "every seed has one".
+    expect(hostile).toBeGreaterThanOrEqual(1);
   });
   it('three hours in, mild dislike stays civil: talk alone has not made a feud yet', () => {
     // 15 hostile pairs when planned, while any feeling below zero was answered coldly; 0 now that only < -0.2 is (L4 fix).
