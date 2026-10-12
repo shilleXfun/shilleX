@@ -80,7 +80,7 @@ export function localPaper(f: PaperFacts): PaperText {
 }
 
 /** Writes the day's paper once: a day that already has one keeps it (papers.day is the primary key). */
-export async function writePaper(d: EngineDeps, day: string, p: PaperText & { memeBrief: string | null }, source: 'model' | 'local') {
+export async function writePaper(d: Pick<EngineDeps, 'db' | 'now'>, day: string, p: PaperText & { memeBrief: string | null }, source: 'model' | 'local') {
   await d.db.insert(papers).values({ day, headline: p.headline.slice(0, HEADLINE_MAX), body: { stories: p.stories.slice(0, MAX_STORIES), memeBrief: p.memeBrief, source }, createdAt: d.now() }).onConflictDoNothing();
 }
 
@@ -158,12 +158,21 @@ export const paperModule: DepthModule = {
     pending.delete(day);
     const [exists] = await d.db.select({ day: papers.day }).from(papers).where(eq(papers.day, day));
     if (exists) return;
-    const facts = await paperFacts(d.db, day);
-    if (d.moments) {
-      const agentId = facts.leadAgentId ?? (await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent')).limit(1))[0]?.id;
-      // `key` keeps two days' papers by the same lead apart in the queue's de-duplication.
-      if (agentId && d.moments.enqueue({ kind: 'paper', agentId, data: { day, key: day }, at: now })) { pending.set(day, now.getTime()); return; }
-    }
-    await writePaper(d, day, { ...localPaper(facts), memeBrief: null }, 'local');
+    await publishPaper(d, day);
   },
 };
+
+/**
+ * Puts `day`'s paper on the moment queue, so its lead agent writes it with one model call inside the daily cap; when there is
+ * no queue (no model) or it is closed (budget spent, halted), writes the local paper at once. Used by the sweep and /admindev.
+ */
+export async function publishPaper(d: Pick<EngineDeps, 'db' | 'now' | 'moments'>, day: string): Promise<'queued' | 'local'> {
+  const facts = await paperFacts(d.db, day);
+  if (d.moments) {
+    const agentId = facts.leadAgentId ?? (await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent')).limit(1))[0]?.id;
+    // `key` keeps two days' papers by the same lead apart in the queue's de-duplication.
+    if (agentId && d.moments.enqueue({ kind: 'paper', agentId, data: { day, key: day }, at: d.now() })) { pending.set(day, d.now().getTime()); return 'queued'; }
+  }
+  await writePaper(d, day, { ...localPaper(facts), memeBrief: null }, 'local');
+  return 'local';
+}
