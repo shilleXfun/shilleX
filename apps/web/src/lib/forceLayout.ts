@@ -4,6 +4,13 @@ export type Pt = { x: number; y: number };
 export const FEUD_AT = -0.4;
 /** A node with more feuds than this has the extra push of each of them scaled down, so one much-hated agent cannot blow the layout apart. */
 export const MAX_FEUD_PUSH = 6;
+/**
+ * How hard each node is pulled toward the loose ring. Repulsion pushes the outer nodes outward at roughly a third of k, and
+ * at the old 0.08 the pull could not hold them: the soft margin collected about half the agents into straight rows along
+ * the walls, with or without feuds (23-29 of 50 within 6% of a wall, against 11 for a uniform spread). At this strength
+ * the outer agents settle inside the ring instead, and a flat box no longer stacks them along its top and bottom.
+ */
+const RING_PULL = 0.7;
 
 export function mulberry32(seed: number): () => number {
   let a = seed | 0;
@@ -78,8 +85,8 @@ export function forceLayout(
       // Pull toward a loose ring (an ellipse at 70% of the half extents) instead of the centre, so agents spread over the
       // whole backdrop rather than collapsing behind the reading column or flattening against the walls.
       const ux = (xs[i]! - cx) / (width / 2), uy = (ys[i]! - cy) / (height / 2), rr = Math.max(1e-6, Math.hypot(ux, uy));
-      dx[i]! += (cx + (ux / rr) * 0.7 * (width / 2) - xs[i]!) * 0.08;
-      dy[i]! += (cy + (uy / rr) * 0.7 * (height / 2) - ys[i]!) * 0.08;
+      dx[i]! += (cx + (ux / rr) * 0.7 * (width / 2) - xs[i]!) * RING_PULL;
+      dy[i]! += (cy + (uy / rr) * 0.7 * (height / 2) - ys[i]!) * RING_PULL;
       const m = Math.hypot(dx[i]!, dy[i]!);
       if (m > 0) { const s = Math.min(m, temp) / m; xs[i]! += dx[i]! * s; ys[i]! += dy[i]! * s; }
       const mx = width * 0.06, my = height * 0.06;
