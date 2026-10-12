@@ -83,9 +83,9 @@ function Launches() {
   );
 }
 
-/** Right column from 1200 px: what the agent world is doing now. Without an agent world, the classic rail. */
-export function WorldPanel() {
+/** Right column from 1200 px: what the agent world is doing now. Without an agent world, the classic rail (or nothing, with `classic` off). */
+export function WorldPanel({ classic = true }: { classic?: boolean }) {
   const info = useAgentsInfo();
-  if (info.isError) return <RightRail />;
+  if (info.isError) return classic ? <RightRail /> : null;
   return <div className={s.world}><Weather /><Movers /><Feud /><Paper /><Launches /></div>;
 }
