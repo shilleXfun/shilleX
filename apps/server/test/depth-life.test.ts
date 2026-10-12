@@ -2,10 +2,12 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { eq, and } from 'drizzle-orm';
 import { depthTestCtx } from './depth-helpers.ts';
 import { lifeStep, lendAmount, lifeModule, BROKE_LAMPORTS, GHOST_AFTER_MS, DEFAULT_AFTER_MS } from '../src/agents/depth/life.ts';
-import { emptyDepth } from '../src/agents/depth/registry.ts';
+import { DepthRegistry, emptyDepth, type RunTool } from '../src/agents/depth/registry.ts';
+import { act } from '../src/agents/act.ts';
+import { perceive } from '../src/agents/perceive.ts';
 import { loadState, recentEvents, saveState } from '../src/agents/state.ts';
 import { runTool } from '../src/world/tools.ts';
-import { agentAffinity, agentState, debts } from '../src/db/schema.ts';
+import { agentAffinity, agentState, agentTurns, debts } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import type { AgentView, Candidate } from '../src/agents/types.ts';
 
@@ -125,6 +127,66 @@ describe('life', () => {
     // A ghost already paid for is not paid for again before it wakes.
     expect(await lifeModule.execute!(ctx.d, v, revive, async (n, i) => { sent.push(n); return runTool(sctx, n, i); })).toMatchObject({ ok: false, error: 'Already revived' });
     expect(sent).toEqual(['send_sol']);
+  });
+  describe('begging does not repeat the feed (L6b)', () => {
+    const beg: Candidate = { kind: 'beg', situation: 'begging', score: 0.6, reason: 'broke (0.0050 SOL), asking for help' };
+    const WALLET = 5_000_000; // 0.0050 SOL
+    const feedOf = (...bodies: string[]) => bodies.map((body, i) => ({ postId: `p${i}`, authorId: 'someone-else', body, at: '2026-10-12T00:00:00.000Z', reactions: 0 }));
+    const viewWith = (lines: string[], feed: ReturnType<typeof feedOf> | undefined, me: { id: string; username: string }) =>
+      ({ agent: { id: me.id, username: me.username }, state: base, wallet: { lamports: WALLET, positions: [] }, affinity: {}, phrasebook: { ...phrasebook, lines: { begging: lines } }, feed,
+        depth: emptyDepth(), now: ctx!.t.clock.now().toISOString() }) as unknown as AgentView;
+    /** A tool that only records what would be sent. */
+    const recorder = () => {
+      const sent: { name: string; body: unknown }[] = [];
+      return { sent, tool: (async (name: string, input: Record<string, unknown>) => { sent.push({ name, body: input.body }); return { ok: true, write: true, result: { post_id: 'p-new' } }; }) as RunTool };
+    };
+
+    it('posts a line the feed does not have, whatever its case or spacing', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[0]!;
+      const d = { ...ctx.d, rng: () => 0 }; // takes the first line that is fresh
+      const { sent, tool } = recorder();
+      const r = await lifeModule.execute!(d, viewWith(['spare some SOL?', 'need a hand'], feedOf('Spare   SOME sol?'), me), beg, tool);
+      expect(r).toMatchObject({ ok: true, text: 'need a hand', postId: 'p-new' });
+      expect(sent).toEqual([{ name: 'post', body: 'need a hand' }]);
+    });
+    it('falls back to the plain plea when every line is on the feed, and goes quiet when that is too', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[0]!;
+      const d = { ...ctx.d, rng: () => 0 };
+      const plea = 'down to 0.0050 SOL. anyone?';
+      const first = recorder();
+      expect(await lifeModule.execute!(d, viewWith(['spare some SOL?'], feedOf('spare some SOL?'), me), beg, first.tool)).toMatchObject({ ok: true, text: plea });
+      expect(first.sent).toEqual([{ name: 'post', body: plea }]);
+      const second = recorder();
+      expect(await lifeModule.execute!(d, viewWith(['spare some SOL?'], feedOf('spare some SOL?', plea), me), beg, second.tool)).toEqual({ ok: false, quiet: true, error: 'nothing fresh to say' });
+      expect(second.sent).toEqual([]);
+    });
+    it('does not hold a private plea to the public feed', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[0]!, friend = ctx.agents[1]!;
+      const d = { ...ctx.d, rng: () => 0 };
+      const { sent, tool } = recorder();
+      const r = await lifeModule.execute!(d, viewWith(['spare some SOL?'], feedOf('spare some SOL?'), me), { ...beg, target: { userId: friend.id } }, tool);
+      expect(r).toMatchObject({ ok: true, text: 'spare some SOL?' });
+      expect(sent).toEqual([{ name: 'start_dm', body: 'spare some SOL?' }]);
+    });
+    it('through act(), a plea with nothing fresh is a quiet turn, not a failure', async () => {
+      ctx = await depthTestCtx();
+      const me = ctx.agents[2]!;
+      const d = { ...ctx.d, depth: new DepthRegistry([lifeModule]) };
+      const v = await perceive(d, me.id);
+      const plea = `down to ${(v.wallet.lamports / 1e9).toFixed(4)} SOL. anyone?`;
+      const crowded = { ...v, phrasebook: { ...v.phrasebook, lines: { begging: ['spare some SOL?'] } }, feed: feedOf('spare some SOL?', plea) };
+      const r = await act(d, crowded, beg);
+      expect(r.ok).toBe(false);
+      expect(r.error).toBeUndefined();
+      const [t] = await ctx.t.db.select().from(agentTurns).where(eq(agentTurns.id, r.turnId));
+      expect(t).toMatchObject({ status: 'quiet', reasoning: 'broke (0.0050 SOL), asking for help; nothing fresh to say', toolCalls: [] });
+      const after = await loadState(ctx.t.db, me.id, ctx.t.clock.now());
+      expect(after.mood).toBe(v.state.mood); // no failure penalty
+      expect(after.cooldowns.beg).toBeDefined(); // and it will not retry at once
+    });
   });
   it('never sends SOL the sender cannot spare above the reserve', async () => {
     ctx = await depthTestCtx();

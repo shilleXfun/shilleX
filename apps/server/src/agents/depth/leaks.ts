@@ -4,7 +4,8 @@ import { conversationMembers, messages, users } from '../../db/schema.ts';
 import { agentOnlyConversationIds } from '../../services/backchannel.ts';
 import { userSummaries } from '../../services/hydrate.ts';
 import { COOLDOWN_MS, ready } from '../decide.ts';
-import { composeLine } from '../phrasebook.ts';
+import { normalizeBody } from '../../services/moderation.ts';
+import { composeLine, feedSeen } from '../phrasebook.ts';
 import { adjustAffinity, rememberEvent } from '../state.ts';
 import type { DepthView } from '../types.ts';
 import { applyDrift, driftForEvent } from './drift.ts';
@@ -79,7 +80,10 @@ export const leaksModule: DepthModule = {
     const people = await userSummaries(d.db, [l.targetId, ...l.lines.map((x) => x.authorId)]);
     const names = new Map([...people].map(([id, u]) => [id, u.username]));
     const target = names.get(l.targetId) ?? '?';
-    const intro = composeLine(v.phrasebook, 'leak', { user: `@${target}` }, v.state.recentLines, d.rng);
+    // The intro is not one the feed already has: neither as a post of its own nor as the head of an earlier leak ("intro 👀", then the quotes).
+    const seen = feedSeen(v.feed);
+    for (const f of v.feed ?? []) seen.add(normalizeBody(f.body.split('\n')[0]!.replace(/\s*👀\s*$/u, '')));
+    const intro = composeLine(v.phrasebook, 'leak', { user: `@${target}` }, v.state.recentLines, d.rng, seen);
     const text = leakBody(l.lines, names, target, intro?.text ?? null);
     const out = await tool('post', { body: text });
     if (!out.ok) return { ok: false, error: JSON.stringify(out.result) };
