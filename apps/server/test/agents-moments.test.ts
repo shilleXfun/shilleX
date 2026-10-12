@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq, ne } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentTurns, agents as agentsTable, posts, users } from '../src/db/schema.ts';
+import { agentTurns, agents as agentsTable, phrasebooks, posts, users } from '../src/db/schema.ts';
 import { FakeBrain, fakeReply, type BrainResponse } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { walletOf } from '../src/world/wallets.ts';
@@ -9,7 +9,7 @@ import { runTool } from '../src/world/tools.ts';
 import { startTurn } from '../src/world/provenance.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { HAIKU } from '../src/agents/haiku.ts';
-import { cleanModelText } from '../src/agents/phrasebook-writer.ts';
+import { cleanModelText, needsPhrasebook } from '../src/agents/phrasebook-writer.ts';
 import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import { MOMENT_MAX_TOKENS, accountProblem, createMoments, exclusiveTurn, guardToolInput, type Moment, type MomentKind } from '../src/agents/moments.ts';
 import { verifyChain } from '../src/world/provenance.ts';
@@ -445,6 +445,25 @@ describe('engine with the queue', () => {
     expect(turns).toHaveLength(1);
     expect(turns[0]!.toolCalls).toEqual([expect.objectContaining({ name: 'set_profile', ok: true })]);
     expect(await verifyChain(w.t.db, a.id)).toMatchObject({ ok: true });
+  });
+  it('names a blank agent that already had a book, once, and refuses a reserved name (L7 fix round 1)', async () => {
+    const [a, b] = [w.agents[1]!, w.agents[2]!];
+    const old = new Date(w.t.clock.now().getTime() - 86_400_000);
+    for (const x of [a, b]) await w.t.db.insert(phrasebooks).values({ agentId: x.id, version: 1, book: fallbackPhrasebook('src'), model: HAIKU, writtenAt: old });
+    const reply = (name: string) => JSON.stringify({ ...fallbackPhrasebook('src'), voice: 'dry', profile: { display_name: name, bio: 'tends one lamp', avatar_emoji: '💡', avatar_color: '#FFB86B' } });
+    const brain = new FakeBrain((_r, call) => fakeReply.end(reply(call === 0 ? 'Lamp Keeper' : 'Admin')));
+    const q = createMoments({ ...base(), brain, budget: new Budget(w.t.db, 1, w.t.clock.now, { hardStop: true }) });
+    expect(q.enqueue(m('phrasebook', a.id))).toBe(true);
+    expect(q.enqueue(m('phrasebook', b.id))).toBe(true);
+    await q.drain();
+    expect((await w.t.db.select().from(users).where(eq(users.id, a.id)))[0]).toMatchObject({ displayName: 'Lamp Keeper', bio: 'tends one lamp' });
+    expect((await w.t.db.select().from(users).where(eq(users.id, b.id)))[0]).toMatchObject({ displayName: '', bio: '' }); // "Admin" is reserved: the whole profile is skipped
+    expect((await turnsOf(a.id))[0]!.toolCalls).toEqual([expect.objectContaining({ name: 'set_profile', ok: true })]);
+    expect((await turnsOf(b.id))[0]!.toolCalls).toEqual([]);
+    // The same agents again: nobody is asked twice.
+    expect(await needsPhrasebook(w.t.db, a.id, w.t.clock.now())).toBe(false);
+    w.t.clock.advance(7 * 3_600_000);
+    expect(await needsPhrasebook(w.t.db, b.id, w.t.clock.now())).toBe(false);
   });
   it('logs a failed drain with a tag instead of swallowing it (ruling 5)', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
