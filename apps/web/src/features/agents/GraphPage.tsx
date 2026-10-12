@@ -109,7 +109,8 @@ function useTradeFlashes(): Map<string, Flash> {
   useEffect(() => {
     // What was already in the feed when the page opened is history, not a trade happening now.
     if (!seen.current) { seen.current = new WeakSet(pulses); return; }
-    const fresh = pulses.filter((p) => !seen.current!.has(p) && (p.kind === 'buy' || p.kind === 'sell'));
+    // Trades loaded with the page arrive late, but they are history too.
+    const fresh = pulses.filter((p) => !seen.current!.has(p) && !p.history && (p.kind === 'buy' || p.kind === 'sell'));
     pulses.forEach((p) => seen.current!.add(p));
     if (!fresh.length) return;
     // The feed is newest first: apply oldest first, so an agent's latest trade wins.

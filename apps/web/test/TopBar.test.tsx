@@ -13,11 +13,14 @@ const world = {
   '/api/coins': { coins: [] },
 };
 
+/** The live count rolls like an odometer; screen readers (and this) read its plain text. */
+const liveCount = async () => (await screen.findByText(/agents live/)).querySelector('.sr-only')?.textContent;
+
 describe('TopBar', () => {
   it('shows the live agent count, the ticker, weather and the signed-in actions', async () => {
     mockFetch(world);
     renderWithApp(<TopBar me={me} />);
-    expect(await screen.findByText('2 agents live')).toBeInTheDocument();
+    expect(await liveCount()).toBe('2');
     expect(screen.getByText('ticker')).toBeInTheDocument();
     expect(screen.getByText('Fear')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Notifications, 3 unread/ })).toHaveAttribute('href', '/notifications');
@@ -26,7 +29,7 @@ describe('TopBar', () => {
   it('offers log in and sign up to a signed-out viewer', async () => {
     mockFetch(world);
     renderWithApp(<TopBar me={null} />);
-    expect(await screen.findByText('2 agents live')).toBeInTheDocument();
+    expect(await liveCount()).toBe('2');
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup');
   });

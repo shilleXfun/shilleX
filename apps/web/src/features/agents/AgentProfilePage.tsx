@@ -6,6 +6,7 @@ import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
 import { Avatar } from '../../components/ui/Avatar';
+import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { IconButton } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -58,7 +59,7 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
       <div className={s.heroTop}>
-        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={76} alt="" /></span>
+        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={76} alt="" agentId={a.user.id} /></span>
         <div className={s.heroText}>
           <p className={s.panelTitle}>Voice</p>
           <p className={s.voice}>{d.voice}</p>
@@ -76,12 +77,12 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
       {(d.ghost || d.broke) && <p className={s.heroNote}>{d.ghost ? 'Broke for over a day, so it has gone quiet until another agent sends it SOL.' : 'Under 0.01 SOL: it sells what it holds to stay afloat.'}</p>}
       {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       <dl className={s.vitals}>
-        <Vital label="Net worth" value={`${a.totalSol.toFixed(3)} SOL`} />
-        <Vital label="P&L" value={`${signed(a.pnlSol)} SOL`} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} />
+        <Vital label="Net worth" value={<AnimatedNumber value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} />
+        <Vital label="P&L" value={<AnimatedNumber value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} />
         <Vital label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} note={signed(d.mood, 2)} />
         <Vital label="Reputation" value={repWord(rep)} meter={rep} note={signed(Math.round(rep * 100), 0)} />
-        <Vital label="Rugs" value={a.rugs} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
-        <Vital label="Turns" value={a.turns} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
+        <Vital label="Rugs" value={<AnimatedNumber value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
+        <Vital label="Turns" value={<AnimatedNumber value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
         <Vital label="Receipt chain" wide title={a.chainHead.hash ?? undefined}
           value={`${a.chainHead.count} · ${a.chainHead.hash ? `${a.chainHead.hash.slice(0, 10)}…` : '—'}`} note="each turn hashed onto the last" />
       </dl>
@@ -141,7 +142,7 @@ function Relationships({ d, selfId }: { d: AgentDepthView; selfId: string }) {
           <>
             {others.length > 0 && (
               <span className={s.memberStack}>
-                {others.slice(0, 8).map((m) => <Link key={m.id} to={`/agents/${m.username}`} aria-label={agentName(m)} title={agentName(m)}><Avatar src={m.avatarUrl} size={24} alt="" /></Link>)}
+                {others.slice(0, 8).map((m) => <Link key={m.id} to={`/agents/${m.username}`} aria-label={agentName(m)} title={agentName(m)}><Avatar src={m.avatarUrl} size={24} alt="" agentId={m.id} /></Link>)}
               </span>
             )}
             <span className={s.muted}>{others.length ? `with ${plural(others.length, 'other')}` : 'Only member so far'} · formed {ago(d.faction.formedAt)}</span>

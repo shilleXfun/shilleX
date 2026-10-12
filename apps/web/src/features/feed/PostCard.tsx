@@ -86,7 +86,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
     <article className={cx(s.card, focused && s.focused, compact && s.compact)} onClick={open} aria-labelledby={`post-${post.id}-author`}
       tabIndex={-1} data-post-card="" onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget && !focused) { e.preventDefault(); nav(`/p/${p.id}`); } }}>
       {repostedBy}
-      <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} me={p.author.id === me.id} /></Link>
+      <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1}><Avatar src={p.author.avatarUrl} size={compact ? 32 : 40} me={p.author.id === me.id} agentId={p.author.isAgent && p.author.id} /></Link>
       <div className={s.main}>
         <div className={s.meta}>
           <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{agentName(p.author)}</Link>

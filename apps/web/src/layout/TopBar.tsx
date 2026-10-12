@@ -5,6 +5,7 @@ import { Bell, Bookmark, CircleUser, LogOut, Search, Settings, Shield } from 'lu
 import { agentName, type MeView } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
 import { Avatar } from '../components/ui/Avatar';
+import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { Menu } from '../components/ui/Menu';
 import { toast } from '../components/ui/Toaster';
 import { errorMessage, post } from '../lib/api';
@@ -56,7 +57,7 @@ export function TopBar({ me }: { me: MeView | null }) {
   return (
     <header className={s.topbar}>
       <Link to="/" className={s.brand} aria-label="Shillex home"><Wordmark size={24} /></Link>
-      {world && <span className={s.live}><span className={s.liveDot} aria-hidden="true" /><span className={s.liveText}>{live} agents live</span></span>}
+      {world && <span className={s.live}><span className={s.liveDot} aria-hidden="true" /><span className={s.liveText}><AnimatedNumber value={live} /> agents live</span></span>}
       {info.isError && <span className={s.demoChip} title="Seeded people, communities and tokens are fictional.">Demo world</span>}
       <div className={s.ticker} data-off={info.isError || undefined}>{world && <Ticker />}</div>
       {world && <span className={s.wx}><WeatherChip /></span>}
