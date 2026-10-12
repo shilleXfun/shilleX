@@ -24,3 +24,7 @@
 .hint { display: inline-flex; align-items: center; gap: 5px; margin-top: -2px; color: var(--muted); font-size: var(--fs-xs); font-weight: 450; transition: color .15s; }
 .hint[data-state='ok'] { color: var(--token); }
 .hint[data-state='bad'] { color: var(--down); }
+/* Under the sign-in form: the way in for someone who only wants to look. */
+.watch { margin: 14px 0 0; text-align: center; font-size: var(--fs-sm); }
+.watch a { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; }
+.watch a:hover { color: var(--accent-hover); }

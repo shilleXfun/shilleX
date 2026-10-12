@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ScrollRestoration, useLocation, useMatch, useNavigate, useOutlet } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
+import type { MeView } from '@shillex/shared';
 import { dur, ease } from '../lib/motion';
 import { useRequiredMe } from '../lib/useMe';
 import { TopBar } from './TopBar';
@@ -21,7 +22,6 @@ import { CommandPalette, openPalette } from './CommandPalette';
 import s from './layout.module.css';
 import sh from './shell.module.css';
 
-/** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
 /** j/k: focus the next or previous post card, starting from the focused one or else the one in view. */
 function stepPost(dir: 1 | -1) {
   const cards = [...document.querySelectorAll<HTMLElement>('main [data-post-card]')];
@@ -37,6 +37,7 @@ function stepPost(dir: 1 | -1) {
   next.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 
+/** Focuses a `data-shortcut` target, retrying briefly while the page it lives on is still animating in. */
 function focusShortcut(name: string, tries = 12) {
   const el = document.querySelector<HTMLElement>('[data-shortcut="' + name + '"]');
   if (el) el.focus();
@@ -50,12 +51,12 @@ const route = {
   exit: { opacity: 0, y: -4, pointerEvents: 'none', transition: { duration: dur.micro } },
 };
 
-export function AppShell() {
-  const me = useRequiredMe();
-  useTokenEvents();
-  useRealtimeSync();
-  useSwarmPosts();
-  useAgentPulses();
+/**
+ * The Swarm layout both shells share: the glass top bar, the icon rail, the page column with its route transition, the
+ * World now panel from 1200 px and the phone tab bar. `me` null is a visitor (public sections only); `children` are the
+ * shell's own overlays (banners, dialogs, toasts, panels).
+ */
+export function ShellFrame({ me, children }: { me: MeView | null; children?: ReactNode }) {
   const { pathname } = useLocation();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
@@ -67,14 +68,43 @@ export function AppShell() {
   // Conversation screens are immersive on mobile: no tab bar or top bar (they render their own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
-  const nav = useNavigate();
   // The World now panel only exists from 1200px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
-  const [help, setHelp] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
+  return (
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide}>
+      <a href="#main" className={s.skip}>Skip to content</a>
+      <TopBar me={me} />
+      <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
+      <div className={sh.stage}>
+        <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
+          {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+          </AnimatePresence>
+        </main>
+        {/* A visitor never gets the classic rail (no agent world): it is built from signed-in data. */}
+        {wideEnoughForRail && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} /></aside>}
+      </div>
+      {children}
+      <MobileTabBar me={me} />
+      <ScrollRestoration />
+    </div>
+  );
+}
+
+export function AppShell() {
+  const me = useRequiredMe();
+  useTokenEvents();
+  useRealtimeSync();
+  useSwarmPosts();
+  useAgentPulses();
+  const { pathname } = useLocation();
+  const nav = useNavigate();
+  const [help, setHelp] = useState(false);
   useHotkeys({
     // A page's own search box wins; elsewhere / opens the palette.
     '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
@@ -85,26 +115,12 @@ export function AppShell() {
     '?': () => setHelp(true),
   });
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide}>
-      <a href="#main" className={s.skip}>Skip to content</a>
+    <ShellFrame me={me}>
       <ReconnectBanner />
-      <TopBar me={me} />
-      <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
-      <div className={sh.stage}>
-        <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
-          {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
-          </AnimatePresence>
-        </main>
-        {wideEnoughForRail && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel /></aside>}
-      </div>
       <TokenPanelHost />
-      <MobileTabBar me={me} />
       <Toaster />
       <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
       <CommandPalette />
-      <ScrollRestoration />
-    </div>
+    </ShellFrame>
   );
 }

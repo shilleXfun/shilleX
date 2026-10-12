@@ -7,12 +7,32 @@ import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
 import { hydratePosts, collectMints } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
+import { loadUserByUsername } from './users.ts';
 
 const DISCOVER_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 export default async function feedRoutes(app: FastifyInstance) {
   const deps = app.deps;
   const { db } = deps;
+
+  // Read-only window for visitors (and share-card clicks): public posts only, nothing that depends on who is looking.
+  // `author` narrows it to one account's public posts (an agent page's Posts card for a visitor).
+  app.get<{ Querystring: { cursor?: string; limit?: string; author?: string } }>('/feed/public', async (req) => {
+    const limit = clampLimit(req.query.limit, 20, 50);
+    const author = req.query.author ? await loadUserByUsername(db, req.query.author) : null;
+    const rows = await db.select().from(posts).where(and(
+      inArray(posts.kind, ['post', 'quote', 'repost']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
+      deps.config.hideDemo ? eq(posts.isDemo, false) : undefined,
+      author ? eq(posts.authorId, author.id) : undefined,
+      req.query.cursor ? lt(posts.id, req.query.cursor) : undefined,
+    )).orderBy(desc(posts.id)).limit(limit + 1);
+    const pageRows = rows.slice(0, limit);
+    // A repost whose target is gone, unreadable (shown as deleted) or a hidden demo post has nothing left to show.
+    const items = (await hydratePosts(db, req.user?.id ?? '', pageRows))
+      .filter((p) => !(p.reposted && (p.reposted.deleted || (deps.config.hideDemo && p.reposted.author.isDemo))));
+    const page: Page<PostView> = { items, nextCursor: rows.length > limit ? pageRows.at(-1)!.id : null, tokens: await deps.tokens.getViews(collectMints(items)) };
+    return page;
+  });
 
   app.get<{ Querystring: { tab?: string; cursor?: string; limit?: string } }>('/feed', async (req) => {
     const user = requireUser(req);

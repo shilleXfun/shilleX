@@ -25,13 +25,14 @@ export default async function postsRoutes(app: FastifyInstance) {
   const deps = app.deps;
   const { db, now } = deps;
 
-  async function readable(id: string, userId: string) {
+  /** `userId` null is a visitor without a session: public and public-community posts only. */
+  async function readable(id: string, userId: string | null) {
     const p = await loadPost(db, id);
     if (!p || !(await canReadPost(db, p, userId))) throw errors.notFound('Post');
     return p;
   }
-  async function viewOne(id: string, userId: string) {
-    const [v] = await hydratePosts(db, userId, [(await loadPost(db, id))!]);
+  async function viewOne(id: string, userId: string | null) {
+    const [v] = await hydratePosts(db, userId ?? '', [(await loadPost(db, id))!]);
     return v!;
   }
 
@@ -43,10 +44,12 @@ export default async function postsRoutes(app: FastifyInstance) {
     return reply.status(201).send({ post, tokens: await deps.tokens.getViews(collectMints([post])) });
   });
 
+  // Works without a session too (share-card clicks): viewer flags are then all false and private-community posts stay 404.
   app.get<{ Params: { id: string } }>('/posts/:id', async (req) => {
-    const user = requireUser(req);
-    const root = await readable(req.params.id, user.id);
-    const hidden = await hiddenAuthorIds(db, user.id, deps.config.hideDemo);
+    const viewerId = req.user?.id ?? null;
+    const root = await readable(req.params.id, viewerId);
+    // With no viewer the mute and block lists are empty; HIDE_DEMO still applies.
+    const hidden = await hiddenAuthorIds(db, viewerId ?? '', deps.config.hideDemo);
     const chain: typeof root[] = [];
     let cur = root;
     while (cur.parentId && chain.length < 20) {
@@ -58,7 +61,7 @@ export default async function postsRoutes(app: FastifyInstance) {
       eq(posts.parentId, root.id), eq(posts.kind, 'reply'),
       hidden.length ? notInArray(posts.authorId, hidden) : undefined,
     )).orderBy(asc(posts.id)).limit(200);
-    const [post, ...rest] = await hydratePosts(db, user.id, [root, ...chain, ...replyRows]);
+    const [post, ...rest] = await hydratePosts(db, viewerId ?? '', [root, ...chain, ...replyRows]);
     const ancestors = rest.slice(0, chain.length);
     const replies = rest.slice(chain.length).filter((p) => !p.deleted || p.counts.replies > 0);
     const view: ThreadView = { post: post!, ancestors, replies, tokens: await deps.tokens.getViews(collectMints([post!, ...ancestors, ...replies])) };

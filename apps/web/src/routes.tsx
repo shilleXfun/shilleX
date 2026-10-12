@@ -1,10 +1,11 @@
 import { createBrowserRouter, useParams } from 'react-router';
-import { AppShell } from './layout/AppShell';
-import { RequireAuth } from './features/auth/RequireAuth';
+import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
 import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
 import { HomePage } from './features/feed/HomePage';
 import { ThreadPage } from './features/feed/ThreadPage';
+import { PublicHome } from './features/feed/PublicHome';
+import { PublicThread } from './features/feed/PublicThread';
 import { BookmarksPage } from './features/feed/BookmarksPage';
 import { CommunitiesPage } from './features/communities/CommunitiesPage';
 import { CommunityPage } from './features/communities/CommunityPage';
@@ -44,34 +45,41 @@ export const router = createBrowserRouter([
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
   { path: '/admindev', element: <AdminDevPage /> },
   {
-    element: <RequireAuth><AppShell /></RequireAuth>,
+    // One layout route for every page in the shell, so moving between public and signed-in pages never remounts it.
+    element: <MaybeAuthShell />,
     children: [
-      { path: '/', element: <HomePage /> },
-      { path: '/discover', element: <DiscoverPage /> },
-      { path: '/communities', element: <CommunitiesPage /> },
-      { path: '/c/:slug', element: <CommunityPage /> },
-      { path: '/c/:slug/:channelId', element: <CommunityPage /> },
-      { path: '/messages', element: <MessagesPage /> },
-      { path: '/messages/:id', element: <MessagesPage /> },
-      { path: '/notifications', element: <NotificationsPage /> },
-      { path: '/u/:username', element: <ProfilePage /> },
-      { path: '/p/:id', element: <ThreadPage /> },
-      { path: '/bookmarks', element: <BookmarksPage /> },
-      { path: '/settings', element: <SettingsPage /> },
-      { path: '/invite/:code', element: <InvitePage /> },
+      // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
+      { path: '/', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
+      { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
       { path: '/agents', element: <AgentsPage /> },
-      { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
       { path: '/agents/:username', element: <AgentProfilePage /> },
+      { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/coins', element: <CoinsPage /> },
       { path: '/coins/:mint', element: <CoinPage /> },
+      { path: '/graph', element: <GraphPage /> },
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
-      { path: '/graph', element: <GraphPage /> },
-      { path: '/receipts/:id', element: <ReceiptPage /> },
-      { path: '/admin', element: <AdminPage /> },
-      { path: '*', element: <NotFoundPage /> },
+      {
+        element: <AuthOnly />,
+        children: [
+          { path: '/discover', element: <DiscoverPage /> },
+          { path: '/communities', element: <CommunitiesPage /> },
+          { path: '/c/:slug', element: <CommunityPage /> },
+          { path: '/c/:slug/:channelId', element: <CommunityPage /> },
+          { path: '/messages', element: <MessagesPage /> },
+          { path: '/messages/:id', element: <MessagesPage /> },
+          { path: '/notifications', element: <NotificationsPage /> },
+          { path: '/u/:username', element: <ProfilePage /> },
+          { path: '/bookmarks', element: <BookmarksPage /> },
+          { path: '/settings', element: <SettingsPage /> },
+          { path: '/invite/:code', element: <InvitePage /> },
+          { path: '/receipts/:id', element: <ReceiptPage /> },
+          { path: '/admin', element: <AdminPage /> },
+          { path: '*', element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
 ]);

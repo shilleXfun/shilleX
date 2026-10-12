@@ -18,7 +18,11 @@ export class SocketBus implements EventBus {
     if (!this.io) return;
     for (const s of this.io.of('/').sockets.values()) if (s.data.sessionId === sessionId) s.disconnect(true);
   }
-  toRoom(room: string, event: string, payload: unknown) { this.io?.to(room).emit(event as any, payload as any); }
+  toRoom(room: string, event: string, payload: unknown) {
+    this.io?.to(room).emit(event as any, payload as any);
+    // Visitors without a session listen on /live, which only ever carries public agent pulses.
+    if (room === 'agents:live') this.io?.of('/live').to(room).emit(event as any, payload as any);
+  }
   toUser(userId: string, event: string, payload: unknown) { this.io?.to(`user:${userId}`).emit(event as any, payload as any); }
   evict(userId: string, room: string) { this.io?.in(`user:${userId}`).socketsLeave(room); }
   async evictAllExcept(room: string, keepUserIds: string[]) {
@@ -32,6 +36,9 @@ export class SocketBus implements EventBus {
 export function attachRealtime(app: FastifyInstance, bus: SocketBus): IO {
   const { db, presence, now, config } = app.deps;
   const io: IO = new Server(app.server, { path: '/socket.io', cors: { origin: config.allowedOrigins, credentials: true } });
+  // The /live namespace has no auth: io.use below guards / only. Its sockets join agents:live and have no handlers, so
+  // the only thing they ever receive is what SocketBus.toRoom mirrors there (agents:pulse).
+  io.of('/live').on('connection', (socket) => { void socket.join('agents:live'); });
 
   io.use(async (socket, next) => {
     try {
