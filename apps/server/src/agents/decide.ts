@@ -15,7 +15,7 @@ export const RUG_MIN_SHARE = 0.7;
 const MIN = 60_000, HOUR = 60 * MIN;
 export const COOLDOWN_MS: Record<ActionKind, number> = {
   post: 4 * MIN, reply: 1 * MIN, react: 20_000, follow: 10 * MIN, unfollow: 30 * MIN, chat: 90_000, dm: 2 * MIN,
-  buy: 3 * MIN, sell: 3 * MIN, launch: 6 * HOUR, rug: 30 * MIN, send_sol: 30 * MIN, create_community: 24 * HOUR,
+  buy: 3 * MIN, sell: 3 * MIN, launch: 12 * HOUR, rug: 30 * MIN, send_sol: 30 * MIN, create_community: 24 * HOUR,
   beg: 30 * MIN, repay: 10 * MIN, leak: 12 * HOUR, lend: 30 * MIN, revive: 2 * HOUR, idle: 0,
 };
 const WEATHER_RISK: Record<AgentView['weather'], number> = { euphoria: 0.2, grind: 0, fear: -0.2, chaos: 0.1 };
@@ -102,10 +102,20 @@ export function coinScore(v: AgentView, c: AgentView['coins'][number], talk: Map
   return { d, why: top ? WHY[top[0]]! : 'a hunch' };
 }
 
+// ── Launches (L3) ──
+/** A coin nobody but its creator bought within its first half hour. */
+export const DEAD_AFTER_MS = 30 * MIN;
+export function isDeadCoin(c: Pick<AgentView['coins'][number], 'holders' | 'launchedAt' | 'graduated'>, nowMs: number): boolean {
+  return !c.graduated && c.holders <= 1 && nowMs - Date.parse(c.launchedAt) >= DEAD_AFTER_MS;
+}
+/** A wallet this far above LAUNCH_MIN launches at full rate; poorer ones still can, down to a quarter as often. */
+export const LAUNCH_COMFORT = 60_000_000;
+
 export function candidates(v: AgentView, rng: () => number): Candidate[] {
   const t = v.state.traits, mood = v.state.mood;
   const aff = (id: string) => v.affinity[id] ?? 0;
   const energyFactor = 0.3 + 0.7 * v.state.energy;
+  const nowMs = Date.parse(v.now);
   const out: Candidate[] = [];
   const add = (c: Candidate) => {
     if (!(c.score > 0) || !ready(v, c.kind)) return;
@@ -161,7 +171,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
 
   // What to post about.
   const hour = new Date(v.now).getUTCHours();
-  const myCoin = v.coins.find((c) => c.creatorId === v.agent.id && !c.graduated);
+  // A creator stops shilling its coin once it is dead (L3).
+  const myCoin = v.coins.find((c) => c.creatorId === v.agent.id && !c.graduated && !isDeadCoin(c, nowMs));
   const winner = v.wallet.positions.find((p) => pnlOf(p) > 0.2);
   const loser = v.wallet.positions.find((p) => pnlOf(p) < -0.2);
   const busiest = [...v.coins].sort((a, b) => b.change1h - a.change1h)[0];
@@ -213,12 +224,17 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     add({ kind: 'sell', score, raw: sellRaw, situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
       reason: `sold ${all ? 'all' : 'half'} of $${p.symbol}: P&L ${pct(pnl)}, 10-min move ${pct(c.change10m)}, greed ${f2(t.greed)}` });
   }
-  const liveOwn = v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && Date.parse(v.now) - Date.parse(c.launchedAt) < 24 * HOUR);
+  const liveOwn = v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && nowMs - Date.parse(c.launchedAt) < 24 * HOUR);
   if (!broke && v.wallet.lamports >= LAUNCH_MIN && !liveOwn) {
     const initial = Math.max(0, Math.floor((v.wallet.lamports - RESERVE - LAUNCH_COST) * 0.3 * t.risk));
-    const recent = v.coins.filter((c) => Date.parse(v.now) - Date.parse(c.launchedAt) < HOUR).length;
-    add({ kind: 'launch', score: (0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent), lamports: initial, situation: 'launching',
-      reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, risk ${f2(t.risk)}, curiosity ${f2(t.curiosity)}` });
+    const recent = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < HOUR).length;
+    // Dead coins from the last day damp launches, a thin wallet launches less, and a creator whose last coin flopped is shy.
+    const dead = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < 24 * HOUR && isDeadCoin(c, nowMs)).length;
+    const wealth = 0.25 + 0.75 * clamp((v.wallet.lamports - LAUNCH_MIN) / LAUNCH_COMFORT, 0, 1);
+    const last = v.coins.filter((c) => c.creatorId === v.agent.id).sort((a, b) => b.launchedAt.localeCompare(a.launchedAt))[0];
+    const shy = last && isDeadCoin(last, nowMs) ? 0.3 : 1;
+    add({ kind: 'launch', score: ((0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent + dead / 4)) * wealth * shy, lamports: initial, situation: 'launching',
+      reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, ${recent} launched this hour, ${dead} dead today, risk ${f2(t.risk)}${shy < 1 ? ', my last coin flopped' : ''}` });
   }
   const ally = Object.entries(v.affinity).filter(([, s]) => s > 0.7).sort((a, b) => b[1] - a[1])[0];
   if (!broke && ally && v.wallet.lamports > 80_000_000) {
