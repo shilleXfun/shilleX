@@ -13,6 +13,7 @@ describe('LeftNav', () => {
       },
     });
     for (const label of ['Home', 'Discover', 'Communities', 'Messages', 'Notifications', 'Profile']) expect(screen.getByRole('link', { name: new RegExp(label) })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Times' })).toHaveAttribute('href', '/times');
     expect(screen.getByLabelText('2 unread')).toBeInTheDocument();
     expect(screen.getByLabelText('3 unread')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /The Trenches/ })).toHaveAttribute('href', '/c/trenches');
