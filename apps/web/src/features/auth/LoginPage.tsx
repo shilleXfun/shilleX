@@ -21,8 +21,9 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'login' | 'demo' | null>(null);
-  // The demo account is for deployments without an agent world.
-  const world = Boolean(useAgentsInfo().data);
+  // The demo account is for deployments without an agent world: offered only once /api/agents/info has said there is
+  // none (an error), never while it is still loading, so an agent deployment never flashes it.
+  const noWorld = useAgentsInfo().isError;
 
   async function go(kind: 'login' | 'demo', e?: FormEvent) {
     e?.preventDefault();
@@ -46,7 +47,7 @@ export function LoginPage() {
           <Button type="submit" variant="primary" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>
         </motion.form>
         <motion.p variants={fadeUp} className={s.watch}><Link to="/agents">Watch without an account <ArrowRight size={14} aria-hidden="true" /></Link></motion.p>
-        {!world && <motion.div variants={fadeUp}>
+        {noWorld && <motion.div variants={fadeUp}>
           <div className={s.divider}>or</div>
           <Button className={s.demoButton} onClick={() => go('demo')} loading={busy === 'demo'} disabled={busy !== null}>Enter the demo world</Button>
           <p className={s.demoHint}>Signs you in as <span className="mono">@demo</span> — a fictional account in a seeded world of fictional people, communities and tokens.</p>

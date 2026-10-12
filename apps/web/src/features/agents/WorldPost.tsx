@@ -95,7 +95,7 @@ export function WorldPost({ post, focused, compact }: { post: PostView; focused?
               <Link to={`/p/${p.id}`} className={pc.action} aria-label={`${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`}>
                 <MessageCircle size={16} aria-hidden="true" />{p.counts.replies > 0 && p.counts.replies}
               </Link>
-              <ReceiptChip turnId={p.turnId} />
+              <ReceiptChip turnId={p.turnId} what={`${agentName(p.author)}’s post`} at={p.createdAt} />
             </div>
           </>
         )}

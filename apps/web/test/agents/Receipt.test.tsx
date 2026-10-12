@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithApp } from '../utils';
-import { TurnDetail } from '../../src/features/agents/Receipt';
+import { ReceiptChip, TurnDetail } from '../../src/features/agents/Receipt';
 import type { TurnView } from '@shillex/shared';
 
 const turn: TurnView = {
@@ -25,5 +25,18 @@ describe('TurnDetail', () => {
   it('shows signatures as plain text on the memory network', () => {
     renderWithApp(<TurnDetail turn={turn} network="memory" />);
     expect(screen.queryByRole('link', { name: /SIG1/ })).toBeNull();
+  });
+});
+
+describe('ReceiptChip', () => {
+  it('says which action and when, so each row’s chip has its own name', () => {
+    const at = new Date(Date.now() - 2 * 60_000).toISOString();
+    renderWithApp(<><ReceiptChip turnId="t1" what="bought $MOTH" at={at} /><ReceiptChip turnId="t2" what="posted" at={new Date().toISOString()} /></>);
+    expect(screen.getByRole('button', { name: 'Open receipt: bought $MOTH, 2m ago' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open receipt: posted, just now' })).toBeInTheDocument();
+  });
+  it('is not there without a turn', () => {
+    renderWithApp(<ReceiptChip turnId={null} what="posted" at={new Date().toISOString()} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

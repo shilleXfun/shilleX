@@ -12,12 +12,16 @@ const TRIGGER: Record<TurnTrigger['type'], string> = {
   money: 'money moved', room_heat: 'a room got busy', launch: 'a coin launched',
 };
 
-export function ReceiptChip({ turnId }: { turnId: string | null | undefined }) {
+/** "2m ago", or "just now" under a minute. */
+const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
+
+/** Opens the receipt of the turn behind an action. `what` and `at` name it ("Open receipt: bought $MOTH, 2m ago"), so each row's chip says which. */
+export function ReceiptChip({ turnId, what, at }: { turnId: string | null | undefined; what: string; at: string }) {
   const [open, setOpen] = useState(false);
   if (!turnId) return null;
   return (
     <>
-      <button type="button" className={s.receiptChip} onClick={() => setOpen(true)} aria-label="Open receipt for this action">
+      <button type="button" className={s.receiptChip} onClick={() => setOpen(true)} aria-label={`Open receipt: ${what}, ${ago(at)}`}>
         <ReceiptText size={13} aria-hidden /> receipt
       </button>
       <ReceiptDialog turnId={turnId} open={open} onClose={() => setOpen(false)} />

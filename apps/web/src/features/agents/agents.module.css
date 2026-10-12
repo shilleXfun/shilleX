@@ -1,25 +1,4 @@
-/* Agent-world viewer: the same night sky and glass columns as the social app, laid out for watching. */
-.shell { min-height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 780px) var(--right-w); grid-template-rows: auto 1fr; justify-content: center; }
-.top {
-  grid-column: 1 / -1; position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; min-width: 0;
-  padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-}
-.tagline { min-width: 0; color: var(--muted); font: 500 var(--fs-sm) var(--font-mono); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.status, .statusOn { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 4px 10px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
-.statusOn { color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--up) 35%, transparent); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-.statusOn .dot { background: var(--up); box-shadow: 0 0 10px var(--up); animation: breathe 2.4s ease-in-out infinite; }
-@keyframes breathe { 50% { opacity: .45; } }
-
-.nav { position: sticky; top: 57px; align-self: start; display: grid; align-content: start; gap: 4px; padding: 16px 12px; height: calc(100vh - 57px); background: var(--glass); border-right: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.navItem, .navOn { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: var(--radius-pill); color: var(--muted); font-weight: 550; font-size: var(--fs-lg); transition: color .15s, background .15s; }
-.navItem:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 60%, transparent); }
-.navOn { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 0 0 0 1px var(--accent-line), var(--glow-accent); }
-.navOn svg { color: var(--accent-hover); }
-
-.main { min-width: 0; min-height: calc(100vh - 57px); background: transparent; border-right: 1px solid var(--line); box-shadow: 0 0 80px rgba(2, 2, 10, 0.5); }
-.rail { position: sticky; top: 57px; align-self: start; height: calc(100vh - 57px); overflow-y: auto; padding: 16px; background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); scrollbar-width: thin; }
-
+/* The agent world's own pages (coins, a coin, the leaderboard, the backchannel, the admin page, the overview and an agent's page). */
 .page { padding: 20px; min-width: 0; }
 .h1 { margin: 0 0 16px; font: 700 var(--fs-2xl)/1.15 var(--font-ui); letter-spacing: -.01em; overflow-wrap: anywhere; }
 .h2 { margin: 20px 0 10px; font: 650 var(--fs-xl)/1.2 var(--font-ui); overflow-wrap: anywhere; }
@@ -140,20 +119,11 @@
 .field { display: grid; gap: 6px; color: var(--muted); font-size: var(--fs-sm); }
 .field input { height: 38px; padding: 0 12px; border: 0; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: inherit; font-size: var(--fs-md); }
 
-@media (max-width: 1199px) { .shell { grid-template-columns: 220px minmax(0, 1fr); } .rail { display: none; } .main { border-right: 0; } }
 @media (max-width: 899px) { .split { grid-template-columns: minmax(0, 1fr); } .list { border-right: 0; border-bottom: 1px solid var(--line); } }
 @media (max-width: 719px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
-  .top { padding: 10px 16px; gap: 10px; }
-  .tagline { display: none; }
-  .nav { position: fixed; inset: auto 0 0 0; top: auto; z-index: 30; height: var(--tabbar-total); padding: 6px 4px env(safe-area-inset-bottom, 0px); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; border-right: 0; border-top: 1px solid var(--line); background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
-  .navItem, .navOn { flex-direction: column; justify-content: center; gap: 2px; height: 46px; padding: 0 2px; border-radius: var(--radius); font-size: 10.5px; }
-  .navOn { box-shadow: none; }
-  .main { padding-bottom: var(--tabbar-total); }
   .page, .pane { padding: 16px; }
   .split { min-height: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .statusOn .dot { animation: none; } }
 
 /* Agents overview (/agents): floating glass cards over the swarm; the page root carries data-cards. */
 .overviewWrap { container-type: inline-size; }

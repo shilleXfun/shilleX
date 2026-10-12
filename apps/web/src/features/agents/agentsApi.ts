@@ -5,11 +5,8 @@ import { ApiError, get } from '../../lib/api';
 export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
 const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground: false, staleTime: ms / 2 });
 
-/** 404 means this deployment has no agent world (a demo), so it is not retried: the shell shows the demo chip and the classic rail at once. */
-export const useAgentsInfo = () => useQuery({
-  queryKey: ['agents', 'info'], queryFn: () => get<AgentsInfo>('/agents/info'), ...live(15_000),
-  retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 3,
-});
+/** 404 means this deployment has no agent world (a demo). The app's retry policy never retries a 4xx, so the shell shows the demo chip and the classic rail at once. */
+export const useAgentsInfo = () => useQuery({ queryKey: ['agents', 'info'], queryFn: () => get<AgentsInfo>('/agents/info'), ...live(15_000) });
 export const useBackchannel = () => useQuery({ queryKey: ['agents', 'backchannel'], queryFn: () => get<{ conversations: ConversationView[] }>('/agents/backchannel').then((r) => r.conversations), ...live(5_000) });
 export const useBackchannelMessages = (id: string | undefined) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'backchannel', id], queryFn: () => get<{ messages: MessageView[] }>(`/agents/backchannel/${id}/messages`).then((r) => r.messages), ...live(5_000) });
 export const useCoins = () => useQuery({ queryKey: ['agents', 'coins'], queryFn: () => get<{ coins: CoinView[] }>('/coins').then((r) => r.coins), ...live(15_000) });
