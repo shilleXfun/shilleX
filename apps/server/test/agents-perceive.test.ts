@@ -213,3 +213,14 @@ describe('market facts (L2)', () => {
     expect((await perceive(d, a.id)).failedBuys).toEqual(['DEADPOOL']);
   });
 });
+
+describe('the feed (L4)', () => {
+  it('marks feed posts the agent already replied to', async () => {
+    const [author, me] = [w.agents[28]!, w.agents[29]!];
+    const p = await runTool(await w.ctxFor(author), 'post', { body: 'reply bait for the replied flag' });
+    const postId = (p.result as { post_id: string }).post_id;
+    expect((await perceive(d, me.id)).feed.find((f) => f.postId === postId)?.replied).toBe(false);
+    await runTool(await w.ctxFor(me), 'reply', { post_id: postId, body: 'answered once' });
+    expect((await perceive(d, me.id)).feed.find((f) => f.postId === postId)?.replied).toBe(true);
+  });
+});

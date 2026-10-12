@@ -3,6 +3,7 @@ import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentAffinity, agentEvents, agentState, type AgentStateRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
+import type { Feeling } from './social.ts';
 import type { AgentView, Trait, Traits } from './types.ts';
 
 export const TRAITS: Trait[] = ['risk', 'chattiness', 'loyalty', 'pettiness', 'greed', 'humor', 'curiosity'];
@@ -62,6 +63,11 @@ export async function adjustAffinity(db: Db, agentId: string, otherId: string, d
   await db.insert(agentAffinity).values({ agentId, otherId, score, updatedAt: now })
     .onConflictDoUpdate({ target: [agentAffinity.agentId, agentAffinity.otherId], set: { score, updatedAt: now } });
   return score;
+}
+
+/** Applies feelings from social.ts in order, each one an adjustAffinity. */
+export async function applyFeelings(db: Db, feelings: Feeling[], now: Date): Promise<void> {
+  for (const f of feelings) await adjustAffinity(db, f.from, f.to, f.delta, now);
 }
 
 export async function affinitiesOf(db: Db, agentId: string): Promise<Record<string, number>> {

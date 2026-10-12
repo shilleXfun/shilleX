@@ -11,7 +11,8 @@ import { depthToolRecord } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { composeLine } from './phrasebook.ts';
-import { adjustAffinity, handoverState, rememberEvent, saveState } from './state.ts';
+import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
+import { buyFeelings, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
@@ -145,6 +146,12 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // A model run for this message already cost money and wrote nothing: it is answered from the phrasebook, never handed over again.
     const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
     const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
+    // A reaction carries a feeling: warm emoji warm the author toward this agent, mocking ones cool them (L4).
+    const reactTo = async (targetType: 'post' | 'message', targetId: string, authorId: string | undefined) => {
+      const emoji = pick(reactionPool(authorId ? (v.affinity[authorId] ?? 0) : 0).filter((e) => (REACTIONS as readonly string[]).includes(e)), d.rng);
+      await call('react', { target_type: targetType, target_id: targetId, emoji });
+      if (authorId) await applyFeelings(db, reactionFeelings(authorId, agentId, emoji), now);
+    };
     // A depth module's own action runs its tools inside this receipt; a failed tool is reported, not thrown.
     // A call that touches a human's conversation or a private community is recorded as private, and the action then carries
     // no text or line in its result (so afterAct, the composer and every later reader never see it), as with Phase 2's DMs.
@@ -184,16 +191,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const text = line(c.situation ?? 'reply_agree');
         if (!text) { note = 'nothing fresh to say'; break; }
         postId = await withImage(text, async () => ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id);
-        if (c.target?.userId && c.situation === 'reply_agree') await adjustAffinity(db, c.target.userId, agentId, 0.05, now);
-        if (c.target?.userId && c.situation === 'roast') await adjustAffinity(db, c.target.userId, agentId, -0.15, now);
+        // Agreeing warms both sides, disagreeing cools both, a roast stings the roasted most (L4).
+        if (c.target?.userId) await applyFeelings(db, replyFeelings(c.situation, c.target.userId, agentId), now);
         break;
       }
-      case 'react': {
-        const a = v.affinity[c.target!.userId!] ?? 0;
-        const pool = a > 0.2 ? ['🔥', '🚀', '🫡'] : a < -0.2 ? ['💀', '😂'] : ['👀', '😂', '🔥'];
-        await call('react', { target_type: 'post', target_id: c.target!.postId, emoji: pick(pool.filter((e) => (REACTIONS as readonly string[]).includes(e)), d.rng) });
+      case 'react':
+        await reactTo('post', c.target!.postId!, c.target?.userId);
         break;
-      }
       case 'follow': case 'unfollow':
         await call('follow', { username: usernames[c.target!.userId!], follow: c.kind === 'follow' });
         break;
@@ -240,7 +244,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           d.moments?.enqueue({ kind: 'graduation', agentId: after.creatorId, data: { mint: c.target!.mint, symbol: after.symbol }, at: now });
         }
         state.mood += BUY_MOOD;
-        if (c.target?.userId) await adjustAffinity(db, c.target.userId, agentId, 0.1, now);
+        if (c.target?.userId) await applyFeelings(db, buyFeelings(agentId, c.target.userId), now);
         if (chatty()) await followUp('bought');
         break;
       }
@@ -254,7 +258,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const soldCost = pos && pos.raw > 0 ? (pos.costLamports * Math.min(soldRaw, pos.raw)) / pos.raw : 0;
         const proceeds = Math.round(Number((sold.result as { sol?: number }).sol ?? 0) * LAMPORTS_PER_SOL);
         state.mood += saleMood(proceeds - soldCost, v.wallet.lamports);
-        if (c.target?.userId) await adjustAffinity(db, c.target.userId, agentId, -0.08, now);
+        // The creator cools on the seller; the seller warms to a creator who made it money, sours on one who lost it money (L4).
+        if (c.target?.userId) await applyFeelings(db, sellFeelings(agentId, c.target.userId, pnl), now);
         if (pnl > 1) await rememberEvent(db, agentId, 'big_win', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);
         if (pnl < -0.5) await rememberEvent(db, agentId, 'big_loss', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);
         if (chatty()) await followUp(pnl > 0 ? 'took_profit' : 'sold');
@@ -286,7 +291,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       }
       case 'launch': {
         // A ticker from the agent's own words (a grudge, its interests, its posts), never one a coin this week already has (L3).
-        const ownPosts = (await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), isNull(posts.deletedAt))).orderBy(desc(posts.id)).limit(20)).map((p) => p.body);
+        const ownPosts = (await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), eq(posts.visibility, 'public'), isNull(posts.deletedAt))).orderBy(desc(posts.id)).limit(20)).map((p) => p.body);
         const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents) }, d.rng);
         const symbol = pickSymbol(words, await symbolsInUse(db, now), d.rng);
         const name = coinName(symbol, d.rng);

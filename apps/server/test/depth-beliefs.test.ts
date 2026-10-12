@@ -189,3 +189,38 @@ describe('engine cooldowns for depth candidates', () => {
     expect(seen.at(-1)).toContain('DEPTH_PROBE');
   });
 });
+
+describe('talk meets trades (L4)', () => {
+  const traits = { risk: 0.5, chattiness: 0.8, loyalty: 0.5, pettiness: 0.3, greed: 0.3, humor: 0.5, curiosity: 0.5 };
+  const belief = (expect: number) => ({ HOTM: { expect, trustCreator: 0.5, stance: null, stanceAt: null } });
+  const talkView = (over: Record<string, unknown> = {}, t: Partial<typeof traits> = {}) => ({
+    agent: { id: 'me', username: 'me', displayName: '' },
+    state: { traits: { ...traits, ...t } },
+    wallet: { lamports: 50_000_000, positions: [] },
+    coins: [{ mint: 'HOTM', symbol: 'HOT', creatorId: 'maker' }],
+    feed: [{ postId: 'p1', authorId: 'x', body: '$HOT to the moon 🚀', at: '', reactions: 0 }],
+    depth: { ...emptyDepth(), beliefs: belief(-0.5) },
+    ...over,
+  }) as unknown as AgentView;
+  const replies = (v: AgentView) => beliefsModule.candidates!(v, () => 0).filter((c) => c.kind === 'reply');
+  it('pushes back on a bullish post about a coin it expects to fall', () => {
+    const [c] = replies(talkView());
+    expect(c).toMatchObject({ situation: 'reply_disagree', target: { postId: 'p1', userId: 'x', mint: 'HOTM' } });
+    expect(c!.score).toBeCloseTo(0.3 * 0.8 * 0.5);
+  });
+  it('roasts instead when petty, and agrees when the post leans its way', () => {
+    expect(replies(talkView({}, { pettiness: 0.9 }))[0]).toMatchObject({ situation: 'roast' });
+    expect(replies(talkView({ depth: { ...emptyDepth(), beliefs: belief(0.5) } }))[0]).toMatchObject({ situation: 'reply_agree' });
+  });
+  it('answers a post about a coin it holds even without a strong view, and stays out of the rest', () => {
+    const calm = { depth: { ...emptyDepth(), beliefs: belief(0.1) } };
+    expect(replies(talkView(calm))).toEqual([]);
+    const holding = talkView({ ...calm, wallet: { lamports: 50_000_000, positions: [{ mint: 'HOTM', symbol: 'HOT', raw: 1, costLamports: 1, valueLamports: 1, createdByMe: false, creatorId: 'maker' }] } });
+    expect(replies(holding)[0]).toMatchObject({ situation: 'reply_agree' });
+    expect(replies(holding)[0]!.score).toBeCloseTo(0.3 * 0.8 * 0.3);
+  });
+  it('never answers its own post or one it already answered', () => {
+    expect(replies(talkView({ feed: [{ postId: 'p1', authorId: 'x', body: '$HOT to the moon 🚀', at: '', reactions: 0, replied: true }] }))).toEqual([]);
+    expect(replies(talkView({ feed: [{ postId: 'p1', authorId: 'me', body: '$HOT to the moon 🚀', at: '', reactions: 0 }] }))).toEqual([]);
+  });
+});
