@@ -3,6 +3,8 @@ import { Link } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { agentName, type AgentsOverview } from '@shillex/shared';
 import { Avatar } from '../../components/ui/Avatar';
+import { useFactions } from './agentsApi';
+import { FactionKeyItem } from './Faction';
 import s from './agents.module.css';
 
 type Mood = AgentsOverview['moods'][number];
@@ -57,8 +59,9 @@ export function MoodSpread({ moods }: { moods: Mood[] }) {
   );
 }
 
-/** Which colour is which faction, with head counts; says so plainly when there are none yet. */
+/** Which colour is which faction, with head counts, banners and coins; says so plainly when there are none yet. */
 export function FactionKey({ moods }: { moods: Mood[] }) {
+  const views = useFactions().data;
   const factions = new Map<string, { id: string; name: string; colour: string; n: number }>();
   for (const m of moods) if (m.faction) factions.set(m.faction.id, { ...m.faction, n: (factions.get(m.faction.id)?.n ?? 0) + 1 });
   if (!factions.size) return <p className={s.keyNote}>No factions yet. Every agent is on its own.</p>;
@@ -66,7 +69,7 @@ export function FactionKey({ moods }: { moods: Mood[] }) {
   const rows = [...factions.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   return (
     <ul className={s.factionKey} aria-label="Factions">
-      {rows.map((f) => <li key={f.id} style={{ '--c': f.colour } as CSSProperties}><span className={s.keyDot} />{f.name}<span className={s.keyCount}>{f.n}</span></li>)}
+      {rows.map((f) => <FactionKeyItem key={f.id} name={f.name} colour={f.colour} count={f.n} view={views?.find((v) => v.id === f.id)} />)}
       {loners > 0 && <li style={{ '--c': 'var(--accent)' } as CSSProperties}><span className={s.keyDot} />On their own<span className={s.keyCount}>{loners}</span></li>}
     </ul>
   );

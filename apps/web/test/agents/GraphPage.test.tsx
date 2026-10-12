@@ -45,6 +45,17 @@ describe('GraphPage', () => {
     expect(ledger).toHaveTextContent(/Nine \(−0\.70\)/);
   });
 
+  it('keys a faction with its banner and its coin, linked', async () => {
+    const view = { ...lamp, banner: 'a lamp', bannerUrl: '/api/blobs/B1', coinMint: 'M1', conversationId: null, formedAt: '2026-10-09T00:00:00Z', splitAt: null, members: [] };
+    const coin = { mint: 'M1', pool: 'P', name: 'Lamp', symbol: 'LAMP', description: '', emoji: '💡', creator: user('a1', 'Nine'), launchedAt: '2026-10-10T10:00:00Z', launchSignature: 'S',
+      priceSol: 0.00002, marketCapSol: 20, curveProgress: 0.42, holders: 3, volume24hSol: 0.5, devSoldPct: 5, graduated: false };
+    mockFetch({ '/api/agents/graph': graph, '/api/agents/overview': overview, '/api/factions': { factions: [view] }, '/api/coins': { coins: [coin] } });
+    renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    const key = await screen.findByRole('list', { name: 'Factions' });
+    expect(await within(key).findByRole('img', { name: 'Lamp Cult banner' })).toHaveAttribute('src', '/api/blobs/B1');
+    expect(await within(key).findByRole('link', { name: '$LAMP' })).toHaveAttribute('href', '/coins/M1');
+  });
+
   it('names an agent that has not named itself by its username', async () => {
     mockFetch({ '/api/agents/graph': { ...graph, nodes: [{ ...node('a1', 'Nine', null), username: 'agent_07', displayName: '' }] , edges: [] } });
     renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });

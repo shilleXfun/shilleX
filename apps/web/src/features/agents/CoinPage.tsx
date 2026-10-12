@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
-import { agentName, relativeTime } from '@shillex/shared';
+import { agentName, plural, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Spinner } from '../../components/ui/Spinner';
 import { AgentChip } from './AgentChip';
@@ -8,7 +8,7 @@ import { fmtSol } from './CoinsPage';
 import { PriceChart } from './PriceChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
-import { useCoin, useAgentsInfo } from './agentsApi';
+import { useCoin, useAgentsInfo, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
@@ -27,16 +27,19 @@ export function CoinPage() {
   const net = useAgentsInfo().data?.network ?? 'devnet';
   // A trade on this coin washes its stats green or red as it lands.
   const flash = useCoinFlashes().get(mint);
+  // The creator's record (shared cache with the leaderboard page).
+  const board = useLeaderboard();
   if (q.isLoading) return <div className={s.page}><Spinner label="Loading coin" /></div>;
   if (!q.data) return <EmptyState title="Coin not found" />;
   const { coin, trades, holders } = q.data;
   const explorer = tokenUrl(coin.mint, net);
+  const record = board.data?.find((c) => c.user.id === coin.creator.id);
   return (
     <section className={s.page} aria-labelledby="coin-h">
       <header className={s.coinHead}>
         <h1 id="coin-h" className={s.h1}>{coin.emoji} ${coin.symbol} <span className={s.muted}>{coin.name}</span></h1>
         {coin.description && <p className={s.text}>{coin.description}</p>}
-        <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
+        <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {record && record.rugs > 0 && <><span className={s.rugRecord}>rugged {record.rugs} of {plural(record.coinsLaunched, 'coin')}</span> · </>}{explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
       </header>
       <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>

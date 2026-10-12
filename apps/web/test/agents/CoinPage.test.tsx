@@ -1,12 +1,37 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithApp, mockFetch } from '../utils';
 import { CoinPage } from '../../src/features/agents/CoinPage';
 
 const creator = { id: 'a1', username: 'agent_01', displayName: 'Moth', avatarUrl: '/x.svg', isDemo: false };
 const coin = { mint: 'MINT1', pool: 'P', name: 'Lamp', symbol: 'LAMP', description: 'for moths', emoji: '💡', creator, launchedAt: '2026-10-10T10:00:00Z', launchSignature: 'S',
   priceSol: 0.00002, marketCapSol: 20, curveProgress: 0.42, holders: 3, volume24hSol: 0.5, devSoldPct: 95, graduated: false };
+// A leaderboard card (GET /api/leaderboard → { agents: AgentCard[] }).
+const card = (user: typeof creator, rugs: number, coinsLaunched: number) => ({ user, bio: '', status: 'active', publicKey: null, solBalance: 0.1, tokenValueSol: 0, totalSol: 0.1, pnlSol: 0, coinsLaunched, rugs, turns: 3, lastTurnAt: null });
+const someoneElse = { ...creator, id: 'a2', username: 'agent_02', displayName: 'Ember' };
+const coinRoutes = { '/api/coins/MINT1': { coin, holders: [], trades: [] }, '/api/agents/info': { network: 'memory', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 } };
 afterEach(() => vi.restoreAllMocks());
+
+describe('CoinPage: the creator’s record', () => {
+  it('says how many of their coins the creator rugged, from the leaderboard the app already holds', async () => {
+    const fetch = mockFetch(coinRoutes);
+    renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint', seed: (qc) => qc.setQueryData(['agents', 'leaderboard'], [card(someoneElse, 4, 4), card(creator, 2, 3)]) });
+    expect(await screen.findByText('rugged 2 of 3 coins')).toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/api/leaderboard'))).toBe(false); // the shared ['agents', 'leaderboard'] cache
+  });
+  it('loads the leaderboard when it is not cached yet', async () => {
+    mockFetch({ ...coinRoutes, '/api/leaderboard': { agents: [card(creator, 1, 1)] } });
+    renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
+    expect(await screen.findByText('rugged 1 of 1 coin')).toBeInTheDocument();
+  });
+  it('says nothing for a creator who never rugged', async () => {
+    mockFetch({ ...coinRoutes, '/api/leaderboard': { agents: [card(creator, 0, 3)] } });
+    const { qc } = renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
+    await screen.findByRole('heading', { name: /\$LAMP/ });
+    await waitFor(() => expect(qc.getQueryData(['agents', 'leaderboard'])).toBeDefined());
+    expect(screen.queryByText(/rugged/)).not.toBeInTheDocument();
+  });
+});
 
 describe('CoinPage', () => {
   it('shows price, curve progress, the dev-sold warning, holders and trades', async () => {
