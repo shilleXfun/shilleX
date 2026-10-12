@@ -4,6 +4,7 @@ import type { ToolCallRecord } from '@shillex/shared';
 import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
+import { isReservedUsername } from '../lib/reserved.ts';
 import { TOOLS, runTool, type ToolContext } from '../world/tools.ts';
 import { actorFor, busyFor } from './act.ts';
 import type { EngineDeps } from './engine.ts';
@@ -278,7 +279,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       // simply asked again by a later tick. A first book also names the agent through set_profile, in the book's receipt (L7).
       await exclusiveTurn(d, m.agentId, async () => {
         if (!(await needsPhrasebook(d.db, m.agentId, d.now()))) return;
-        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now, tool: async (agentId, turnId, name, input) => {
+        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now, reserved: (name) => isReservedUsername(d.app.deps.config, name), tool: async (agentId, turnId, name, input) => {
           const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
           if (!agent) return { ok: false, write: false, result: { code: 'NO_AGENT', error: `No agent ${agentId}` } };
           return runTool({ app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl }, name, input);

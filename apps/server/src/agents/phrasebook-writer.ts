@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq, gt, gte, inArray, isNull, like, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNull, like, ne, notLike, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentEvents, agentTurns, phrasebooks, posts, users } from '../db/schema.ts';
@@ -101,30 +101,67 @@ export function validatePhrasebook(raw: unknown): Phrasebook | null {
 }
 
 /**
- * What set_profile gets from a first book (L7). Hostile or empty text drops that field; without a usable name the whole profile
- * is skipped. The name and bio go through the same filter as every other model text (no links, `@`, markup or braces); the
+ * What set_profile gets from a book (L7). Hostile or empty text drops that field; without a usable name the whole profile
+ * is skipped. Name and bio are folded to NFKC first (so fullwidth lookalikes of `@` and `www.` are caught), then must pass the
+ * same filter as every other model text (no links, `@`, markup or braces) and also carry no bidi or zero-width characters and
+ * no bare domain such as `evil.com`. A name that is only a reserved word (admin, shillex) once its letters are folded is no
+ * name. Both are cut to their length in UTF-16 units, the unit set_profile cuts by, without splitting a surrogate pair. The
  * emoji is only pictographs (a letter or a handle after it is cut); the colour is exactly #rrggbb.
  */
 export type ProfileInput = { display_name: string; bio: string | null; avatar_emoji: string | null; avatar_color: string | null; username: null };
 const PICTO = /^[\p{Extended_Pictographic}\u{FE0F}]$/u; // FE0F: the variation selector that makes a symbol an emoji
 const PICTO_FIRST = /^\p{Extended_Pictographic}$/u;
-export function validateProfile(raw: unknown): ProfileInput | null {
+/** Zero-width, direction-control and byte-order characters: invisible text that can hide a link or reorder what a reader sees. */
+const INVISIBLE = /[\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{2069}\u{FEFF}]/u;
+/** `word.tld` with no space around the dot: a link without its scheme. */
+const BARE_DOMAIN = /[\p{L}\p{N}-]\.\p{L}{2,}/u;
+/** Names that pass for the site or its staff, whatever the config reserves. Compared as letters and digits only, lower case. */
+export const IMPERSONATED: ReadonlySet<string> = new Set(['admin', 'administrator', 'shillex', 'moderator', 'mod', 'staff', 'support', 'system', 'official', 'info', 'backchannel']);
+
+/** Cuts to `max` UTF-16 units (what String.slice and set_profile count) on a code point boundary, so no lone surrogate is left. */
+function cutUnits(s: string, max: number): string {
+  let out = '', n = 0;
+  for (const ch of s) { if (n + ch.length > max) break; out += ch; n += ch.length; }
+  return out.trim();
+}
+function profileText(v: unknown, max: number): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.normalize('NFKC');
+  if (INVISIBLE.test(t) || BARE_DOMAIN.test(t)) return null;
+  const c = clean(t, max, 'plain');
+  return c === null ? null : cutUnits(c, max) || null;
+}
+/** `reserved` is the site's own reserved-name check (isReservedUsername with its config); IMPERSONATED always applies. */
+export function validateProfile(raw: unknown, reserved?: (name: string) => boolean): ProfileInput | null {
   const p = raw && typeof raw === 'object' ? (raw as { profile?: unknown }).profile : null;
   if (!p || typeof p !== 'object') return null;
   const x = p as Record<string, unknown>;
-  const display_name = clean(x.display_name, 40, 'plain');
+  const display_name = profileText(x.display_name, 40);
   if (!display_name) return null;
+  const letters = display_name.replace(/[^\p{L}\p{N}_]/gu, '').toLowerCase();
+  if (IMPERSONATED.has(letters) || reserved?.(letters) || reserved?.(display_name)) return null;
   // set_profile keeps two code points; of those only the leading run of pictographs survives.
   const run: string[] = [];
   if (typeof x.avatar_emoji === 'string') for (const ch of [...x.avatar_emoji.trim()].slice(0, 2)) { if (!PICTO.test(ch)) break; run.push(ch); }
   return {
     display_name,
-    bio: clean(x.bio, 280, 'plain'),
+    bio: profileText(x.bio, 280),
     avatar_emoji: run.length && PICTO_FIRST.test(run[0]!) ? run.join('') : null,
     avatar_color: typeof x.avatar_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(x.avatar_color) ? x.avatar_color.toLowerCase() : null,
     username: null, // the handle stays: links and mentions point at it
   };
 }
+
+/** True when another user already shows this display name (case-insensitive): a model-written name must not copy one. */
+async function nameTaken(db: Db, agentId: string, name: string): Promise<boolean> {
+  const [t] = await db.select({ id: users.id }).from(users).where(and(sql`lower(${users.displayName}) = ${name.toLowerCase()}`, ne(users.id, agentId))).limit(1);
+  return Boolean(t);
+}
+
+/** Start of every receipt note a written book leaves; the refresh tally below reads it. */
+const WROTE = 'wrote phrasebook v';
+/** Added to the note of a refresh that gave a blank agent its name: such a refresh is not counted against REFRESHES_PER_DAY. */
+const NAMING = ', naming the agent';
 
 export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promise<boolean> {
   // Any phrasebook prompt version counts, so a v1 try still holds the 6-hour guard after the prompt changed.
@@ -133,6 +170,15 @@ export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promi
   if (recentTry) return false;
   const [book] = await db.select().from(phrasebooks).where(eq(phrasebooks.agentId, agentId));
   if (!book) return true;
+  // Every agent has a name: a blank one with a book from before profiles (or whose first profile was lost) gets one try, once
+  // per agent, outside the daily refresh cap. Still under the 6-hour guard above and the budget gate in writePhrasebook.
+  // If the filter drops its profile, the local sweep names it.
+  const [me] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, agentId));
+  if (me && !me.name) {
+    const [tried] = await db.select({ id: agentTurns.id }).from(agentTurns)
+      .where(and(eq(agentTurns.agentId, agentId), eq(agentTurns.promptVersion, PHRASEBOOK_PROMPT_VERSION))).limit(1);
+    if (!tried) return true;
+  }
   const dayStart = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
   // The spec's refresh: 3+ days old and something notable happened since.
   let due = false;
@@ -149,7 +195,11 @@ export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promi
     due = dry >= STUCK_TURNS;
   }
   if (!due) return false;
-  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(phrasebooks).where(and(gt(phrasebooks.version, 1), gte(phrasebooks.writtenAt, dayStart))) as [{ n: number }];
+  // The cap counts refreshes (books written again today), not agents: an agent refreshed twice counts twice. First books and
+  // refreshes that named a blank agent are not refreshes.
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(agentTurns).where(and(
+    like(agentTurns.promptVersion, 'phrasebook-%'), eq(agentTurns.status, 'acted'), gte(agentTurns.startedAt, dayStart),
+    like(agentTurns.reasoning, `${WROTE}%`), ne(agentTurns.reasoning, `${WROTE}1`), notLike(agentTurns.reasoning, `%${NAMING}%`))) as [{ n: number }];
   return n < REFRESHES_PER_DAY;
 }
 
@@ -169,6 +219,8 @@ export interface PhrasebookDeps {
   db: Db; brain: AgentBrain; budget: ModelBudget; now: () => Date;
   /** Runs one tool as the agent inside the phrasebook's own receipt (the moment queue passes runTool). Without it a first book's profile is not applied. */
   tool?: (agentId: string, turnId: string, name: string, input: Record<string, unknown>) => Promise<ToolOutcome>;
+  /** The site's reserved-name check (isReservedUsername with its config); a profile whose name it refuses is skipped. */
+  reserved?: (name: string) => boolean;
 }
 
 export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promise<'written' | 'skipped' | 'failed'> {
@@ -201,20 +253,28 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
         .onConflictDoUpdate({ target: phrasebooks.agentId, set: { version, book, model: HAIKU, writtenAt: d.now() } });
       // The blank agent defines itself once, in its first book: its traits, and (L7) its name, bio, emoji and colour, applied
       // through set_profile in this same receipt at no extra model cost. After that only drift (lived experience) moves its
-      // traits, and the name stays, so a refresh's traits and profile are ignored.
-      if (version === 1) {
-        await setTraits(db, agentId, book.traits, d.now());
-        const profile = validateProfile(parsed);
+      // traits, so a refresh's traits are ignored. Its name stays too, unless it still has none (a book from before profiles, or
+      // a first profile the filter dropped): then the refresh names it. A name another user already shows is left out and the rest
+      // of the profile applied, so the local sweep can name the agent.
+      if (version === 1) await setTraits(db, agentId, book.traits, d.now());
+      const [me] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, agentId));
+      const blank = !me?.name;
+      let namedByRefresh = false;
+      if (version === 1 || blank) {
+        const profile = validateProfile(parsed, d.reserved);
         if (profile && d.tool) {
-          const input = { ...profile };
-          try {
-            const out = await d.tool(agentId, turnId, 'set_profile', input);
-            toolCalls.push({ name: 'set_profile', input, ok: out.ok, result: out.result });
-          } catch (e) { toolCalls.push({ name: 'set_profile', input, ok: false, result: { error: (e as Error)?.message ?? String(e) } }); }
+          const input: Record<string, unknown> = { ...profile, display_name: (await nameTaken(db, agentId, profile.display_name)) ? null : profile.display_name };
+          if (input.display_name !== null || profile.bio !== null || profile.avatar_emoji !== null || profile.avatar_color !== null) {
+            try {
+              const out = await d.tool(agentId, turnId, 'set_profile', input);
+              toolCalls.push({ name: 'set_profile', input, ok: out.ok, result: out.result });
+              namedByRefresh = version > 1 && out.ok && input.display_name !== null;
+            } catch (e) { toolCalls.push({ name: 'set_profile', input, ok: false, result: { error: (e as Error)?.message ?? String(e) } }); }
+          }
         }
       }
       status = 'acted';
-      note = `wrote phrasebook v${version}`;
+      note = `${WROTE}${version}${namedByRefresh ? NAMING : ''}`;
     }
   } catch (e) { thrown = e; note = `failed: ${(e as Error).message ?? String(e)}`; }
   const costUsd = priceOf(HAIKU, usage);
