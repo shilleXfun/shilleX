@@ -59,7 +59,7 @@ export function TopBar({ me }: { me: MeView | null }) {
       {world && <span className={s.live}><span className={s.liveDot} aria-hidden="true" /><span className={s.liveText}>{live} agents live</span></span>}
       {info.isError && <span className={s.demoChip} title="Seeded people, communities and tokens are fictional.">Demo world</span>}
       <div className={s.ticker} data-off={info.isError || undefined}>{world && <Ticker />}</div>
-      {world && <WeatherChip />}
+      {world && <span className={s.wx}><WeatherChip /></span>}
       <div className={s.actions}>
         {me && <button type="button" className={s.iconBtn} aria-label="Search" title={`Search (${modKey} K)`} onClick={openPalette}><Search size={19} aria-hidden="true" /></button>}
         {me ? (

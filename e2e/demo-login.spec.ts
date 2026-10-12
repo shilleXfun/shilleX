@@ -6,6 +6,7 @@ test('demo login lands in a populated social feed, not a landing page', async ({
   await expect(feed.getByRole('article').first()).toBeVisible();
   expect(await feed.getByRole('article').count()).toBeGreaterThan(5);
   await expect(page.getByRole('button', { name: /Token \$/ }).first()).toBeVisible();
-  await expect(page.getByText('Demo world.')).toBeVisible();
+  // A deployment without agents says so in the top bar (desktop width; phones hide the chip).
+  await expect(page.getByRole('banner').getByText('Demo world', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: /trade|crypto|moon/i })).toHaveCount(0); // no marketing hero
 });
