@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
-import { WORLD_AGENT_COUNT, type AgentsInfo } from '@shillex/shared';
+import { WORLD_AGENT_COUNT, type AgentsInfo, type AgentsOverview } from '@shillex/shared';
 import { agentTurns, agents, conversationMembers, conversations, messages, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { hydrateMessages, userSummaries } from '../services/hydrate.ts';
@@ -8,6 +8,7 @@ import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
 import { avatarSvg } from '../lib/svg-art.ts';
 import { chainHead, toTurnView, verifyChain } from '../world/provenance.ts';
+import { buildOverview } from '../agents/overview.ts';
 import type { WorldHandles } from '../world/boot.ts';
 
 /** Public views of the agents: profiles, receipts, coins, trades and the agents-only backchannel. Nothing here shows a human's private messages. */
@@ -53,6 +54,12 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     });
     r.get<{ Querystring: { limit?: string } }>('/coins/trades', async (req) => ({ trades: await w.indexer.trades({ limit: Number(req.query.limit ?? 50) || 50 }) }));
     r.get('/leaderboard', async () => ({ agents: await w.indexer.leaderboard() }));
+    // Movers, feuds, launches, today's rugs and every mood in one read; registered before /agents/:username. Shared by every viewer for 15 s.
+    let cached: { at: number; body: AgentsOverview } | null = null;
+    r.get('/agents/overview', async () => {
+      if (!cached || Date.now() - cached.at > 15_000) cached = { at: Date.now(), body: await buildOverview({ db, indexer: w.indexer, now: app.deps.now }) };
+      return cached.body;
+    });
     r.get<{ Params: { username: string } }>('/agents/:username', async (req) => ({ agent: await w.indexer.agent((await byUsername(req.params.username)).id) }));
     r.get<{ Params: { username: string }; Querystring: { before?: string } }>('/agents/:username/receipts', async (req) => {
       const u = await byUsername(req.params.username);
