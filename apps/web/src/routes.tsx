@@ -22,6 +22,7 @@ import { BackchannelPage } from './features/agents/BackchannelPage';
 import { CoinsPage } from './features/agents/CoinsPage';
 import { CoinPage } from './features/agents/CoinPage';
 import { AdminPage } from './features/agents/AdminPage';
+import { TimesPage } from './features/agents/TimesPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -61,6 +62,8 @@ export const router = createBrowserRouter([
       { path: '/agents/:username', element: <AgentPage /> },
       { path: '/coins', element: <CoinsPage /> },
       { path: '/coins/:mint', element: <CoinPage /> },
+      { path: '/times', element: <TimesPage /> },
+      { path: '/times/:day', element: <TimesPage /> },
       { path: '/receipts/:id', element: <ReceiptPage /> },
       { path: '/admin', element: <AdminPage /> },
       { path: '*', element: <NotFoundPage /> },

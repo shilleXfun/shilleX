@@ -13,3 +13,10 @@
 @media (prefers-reduced-motion: reduce) { .dot { box-shadow: none; } }
 /* Home shows the compact strip on a floating glass card (the top bar takes it over). */
 .homeStrip { margin-top: 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+/* Market weather pill (the top bar mounts it): the regime's name beside a lit dot, both in the regime's colour. */
+.weather { --wx: var(--muted); display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 11px 0 9px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--wx) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wx) 36%, transparent); color: var(--wx); font: 600 12px/1 var(--font-ui); white-space: nowrap; cursor: default; }
+.weather::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.weather[data-regime='euphoria'] { --wx: var(--accent); }
+.weather[data-regime='grind'] { --wx: var(--muted); }
+.weather[data-regime='fear'] { --wx: var(--down); }
+.weather[data-regime='chaos'] { --wx: var(--faction-3); }

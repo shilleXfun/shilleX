@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, MessageView, TradeView, TurnView, UserSummary } from '@shillex/shared';
-import { get } from '../../lib/api';
+import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, MessageView, PaperView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import { ApiError, get } from '../../lib/api';
 
 export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
 const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground: false, staleTime: ms / 2 });
@@ -21,3 +21,10 @@ export const useAgentGraph = () => useQuery({ queryKey: ['agents', 'graph'], que
 
 /** Movers, feuds, launches, today's rugs and every mood (public). The Agents page and the World now panel read it. */
 export const useOverview = () => useQuery({ queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500 });
+
+/** The Shillex Times: the latest edition, or one day's (YYYY-MM-DD). null when there is no such edition (404). */
+export const usePaper = (day?: string) => useQuery({
+  queryKey: ['papers', day ?? 'latest'],
+  queryFn: () => get<PaperView>(day ? `/papers/${day}` : '/papers/latest').catch((e) => { if (e instanceof ApiError && e.status === 404) return null; throw e; }),
+  staleTime: 60_000, retry: false,
+});
