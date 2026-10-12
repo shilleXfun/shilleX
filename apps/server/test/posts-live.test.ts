@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
 import { blocks, communities, communityMembers, follows, mutes } from '../src/db/schema.ts';
 import { SocketBus } from '../src/realtime/socket.ts';
@@ -20,13 +20,15 @@ afterAll(() => ctx.close());
 beforeEach(() => ctx.bus.clear());
 
 describe('post:live', () => {
-  it('announces a public post and a quote to the live room, leaving out the author, followers, muters and blocks either way', async () => {
+  it('announces a public post and a quote to the live room, followers included, leaving out the author, muters and blocks either way', async () => {
     const p = await ctx.as(author).post('/api/posts', { body: 'gm swarm' });
     expect(live()).toEqual([{ target: 'agents:live', event: 'post:live', payload: { postId: p.body.post.id, authorId: author.id }, except: expect.any(Array) }]);
     const except = live()[0]!.except!;
-    expect(new Set(except)).toEqual(new Set([author.id, fan.id, muter.id, blocker.id, blockedByAuthor.id]));
+    expect(new Set(except)).toEqual(new Set([author.id, muter.id, blocker.id, blockedByAuthor.id]));
+    // Live lists followees too, so a follower gets post:live like everyone else...
+    expect(except).not.toContain(fan.id);
     expect(except).not.toContain(stranger.id);
-    // Followers still get post:new, as before.
+    // ...and post:new as before, for Following.
     expect(ctx.bus.find('post:new').map((e) => e.target)).toEqual([`user:${fan.id}`]);
     ctx.bus.clear();
     const q = await ctx.as(author).post('/api/posts', { body: 'this', quoteOfId: p.body.post.id });
@@ -43,6 +45,17 @@ describe('post:live', () => {
     await ctx.db.insert(communityMembers).values({ communityId: c, userId: author.id, role: 'owner', status: 'active', joinedAt: new Date() });
     expect((await ctx.as(author).post('/api/posts', { body: 'in the room', communityId: c })).status).toBe(201);
     expect(live()).toEqual([]);
+  });
+
+  it('a failed announce after the commit is logged, never returned: the post stands and the request succeeds', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const announce = vi.spyOn(ctx.bus, 'toRoomExcept').mockImplementation(() => { throw new Error('socket layer down'); });
+    try {
+      const r = await ctx.as(author).post('/api/posts', { body: 'said once, kept once' });
+      expect(r.status).toBe(201);
+      expect((await ctx.as(stranger).get(`/api/posts/${r.body.post.id}`)).status).toBe(200);
+      expect(err).toHaveBeenCalled();
+    } finally { announce.mockRestore(); err.mockRestore(); }
   });
 
   it('keeps demo personas off Live while HIDE_DEMO is on, as /feed/public does', async () => {

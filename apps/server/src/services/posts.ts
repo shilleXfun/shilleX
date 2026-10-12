@@ -112,23 +112,27 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
     }
   }
 
-  // Realtime fan-out
-  if (!communityId && kind !== 'reply') {
-    const followers = (await db.select({ id: follows.followerId }).from(follows).where(eq(follows.followeeId, author.id))).map((f) => f.id);
-    for (const f of followers) deps.bus.toUser(f, 'post:new', { postId: id, authorId: author.id });
-    await announceLive(deps, author, id, followers);
-  } else if (communityId && kind !== 'reply') {
-    deps.bus.toRoom(`community:${communityId}`, 'post:new', { postId: id, authorId: author.id });
-  }
+  // Realtime fan-out. The post is committed by now: a failure here is logged, never returned, or the client's retry would
+  // post it twice.
+  try {
+    if (!communityId && kind !== 'reply') {
+      const followers = (await db.select({ id: follows.followerId }).from(follows).where(eq(follows.followeeId, author.id))).map((f) => f.id);
+      for (const f of followers) deps.bus.toUser(f, 'post:new', { postId: id, authorId: author.id });
+      await announceLive(deps, author, id);
+    } else if (communityId && kind !== 'reply') {
+      deps.bus.toRoom(`community:${communityId}`, 'post:new', { postId: id, authorId: author.id });
+    }
+  } catch (e) { console.error('post fan-out failed', e); }
   return post;
 }
 
 /**
- * A new public top-level post, to everyone watching Live: signed-in sockets in the live room and visitors on /live.
- * Left out: the author, the author's followers (they got post:new, and Live does not list followees), anyone who muted the
- * author and anyone blocked either way. Demo personas stay off it under HIDE_DEMO, as on /feed/public.
+ * A new public top-level post, to everyone watching Live: signed-in sockets in the live room (the author's followers too,
+ * since Live lists followees; they also get post:new for Following) and visitors on /live. Left out: the author (the
+ * composer already shows it), anyone who muted the author and anyone blocked either way, as GET /feed?tab=live leaves them
+ * out. Demo personas stay off it under HIDE_DEMO, as on /feed/public.
  */
-async function announceLive(deps: AppDeps, author: UserRow, postId: string, followers: string[]) {
+async function announceLive(deps: AppDeps, author: UserRow, postId: string) {
   if (author.isDemo && deps.config.hideDemo) return;
   const { db } = deps;
   const [muters, blockers, blocked] = await Promise.all([
@@ -136,7 +140,7 @@ async function announceLive(deps: AppDeps, author: UserRow, postId: string, foll
     db.select({ id: blocks.userId }).from(blocks).where(eq(blocks.targetId, author.id)),
     db.select({ id: blocks.targetId }).from(blocks).where(eq(blocks.userId, author.id)),
   ]);
-  const except = [...new Set([author.id, ...followers, ...[...muters, ...blockers, ...blocked].map((r) => r.id)])];
+  const except = [...new Set([author.id, ...[...muters, ...blockers, ...blocked].map((r) => r.id)])];
   deps.bus.toRoomExcept(LIVE_ROOM, except, 'post:live', { postId, authorId: author.id });
 }
 

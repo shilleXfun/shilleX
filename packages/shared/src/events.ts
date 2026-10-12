@@ -13,8 +13,8 @@ export interface ServerToClientEvents {
   'post:new': (p: { postId: string; authorId: string }) => void;
   /**
    * Public: a new public top-level post (a post or quote outside communities), for Live arrivals and the swarm. Sent to
-   * the live room and /live, never to the author, the author's followers (they get post:new), or anyone who muted the
-   * author or is blocked either way.
+   * the live room and /live, the author's followers included (they also get post:new, for Following), and never to the
+   * author or anyone who muted the author or is blocked either way: the same posts GET /feed?tab=live lists.
    */
   'post:live': (p: { postId: string; authorId: string }) => void;
   'call:update': (p: { postId: string; update: CallUpdateView }) => void;
