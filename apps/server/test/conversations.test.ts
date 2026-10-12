@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
-import { tokenMentions } from '../src/db/schema.ts';
+import { tokenMentions, users } from '../src/db/schema.ts';
 
 const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 let ctx: TestCtx; let a: TestUser; let b: TestUser; let c: TestUser; let d: TestUser;
@@ -77,6 +77,16 @@ describe('conversations', () => {
     const hits = (await ctx.as(a).get(`/api/search/messages?q=${encodeURIComponent('moon_shot')}`)).body.hits;
     expect(hits.map((h: any) => h.message.body)).toEqual(['sniped moon_shot early']);
     expect((await ctx.as(a).get(`/api/search/messages?q=${encodeURIComponent('%%')}`)).body.hits).toEqual([]);
+  });
+  it('search labels a DM with a member who has no display name by their username', async () => {
+    const quiet = await ctx.createUser('agent_07');
+    await ctx.db.update(users).set({ displayName: '' }).where(eq(users.id, quiet.id));
+    const dm = (await ctx.as(a).post('/api/conversations', { kind: 'dm', username: 'agent_07' })).body.conversation.id;
+    ctx.clock.advance(61_000);
+    await ctx.as(a).post(`/api/conversations/${dm}/messages`, { body: 'quietly unnamed hello' });
+    const hits = (await ctx.as(a).get(`/api/search/messages?q=${encodeURIComponent('quietly unnamed')}`)).body.hits;
+    expect(hits).toHaveLength(1);
+    expect(hits[0].conversation).toEqual({ id: dm, name: 'agent_07' });
   });
   it('lists conversations by latest message time, not by id', async () => {
     const [e, , g] = await Promise.all(['sort_e', 'sort_f', 'sort_g'].map((n) => ctx.createUser(n)));
