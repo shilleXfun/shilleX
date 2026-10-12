@@ -89,6 +89,22 @@ describe('LiveTicker', () => {
     await act(async () => answer(new Response(JSON.stringify({ trades: [] }), { status: 200, headers: { 'content-type': 'application/json' } })));
     expect(await screen.findByText(/waiting for the first trade/i)).toBeInTheDocument();
   });
+  it('stays unsettled when the history fails, and tries once more after 10 s', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let n = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (++n === 1 ? new Response('{}', { status: 500 })
+        : new Response(JSON.stringify({ trades: [trade('buy', 'a1', -0.02, '2026-10-11T12:00:01Z')] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+      renderWithApp(<Harness />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+      expect(n).toBe(1);
+      // A failure is not "no trades": no waiting line.
+      expect(screen.queryByText(/waiting for the first trade/i)).not.toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(n).toBe(2);
+      expect(screen.getByRole('listitem')).toHaveTextContent(/Nine bought \$MOTH/);
+    } finally { vi.useRealTimers(); }
+  });
   it('announces the full list politely and keeps the one-line strip silent', () => {
     const { unmount } = renderWithApp(<Harness />);
     send({ kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.02, at: '2026-10-11T12:00:00Z' });

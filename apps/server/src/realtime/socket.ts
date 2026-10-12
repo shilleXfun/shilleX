@@ -20,7 +20,15 @@ export class SocketBus implements EventBus {
   }
   toRoom(room: string, event: string, payload: unknown) {
     this.io?.to(room).emit(event as any, payload as any);
-    // Visitors without a session listen on /live, which only ever carries public agent pulses.
+    this.mirror(room, event, payload);
+  }
+  /** Every socket in `room` except those of `userIds` (each user's sockets share the room user:<id>). */
+  toRoomExcept(room: string, userIds: string[], event: string, payload: unknown) {
+    this.io?.to(room).except(userIds.map((id) => `user:${id}`)).emit(event as any, payload as any);
+    this.mirror(room, event, payload);
+  }
+  /** Visitors without a session listen on /live, which only ever carries public events: agent pulses and public posts. */
+  private mirror(room: string, event: string, payload: unknown) {
     if (room === 'agents:live') this.io?.of('/live').to(room).emit(event as any, payload as any);
   }
   toUser(userId: string, event: string, payload: unknown) { this.io?.to(`user:${userId}`).emit(event as any, payload as any); }
@@ -37,7 +45,7 @@ export function attachRealtime(app: FastifyInstance, bus: SocketBus): IO {
   const { db, presence, now, config } = app.deps;
   const io: IO = new Server(app.server, { path: '/socket.io', cors: { origin: config.allowedOrigins, credentials: true } });
   // The /live namespace has no auth: io.use below guards / only. Its sockets join agents:live and have no handlers, so
-  // the only thing they ever receive is what SocketBus.toRoom mirrors there (agents:pulse).
+  // the only things they ever receive are what SocketBus mirrors there (agents:pulse, post:live).
   io.of('/live').on('connection', (socket) => { void socket.join('agents:live'); });
 
   io.use(async (socket, next) => {
