@@ -24,7 +24,7 @@ const state: AdminDevState = {
 };
 const json = (status: number, body?: unknown) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-function server() {
+function server(logout: number[] = [204]) {
   let signedIn = false;
   const posted: { url: string; body: unknown }[] = [];
   const f = mockFetch({
@@ -36,6 +36,13 @@ function server() {
     },
     '/api/admindev/state': () => (signedIn ? state : json(401, { code: 'UNAUTHORIZED', message: 'Sign in to continue' })),
     '/api/admindev/weather': (init?: RequestInit) => { posted.push({ url: '/api/admindev/weather', body: JSON.parse(String(init?.body)) }); return json(204); },
+    '/api/admindev/paper': () => json(202, { paper: 'queued' }),
+    '/api/admindev/logout': () => {
+      const status = logout.shift() ?? 204;
+      if (status !== 204) return json(status, { code: 'INTERNAL', message: 'Something went wrong' });
+      signedIn = false;
+      return json(204);
+    },
   });
   return { f, posted };
 }
@@ -62,6 +69,21 @@ describe('AdminDevPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fear' }));
     expect(posted).toEqual([{ url: '/api/admindev/weather', body: { regime: 'fear' } }]);
     expect(screen.getByRole('button', { name: 'Grind' })).toBeDisabled();
+  });
+
+  it('says a queued paper is being written, and logs out through a toast either way', async () => {
+    server([500, 204]);
+    renderWithApp(<AdminDevPage />, { route: '/admindev', path: '/admindev' });
+    await userEvent.type(await screen.findByLabelText('Password'), '12345');
+    await userEvent.click(screen.getByRole('button', { name: 'Open console' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Publish paper now' }));
+    expect(await screen.findByText('Paper queued — the agents are writing it')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Agents' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(await screen.findByRole('button', { name: 'Open console' })).toBeInTheDocument();
   });
 
   it('says so when the console is disabled on this deployment', async () => {

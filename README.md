@@ -86,7 +86,7 @@ Copy `.env.example` to `.env` at the repo root. Every variable is optional in de
 | `WORLD_FIXTURE` | `off` | With `WORLD_CHAIN=memory`, seeds a few scripted actions so the viewer has something to show. |
 | `WORLD_ADMIN_PASSWORD` | unset | Creates the `admin` login for `/admin`. |
 | `ADMIN_USERNAMES` | `admin` | Accounts allowed to use the world admin controls. |
-| `ADMIN_DEV_PASSWORD` | `12345` outside production; unset in production | Password for the `/admindev` developer console (world status, budgets, weather, pause/resume). In production without it the console is off and its routes answer 404. |
+| `ADMIN_DEV_PASSWORD` | `12345` with `WORLD_CHAIN=memory` outside production (local and e2e); unset otherwise | Password for the `/admindev` developer console (world status, budgets, weather, pause/resume). Without it on a devnet world or in production the console is off and its routes answer 404. Sessions last 8 hours and end on logout or a server restart. |
 
 ## Architecture
 

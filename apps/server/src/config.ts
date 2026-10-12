@@ -22,7 +22,10 @@ export interface Config {
   worldKey: string | undefined;
   adminUsernames: string[];
   worldAdminPassword: string | undefined;
-  /** Password for the /admindev console (ADMIN_DEV_PASSWORD). Defaults to 12345 outside production; null (console off) in production when unset. */
+  /**
+   * Password for the /admindev console (ADMIN_DEV_PASSWORD). Defaults to 12345 only for a local memory-chain world outside
+   * production (local dev and e2e); anywhere else an unset password is null and the console is off.
+   */
   adminDevPassword: string | null;
   worldChain: 'devnet' | 'memory';
   /** RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. */
@@ -48,6 +51,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const agentsOn = on(env.AGENTS, false);
   const tick = (env.ENGINE_TICK_MS ?? '2000,6000').split(',').map((s) => Number(s.trim()));
+  const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : 'devnet';
   return {
     nodeEnv,
     port,
@@ -68,8 +72,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     worldKey: env.WORLD_KEY || undefined,
     adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
-    adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv === 'production' ? null : '12345'),
-    worldChain: env.WORLD_CHAIN === 'memory' ? 'memory' : 'devnet',
+    adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv !== 'production' && worldChain === 'memory' ? '12345' : null),
+    worldChain,
     devnetRpcUrl: env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',

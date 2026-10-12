@@ -87,7 +87,7 @@ function Console({ state, reconnecting }: { state: AdminDevState; reconnecting: 
         <span className={s.chip}>{world.network}</span>
         <span className={s.runtime} data-on={world.runtime === 'on'}><span className={s.dot} aria-hidden="true" />Runtime {world.runtime}</span>
         {reconnecting && <span className={s.reconnecting} role="status">Reconnecting…</span>}
-        <Button size="sm" variant="ghost" className={s.logout} onClick={() => adminDev.logout().finally(refresh)}>Log out</Button>
+        <Button size="sm" variant="ghost" className={s.logout} loading={busy('logout')} onClick={() => run('logout', adminDev.logout, 'Logged out')}>Log out</Button>
       </header>
       <div className={s.grid}>
         <World world={world} />
@@ -101,7 +101,7 @@ function Console({ state, reconnecting }: { state: AdminDevState; reconnecting: 
             <Button loading={busy('resume-all')} onClick={() => run('resume-all', () => adminDev.everyone('resume-all'), 'Agents resumed')}>Resume all</Button>
           </div>
           <div className={s.control}>
-            <Button loading={busy('paper')} onClick={() => run('paper', adminDev.paper, (r) => ((r as { paper?: string })?.paper === 'queued' ? 'Paper queued for its writer' : 'Paper published'))}>Publish paper now</Button>
+            <Button loading={busy('paper')} onClick={() => run('paper', adminDev.paper, (r) => ((r as { paper?: string })?.paper === 'queued' ? 'Paper queued — the agents are writing it' : 'Paper published'))}>Publish paper now</Button>
             <p className={s.note}>Writes today’s front page from what has happened so far. Today keeps that edition.</p>
           </div>
         </section>
