@@ -63,6 +63,7 @@
 .readLine { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 500 11.5px/1.5 var(--font-mono); white-space: nowrap; }
 .readLine b { font-weight: 600; }
 .readDot { flex: none; width: 8px; height: 8px; border-radius: 3px; background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
+.readCoin { color: var(--token); }
 
 /* The key under the drawing. */
 .key { display: grid; gap: 10px; padding-top: 12px; }

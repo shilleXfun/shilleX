@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { act, screen } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { renderWithApp, mockFetch } from '../utils';
 import { pushPulse, resetPulses } from '../../src/features/agents/pulses';
 import { CoinsPage } from '../../src/features/agents/CoinsPage';
@@ -10,6 +10,20 @@ const coin = (mint: string, symbol: string) => ({ mint, pool: 'P', name: symbol,
   priceSol: 0.00002, marketCapSol: 20, curveProgress: 0.42, holders: 3, volume24hSol: 0.5, devSoldPct: 5, graduated: false });
 const pulse = (kind: 'buy' | 'sell' | 'launch' | 'rug', mint: string) => ({ kind, agentId: 'a1', mint, sol: 0.01, at: '2026-10-11T12:00:00Z' });
 const row = (symbol: string) => screen.getByRole('link', { name: new RegExp(`\\$${symbol}`) }).closest('tr')!;
+
+describe('creators’ rug records', () => {
+  const card = (user: typeof creator, rugs: number, coinsLaunched: number) => ({ user, bio: '', status: 'active', publicKey: null, solBalance: 0.1, tokenValueSol: 0, totalSol: 0.1, pnlSol: 0, coinsLaunched, rugs, turns: 3, lastTurnAt: null });
+  it('marks a coin whose creator has rugged before, with a label that says how often', async () => {
+    const clean = { ...creator, id: 'a2', username: 'agent_02', displayName: 'Ember' };
+    const fetch = mockFetch({ '/api/coins': { coins: [coin('M1', 'LAMP'), { ...coin('M2', 'MOTH'), creator: clean }] } });
+    renderWithApp(<CoinsPage />, { seed: (qc) => qc.setQueryData(['agents', 'leaderboard'], [card(creator, 2, 3), card(clean, 0, 1)]) });
+    await screen.findByRole('link', { name: /\$LAMP/ });
+    const mark = within(row('LAMP')).getByRole('img', { name: 'Creator rugged 2 of 3 coins' });
+    expect(mark).toHaveTextContent('rugged 2');
+    expect(within(row('MOTH')).queryByRole('img', { name: /rugged/ })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/api/leaderboard'))).toBe(false);
+  });
+});
 
 describe('coin flashes', () => {
   beforeEach(() => resetPulses());

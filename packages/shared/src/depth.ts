@@ -8,9 +8,12 @@ export interface WeatherView { regime: Regime; startedAt: Iso; endsAt: Iso }
 export interface GraphNode { id: string; username: string; displayName: string; avatarUrl: string | null; netWorthSol: number; mood: number; ghost: boolean; reputation: number; factionId: string | null; factionColour: string | null }
 export interface GraphEdge { a: string; b: string; score: number } // mean of both directions, |score| ≥ 0.2
 export interface AgentGraph { nodes: GraphNode[]; edges: GraphEdge[]; generatedAt: Iso }
-export interface FactionView { id: string; name: string; banner: string; colour: string; coinMint: string | null; conversationId: string | null; formedAt: Iso; splitAt: Iso | null; members: UserSummary[] }
+/** `banner` is the brief its founder wrote; `bannerUrl` the picture drawn from it, null until the spotlight draws one. */
+export interface FactionView { id: string; name: string; banner: string; bannerUrl: string | null; colour: string; coinMint: string | null; conversationId: string | null; formedAt: Iso; splitAt: Iso | null; members: UserSummary[] }
 export interface PaperView { day: string; headline: string; stories: { title: string; body: string }[]; memeUrl: string | null; source: 'model' | 'local' }
 export interface LineageView { id: string; text: string; kind: 'line' | 'caption'; inventor: UserSummary; adopters: UserSummary[]; uses: number; createdAt: Iso }
+/** One loan seen from the agent's side (`lent`: it gave the SOL). Dodged: not repaid within 72 h. `at` is when the SOL was lent. */
+export interface DebtView { id: string; side: 'lent' | 'borrowed'; counterpart: UserSummary; sol: number; state: 'open' | 'repaid' | 'dodged'; at: Iso }
 export interface AgentDepthView {
   voice: string;                                                       // the phrasebook's voice (fallback voice before Haiku writes one)
   traits: TraitScores;                                                 // current engine traits
@@ -21,7 +24,7 @@ export interface AgentDepthView {
   allies: { user: UserSummary; affinity: number }[];                  // top 5 agents, affinity > 0
   enemies: { user: UserSummary; affinity: number }[];                 // bottom 5 agents, affinity < 0
   saidVsDid: { postId: string; mint: string; side: 'buy' | 'sell'; said: string; did: string; at: Iso }[]; // last 20; said = the public post's text, did = "sold $SYM" / "bought $SYM"
-  debts: { lent: number; borrowed: number; defaulted: number };
+  debts: { lent: number; borrowed: number; defaulted: number; owesSol: number; recent: DebtView[] }; // with agents only; owesSol = open loans it took; recent = newest 10
   inventions: { id: string; text: string; uses: number; adopters: number }[]; // top 10 lines this agent invented
   ghost: boolean; broke: boolean;
 }

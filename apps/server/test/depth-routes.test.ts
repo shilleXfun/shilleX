@@ -6,9 +6,13 @@ import { adjustAffinity } from '../src/agents/state.ts';
 import { formFactions } from '../src/agents/depth/factions.ts';
 import { writePaper } from '../src/agents/depth/paper.ts';
 import { recordLineage } from '../src/agents/depth/lineage.ts';
-import { posts, saidVsDid, weather, worldCoins } from '../src/db/schema.ts';
+import { debts, factions, memeTemplates, posts, saidVsDid, weather, worldCoins } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { reputation } from '../src/agents/depth/reputation.ts';
+import { spotlightSweep } from '../src/agents/depth/spotlight.ts';
+import { generateTemplate } from '../src/agents/memes.ts';
+import { renderSvg } from '../src/agents/cards.ts';
+import type { ImageGen } from '../src/agents/images.ts';
 
 let ctx: Awaited<ReturnType<typeof depthTestCtx>>;
 afterEach(() => ctx?.t.close());
@@ -56,7 +60,7 @@ describe('depth routes', () => {
     await adjustAffinity(ctx.t.db, a!.id, c!.id, -0.7, ctx.t.clock.now());
     await adjustAffinity(ctx.t.db, a!.id, human.id, 0.9, ctx.t.clock.now());
     const r = (await get(`/api/agents/${a!.username}/depth`)).json();
-    expect(r).toMatchObject({ reputation: 0, faction: null, saidVsDid: [], debts: { lent: 0, borrowed: 0, defaulted: 0 }, ghost: false, broke: false, mood: 0 });
+    expect(r).toMatchObject({ reputation: 0, faction: null, saidVsDid: [], debts: { lent: 0, borrowed: 0, defaulted: 0, owesSol: 0, recent: [] }, ghost: false, broke: false, mood: 0 });
     expect(typeof r.voice).toBe('string');
     expect(Object.keys(r.traits).sort()).toEqual(['chattiness', 'curiosity', 'greed', 'humor', 'loyalty', 'pettiness', 'risk']);
     expect(r.allies).toEqual([{ user: expect.objectContaining({ id: b!.id }), affinity: 0.6 }]); // the human is never listed
@@ -81,6 +85,55 @@ describe('depth routes', () => {
     const res = await get(`/api/agents/${a.username}/depth`);
     expect(res.json().saidVsDid).toEqual([{ postId: pub, mint, side: 'sell', said: 'PUBLIC-LINE $MOON to the moon', did: 'sold $MOON', at: now.toISOString() }]);
     expect(res.body).not.toContain('SENTINEL');
+  });
+
+  it('lists an agent’s debts: who with, how much, and whether it is open, repaid or dodged; agents only', async () => {
+    const get = await setup();
+    const [a, b, c, d] = ctx.agents;
+    const human = await ctx.t.createUser('loan_shark');
+    const now = ctx.t.clock.now();
+    const ago = (h: number) => new Date(now.getTime() - h * 3600_000);
+    const debt = (id: string, lenderId: string, borrowerId: string, lamports: number, h: number, x: { repaidAt?: Date; defaultedAt?: Date } = {}) =>
+      ({ id, lenderId, borrowerId, lamports, signature: `sig-${id}`, createdAt: ago(h), ...x });
+    await ctx.t.db.insert(debts).values([
+      debt('d1', b!.id, a!.id, 20_000_000, 100, { defaultedAt: ago(28) }), // a dodged b
+      debt('d2', c!.id, a!.id, 40_000_000, 2),                            // a owes c
+      debt('d3', a!.id, d!.id, 10_000_000, 50, { repaidAt: ago(10) }),    // d paid a back
+      debt('d4', human.id, a!.id, 500_000_000, 1),                        // a human is never the other side
+    ]);
+    const r = (await get(`/api/agents/${a!.username}/depth`)).json();
+    expect(r.debts).toMatchObject({ lent: 1, borrowed: 2, defaulted: 1, owesSol: 0.04 });
+    expect(r.debts.recent).toEqual([
+      { id: 'd2', side: 'borrowed', counterpart: expect.objectContaining({ id: c!.id, username: c!.username }), sol: 0.04, state: 'open', at: ago(2).toISOString() },
+      { id: 'd3', side: 'lent', counterpart: expect.objectContaining({ id: d!.id }), sol: 0.01, state: 'repaid', at: ago(50).toISOString() },
+      { id: 'd1', side: 'borrowed', counterpart: expect.objectContaining({ id: b!.id }), sol: 0.02, state: 'dodged', at: ago(100).toISOString() },
+    ]);
+    expect(JSON.stringify(r)).not.toContain(human.id);
+    expect(JSON.stringify(r)).not.toContain('sig-');
+  });
+
+  it('gives a faction its banner picture once the spotlight has drawn one from its brief, and nothing before', async () => {
+    const get = await setup();
+    const trio = ctx.agents.slice(0, 3);
+    for (const x of trio) for (const y of trio) if (x !== y) await adjustAffinity(ctx.t.db, x.id, y.id, 0.7, ctx.t.clock.now());
+    await formFactions(ctx.d);
+    // The brief keeps an emoji the stored template brief drops, so the match must go through the same cleanup.
+    const brief = 'a lantern over still water 🏮';
+    await ctx.t.db.update(factions).set({ banner: brief });
+    const art = (fill: string): ImageGen => ({ async generate() { return { png: renderSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="${fill}"/></svg>`), usd: 0.011 }; } });
+    const limits = { usd: 1, max: 5 };
+    expect((await get('/api/factions')).json().factions[0]).toMatchObject({ banner: brief, bannerUrl: null });
+    // A picture drawn from the same words that is not a faction banner never counts.
+    await generateTemplate({ db: ctx.t.db, gen: art('#112233'), limits, now: ctx.t.clock.now }, { brief, tags: ['idle'], authorId: trio[0]!.id });
+    expect((await get('/api/factions')).json().factions[0].bannerUrl).toBeNull();
+    ctx.t.clock.advance(1000);
+    await spotlightSweep({ db: ctx.t.db, bus: ctx.t.bus, now: ctx.t.clock.now, gen: art('#334455'), limits });
+    const [tpl] = (await ctx.t.db.select().from(memeTemplates)).filter((m) => m.tags.includes('faction_cheer'));
+    expect(tpl).toBeDefined();
+    const url = `/api/blobs/${tpl!.blobId}`;
+    expect((await get('/api/factions')).json().factions[0].bannerUrl).toBe(url);
+    expect((await get(`/api/agents/${trio[0]!.username}/depth`)).json().faction.bannerUrl).toBe(url);
+    expect((await get(url)).statusCode).toBe(200);
   });
 
   it('weather is deterministic for the day and returns the engine’s active regime when there is one', async () => {

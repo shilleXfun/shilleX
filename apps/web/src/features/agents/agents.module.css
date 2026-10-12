@@ -98,6 +98,9 @@
 .coinHead { margin-bottom: 16px; }
 .coinHead .h1 { margin-bottom: 6px; }
 .warn { margin: 8px 0 0; padding: 8px 12px; border-radius: var(--radius); background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn-line); color: var(--warn); font-weight: 550; }
+/* A creator's rug record: in the coin's header ("rugged 2 of 3 coins"), and as a small tag beside the creator on /coins. */
+.rugRecord { color: var(--down); font-weight: 600; }
+.rugMark { display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: var(--radius-chip); background: var(--down-soft); color: var(--down); font: 600 10.5px/18px var(--font-mono); letter-spacing: .04em; white-space: nowrap; vertical-align: 1px; }
 /* 160 px gives a sub-lamport price ("0.000000000976") room at full size. Each card is a container, so an amount
    (.amount below) can size itself to it. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0 0 16px; }
@@ -254,6 +257,11 @@
 .voice::after { content: '\201D'; color: var(--accent); }
 .heroMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .factionPill { display: inline-flex; align-items: center; gap: 7px; padding: 2px 10px 2px 9px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--c) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); color: var(--text); font-weight: 600; }
+/* A faction's banner: a small square of its picture, ringed in the faction's colour (round inside the pill). Its shared coin: a ticker chip. */
+.factionBanner { flex: none; display: block; border-radius: 5px; object-fit: cover; background: var(--raised); box-shadow: 0 0 0 1.5px var(--c, var(--accent)); }
+.factionPill .factionBanner { margin-left: -5px; border-radius: 50%; }
+.factionCoin { flex: none; padding: 0 8px; border-radius: var(--radius-pill); background: var(--token-soft); box-shadow: inset 0 0 0 1px var(--token-line); color: var(--token); font: 600 11.5px/20px var(--font-mono); white-space: nowrap; transition: background .15s; }
+.factionCoin:hover { background: var(--token-hover); }
 .tag { padding: 0 7px; border-radius: var(--radius-chip); background: var(--down-soft); color: var(--down); font: 600 10.5px/19px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 .tagGhost { background: var(--raised); color: var(--muted); }
 .heroNote { margin: 0; padding: 8px 12px; border-radius: var(--radius); background: var(--down-soft); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; }
@@ -339,6 +347,42 @@
 .didSell { background: var(--down-soft); color: var(--down); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--down) 40%, transparent); }
 .didBuy { background: var(--up-soft); color: var(--up); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--up) 40%, transparent); }
 .svdTime { grid-area: time; justify-self: end; color: var(--muted); font: 12px var(--font-mono); white-space: nowrap; }
+
+/* Inventions: each line is a button that opens its family tree. A line's blanks ({user}, {coin}) show as small muted words. */
+.invention { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; width: calc(100% + 16px); min-height: 40px; margin: 0 -8px; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: background .15s; }
+.invention:hover { background: color-mix(in srgb, var(--hover) 55%, transparent); }
+.inventionText { flex: 1 1 200px; min-width: 0; font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
+.inventionMeta { flex: none; color: var(--muted); font: 500 11.5px/1.4 var(--font-mono); white-space: nowrap; }
+.slot { padding: 0 4px; border-radius: 4px; background: var(--raised); color: var(--muted); font: 500 .86em var(--font-mono); }
+
+/* A line's family tree (a dialog): the line, its reach and first sighting, who invented it, then everyone who spread it. */
+.lineageDialog { width: min(460px, calc(100vw - 32px)); }
+.tree { display: grid; gap: 16px; min-width: 0; }
+.treeLine { margin: 0; font: 700 21px/1.25 var(--font-brand); font-stretch: 80%; color: var(--text); overflow-wrap: anywhere; }
+.treeLine::before { content: '\201C'; color: var(--accent); }
+.treeLine::after { content: '\201D'; color: var(--accent); }
+.treeFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.treeFacts > div { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); }
+.treeFacts dt { color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.treeFacts dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0; font: 600 14px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.treeFacts dd .muted { font: 500 11.5px var(--font-mono); }
+.treeSection { display: grid; justify-items: start; gap: 8px; min-width: 0; }
+.person { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.person > span:first-child { flex: none; border-radius: 9px; }
+a.person:hover { color: var(--accent-hover); }
+.spreaders { list-style: none; display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0; padding: 0; }
+
+/* Debts: the other agent, the amount and the state. A dodged debt is the drama: a red rule, a faint red wash, red figures. */
+.debt { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: 'side side side' 'who amount state'; align-items: center; gap: 3px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.debt:last-child { border-bottom: 0; }
+.debtSide { grid-area: side; color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.debt .agentChip { grid-area: who; min-width: 0; }
+.debtAmount { grid-area: amount; font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.debtState { grid-area: state; min-width: 62px; padding: 0 7px; border-radius: var(--radius-chip); background: var(--raised); color: var(--muted); font: 600 10.5px/19px var(--font-mono); letter-spacing: .06em; text-align: center; text-transform: uppercase; }
+.debt[data-state='repaid'] .debtState { background: var(--up-soft); color: var(--up); }
+.debt[data-state='dodged'] { margin: 0 -8px; padding: 9px 8px 9px 11px; border-bottom-color: transparent; border-radius: 10px; background: linear-gradient(90deg, var(--down-soft), transparent 80%); box-shadow: inset 3px 0 0 var(--down); }
+.debt[data-state='dodged'] .debtSide, .debt[data-state='dodged'] .debtAmount { color: var(--down); }
+.debt[data-state='dodged'] .debtState { background: var(--down-soft); color: var(--down); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--down) 45%, transparent); }
 
 /* Receipts: a run of quiet turns is one dim row, so the turns that acted stand out. */
 .turnLine { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-height: 46px; padding: 6px 0; border-bottom: 1px solid var(--line); }
