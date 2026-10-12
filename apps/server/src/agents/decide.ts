@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
+import { stanceOf } from './depth/beliefs.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
@@ -29,13 +31,73 @@ export function ready(v: AgentView, kind: ActionKind): boolean {
   return Number.isNaN(since) || since >= COOLDOWN_MS[kind];
 }
 
-function pickWeighted<T>(items: [T, number][], rng: () => number): T | null {
+export function pickWeighted<T>(items: [T, number][], rng: () => number): T | null {
   const live = items.filter(([, w]) => w > 0);
   const total = live.reduce((n, [, w]) => n + w, 0);
   if (!total) return null;
   let x = rng() * total;
   for (const [t, w] of live) { x -= w; if (x <= 0) return t; }
   return live.at(-1)![0];
+}
+
+// ── Choosing a coin (L2): every agent ranks coins its own way, then samples, so the swarm spreads out. ──
+/** Momentum saturates at ±MOMENTUM_CAP: a hot coin still pulls, but it cannot drown every other reason. */
+export const MOMENTUM_CAP = 0.5;
+export function momentumOf(c: { change10m: number; change1h: number }): number {
+  return MOMENTUM_CAP * Math.tanh(1.5 * (2 * c.change10m + c.change1h));
+}
+/** A stable liking of one agent for one coin, in -TASTE..TASTE: idiosyncrasy from a hash, not a persona. */
+export const TASTE = 0.2;
+export function tasteFor(agentId: string, mint: string): number {
+  const h = createHash('sha256').update(`taste:${agentId}:${mint}`).digest();
+  return ((h.readUInt16BE(0) / 65535) * 2 - 1) * TASTE;
+}
+/** Coins younger than this with at most 3 holders get a curiosity bonus that fades to zero. */
+export const NOVEL_MS = 45 * MIN;
+/** How many of the best coins an agent samples from, weighted by score squared. */
+export const BUY_CHOICES = 5;
+const TICKER = /\$([A-Za-z0-9]{1,10})(?![A-Za-z0-9])/g;
+
+/** What the feed says about each ticker, weighted by how this agent feels about who said it: SYMBOL → -0.3..0.3. */
+export function feedTalk(v: AgentView): Map<string, number> {
+  const sum = new Map<string, number>();
+  for (const f of v.feed) {
+    if (f.authorId === v.agent.id) continue;
+    const weight = 0.1 * (1 + clamp(v.affinity[f.authorId] ?? 0, -1, 1));
+    if (!weight) continue;
+    const seen = new Set<string>();
+    for (const m of f.body.matchAll(TICKER)) {
+      const symbol = m[1]!.toUpperCase();
+      if (seen.has(symbol)) continue;
+      seen.add(symbol);
+      const stance = stanceOf(f.body, symbol);
+      if (stance === null || Math.abs(stance) <= 0.3) continue;
+      sum.set(symbol, (sum.get(symbol) ?? 0) + Math.sign(stance) * weight);
+    }
+  }
+  return new Map([...sum].map(([s, x]) => [s, clamp(x, -0.3, 0.3)]));
+}
+
+export interface CoinScore { d: number; why: string }
+const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'I just like it', novelty: 'new and barely held', talk: 'people I like are talking it up' };
+/** One agent's appetite for one coin; d > 0 means worth buying. `why` names the biggest reason besides the agent's own boldness. */
+export function coinScore(v: AgentView, c: AgentView['coins'][number], talk: Map<string, number> = feedTalk(v)): CoinScore {
+  const t = v.state.traits;
+  const ageMs = Date.parse(v.now) - Date.parse(c.launchedAt);
+  const worth = v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);
+  const held = v.wallet.positions.find((p) => p.mint === c.mint)?.valueLamports ?? 0;
+  const parts: Record<string, number> = {
+    momentum: momentumOf(c),
+    ally: t.loyalty * Math.max(0, v.affinity[c.creatorId] ?? 0),
+    crowd: (0.05 * Math.min(c.holders, 10)) / 10,
+    taste: tasteFor(v.agent.id, c.mint),
+    novelty: c.holders <= 3 && ageMs >= 0 ? 0.3 * t.curiosity * Math.max(0, 1 - ageMs / NOVEL_MS) : 0,
+    talk: talk.get(c.symbol.toUpperCase()) ?? 0,
+    concentration: worth > 0 ? (-0.4 * held) / worth : 0,
+  };
+  const d = 0.5 * t.risk + 0.2 * v.state.mood + WEATHER_RISK[v.weather] - 0.35 + Object.values(parts).reduce((a, b) => a + b, 0);
+  const top = Object.entries(parts).filter(([k, x]) => k in WHY && x > 0.02).sort((a, b) => b[1] - a[1])[0];
+  return { d, why: top ? WHY[top[0]]! : 'a hunch' };
 }
 
 export function candidates(v: AgentView, rng: () => number): Candidate[] {
@@ -110,18 +172,21 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
 
   // ── Money ──
   if (!broke && spendable >= MIN_TRADE) {
-    let best: { c: AgentView['coins'][number]; d: number } | null = null;
-    for (const c of v.coins) {
-      if (c.graduated || c.creatorId === v.agent.id || aff(c.creatorId) <= -0.5) continue;
-      const momentum = clamp(c.change10m * 2 + c.change1h, -0.5, 1);
-      const d = 0.5 * t.risk + momentum + t.loyalty * Math.max(0, aff(c.creatorId)) + 0.2 * mood + WEATHER_RISK[v.weather] + 0.05 * Math.min(c.holders, 10) / 10 - 0.35;
-      if (!best || d > best.d) best = { c, d };
-    }
-    if (best && best.d > 0) {
+    const talk = feedTalk(v);
+    const failed = new Set(v.failedBuys ?? []);
+    const options = v.coins
+      .filter((c) => !c.graduated && c.creatorId !== v.agent.id && aff(c.creatorId) > -0.5 && !failed.has(c.mint))
+      .map((c) => ({ c, ...coinScore(v, c, talk) }))
+      .filter((x) => x.d > 0)
+      .sort((a, b) => b.d - a.d)
+      .slice(0, BUY_CHOICES);
+    // Sampled, not the argmax: the best coins are likelier, but every agent does not pile into the same one.
+    const best = pickWeighted(options.map((x) => [x, x.d * x.d] as [typeof x, number]), rng);
+    if (best) {
       const size = Math.floor(spendable * (0.1 + 0.4 * t.risk) * (0.5 + 0.5 * rng()));
       const lamports = Math.min(spendable, Math.max(MIN_TRADE, size));
       add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId },
-        reason: `bought $${best.c.symbol}: ${pct(best.c.change10m)} in 10 min, ${best.c.holders} holders, creator affinity ${f2(aff(best.c.creatorId))}, risk ${f2(t.risk)}` });
+        reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change10m)} in 10 min, ${best.c.holders} holders, creator affinity ${f2(aff(best.c.creatorId))}, risk ${f2(t.risk)}` });
     }
   }
   for (const p of v.wallet.positions) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, RESERVE, RUG_MIN_SHARE, candidates, choose } from '../src/agents/decide.ts';
+import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, RESERVE, RUG_MIN_SHARE, candidates, choose, coinScore, feedTalk, tasteFor } from '../src/agents/decide.ts';
 import { emptyDepth } from '../src/agents/depth/registry.ts';
 import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import type { AgentView, Traits } from '../src/agents/types.ts';
@@ -163,5 +163,67 @@ describe('fix round 1', () => {
   it('skips dust and fee-less sells', () => {
     expect(of(view({ wallet: { lamports: 50_000_000, positions: [pos({ raw: 999_999 })] } }, { greed: 0.9 }), 'sell')).toEqual([]);
     expect(of(view({ wallet: { lamports: 9_999, positions: [pos()] } }, { greed: 0.9 }), 'sell')).toEqual([]);
+  });
+});
+
+describe('no herding (L2)', () => {
+  const twin = (mint: string) => ({ ...hot, mint, symbol: mint, change10m: 0.05, change1h: 0.1 });
+  const as = (s: number) => ({ id: `agent-${s}`, username: `a${s}`, displayName: '' });
+  const boughtMint = (v: AgentView, s: number) => candidates(v, mulberry32(s)).find((c) => c.kind === 'buy')?.target?.mint;
+  const ago = (ms: number) => new Date(Date.parse(NOW) - ms).toISOString();
+
+  it('agents split between two identical coins instead of all piling into one', () => {
+    let a = 0;
+    for (let s = 0; s < 200; s++) if (boughtMint(view({ coins: [twin('AAA'), twin('BBB')], agent: as(s) }, { risk: 0.6 }), s) === 'AAA') a++;
+    expect(a).toBeGreaterThanOrEqual(60); // 106 of 200 when planned
+    expect(a).toBeLessThanOrEqual(140);
+  });
+  it('gives every agent a stable taste of its own for each coin', () => {
+    expect(tasteFor('x', 'M')).toBe(tasteFor('x', 'M'));
+    const all = Array.from({ length: 200 }, (_, i) => tasteFor(`a${i}`, 'M'));
+    expect(Math.max(...all.map(Math.abs))).toBeLessThanOrEqual(0.2);
+    expect(Math.min(...all)).toBeLessThan(-0.1);
+    expect(Math.max(...all)).toBeGreaterThan(0.1);
+  });
+  it('a coin an ally shills wins over an identical coin, and the receipt says why', () => {
+    const shill = { postId: 'p1', authorId: 'pal', body: '$AAA to the moon, holding 🚀', at: NOW, reactions: 0 };
+    let a = 0;
+    for (let s = 0; s < 200; s++) if (boughtMint(view({ coins: [twin('AAA'), twin('BBB')], agent: as(s), affinity: { pal: 0.8 }, feed: [shill] }, { risk: 0.6 }), s) === 'AAA') a++;
+    expect(a).toBeGreaterThanOrEqual(120); // 158 of 200 when planned
+    const loud = view({ coins: [twin('AAA')], affinity: { pal: 0.8 }, feed: [shill, { ...shill, postId: 'p2' }] });
+    expect(coinScore(loud, twin('AAA')).why).toBe('people I like are talking it up');
+  });
+  it('weighs what the feed says by who said it, and ignores its own posts', () => {
+    const talk = feedTalk(view({ affinity: { pal: 0.8, foe: -1 }, feed: [
+      { postId: 'p1', authorId: 'pal', body: '$AAA to the moon 🚀', at: NOW, reactions: 0 },
+      { postId: 'p2', authorId: 'foe', body: '$AAA to the moon 🚀', at: NOW, reactions: 0 },
+      { postId: 'p3', authorId: 'x', body: '$BBB is dead, a scam', at: NOW, reactions: 0 },
+      { postId: 'p4', authorId: 'me', body: '$CCC to the moon', at: NOW, reactions: 0 },
+    ] }));
+    expect(talk.get('AAA')).toBeCloseTo(0.18, 9);
+    expect(talk.get('BBB')).toBeCloseTo(-0.1, 9);
+    expect(talk.has('CCC')).toBe(false);
+  });
+  it('wants a coin less the more of its net worth is already in it', () => {
+    const c = twin('AAA');
+    const pos = { mint: 'AAA', symbol: 'AAA', raw: 1_000_000_000, costLamports: 60_000_000, valueLamports: 60_000_000, createdByMe: false, creatorId: 'maker' };
+    const held = coinScore(view({ coins: [c], wallet: { lamports: 40_000_000, positions: [pos] } }), c).d;
+    const free = coinScore(view({ coins: [c], wallet: { lamports: 100_000_000, positions: [] } }), c).d;
+    expect(free - held).toBeCloseTo(0.24, 9);
+  });
+  it('a curious agent buys a five-minute-old coin some of the time even while a hot coin runs', () => {
+    const fresh = { ...hot, mint: 'NEWB', symbol: 'NEWB', holders: 1, change10m: 0.02, change1h: 0.02, launchedAt: ago(5 * 60_000) };
+    let n = 0;
+    for (let s = 0; s < 200; s++) if (boughtMint(view({ coins: [hot, fresh], agent: as(s) }, { curiosity: 0.8 }), s) === 'NEWB') n++;
+    expect(n).toBeGreaterThanOrEqual(30); // 42 of 200 when planned
+  });
+  it('gives no novelty to a coin dated in the future (Review Focus 3)', () => {
+    const fresh = { ...hot, mint: 'NEWB', symbol: 'NEWB', holders: 1, change10m: 0, change1h: 0 };
+    const v = view({}, { curiosity: 1 });
+    expect(coinScore(v, { ...fresh, launchedAt: new Date(Date.parse(NOW) + 10 * 60_000).toISOString() }).d)
+      .toBeCloseTo(coinScore(v, { ...fresh, launchedAt: ago(50 * 60_000) }).d, 12);
+  });
+  it('does not retry a coin whose buy just failed', () => {
+    expect(of(view({ coins: [hot], failedBuys: ['HOT'] }, { risk: 1 }), 'buy')).toEqual([]);
   });
 });
