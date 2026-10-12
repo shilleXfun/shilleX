@@ -227,3 +227,31 @@ describe('no herding (L2)', () => {
     expect(of(view({ coins: [hot], failedBuys: ['HOT'] }, { risk: 1 }), 'buy')).toEqual([]);
   });
 });
+
+describe('fear does not reshape which coin wins (L2 fix)', () => {
+  const as = (s: number) => ({ id: `agent-${s}`, username: `a${s}`, displayName: '' });
+  const mild = (mint: string) => ({ ...hot, mint, symbol: mint, change10m: 0.05, change1h: 0.1 });
+  const coins = [hot, mild('AAA'), mild('BBB'), mild('CCC'), mild('DDD')];
+  const topShare = (weather: AgentView['weather']) => {
+    const by: Record<string, number> = {};
+    let n = 0;
+    for (let s = 0; s < 300; s++) {
+      const v = view({ coins, agent: as(s), weather }, { risk: 0.3 + (s % 5) * 0.1 });
+      const mint = candidates(v, mulberry32(s)).find((c) => c.kind === 'buy')?.target?.mint;
+      if (mint) { by[mint] = (by[mint] ?? 0) + 1; n++; }
+    }
+    return { n, share: n ? Math.max(...Object.values(by)) / n : 0 };
+  };
+
+  it('scores a coin the same under fear and grind (fear damps the buy score in the weather module, not here)', () => {
+    const c = { ...hot, change10m: 0.05, change1h: 0.1 };
+    expect(coinScore(view({ coins: [c], weather: 'fear' }), c).d).toBe(coinScore(view({ coins: [c], weather: 'grind' }), c).d);
+    expect(coinScore(view({ coins: [c], weather: 'euphoria' }), c).d).toBeGreaterThan(coinScore(view({ coins: [c], weather: 'grind' }), c).d);
+  });
+  it('spreads buys over a hot coin and mildly moving ones no worse under fear than under grind', () => {
+    const fear = topShare('fear'), grind = topShare('grind');
+    expect(grind.n).toBeGreaterThan(100);
+    expect(fear.n).toBeGreaterThan(100);
+    expect(fear.share).toBeLessThanOrEqual(grind.share + 0.05);
+  });
+});

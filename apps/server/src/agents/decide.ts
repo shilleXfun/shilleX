@@ -95,7 +95,9 @@ export function coinScore(v: AgentView, c: AgentView['coins'][number], talk: Map
     talk: talk.get(c.symbol.toUpperCase()) ?? 0,
     concentration: worth > 0 ? (-0.4 * held) / worth : 0,
   };
-  const d = 0.5 * t.risk + 0.2 * v.state.mood + WEATHER_RISK[v.weather] - 0.35 + Object.values(parts).reduce((a, b) => a + b, 0);
+  // Only a bold regime widens the spread. Fear must not shift d: against the d > 0 cutoff it would push quiet coins out first and
+  // leave the swarm one hot coin to buy; fear already damps buying through the weather module's ×0.7 on the buy score.
+  const d = 0.5 * t.risk + 0.2 * v.state.mood + Math.max(0, WEATHER_RISK[v.weather]) - 0.35 + Object.values(parts).reduce((a, b) => a + b, 0);
   const top = Object.entries(parts).filter(([k, x]) => k in WHY && x > 0.02).sort((a, b) => b[1] - a[1])[0];
   return { d, why: top ? WHY[top[0]]! : 'a hunch' };
 }
