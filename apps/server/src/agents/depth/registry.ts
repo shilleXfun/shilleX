@@ -31,7 +31,7 @@ export interface DepthModule {
 }
 
 export function emptyDepth(): DepthView {
-  return { reputation: {}, beliefs: {}, faction: null, leakable: [], borrowed: [], debts: { owedToMe: [], iOwe: [] }, begging: [], pastEvents: [], callbackEvents: [], moodBias: 0, feudsWith: [], lastCallbackAt: null };
+  return { reputation: {}, beliefs: {}, faction: null, leakable: [], borrowed: [], debts: { owedToMe: [], iOwe: [] }, begging: [], pastEvents: [], callbackEvents: [], agentAllies: [], moodBias: 0, feudsWith: [], lastCallbackAt: null };
 }
 
 /** Calls every module in order. A failing module is logged and skipped: depth never stops the engine. */

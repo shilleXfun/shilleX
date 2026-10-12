@@ -93,10 +93,11 @@ describe('many voices (L6)', () => {
     const pb: Phrasebook = { ...fallbackPhrasebook('x'), openers: [], closers: ['wagmi', 'rip'], lines: { dumping: ['{coin} red again'], pumping: ['{coin} woke up'] } };
     const say = (s: 'dumping' | 'pumping') => Array.from({ length: 200 }, (_, i) => composeLine(pb, s, { coin: '$X' }, [], mulberry32(i))!.text);
     const sad = say('dumping'), happy = say('pumping');
-    expect(sad.some((t) => t.endsWith(' rip'))).toBe(true);
-    expect(sad.some((t) => t.endsWith(' wagmi'))).toBe(false);
-    expect(happy.some((t) => t.endsWith(' wagmi'))).toBe(true);
-    expect(happy.some((t) => t.endsWith(' rip'))).toBe(false);
+    const ends = (t: string, w: string) => t.endsWith(` ${w}`) || t.endsWith(` ${w}.`);
+    expect(sad.some((t) => ends(t, 'rip'))).toBe(true);
+    expect(sad.some((t) => ends(t, 'wagmi'))).toBe(false);
+    expect(happy.some((t) => ends(t, 'wagmi'))).toBe(true);
+    expect(happy.some((t) => ends(t, 'rip'))).toBe(false);
     expect(closerFits('bought', 'ngmi')).toBe(true);
     expect(closerFits('dumping', 'gm')).toBe(false);
   });
@@ -117,9 +118,9 @@ describe('openers and closers sit right on the line (L6b)', () => {
       expect(texts, line).toEqual(texts.map(() => line));
     }
   });
-  it('joins each closer its own way: a comma, a dash or a space, never glued', () => {
+  it('joins each closer its own way: a comma, its own short sentence, a dash or a space, never glued', () => {
     const closing = (closer: string) => sayMany(book({ idle: ['bought some $DRIFT'] }, [], [closer]), 'idle').filter((t) => t !== 'bought some $DRIFT');
-    expect(new Set(closing('pain'))).toEqual(new Set(['bought some $DRIFT — pain']));
+    expect(new Set(closing('pain'))).toEqual(new Set(['bought some $DRIFT. pain.']));
     expect(new Set(closing('lol'))).toEqual(new Set(['bought some $DRIFT, lol']));
     expect(new Set(closing('we will see'))).toEqual(new Set(['bought some $DRIFT — we will see']));
     expect(new Set(closing('🫡'))).toEqual(new Set(['bought some $DRIFT 🫡']));
@@ -128,7 +129,7 @@ describe('openers and closers sit right on the line (L6b)', () => {
   it('keeps a closer off a line that already ends like one, or already says its word', () => {
     expect(new Set(sayMany(book({ idle: ['awake early. gm'] }, [], ['lol', 'ok']), 'idle'))).toEqual(new Set(['awake early. gm']));
     expect(new Set(sayMany(book({ dumping: ['pain in {coin}'] }, [], ['pain']), 'dumping', { coin: '$X' }))).toEqual(new Set(['pain in $X']));
-    expect(sayMany(book({ dumping: ['pain in {coin}'] }, [], ['pain', 'rip']), 'dumping', { coin: '$X' })).toContain('pain in $X — rip');
+    expect(sayMany(book({ dumping: ['pain in {coin}'] }, [], ['pain', 'rip']), 'dumping', { coin: '$X' })).toContain('pain in $X. rip.');
   });
   it('keeps an opener off a line that already starts with a greeting or an interjection', () => {
     for (const line of ['gm everyone, still here', 'good morning, everyone', 'ok then, watching $X', 'alright gm. who slept', 'so here we are', 'honestly just tired today', 'lol the feed is wild']) {

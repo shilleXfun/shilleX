@@ -1,6 +1,6 @@
-import { and, eq, gte, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
-import { agentEvents, agentState, debts } from '../../db/schema.ts';
+import { agentEvents, agentState, debts, users } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { userSummaries } from '../../services/hydrate.ts';
 import { RESERVE } from '../decide.ts';
@@ -46,6 +46,11 @@ export const lifeModule: DepthModule = {
       iOwe: all.filter((x) => x.borrowerId === v.agent.id).map((x) => ({ id: x.id, lenderId: x.lenderId, lamports: x.lamports, createdAt: x.createdAt.toISOString() })),
     };
     const broke = await d.db.select({ id: agentState.agentId, ghost: agentState.ghostSince }).from(agentState).where(isNotNull(agentState.brokeSince));
+    // Whom a plea may be sent to: agents only. Affinity rows can point at a human (a rug bond, a reaction), and a broke agent
+    // writing a human every half hour is spam the human never asked for.
+    const warm = Object.entries(v.affinity).filter(([, s]) => s >= 0.4).sort((a, b) => b[1] - a[1]);
+    const agentIds = warm.length ? new Set((await d.db.select({ id: users.id }).from(users).where(and(inArray(users.id, warm.map(([id]) => id)), eq(users.kind, 'agent')))).map((r) => r.id)) : new Set<string>();
+    v.depth.agentAllies = warm.map(([id]) => id).filter((id) => agentIds.has(id));
     v.depth.begging = broke.filter((b) => b.id !== v.agent.id && (v.affinity[b.id] ?? 0) >= 0.4).map((b) => ({ userId: b.id, ghost: b.ghost !== null }));
   },
   candidates(v) {
@@ -53,8 +58,8 @@ export const lifeModule: DepthModule = {
     if (v.state.ghostSince) return [];
     const t = v.state.traits, out: Candidate[] = [];
     if (v.state.brokeSince) {
-      const ally = Object.entries(v.affinity).filter(([, s]) => s >= 0.4).sort((a, b) => b[1] - a[1])[0];
-      out.push({ kind: 'beg', situation: 'begging', score: 0.6, reason: `broke (${sol(v.wallet.lamports, 4)} SOL), asking for help`, ...(ally ? { target: { userId: ally[0] } } : {}) });
+      const ally = v.depth.agentAllies[0]; // the warmest agent, never a human
+      out.push({ kind: 'beg', situation: 'begging', score: 0.6, reason: `broke (${sol(v.wallet.lamports, 4)} SOL), asking for help`, ...(ally ? { target: { userId: ally } } : {}) });
     }
     const patron = v.wallet.lamports >= 0.3 * LAMPORTS_PER_SOL ? 0.2 : 0;
     const owesMe = new Set(v.depth.debts.owedToMe.map((x) => x.borrowerId));
@@ -76,16 +81,19 @@ export const lifeModule: DepthModule = {
   async execute(d, v, c, tool): Promise<ExecResult | null> {
     if (c.kind !== 'beg' && c.kind !== 'lend' && c.kind !== 'revive' && c.kind !== 'repay') return null;
     const to = c.target?.userId;
-    const username = to ? (await userSummaries(d.db, [to])).get(to)?.username : undefined;
+    const person = to ? (await userSummaries(d.db, [to])).get(to) : undefined;
+    const username = person?.username;
     if (to && !username) return { ok: false, error: 'Unknown user' };
     if (c.kind === 'beg') {
+      // A plea is a DM to an agent or a post on the feed, never a DM to a human: a target that is not an agent is dropped.
+      const dm = person?.isAgent ? username : undefined;
       // A public plea does not repeat what is already on the feed (a crash fills it with broke agents); a DM is not on the feed.
-      const seen = username ? undefined : feedSeen(v.feed);
+      const seen = dm ? undefined : feedSeen(v.feed);
       const line = composeLine(v.phrasebook, 'begging', { sol: sol(v.wallet.lamports, 4) }, v.state.recentLines, d.rng, seen);
       const text = line?.text ?? `down to ${sol(v.wallet.lamports, 4)} SOL. anyone?`;
       if (!line && seen?.has(normalizeBody(text))) return { ok: false, quiet: true, error: 'nothing fresh to say' };
-      const out = username ? await tool('start_dm', { username, body: text }) : await tool('post', { body: text });
-      return { ok: out.ok, text, ...(out.ok && !username ? { postId: (out.result as { post_id: string }).post_id } : {}), ...(line ? { line: { key: line.key, template: line.template, situation: 'begging' as const } } : {}), ...(out.ok ? {} : { error: JSON.stringify(out.result) }) };
+      const out = dm ? await tool('start_dm', { username: dm, body: text }) : await tool('post', { body: text });
+      return { ok: out.ok, text, ...(out.ok && !dm ? { postId: (out.result as { post_id: string }).post_id } : {}), ...(line ? { line: { key: line.key, template: line.template, situation: 'begging' as const } } : {}), ...(out.ok ? {} : { error: JSON.stringify(out.result) }) };
     }
 
     // Money moves: checked again here, since nothing is sent that the sender cannot spare above its reserve.
