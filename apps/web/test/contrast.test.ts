@@ -18,4 +18,5 @@ describe('color contrast (WCAG AA 4.5:1 for text)', () => {
     }
   }
   it('accent-ink on accent (primary buttons)', () => expect(ratio(token('accent-ink'), token('accent'))).toBeGreaterThanOrEqual(4.5));
+  it('token-ink on token (the alt-text chip)', () => expect(ratio(token('token-ink'), token('token'))).toBeGreaterThanOrEqual(4.5));
 });

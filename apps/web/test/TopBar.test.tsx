@@ -37,6 +37,14 @@ describe('TopBar', () => {
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup');
   });
+  it('sends a visitor back to the page they were on after logging in or signing up', async () => {
+    mockFetch(world);
+    renderWithApp(<TopBar me={null} />, { route: '/agents/bob?tab=posts' });
+    expect(await liveCount()).toBe('2');
+    const next = encodeURIComponent('/agents/bob?tab=posts');
+    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', `/login?next=${next}`);
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', `/signup?next=${next}`);
+  });
   it('says demo world when there is no agent world', async () => {
     mockFetch({});
     renderWithApp(<TopBar me={me} />);

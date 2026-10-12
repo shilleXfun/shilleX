@@ -2,6 +2,7 @@ import type { Regime } from '@shillex/shared';
 import { mulberry32 } from '../../lib/forceLayout';
 import type { SwarmModel } from './model';
 import { targetsFor, type SwarmEvent } from './bus';
+import { readColours } from './palette';
 
 type RGBA = [number, number, number, number];
 interface Sky { top: RGBA; low: RGBA; a1: RGBA; a2: RGBA; a3: RGBA; speed: number; jitter: number }
@@ -15,7 +16,6 @@ export const SKIES: Record<Regime | 'none', Sky> = {
   chaos: { top: [6, 6, 14, 1], low: [20, 10, 38, 1], a1: [170, 120, 255, 0.2], a2: [70, 230, 255, 0.15], a3: [255, 80, 200, 0.12], speed: 2.2, jitter: 2.4 },
 };
 const FADE_S = 3, FRAME_MS = 32, STILL_T = 12;
-const UP = '#4BF0A0', DOWN = '#FF5A6E', AMBER = '#FFB86B', CYAN = '#7DE3FF', WHITE = '#E8ECFF', COIN = '#FFE3B0';
 
 const rgba = (c: RGBA) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${c[3]})`;
 const mix = (a: RGBA, b: RGBA, k: number): RGBA => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
@@ -43,13 +43,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   const c: CanvasRenderingContext2D = ctx; // non-null alias: narrowing of `ctx` does not reach the function declarations below
+  const { up: UP, down: DOWN, amber: AMBER, cyan: CYAN, white: WHITE, coin: COIN } = readColours();
   const t0 = performance.now();
   const now = () => (performance.now() - t0) / 1000;
   const rnd = mulberry32(11);
   const stars = Array.from({ length: 140 }, () => ({ x: rnd(), y: rnd(), a: 0.15 + rnd() * 0.5, ph: rnd() * 6.28 }));
   const glowCache = new Map<string, HTMLCanvasElement>();
   const deadNow = new Set<string>();
-  let W = 0, H = 0, raf = 0, last = 0, running = false, drawAvg = 0;
+  let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
   let model: SwarmModel | null = null;
   let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0);
   let streaks: Streak[] = [], rings: Ring[] = [];
@@ -109,7 +110,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         for (const [a, b] of pairs) { c.moveTo(px[a]!, py[a]!); c.lineTo(px[b]!, py[b]!); }
         c.stroke();
       }
-      c.setLineDash([3, 6]); c.strokeStyle = 'rgba(255,90,110,0.38)'; c.beginPath();
+      c.setLineDash([3, 6]); c.strokeStyle = hexA(DOWN, 0.38); c.beginPath();
       for (const [a, b] of m.feuds) { c.moveTo(px[a]!, py[a]!); c.lineTo(px[b]!, py[b]!); }
       c.stroke(); c.setLineDash([]);
       c.font = "500 10px 'Geist Mono Variable', ui-monospace, monospace"; c.textBaseline = 'middle'; c.textAlign = 'left';
@@ -155,6 +156,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     frame(now(), dt);
   }
   const still = () => { if (W && H) frame(STILL_T, 0); };
+  /** Redraws now: a resized buffer is blank until the next frame, and frames come 32 ms apart. */
+  const redraw = () => { if (opts.reduced || !running) still(); else if (W && H) frame(now(), 0); };
 
   function nearest(x: number, y: number, k: number): number[] {
     return model!.nodes.map((_, i) => [i, Math.hypot(px[i]! - x, py[i]! - y)] as const).sort((a, b) => a[1] - b[1]).slice(0, k).map(([i]) => i);
@@ -162,10 +165,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
 
   return {
     resize(w, h, dpr) {
-      W = w; H = h;
+      // Same size, same buffer: assigning canvas.width clears it, and a phone's URL bar sliding fires resize for nothing.
+      if (w === W && h === H && dpr === D) return;
+      W = w; H = h; D = dpr;
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (opts.reduced || !running) still();
+      redraw();
     },
     setModel(m) {
       const old = model;

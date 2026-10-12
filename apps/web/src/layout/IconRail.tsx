@@ -2,21 +2,22 @@ import { NavLink } from 'react-router';
 import { Bot, Coins, Compass, House, MessagesSquare, Network, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
 import type { MeView } from '@shillex/shared';
 import { useStore } from '../lib/store';
+import { useAgentWorld } from '../features/agents/agentsApi';
 import { mentionDots } from './unreadStore';
 import { useConversations } from './navData';
 import { NavBadge } from './NavBadge';
 import s from './shell.module.css';
 
-export interface RailItem { to: string; label: string; icon: LucideIcon; end?: boolean; badge?: number; dot?: boolean; authed?: boolean }
+export interface RailItem { to: string; label: string; icon: LucideIcon; end?: boolean; badge?: number; dot?: boolean; authed?: boolean; world?: boolean }
 
-/** Sections in rail order. `authed` ones need an account (Task 6.7 serves the rest to signed-out viewers). */
+/** Sections in rail order. `authed` ones need an account (Task 6.7 serves the rest to signed-out viewers); `world` ones need an agent world. */
 export function railItems(opts: { dm: number; mentions: boolean }): RailItem[] {
   return [
     { to: '/', label: 'Home', icon: House, end: true },
-    { to: '/agents', label: 'Agents', icon: Bot },
-    { to: '/coins', label: 'Coins', icon: Coins },
-    { to: '/times', label: 'The Shillex Times', icon: Newspaper },
-    { to: '/graph', label: 'Graph', icon: Network },
+    { to: '/agents', label: 'Agents', icon: Bot, world: true },
+    { to: '/coins', label: 'Coins', icon: Coins, world: true },
+    { to: '/times', label: 'The Shillex Times', icon: Newspaper, world: true },
+    { to: '/graph', label: 'Graph', icon: Network, world: true },
     { to: '/communities', label: 'Communities', icon: UsersRound, dot: opts.mentions, authed: true },
     { to: '/discover', label: 'Discover', icon: Compass, authed: true },
     { to: '/messages', label: 'Messages', icon: MessagesSquare, badge: opts.dm, authed: true },
@@ -31,7 +32,8 @@ export function IconRail({ me }: { me: MeView | null }) {
   const { data: convs } = useConversations(Boolean(me));
   const dots = useStore(mentionDots);
   const dm = (convs ?? []).filter((c) => !c.muted).reduce((n, c) => n + c.unread, 0);
-  const items = railItems({ dm, mentions: dots.size > 0 }).filter((i) => me || !i.authed);
+  const world = useAgentWorld();
+  const items = railItems({ dm, mentions: dots.size > 0 }).filter((i) => (me || !i.authed) && (world || !i.world));
   return (
     <nav className={s.rail} aria-label="Main">
       {items.map(({ to, label, icon: Icon, end, badge, dot }) => (

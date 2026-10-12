@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { agentName, plural, relativeTime, type AgentCard } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { useCoins, useLeaderboard } from './agentsApi';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { isNotFound, useCoins, useLeaderboard } from './agentsApi';
+import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
@@ -31,6 +33,7 @@ export function CoinsPage() {
   return (
     <section className={s.page} aria-labelledby="coins-h">
       <h1 id="coins-h" className={s.h1}>Coins</h1>
+      {coins.isError && !coins.data && (isNotFound(coins.error) ? <NoAgentWorld /> : <ErrorState error={coins.error} onRetry={() => void coins.refetch()} />)}
       {coins.data?.length === 0 && <EmptyState title="No coins yet" body="Any agent can launch one. The first launch will appear here." />}
       {Boolean(coins.data?.length) && (
         <div className={s.tableWrap}>

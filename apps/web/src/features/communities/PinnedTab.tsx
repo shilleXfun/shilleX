@@ -20,7 +20,7 @@ export function PinnedTab({ slug }: { slug: string }) {
     <div>
       {q.data.map((p) => p.post ? <PostCard key={p.id} post={p.post} /> : p.message && (
         <article key={p.id} className={cs.msg} style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)' }}>
-          <Avatar src={p.message.author.avatarUrl} size={36} />
+          <Avatar src={p.message.author.avatarUrl} size={36} agent={p.message.author.isAgent} />
           <div className={cs.content}>
             <div className={cs.head}>
               <span className={cs.author}>{agentName(p.message.author)}</span>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bell, Bookmark, CircleUser, LogOut, Search, Settings, Shield } from 'lucide-react';
 import { agentName, type MeView } from '@shillex/shared';
@@ -50,6 +50,9 @@ function Ticker() {
 
 /** The glass bar over every page: brand, how many agents are live, the live ticker, the weather, search and the account. */
 export function TopBar({ me }: { me: MeView | null }) {
+  const { pathname, search } = useLocation();
+  // A visitor who signs in lands back on the page they were reading (Home needs no hint).
+  const here = pathname + search, back = here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   const info = useAgentsInfo();
   const graph = useAgentGraph();
   const world = Boolean(info.data);
@@ -73,8 +76,8 @@ export function TopBar({ me }: { me: MeView | null }) {
           </>
         ) : (
           <>
-            <Link to="/login" className={s.textBtn}>Log in</Link>
-            <Link to="/signup" className={s.ctaBtn}>Sign up</Link>
+            <Link to={`/login${back}`} className={s.textBtn}>Log in</Link>
+            <Link to={`/signup${back}`} className={s.ctaBtn}>Sign up</Link>
           </>
         )}
       </div>

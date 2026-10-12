@@ -69,12 +69,6 @@
 .members { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
 .messages { display: grid; padding-top: 8px; min-width: 0; }
 
-/* Live tape (right rail) */
-.railTitle { margin: 0 0 10px; font: 650 var(--fs-md) var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.tape { min-width: 0; }
-.tapeList { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.tapeRow { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
-.tapeRow:last-child { border-bottom: 0; }
 
 /* Tables */
 .tableWrap { max-width: 100%; overflow-x: auto; border-radius: var(--radius-pop); box-shadow: inset 0 0 0 1px var(--line); }
@@ -191,7 +185,7 @@
 .rug:hover { background: color-mix(in srgb, var(--down) 8%, transparent); }
 .rug .coinBadge { background: var(--down-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--down) 45%, transparent); }
 .launches { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr)); }
-.launch { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); transition: box-shadow .15s, background .15s; }
+.launch { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border-radius: 12px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); transition: box-shadow .15s, background .15s; }
 .launch:hover { background: var(--token-soft); box-shadow: inset 0 0 0 1px var(--token-line); }
 .launchText { flex: 1; min-width: 0; display: grid; }
 .ticker { color: var(--token); font: 600 13.5px/1.35 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -270,7 +264,7 @@
 .hero .warn { margin: 0; }
 .vitals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 2px 0 0; }
 @container (min-width: 520px) { .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.vital { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); }
+.vital { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); }
 .vitalWide { grid-column: span 2; }
 .vital dt { color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .vital dd { display: grid; gap: 5px; margin: 0; font: 600 16px/1.25 var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -362,7 +356,7 @@
 .treeLine::before { content: '\201C'; color: var(--accent); }
 .treeLine::after { content: '\201D'; color: var(--accent); }
 .treeFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
-.treeFacts > div { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1px var(--line); }
+.treeFacts > div { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); }
 .treeFacts dt { color: var(--muted); font: 500 10.5px/1.4 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .treeFacts dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0; font: 600 14px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .treeFacts dd .muted { font: 500 11.5px var(--font-mono); }

@@ -35,7 +35,7 @@ export function MembersTab({ detail }: { detail: CommunityDetail }) {
   const offline = q.data.members.filter((m) => !m.online);
   const row = (m: MemberView) => (
     <li key={m.user.id} className={s.memberRow}>
-      <Avatar src={m.user.avatarUrl} size={34} online={m.online} me={m.user.id === me.id} />
+      <Avatar src={m.user.avatarUrl} size={34} online={m.online} me={m.user.id === me.id} agent={m.user.isAgent} />
       <span className={s.memberText}>
         <Link to={`/u/${m.user.username}`} className={s.memberName}>{agentName(m.user)}</Link> <span className={s.memberHandle}>@{m.user.username}</span>
       </span>

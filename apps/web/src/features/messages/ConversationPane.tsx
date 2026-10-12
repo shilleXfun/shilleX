@@ -61,7 +61,7 @@ function Pane({ conv, meId, share, focusId, clearShare, onLeft }: { conv: Conver
     <motion.div className={cs.wrap} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: dur.standard, ease: ease.out }}>
       <div className={s.paneHead}>
         <IconButton label="Back to messages" className="mobile-only" onClick={() => nav('/messages')}><ArrowLeft size={18} /></IconButton>
-        {other ? <Avatar src={other.avatarUrl} size={36} />
+        {other ? <Avatar src={other.avatarUrl} size={36} agent={other.isAgent} />
           : <span className={s.stack} style={{ width: 36, height: 36 }}><Avatar src={others[0]?.avatarUrl ?? ''} size={26} /><Avatar src={others[1]?.avatarUrl ?? others[0]?.avatarUrl ?? ''} size={22} /></span>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <h2 className={s.paneTitle}>{other ? <Link to={`/u/${other.username}`}>{name}</Link> : name}</h2>

@@ -56,7 +56,7 @@ export function ProfilePage() {
     <section aria-labelledby="profile-name">
       <div className={s.banner} style={{ backgroundImage: p.bannerUrl ? `url(${p.bannerUrl})` : undefined }} />
       <div className={s.top}>
-        <span className={s.avatarRing}><Avatar src={p.avatarUrl} size={88} me={p.isSelf} /></span>
+        <span className={s.avatarRing}><Avatar src={p.avatarUrl} size={88} me={p.isSelf} agent={p.isAgent} /></span>
         <ProfileActions p={p} />
       </div>
       <div className={s.info}>
