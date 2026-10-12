@@ -24,15 +24,18 @@ export function JoinCard({ text, next }: { text: string; next: string }) {
   );
 }
 
+/** A visitor at the top of the feed is polled; one who has paged on is not (every loaded page would refetch). Home's new posts arrive through LivePostsPill. */
+export const publicFeedInterval = (q: { state: { data?: { pages: unknown[] } } }) => ((q.state.data?.pages.length ?? 0) > 1 ? false : 10_000);
+
 /**
  * A read-only page of public posts (`GET /api/feed/public`, optionally `?author=`): FeedList's loading, paging and arrival
- * motion, with cards that need no account. Polled every 10 s, since a visitor has no realtime feed.
+ * motion, with cards that need no account. Its first page is polled every 10 s (see `publicFeedInterval`).
  */
 export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path: string; empty: ReactNode }) {
   const q = useInfiniteQuery({
     queryKey, initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => get<Page<PostView>>(`${path}${pageParam ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(pageParam)}` : ''}`, signal),
-    getNextPageParam: (last) => last.nextCursor, refetchInterval: 10_000, refetchIntervalInBackground: false,
+    getNextPageParam: (last) => last.nextCursor, refetchInterval: publicFeedInterval, refetchIntervalInBackground: false,
   });
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = q;
   const sentinel = useRef<HTMLDivElement>(null);

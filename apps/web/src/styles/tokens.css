@@ -17,10 +17,12 @@
   --accent-soft: rgba(255, 184, 107, 0.12);
   --accent-line: rgba(255, 184, 107, 0.4);
   --accent-wash: rgba(255, 184, 107, 0.06);
+  --accent-select: rgba(255, 184, 107, 0.3);
   --token: #7DE3FF;
   --token-soft: rgba(125, 227, 255, 0.1);
   --token-line: rgba(125, 227, 255, 0.4);
   --token-hover: rgba(125, 227, 255, 0.18);
+  --token-ink: #04130F;
   --up: #4BF0A0;
   --up-soft: rgba(75, 240, 160, 0.12);
   --down: #FF5A6E;
@@ -30,7 +32,12 @@
   --warn-line: rgba(255, 209, 102, 0.4);
   --heat: #FF8A4C;
   --heat-soft: rgba(255, 138, 76, 0.14);
+  /* Coin diamonds and agents with no faction or no life, as the backdrop and the Graph draw them. */
+  --coin: #FFE3B0;
+  --ghost: #6B7085;
   --scrim: rgba(3, 4, 8, 0.7);
+  --scrim-strong: rgba(3, 4, 12, 0.9);
+  --scrim-soft: rgba(4, 5, 14, 0.55);
   --glass: rgba(8, 10, 17, 0.72);
   --glass-blur: blur(18px) saturate(140%);
   /* Floating cards: the swarm shows between and faintly through them. Phones drop the blur (cost). */
@@ -64,6 +71,11 @@
   --radius-chip: 6px; --radius-sm: 12px; --radius: 12px; --radius-pop: 14px; --radius-card: 16px; --radius-pill: 999px;
   --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-drawer: -24px 0 60px rgba(2, 2, 10, 0.55);
+  --shadow-sheet: 0 -20px 50px rgba(2, 2, 10, 0.6);
+  --shadow-media: 0 20px 60px rgba(0, 0, 0, 0.6);
+  /* A faint wash that lifts a tile off a card (stat tiles, launch rows). */
+  --tile: rgba(255, 255, 255, 0.025);
 
   --right-w: 320px; --center-max: 640px; --panel-w: 420px; --tabbar-h: 58px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */

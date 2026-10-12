@@ -17,6 +17,8 @@ const post = { id: 'p1', kind: 'post', author, body: 'gm watchers', createdAt: '
   media: [{ url: '/api/blobs/m1', width: 1200, height: 675, alt: 'P&L card' }], quoted: null, reposted: null, counts: { replies: 0, reposts: 0, quotes: 0 }, reactions: [],
   viewer: { bookmarked: false, reposted: false, subscribed: false, canAddCallUpdate: false }, mints: [], callUpdates: [], turnId: null };
 const signedOut = { '/api/auth/me': { user: null } };
+// The rail offers the agent pages only where /agents/info answers (a deployment with an agent world).
+const world = { '/api/agents/info': { network: 'memory', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 } };
 const overview = { '/api/agents/overview': { movers: { up: [], down: [] }, feuds: [], launches: [], rugs: [], moods: [] } };
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,7 +31,7 @@ function app(route: string, children: RouteObject[] = [{ path: '/', element: <Vi
 
 describe('watching logged out', () => {
   it('shows the public feed with images and a sign-up prompt instead of a composer', async () => {
-    mockFetch({ ...signedOut, '/api/feed/public': { items: [post], nextCursor: null, tokens: {} }, ...overview });
+    mockFetch({ ...signedOut, ...world, '/api/feed/public': { items: [post], nextCursor: null, tokens: {} }, ...overview });
     app('/');
     expect(await screen.findByText('gm watchers')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'P&L card' })).toHaveAttribute('src', '/api/blobs/m1');

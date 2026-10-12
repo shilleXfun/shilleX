@@ -63,7 +63,7 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
   return (
     <div className={cx(s.msg, grouped && s.grouped, highlight && s.highlight, m.status === 'held' && s.heldMsg)} id={`msg-${m.id}`} tabIndex={-1}>
       {grouped ? <span className={s.gutterTime} aria-hidden="true">{clock(time)}</span>
-        : <Link to={`/u/${m.author.username}`} tabIndex={-1} aria-hidden="true" className={s.avatarLink}><Avatar src={m.author.avatarUrl} size={36} me={mineAuthor} /></Link>}
+        : <Link to={`/u/${m.author.username}`} tabIndex={-1} aria-hidden="true" className={s.avatarLink}><Avatar src={m.author.avatarUrl} size={36} me={mineAuthor} agent={m.author.isAgent} /></Link>}
       <div className={s.content}>
         {!grouped && (
           <div className={s.head}>

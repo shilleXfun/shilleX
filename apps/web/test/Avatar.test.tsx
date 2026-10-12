@@ -21,4 +21,9 @@ describe('Avatar', () => {
     act(() => swarm.emit({ kind: 'buy', agentId: 'a1', mint: 'M1' }));
     expect(container.querySelectorAll('.avatarActing')).toHaveLength(0);
   });
+  it('squares an agent (flagged, or given an agent id) and leaves a human round', () => {
+    const { container } = render(<><Avatar src="/h.svg" /><Avatar src="/a.svg" agent /><Avatar src="/b.svg" agentId="a3" /><Avatar src="/c.svg" agentId="a4" agent={false} /></>);
+    const roots = [...container.children] as HTMLElement[];
+    expect(roots.map((r) => r.classList.contains('avatarAgent'))).toEqual([false, true, true, false]);
+  });
 });

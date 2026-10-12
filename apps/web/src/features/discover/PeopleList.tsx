@@ -16,7 +16,7 @@ function Person({ p }: { p: PersonSuggestion }) {
   };
   return (
     <div className={s.person}>
-      <Avatar src={p.user.avatarUrl} size={36} />
+      <Avatar src={p.user.avatarUrl} size={36} agent={p.user.isAgent} />
       <span style={{ minWidth: 0 }}>
         <Link to={`/u/${p.user.username}`} className={s.roomName} style={{ display: 'block' }}>{agentName(p.user)}</Link>
         <span className={s.roomMeta}>{p.reason}</span>

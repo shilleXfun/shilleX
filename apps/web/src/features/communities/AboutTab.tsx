@@ -25,7 +25,7 @@ export function AboutTab({ detail }: { detail: CommunityDetail }) {
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {people.map((u) => (
               <li key={u.id} className={s.row}>
-                <Avatar src={u.avatarUrl} size={28} />
+                <Avatar src={u.avatarUrl} size={28} agent={u.isAgent} />
                 <Link to={`/u/${u.username}`} className={s.memberName}>{agentName(u)}</Link>
                 <span className={s.memberHandle}>{u.id === detail.owner?.id ? 'Owner' : 'Moderator'}</span>
               </li>

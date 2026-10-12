@@ -11,28 +11,31 @@ const coin = (mint: string, creatorId: string, volume24hSol: number): CoinView =
 });
 const graph: AgentGraph = { nodes: [node('a'), node('b')], edges: [], generatedAt: '2026-10-12T10:00:00Z' };
 
-/** A 2D context that does nothing except remember where rings (the only arcs) were drawn and what text was written. */
+/** A 2D context that does nothing except remember where rings (the only arcs) were drawn, what text was written and how many background fills there were (one per frame drawn, plus the stars). */
 function fakeContext() {
   const arcs: number[][] = [];
   const texts: string[] = [];
+  const fills = { n: 0 };
   const grad = { addColorStop: () => undefined };
-  const target: Record<string, unknown> = { arc: (...a: number[]) => { arcs.push(a); }, fillText: (t: string) => { texts.push(t); }, createLinearGradient: () => grad, createRadialGradient: () => grad };
-  return { arcs, texts, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: () => true }) };
+  const target: Record<string, unknown> = { arc: (...a: number[]) => { arcs.push(a); }, fillText: (t: string) => { texts.push(t); }, fillRect: () => { fills.n++; }, createLinearGradient: () => grad, createRadialGradient: () => grad };
+  return { arcs, texts, fills, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: () => true }) };
 }
 
-function setup() {
-  const { arcs, texts, ctx } = fakeContext();
+function setup({ reduced = false } = {}) {
+  const { arcs, texts, fills, ctx } = fakeContext();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
   let clock = 0, frame: FrameRequestCallback = () => undefined;
+  const raf = vi.fn((cb: FrameRequestCallback) => { frame = cb; return 1; });
   vi.spyOn(performance, 'now').mockImplementation(() => clock);
-  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frame = cb; return 1; });
+  vi.stubGlobal('requestAnimationFrame', raf);
   vi.stubGlobal('cancelAnimationFrame', () => undefined);
-  const r = createRenderer(document.createElement('canvas'), { reduced: false })!;
+  const canvas = document.createElement('canvas');
+  const r = createRenderer(canvas, { reduced })!;
   r.resize(1000, 600, 1);
   const first = buildSwarm(graph, [coin('c1', 'a', 1)], null);
   r.setModel(first);
   r.start();
-  return { r, arcs, texts, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
+  return { r, canvas, arcs, texts, fills, raf, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -75,5 +78,45 @@ describe('renderer coin labels', () => {
     texts.length = 0;
     draw(1100);
     expect(texts).toHaveLength(0);
+  });
+});
+
+describe('renderer resize', () => {
+  it('draws a frame at once when it resizes while running (assigning the buffer size clears it)', () => {
+    const { r, canvas, fills, draw } = setup();
+    draw(1000);
+    const before = fills.n;
+    r.resize(800, 500, 1);
+    expect(canvas.width).toBe(800);
+    expect(fills.n).toBeGreaterThan(before);
+  });
+  it('leaves the buffer alone when the size is the same (a phone’s URL bar sliding fires resize for nothing)', () => {
+    const { r, canvas, fills, draw } = setup();
+    draw(1000);
+    const before = fills.n;
+    const set = vi.spyOn(canvas, 'width', 'set');
+    r.resize(1000, 600, 1);
+    expect(set).not.toHaveBeenCalled();
+    expect(fills.n).toBe(before);
+    r.resize(1000, 600, 2);
+    expect(set).toHaveBeenCalledWith(2000);
+  });
+});
+
+describe('renderer reduced motion', () => {
+  it('never requests an animation frame, and draws still frames instead', () => {
+    const { raf, fills } = setup({ reduced: true });
+    expect(raf).not.toHaveBeenCalled();
+    expect(fills.n).toBeGreaterThan(0);
+  });
+  it('queues no animation for a rug: no rings, and the coin is redrawn as rugged', () => {
+    const { r, arcs, texts, raf } = setup({ reduced: true });
+    texts.length = 0;
+    r.event({ kind: 'rug', agentId: 'a', mint: 'c1' });
+    r.event({ kind: 'buy', agentId: 'a', mint: 'c1' });
+    r.event({ kind: 'post', agentId: 'a' });
+    expect(arcs).toHaveLength(0);
+    expect(texts).toContain('$C1 ✕');
+    expect(raf).not.toHaveBeenCalled();
   });
 });

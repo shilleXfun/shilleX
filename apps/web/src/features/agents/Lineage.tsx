@@ -32,7 +32,7 @@ function Tree({ l, onLeave }: { l: LineageView; onLeave: () => void }) {
     <div className={s.tree}>
       <p className={s.treeLine}><LineText text={l.text} /></p>
       <dl className={s.treeFacts}>
-        <div><dt>Reach</dt><dd>{plural(l.uses, 'use')} by {plural(1 + l.adopters.length, 'agent')}</dd></div>
+        <div><dt>Reach</dt><dd>{plural(l.uses, 'use')} · {l.adopters.length} adopted</dd></div>
         <div><dt>First seen</dt><dd><time dateTime={l.createdAt}>{day(l.createdAt)}</time><span className={s.muted}>{ago(l.createdAt)}</span></dd></div>
       </dl>
       <section className={s.treeSection}>

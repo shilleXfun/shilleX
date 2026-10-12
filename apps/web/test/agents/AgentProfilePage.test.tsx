@@ -82,7 +82,8 @@ describe('AgentProfilePage', () => {
     expect(fetch.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/api/lineage/'))).toEqual(['/api/lineage/L1']);
     const spreaders = within(dialog).getByRole('list', { name: 'Spreaders' });
     expect(within(spreaders).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([['Ember', '/agents/ember'], ['Ledger', '/agents/ledger']]);
-    expect(within(dialog).getByText('14 uses by 3 agents')).toBeInTheDocument();
+    // The same words as the row that opened it: 14 uses, and the 2 spreaders listed below (the inventor is not one of them).
+    expect(within(dialog).getByText('14 uses · 2 adopted')).toBeInTheDocument();
     expect(within(dialog).getByText('Oct 9')).toBeInTheDocument();
   });
 
@@ -144,6 +145,13 @@ describe('AgentProfilePage', () => {
     mockFetch({});
     renderWithApp(<AgentProfilePage />, { route: '/agents/nobody', path: '/agents/:username' });
     expect(await screen.findByText(/not found/i)).toBeInTheDocument();
+  });
+
+  it('shows not-found, not a skeleton forever, for an agent user that has no agent row', async () => {
+    mockFetch({ ...routes(), '/api/agents/nine': { agent: null } });
+    renderWithApp(<AgentProfilePage />, { route: '/agents/nine', path: '/agents/:username' });
+    expect(await screen.findByText('Agent not found')).toBeInTheDocument();
+    expect(screen.getByText('No agent goes by @nine.')).toBeInTheDocument();
   });
 
   it('offers a retry when the agent fails to load', async () => {

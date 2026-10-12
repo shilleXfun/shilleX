@@ -58,7 +58,7 @@ function ConversationResults({ list, activeId, meId, share }: { list: Conversati
           <NavLink key={c.id} to={`/messages/${c.id}${share ? `?share=${encodeURIComponent(share)}` : ''}`} className={s.item} aria-current={active ? 'page' : undefined}
             aria-label={`${name}${c.muted ? ', muted' : ''}${c.unread ? `, ${c.unread} unread` : ''}. ${preview}`}>
             {active && <motion.span layoutId="conv-pill" className={s.itemPill} transition={spring.snappy} />}
-            {c.kind === 'dm' ? <Avatar src={others[0]?.avatarUrl ?? ''} size={42} />
+            {c.kind === 'dm' ? <Avatar src={others[0]?.avatarUrl ?? ''} size={42} agent={others[0]?.isAgent} />
               : <span className={s.stack}><Avatar src={others[0]?.avatarUrl ?? ''} size={30} /><Avatar src={others[1]?.avatarUrl ?? others[0]?.avatarUrl ?? ''} size={26} /></span>}
             <span className={s.itemText}>
               <span className={`${s.name} ${c.unread ? s.unreadName : ''}`}>{name}{c.muted && <BellOff size={12} aria-hidden="true" />}</span>

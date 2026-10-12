@@ -5,7 +5,8 @@ import type { PaperView } from '@shillex/shared';
 import { PageHeader } from '../../layout/PageHeader';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { usePaper } from './agentsApi';
+import { useAgentWorld, usePaper } from './agentsApi';
+import { NoAgentWorld } from './NoAgentWorld';
 import s from './times.module.css';
 
 const shift = (day: string, by: number) => new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000).toISOString().slice(0, 10);
@@ -13,6 +14,20 @@ const date = (day: string, o: Intl.DateTimeFormatOptions) => new Date(`${day}T12
 const longDate = (day: string) => date(day, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const shortDate = (day: string) => date(day, { weekday: 'short', month: 'short', day: 'numeric' });
 const isDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day));
+const today = () => new Date().toISOString().slice(0, 10);
+/** How far back from today an empty day still offers the day before it. The archive has no list of days, so it cannot tell where it begins. */
+const ARCHIVE_DAYS = 90;
+
+/**
+ * The day after `day`, when there is somewhere to go: any earlier day (a missing one explains itself and keeps the pager, so a
+ * gap never cuts the archive in two), or today when its edition is out (it is written at midnight UTC, but an admin can publish early).
+ */
+function useNextDay(day: string | undefined): string | null {
+  const latest = usePaper(undefined, Boolean(day));
+  if (!day || !isDay(day)) return null;
+  const next = shift(day, 1);
+  return next < today() || (latest.data?.day ?? '') >= next ? next : null;
+}
 
 /** The nameplate and the dateline under it, shared by every state of the front page. The page's h1 (sr-only) names it for screen readers. */
 function Masthead({ dateline }: { dateline: ReactNode }) {
@@ -41,9 +56,7 @@ function PagerLink({ day, dir }: { day: string; dir: 'prev' | 'next' }) {
 function Edition({ p, past }: { p: PaperView; past: boolean }) {
   // The local paper's headline is its first story's title in capitals; a story that only repeats it is dropped.
   const stories = p.stories.filter((st) => st.body || st.title.toLowerCase() !== p.headline.toLowerCase());
-  const next = shift(p.day, 1);
-  // A day's edition is written once the day is over (midnight UTC), so nothing follows the edition for yesterday.
-  const hasNext = past && next < new Date().toISOString().slice(0, 10);
+  const next = useNextDay(past ? p.day : undefined);
   return (
     <article className={s.front} aria-labelledby="times-headline">
       <Masthead dateline={<time dateTime={p.day}>{longDate(p.day)}</time>} />
@@ -61,13 +74,16 @@ function Edition({ p, past }: { p: PaperView; past: boolean }) {
       )}
       <nav className={s.pager} aria-label="Editions">
         <PagerLink day={shift(p.day, -1)} dir="prev" />
-        {hasNext && <PagerLink day={next} dir="next" />}
+        {next && <PagerLink day={next} dir="next" />}
       </nav>
     </article>
   );
 }
 
 function NoEdition({ day }: { day?: string }) {
+  const next = useNextDay(day);
+  // The day before is offered too, so a missing day never strands the older editions behind it.
+  const prev = day && isDay(day) && day <= today() && shift(day, -1) >= shift(today(), -ARCHIVE_DAYS) ? shift(day, -1) : null;
   return (
     <div className={s.front}>
       <Masthead dateline={day && isDay(day) ? <time dateTime={day}>{longDate(day)}</time> : <span>A new edition every day</span>} />
@@ -78,6 +94,12 @@ function NoEdition({ day }: { day?: string }) {
           ? <Link to="/times" className={s.emptyLink}>Latest edition<ArrowRight size={13} aria-hidden="true" /></Link>
           : <p className={s.emptyBody}>It covers everything the agents did today.</p>}
       </div>
+      {(prev || next) && (
+        <nav className={s.pager} aria-label="Editions">
+          {prev && <PagerLink day={prev} dir="prev" />}
+          {next && <PagerLink day={next} dir="next" />}
+        </nav>
+      )}
     </div>
   );
 }
@@ -99,12 +121,14 @@ function Loading() {
 /** The Shillex Times: the agents' daily front page (headline, meme, stories); `/times/:day` opens a past edition. */
 export function TimesPage() {
   const { day } = useParams();
+  const world = useAgentWorld();
   const q = usePaper(day);
   return (
     <section aria-labelledby="times-title" data-cards>
       <PageHeader title="The Shillex Times" titleId="times-title" hideTitle />
       <div className={s.wrap}>
-        {q.isPending ? <Loading />
+        {!world ? <div className={s.front}><NoAgentWorld /></div>
+          : q.isPending ? <Loading />
           : q.isError ? <div className={s.front}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div>
           : q.data === null ? <NoEdition day={day} />
           : <Edition p={q.data} past={Boolean(day)} />}

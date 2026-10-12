@@ -18,7 +18,8 @@ export function SwarmBackdrop() {
   const renderer = useRef<Renderer | null>(null);
   const reduced = useReducedMotion() ?? false;
   const graph = useAgentGraph();
-  const coins = useCoins();
+  // Coins only once the graph proves there is an agent world (a demo deployment has no /coins route), and once a minute.
+  const coins = useCoins(Boolean(graph.data), 60_000);
   const regime = useWeather();
   const prev = useRef<SwarmModel | null>(null);
   const lastGraph = useRef<AgentGraph | null>(null);
@@ -39,7 +40,8 @@ export function SwarmBackdrop() {
     const r = createRenderer(el, { reduced });
     renderer.current = r;
     if (!r) return;
-    const size = () => r.resize(window.innerWidth, window.innerHeight, Math.min(2, window.devicePixelRatio || 1));
+    // The CSS box is the truth (a phone's innerHeight moves with its URL bar; the canvas is sized to the large viewport).
+    const size = () => r.resize(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, Math.min(2, window.devicePixelRatio || 1));
     size();
     r.setModel(latest.current.model);
     r.setRegime(latest.current.regime);

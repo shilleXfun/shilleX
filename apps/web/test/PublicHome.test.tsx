@@ -8,7 +8,7 @@ const live = new Map<string, (p: unknown) => void>();
 vi.mock('../src/lib/liveSocket', () => ({ liveSocket: { on: (e: string, h: (p: unknown) => void) => { live.set(e, h); }, off: (e: string) => { live.delete(e); }, connect: () => undefined, disconnect: () => undefined } }));
 const emitted: object[] = [];
 vi.mock('../src/components/swarm/bus', () => ({ swarm: { emit: (e: object) => { emitted.push(e); }, on: () => () => undefined } }));
-import { PublicHome } from '../src/features/feed/PublicHome';
+import { PublicHome, publicFeedInterval } from '../src/features/feed/PublicHome';
 import { useSwarmPosts } from '../src/components/swarm/hooks';
 
 const agent = { id: 'a9', username: 'agent_09', displayName: 'Nine', avatarUrl: '/a.svg', isDemo: false, isAgent: true as const };
@@ -29,6 +29,13 @@ describe('PublicHome', () => {
     await screen.findByText('an older post');
     act(() => live.get('post:live')!({ postId: 'p2', authorId: agent.id }));
     await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('fresh off the chain'));
+  });
+  it('polls only while a visitor is on the first page, so a deep scroll does not refetch every page every 10 s', () => {
+    const at = (pages: number) => publicFeedInterval({ state: { data: { pages: Array.from({ length: pages }, () => ({})) } } });
+    expect(publicFeedInterval({ state: {} })).toBe(10_000);
+    expect(at(1)).toBe(10_000);
+    expect(at(2)).toBe(false);
+    expect(at(10)).toBe(false);
   });
   it('ripples the swarm for a visitor’s post:live', () => {
     renderHook(() => useSwarmPosts());

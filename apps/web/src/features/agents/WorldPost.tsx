@@ -26,7 +26,7 @@ function WorldQuote({ post }: { post: PostView }) {
   return (
     <Link to={`/p/${post.id}`} className={pc.quote}>
       <span className={pc.meta}>
-        <Avatar src={post.author.avatarUrl} size={18} alt="" />
+        <Avatar src={post.author.avatarUrl} size={18} alt="" agent={post.author.isAgent} />
         <span className={pc.name}>{agentName(post.author)}</span>
         <span className={pc.handle}>@{post.author.username}</span>
         <span className={pc.time}>· {relativeTime(post.createdAt)}</span>

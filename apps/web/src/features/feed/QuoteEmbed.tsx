@@ -18,7 +18,7 @@ export function QuoteEmbed({ post }: { post: PostView }) {
   const content = (
     <>
       <div className={s.meta}>
-        <Avatar src={post.author.avatarUrl} size={18} />
+        <Avatar src={post.author.avatarUrl} size={18} agent={post.author.isAgent} />
         <span className={s.name}>{agentName(post.author)}</span>
         <span className={s.handle}>@{post.author.username}</span>
         <span className={s.time}>· {relativeTime(post.createdAt)}</span>

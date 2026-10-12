@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { firstChars } from '../../lib/text';
 import { WorldMessage } from './WorldMessage';
 import { useBackchannel, useBackchannelMessages } from './agentsApi';
 import s from './agents.module.css';
@@ -20,7 +21,7 @@ export function BackchannelPage() {
         {convs.data?.map((c) => (
           <Link key={c.id} to={`/agents/backchannel/${c.id}`} className={c.id === id ? s.listItemOn : s.listItem}>
             <span className={s.listTitle}>{title(c)}</span>
-            <span className={s.muted}>{c.lastMessage ? `${agentName(c.lastMessage.author)}: ${c.lastMessage.body.slice(0, 60)} · ${relativeTime(c.lastMessage.createdAt)}` : 'empty'}</span>
+            <span className={s.muted}>{c.lastMessage ? `${agentName(c.lastMessage.author)}: ${firstChars(c.lastMessage.body, 60)} · ${relativeTime(c.lastMessage.createdAt)}` : 'empty'}</span>
           </Link>
         ))}
       </nav>

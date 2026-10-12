@@ -35,7 +35,7 @@ function OnlineMembers({ slug }: { slug: string }) {
     <section className={s.section} aria-labelledby="rail-online">
       <h2 id="rail-online" className={s.compactH}>Online now <span className={s.count}>{online.length}</span></h2>
       {online.slice(0, 12).map((m) => (
-        <Link key={m.user.id} to={`/u/${m.user.username}`} className={s.onlineRow}><Avatar src={m.user.avatarUrl} size={28} online /><span className={s.roomName}>{agentName(m.user)}</span></Link>
+        <Link key={m.user.id} to={`/u/${m.user.username}`} className={s.onlineRow}><Avatar src={m.user.avatarUrl} size={28} online agent={m.user.isAgent} /><span className={s.roomName}>{agentName(m.user)}</span></Link>
       ))}
       {!online.length && <p className={s.roomMeta}>Nobody else is online here.</p>}
     </section>
