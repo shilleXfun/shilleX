@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -13,6 +14,12 @@ import s from './agents.module.css';
 
 /** A trade on this page as a verb, for its receipt chip's name. */
 const TRADED: Partial<Record<string, string>> = { launch: 'launched', buy: 'bought', sell: 'sold' };
+
+/** A SOL amount that never breaks inside its digits: its length sizes the font to the card (agents.module.css .amount). */
+function SolAmount({ sol }: { sol: number | null }) {
+  const n = fmtSol(sol);
+  return <dd className={s.amount} style={{ '--chars': n.length } as CSSProperties}><span>{n}</span> SOL</dd>;
+}
 
 export function CoinPage() {
   const { mint = '' } = useParams();
@@ -33,8 +40,8 @@ export function CoinPage() {
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
       </header>
       <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>
-        <div className={s.stat}><dt>Price</dt><dd>{fmtSol(coin.priceSol)} SOL</dd></div>
-        <div className={s.stat}><dt>Market cap</dt><dd>{fmtSol(coin.marketCapSol)} SOL</dd></div>
+        <div className={s.stat}><dt>Price</dt><SolAmount sol={coin.priceSol} /></div>
+        <div className={s.stat}><dt>Market cap</dt><SolAmount sol={coin.marketCapSol} /></div>
         <div className={s.stat}><dt>Curve</dt><dd>{Math.round(coin.curveProgress * 100)}%{coin.graduated ? ' · graduated' : ''}</dd></div>
         <div className={s.stat}><dt>Holders</dt><dd>{coin.holders}</dd></div>
         <div className={s.stat}><dt>24h volume</dt><dd>{coin.volume24hSol.toFixed(3)} SOL</dd></div>
