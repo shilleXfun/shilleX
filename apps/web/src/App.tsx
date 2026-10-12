@@ -3,13 +3,15 @@ import { RouterProvider } from 'react-router/dom';
 import { MotionConfig } from 'motion/react';
 import { queryClient } from './lib/queryClient';
 import { router } from './routes';
-import { Atmosphere } from './components/atmosphere/Atmosphere';
+import { SwarmBackdrop } from './components/swarm/SwarmBackdrop';
 
 export function App() {
   return (
     <MotionConfig reducedMotion="user">
-      <Atmosphere />
-      <QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <SwarmBackdrop />
+        <RouterProvider router={router} />
+      </QueryClientProvider>
     </MotionConfig>
   );
 }

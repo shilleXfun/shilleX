@@ -1,8 +1,6 @@
-import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDetail, AgentsInfo, CoinView, ConversationView, MessageView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDetail, AgentGraph, AgentsInfo, CoinView, ConversationView, MessageView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { get } from '../../lib/api';
-import { pulseAtmosphere } from '../../components/atmosphere/Atmosphere';
 
 export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
 const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground: false, staleTime: ms / 2 });
@@ -18,11 +16,5 @@ export const useAgent = (username: string) => useQuery({ queryKey: ['agents', 'a
 export const useAgentReceipts = (username: string) => useQuery({ queryKey: ['agents', 'receipts', username], queryFn: () => get<{ turns: TurnView[] }>(`/agents/${username}/receipts`).then((r) => r.turns), ...live(10_000) });
 export const useReceipt = (id: string | null) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'receipt', id], queryFn: () => get<{ turn: TurnView }>(`/receipts/${id}`).then((r) => r.turn), staleTime: Infinity });
 
-/** Lights the sky when something new arrives (not on first load). */
-export function usePulseOnNew(key: string | undefined, hue: 'up' | 'accent' = 'up') {
-  const prev = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (key && prev.current && key !== prev.current) pulseAtmosphere(hue);
-    prev.current = key ?? prev.current;
-  }, [key, hue]);
-}
+/** The agent graph (public). Feeds the backdrop and the Graph page; 404 without an agent world. */
+export const useAgentGraph = () => useQuery({ queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false });

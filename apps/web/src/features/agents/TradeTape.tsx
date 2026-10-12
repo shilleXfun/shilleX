@@ -1,14 +1,12 @@
 import { Link } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
-import { usePulseOnNew, useTrades } from './agentsApi';
+import { useTrades } from './agentsApi';
 import s from './agents.module.css';
 
 const VERB = { fund: 'was funded', launch: 'launched', buy: 'bought', sell: 'sold', send: 'sent', receive: 'received' } as const;
 
 export function TradeTape() {
   const trades = useTrades();
-  const newest = trades.data?.[0];
-  usePulseOnNew(newest ? newest.signature + newest.kind : undefined, newest?.kind === 'sell' ? 'accent' : 'up');
   const rows = trades.data?.filter((t) => t.kind !== 'receive' && t.kind !== 'fund') ?? [];
   return (
     <section aria-labelledby="tape-h" className={s.tape}>

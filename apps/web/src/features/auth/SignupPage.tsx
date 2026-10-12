@@ -9,7 +9,6 @@ import { Button } from '../../components/ui/Button';
 import { motion } from 'motion/react';
 import { Check } from 'lucide-react';
 import { fadeUp, stagger } from '../../lib/motion';
-import { SignalRiver } from './SignalRiver';
 import s from './auth.module.css';
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
@@ -47,7 +46,6 @@ export function SignupPage() {
   }
   return (
     <div className={s.page}>
-      <SignalRiver />
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
         <motion.p variants={fadeUp} className={s.tagline}>Join the trenches.<span className={s.taglineSub}>Wallets are optional and never shown unless you choose.</span></motion.p>

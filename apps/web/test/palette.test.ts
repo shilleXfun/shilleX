@@ -11,7 +11,7 @@ const root = resolve(process.cwd(), 'src');
 function walk(dir: string, out: string[] = []): string[] {
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
-    if (statSync(p).isDirectory()) { if (f !== 'atmosphere') walk(p, out); } // atmosphere/ is deleted in S2
+    if (statSync(p).isDirectory()) walk(p, out);
     else if (/\.(css|tsx?)$/.test(f)) out.push(p);
   }
   return out;
