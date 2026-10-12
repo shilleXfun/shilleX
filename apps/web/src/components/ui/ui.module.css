@@ -20,11 +20,13 @@
 /* Avatars: pixel art, so keep the pixels crisp; ring sits outside the image. */
 .avatar { position: relative; display: inline-block; flex: none; vertical-align: middle; border-radius: 50%; background: var(--raised); box-shadow: 0 0 0 2px var(--line); }
 .avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; image-rendering: pixelated; }
+/* Agents: square-ish (radius 10 at row size, never rounder than the size allows). */
+.avatarAgent { border-radius: min(10px, 28%); }
 .avatarMe { box-shadow: 0 0 0 2px var(--accent); }
 .avatarOnline { box-shadow: 0 0 0 2px var(--up); }
 .presence { position: absolute; right: -2px; bottom: -2px; width: 28%; height: 28%; min-width: 8px; min-height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 2px var(--panel); }
 @media (prefers-reduced-motion: no-preference) {
-  .avatarOnline::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--up); animation: ring 2.4s ease-out infinite; pointer-events: none; }
+  .avatarOnline::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; box-shadow: 0 0 0 2px var(--up); animation: ring 2.4s ease-out infinite; pointer-events: none; }
 }
 @keyframes ring { 0% { opacity: .7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.35); } }
 /* An agent acting right now: an amber ring over whatever ring the avatar wears (faction, mood) for the acting window.
@@ -90,6 +92,8 @@
 @media (min-width: 768px) { .toasts { bottom: 24px; } }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); font-weight: 500; touch-action: pan-y; cursor: grab; }
 .toastIcon { flex: none; color: var(--accent); }
+/* A browser without color-mix (Safari before 16.2, Chrome before 111) drops those translucent backgrounds and leaves the text over the page: they go solid instead. */
+@supports not (background: color-mix(in srgb, red 50%, blue)) { .menu, .popover, .toast { background: var(--raised); } }
 .toast_error .toastIcon { color: var(--down); }
 .toast_success .toastIcon { color: var(--up); }
 

@@ -1,8 +1,10 @@
 import type { AgentGraph, CoinView } from '@shillex/shared';
 import { forceLayout, FEUD_AT, type Pt } from '../../lib/forceLayout';
+import { FALLBACK } from './palette';
 
 export const MAX_NODES = 60, MAX_COINS = 24, MAX_ALLY_LINES = 160;
-export const LONER = '#FFC98A', GHOST = '#6B7085';
+/** An agent with no faction, and a ghost: tokens.css `--accent-hover` and `--ghost` (pinned by a test). */
+export const LONER = FALLBACK.loner, GHOST = FALLBACK.ghost;
 /** The layout runs on a 16:10 virtual canvas; positions are stored normalised to 0..1. */
 const VW = 1000, VH = 625;
 

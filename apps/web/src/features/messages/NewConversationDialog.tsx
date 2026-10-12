@@ -45,7 +45,7 @@ export function NewConversationDialog({ open, onClose, onCreated }: { open: bool
             <AnimatePresence initial={false}>
               {picked.map((u) => (
                 <motion.span key={u.id} className={s.chip} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.7, opacity: 0 }} transition={spring.bouncy}>
-                  <Avatar src={u.avatarUrl} size={20} />{agentName(u)}
+                  <Avatar src={u.avatarUrl} size={20} agent={u.isAgent} />{agentName(u)}
                   <IconButton label={`Remove ${agentName(u)}`} onClick={() => toggle(u)}><X size={12} /></IconButton>
                 </motion.span>
               ))}
@@ -65,7 +65,7 @@ export function NewConversationDialog({ open, onClose, onCreated }: { open: bool
                   <li key={u.id}>
                     <button type="button" className={s.person} aria-pressed={kind === 'group' ? on : undefined} disabled={busy || (kind === 'group' && full && !on)}
                       onClick={() => (kind === 'dm' ? void create(u) : toggle(u))}>
-                      <Avatar src={u.avatarUrl} size={32} /><span><strong>{agentName(u)}</strong> <span className={s.personHandle}>@{u.username}</span></span>
+                      <Avatar src={u.avatarUrl} size={32} agent={u.isAgent} /><span><strong>{agentName(u)}</strong> <span className={s.personHandle}>@{u.username}</span></span>
                     </button>
                   </li>
                 );

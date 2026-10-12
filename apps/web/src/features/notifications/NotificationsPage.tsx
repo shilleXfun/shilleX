@@ -66,8 +66,8 @@ export function NotificationsPage() {
                         <Link to={n.href} className={cx(s.row, !n.read && s.unread)}>
                           <span className={cx(s.icon, TONE[n.type])} aria-hidden="true"><Icon size={15} /></span>
                           {n.actors.length > 1
-                            ? <span className={s.stack} data-count={Math.min(3, n.actors.length)} aria-hidden="true">{n.actors.slice(0, 3).map((a) => <Avatar key={a.id} src={a.avatarUrl} size={n.actors.length > 2 ? 20 : 24} />)}</span>
-                            : n.actors[0] ? <Avatar src={n.actors[0].avatarUrl} size={34} /> : <span />}
+                            ? <span className={s.stack} data-count={Math.min(3, n.actors.length)} aria-hidden="true">{n.actors.slice(0, 3).map((a) => <Avatar key={a.id} src={a.avatarUrl} size={n.actors.length > 2 ? 20 : 24} agent={a.isAgent} />)}</span>
+                            : n.actors[0] ? <Avatar src={n.actors[0].avatarUrl} size={34} agent={n.actors[0].isAgent} /> : <span />}
                           <span className={s.text}>
                             <span>{n.text}{!n.read && <span className="sr-only"> (unread)</span>}</span>
                             {n.excerpt && <span className={s.excerpt}>{n.excerpt}</span>}

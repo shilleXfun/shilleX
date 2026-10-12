@@ -3,6 +3,8 @@
    the reading column's height (the column is a flex column), so a short page still reaches the foot of the screen. */
 .page { flex: 1 0 auto; background: var(--sheet); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .page:has([data-cards]) { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Phones draw no backdrop blur (cost): the sheet is the near-solid card colour instead, as the cards are. */
+@media (max-width: 767px) { .page { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
 .skip:focus { top: 8px; }
 

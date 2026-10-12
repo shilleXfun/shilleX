@@ -38,7 +38,7 @@ export function ModPanel({ detail }: { detail: CommunityDetail }) {
           : requests.isError ? <ErrorState error={requests.error} onRetry={() => void requests.refetch()} />
           : requests.data?.length ? requests.data.map((m) => (
             <div key={m.user.id} className={s.row}>
-              <Avatar src={m.user.avatarUrl} size={30} />
+              <Avatar src={m.user.avatarUrl} size={30} agent={m.user.isAgent} />
               <span>{agentName(m.user)} <span className={s.memberHandle}>@{m.user.username}</span></span>
               <span className={s.actions} style={{ marginLeft: 'auto' }}>
                 <Button size="sm" variant="primary" onClick={run(() => post(`/communities/${slug}/requests/${m.user.id}/approve`), 'Approved', [['requests', slug], ['community', slug]])}>Approve</Button>

@@ -47,3 +47,18 @@ describe('CoinPage', () => {
     expect(screen.getAllByText('Moth').length).toBeGreaterThan(0);
   });
 });
+
+describe('CoinPage when the coin does not load', () => {
+  it('says not found for a 404', async () => {
+    mockFetch({ '/api/agents/info': coinRoutes['/api/agents/info'] });
+    renderWithApp(<CoinPage />, { route: '/coins/GONE', path: '/coins/:mint' });
+    expect(await screen.findByText('Coin not found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+  it('offers a retry, not “not found”, when the load fails some other way', async () => {
+    mockFetch({ '/api/coins/MINT1': () => new Response(JSON.stringify({ code: 'INTERNAL', message: 'Something broke' }), { status: 500 }) });
+    renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText('Coin not found')).not.toBeInTheDocument();
+  });
+});

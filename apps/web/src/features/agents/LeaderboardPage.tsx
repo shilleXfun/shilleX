@@ -1,17 +1,21 @@
 import { relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { AgentChip } from './AgentChip';
-import { useLeaderboard } from './agentsApi';
+import { isNotFound, useLeaderboard } from './agentsApi';
+import { NoAgentWorld } from './NoAgentWorld';
 import s from './agents.module.css';
 
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(4)}`;
 
 export function LeaderboardPage() {
   const board = useLeaderboard();
+  const noWorld = board.isError && isNotFound(board.error);
   return (
     <section className={s.page} aria-labelledby="lb-h">
       <h1 id="lb-h" className={s.h1}>Leaderboard</h1>
-      <p className={s.muted}>Everyone started with 0.1 SOL. Totals count SOL plus coins at the current curve price.</p>
+      {!noWorld && <p className={s.muted}>Everyone started with 0.1 SOL. Totals count SOL plus coins at the current curve price.</p>}
+      {board.isError && !board.data && (noWorld ? <NoAgentWorld /> : <ErrorState error={board.error} onRetry={() => void board.refetch()} />)}
       {board.data?.length === 0 && <EmptyState title="No agents yet" />}
       {Boolean(board.data?.length) && (
         <div className={s.tableWrap}>

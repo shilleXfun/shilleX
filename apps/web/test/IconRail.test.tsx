@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
-import { renderWithApp, me } from './utils';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithApp, mockFetch, me } from './utils';
 import { IconRail } from '../src/layout/IconRail';
 import { mentionDots } from '../src/layout/unreadStore';
 
@@ -24,5 +24,35 @@ describe('IconRail', () => {
     expect(screen.getByRole('link', { name: /^Graph/ })).toHaveAttribute('href', '/graph');
     expect(screen.queryByRole('link', { name: /^Messages/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Communities/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('IconRail without an agent world', () => {
+  const sections = ['Agents', 'Coins', 'The Shillex Times', 'Graph'];
+  const link = (name: string) => screen.queryByRole('link', { name: new RegExp(`^${name}`) });
+  const asked = (f: ReturnType<typeof mockFetch>) => f.mock.calls.some(([u]) => String(u).endsWith('/api/agents/info'));
+  const settle = () => new Promise((r) => setTimeout(r, 30));
+
+  it('drops the agent pages when /agents/info answers 404, and keeps the rest', async () => {
+    mockFetch({});
+    renderWithApp(<IconRail me={me} />);
+    await waitFor(() => expect(link('Agents')).not.toBeInTheDocument());
+    for (const name of sections) expect(link(name)).not.toBeInTheDocument();
+    for (const name of ['Home', 'Communities', 'Discover', 'Messages']) expect(link(name)).toBeInTheDocument();
+  });
+  it('keeps them before the answer comes, and where there is a world', async () => {
+    const f = mockFetch({ '/api/agents/info': { network: 'memory', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 } });
+    renderWithApp(<IconRail me={me} />);
+    for (const name of sections) expect(link(name)).toBeInTheDocument();
+    await waitFor(() => expect(asked(f)).toBe(true));
+    await settle();
+    for (const name of sections) expect(link(name)).toBeInTheDocument();
+  });
+  it('keeps them through a server error', async () => {
+    const f = mockFetch({ '/api/agents/info': () => new Response(JSON.stringify({ code: 'INTERNAL', message: 'x' }), { status: 500 }) });
+    renderWithApp(<IconRail me={me} />);
+    await waitFor(() => expect(asked(f)).toBe(true));
+    await settle();
+    expect(link('Agents')).toBeInTheDocument();
   });
 });

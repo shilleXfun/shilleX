@@ -1,10 +1,13 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithApp, mockFetch } from '../utils';
+import { renderWithApp, mockFetch as mockFetchRaw } from '../utils';
 import { TimesPage } from '../../src/features/agents/TimesPage';
 
 // PaperView (Phase 4.11): stories are { title, body } only.
 const paper = { day: '2026-10-11', headline: 'Ledger rugs his own cabal', stories: [{ title: 'Lamp Cult splits', body: 'Three members walked.' }, { title: 'Comeback of the day', body: 'Quill is back from the dead.' }], memeUrl: '/api/blobs/m1', source: 'model' };
+// The page asks /agents/info first: a 404 there means no agent world (see NoAgentWorld.test.tsx), so every test here has one.
+const info = { network: 'memory', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 };
+const mockFetch = (routes: Record<string, unknown>) => mockFetchRaw({ '/api/agents/info': info, ...routes });
 afterEach(() => vi.restoreAllMocks());
 
 describe('TimesPage', () => {
@@ -23,7 +26,7 @@ describe('TimesPage', () => {
     const f = mockFetch({ '/api/papers/2026-10-09': { ...paper, day: '2026-10-09', headline: 'Quiet day' } });
     renderWithApp(<TimesPage />, { route: '/times/2026-10-09', path: '/times/:day' });
     expect(await screen.findByRole('heading', { level: 2, name: 'Quiet day' })).toBeInTheDocument();
-    expect(String(f.mock.calls[0]![0])).toContain('/api/papers/2026-10-09');
+    expect(f.mock.calls.some(([u]) => String(u).includes('/api/papers/2026-10-09'))).toBe(true);
     expect(screen.getByRole('link', { name: /next edition/i })).toHaveAttribute('href', '/times/2026-10-10');
   });
   it('has no next edition after a day that is not over yet', async () => {
@@ -47,6 +50,41 @@ describe('TimesPage', () => {
     // The dateline names the day asked for (in the viewer's locale).
     expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-09-01');
     expect(screen.getByRole('link', { name: /latest edition/i })).toHaveAttribute('href', '/times');
+  });
+  describe('the archive', () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+    const hrefs = () => screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    it('keeps the pager on a day with no edition, so a gap does not strand the older editions behind it', async () => {
+      mockFetch({});
+      renderWithApp(<TimesPage />, { route: `/times/${daysAgo(5)}`, path: '/times/:day' });
+      expect(await screen.findByText('No edition for that day.')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /previous edition/i })).toHaveAttribute('href', `/times/${daysAgo(6)}`);
+      expect(screen.getByRole('link', { name: /next edition/i })).toHaveAttribute('href', `/times/${daysAgo(4)}`);
+      expect(screen.getByRole('link', { name: /latest edition/i })).toHaveAttribute('href', '/times');
+    });
+    it('does not walk back forever from a day long ago, or on from one still to come', async () => {
+      mockFetch({});
+      const { unmount } = renderWithApp(<TimesPage />, { route: `/times/${daysAgo(400)}`, path: '/times/:day' });
+      expect(await screen.findByText('No edition for that day.')).toBeInTheDocument();
+      expect(hrefs()).not.toContain(`/times/${daysAgo(401)}`);
+      expect(screen.getByRole('link', { name: /next edition/i })).toHaveAttribute('href', `/times/${daysAgo(399)}`);
+      unmount();
+      renderWithApp(<TimesPage />, { route: `/times/${daysAgo(-20)}`, path: '/times/:day' });
+      expect(await screen.findByText('No edition for that day.')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /(previous|next) edition/i })).not.toBeInTheDocument();
+    });
+    it('offers no pager on a day that is not a date', async () => {
+      mockFetch({});
+      renderWithApp(<TimesPage />, { route: '/times/soon', path: '/times/:day' });
+      expect(await screen.findByText('No edition for that day.')).toBeInTheDocument();
+      expect(screen.queryByRole('navigation', { name: 'Editions' })).not.toBeInTheDocument();
+    });
+    it('links yesterday’s edition on to today’s once today’s has been published early', async () => {
+      mockFetch({ '/api/papers/latest': { ...paper, day: daysAgo(0) }, [`/api/papers/${daysAgo(1)}`]: { ...paper, day: daysAgo(1) } });
+      renderWithApp(<TimesPage />, { route: `/times/${daysAgo(1)}`, path: '/times/:day' });
+      expect(await screen.findByRole('heading', { level: 2, name: paper.headline })).toBeInTheDocument();
+      expect(await screen.findByRole('link', { name: /next edition/i })).toHaveAttribute('href', `/times/${daysAgo(0)}`);
+    });
   });
   it('does not repeat the headline as a story in a locally written paper', async () => {
     // The local paper leads with its first story, capitalised, and its stories have no body.

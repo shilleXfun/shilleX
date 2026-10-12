@@ -56,6 +56,46 @@ describe('GraphPage', () => {
     expect(await within(key).findByRole('link', { name: '$LAMP' })).toHaveAttribute('href', '/coins/M1');
   });
 
+  it('counts only real feuds (−0.4 or worse), as the Agents page and the backdrop do: mild dislike is neither drawn nor counted', async () => {
+    const mild = { ...graph, edges: [...graph.edges, { a: 'a2', b: 'a3', score: -0.3 }] };
+    mockFetch({ '/api/agents/graph': mild });
+    renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    await screen.findByRole('link', { name: 'Nine' });
+    expect(screen.getAllByTestId('graph-edge')).toHaveLength(2);
+    expect(screen.getByText('3 agents · 1 alliance · 1 feud')).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Who likes whom' });
+    // Ember's only dislike is the mild one: no worst enemy. Ledger's is the real feud with Nine.
+    expect(within(table).getByRole('row', { name: /^Ember/ })).toHaveTextContent(/Ember.*\+0\.80\).*None$/);
+    expect(within(table).getByRole('row', { name: /^Ledger/ })).toHaveTextContent(/Nine \(−0\.70\)/);
+  });
+
+  it('says there are no alliances or feuds when the only ties are mild dislike', async () => {
+    mockFetch({ '/api/agents/graph': { ...graph, edges: [{ a: 'a1', b: 'a3', score: -0.3 }] } });
+    renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    await screen.findByRole('link', { name: 'Nine' });
+    expect(screen.queryAllByTestId('graph-edge')).toHaveLength(0);
+    expect(screen.getByText('3 agents · 0 alliances · 0 feuds')).toBeInTheDocument();
+    expect(screen.getByText('No alliances or feuds yet.', { exact: false })).toBeInTheDocument();
+  });
+
+  it('names a faction’s banner from the factions list as soon as it loads, even before the overview does', async () => {
+    const view = { ...lamp, banner: 'a lamp', bannerUrl: '/api/blobs/B1', coinMint: null, conversationId: null, formedAt: '2026-10-09T00:00:00Z', splitAt: null, members: [] };
+    mockFetch({ '/api/agents/graph': graph, '/api/factions': { factions: [view] } }); // no overview
+    renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    const key = await screen.findByRole('list', { name: 'Factions' });
+    expect(await within(key).findByRole('img', { name: 'Lamp Cult banner' })).toBeInTheDocument();
+    expect(within(key).getByText('Lamp Cult')).toBeInTheDocument();
+  });
+
+  it('shortens a long name without splitting an emoji', async () => {
+    const long = { ...node('a1', 'x'.repeat(14) + '👨‍👩‍👧‍👦' + 'tail', null), username: 'xl' };
+    mockFetch({ '/api/agents/graph': { ...graph, nodes: [long], edges: [] } });
+    const { container } = renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    await screen.findByRole('link', { name: /^x+/ });
+    const labels = [...container.querySelectorAll('svg text')].map((t) => t.textContent);
+    expect(labels).toContain('x'.repeat(14) + '👨‍👩‍👧‍👦' + '…');
+  });
+
   it('names an agent that has not named itself by its username', async () => {
     mockFetch({ '/api/agents/graph': { ...graph, nodes: [{ ...node('a1', 'Nine', null), username: 'agent_07', displayName: '' }] , edges: [] } });
     renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });

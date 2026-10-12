@@ -3,15 +3,16 @@ import { Link } from 'react-router';
 import { useReducedMotion } from 'motion/react';
 import { Network } from 'lucide-react';
 import { agentName, plural, type AgentGraph, type AgentPulse, type FactionView, type GraphNode } from '@shillex/shared';
-import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
-import { forceLayout, type Pt } from '../../lib/forceLayout';
+import { forceLayout, FEUD_AT, type Pt } from '../../lib/forceLayout';
+import { clipText } from '../../lib/text';
 import { PageHeader } from '../../layout/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { GHOST, LONER } from '../../components/swarm/model';
-import { useAgentGraph, useFactions, useOverview } from './agentsApi';
+import { isNotFound, useAgentGraph, useFactions, useOverview } from './agentsApi';
+import { NoAgentWorld } from './NoAgentWorld';
 import { FactionBanner, FactionKeyItem, useCoinSymbol } from './Faction';
 import { moodWord } from './MoodGrid';
 import { usePulseFeed } from './pulses';
@@ -33,7 +34,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /** Height over width before the screen caps it: taller than wide on phones, a little wider than tall from tablets up. */
 const ratioFor = (w: number) => (w < 560 ? 1.15 : 0.82);
 const signed = (n: number) => `${n > 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}`;
-const short = (t: string) => (t.length > 16 ? `${t.slice(0, 15)}…` : t);
+const short = (t: string) => clipText(t, 16);
+/** Allies pull together (score above 0); a feud is a score of FEUD_AT or lower, as on the backdrop and the Agents page. Milder dislike is neither: it is not drawn and not counted. */
+const isAlly = (e: Edge) => e.score > 0;
+const isFeud = (e: Edge) => e.score <= FEUD_AT;
 const other = (e: Edge, id: string) => (e.a === id ? e.b : e.a);
 const hit = (p: Box, q: Box) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
 const ringOf = (n: GraphNode) => (n.ghost ? GHOST : n.factionColour ?? LONER);
@@ -43,7 +47,7 @@ function tiesOf(g: AgentGraph): Ties {
   const m: Ties = new Map(g.nodes.map((n) => [n.id, { allies: [], enemies: [] }]));
   for (const e of g.edges) for (const id of [e.a, e.b]) {
     const t = m.get(id);
-    if (t && e.score > 0) t.allies.push(e); else if (t && e.score < 0) t.enemies.push(e);
+    if (t && isAlly(e)) t.allies.push(e); else if (t && isFeud(e)) t.enemies.push(e);
   }
   for (const t of m.values()) { t.allies.sort((x, y) => y.score - x.score); t.enemies.sort((x, y) => x.score - y.score); }
   return m;
@@ -191,7 +195,7 @@ function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H 
     const offsets = new Map(nodes.map((x) => { const sp = spots.get(x.n.id); return [x.n.id, sp ? { dx: sp.x - x.x, dy: sp.y - x.y, anchor: sp.anchor } : null] as const; }));
     const ids = new Set(graph.nodes.map((n) => n.id));
     // Weakest ties first, so the strongest lines draw on top.
-    const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b)).sort((x, y) => Math.abs(x.score) - Math.abs(y.score));
+    const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b) && (isAlly(e) || isFeud(e))).sort((x, y) => Math.abs(x.score) - Math.abs(y.score));
     // Painted smallest first, so big agents sit on top; linked in id order, so tab order and focus stay put across refetches.
     const links = [...nodes].sort((p, q) => (p.n.id < q.n.id ? -1 : p.n.id > q.n.id ? 1 : 0));
     return { nodes: nodes.sort((p, q) => p.r - q.r), links, offsets, edges };
@@ -237,7 +241,7 @@ function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H 
           {scene.edges.map((e) => {
             const p = at.get(e.a)!, q = at.get(e.b)!, w = Math.abs(e.score);
             // Allies in their faction's colour (amber across factions or on their own); feuds red and dashed.
-            const ally = e.score > 0, colour = p.n.factionColour && p.n.factionColour === q.n.factionColour ? p.n.factionColour : LONER;
+            const ally = isAlly(e), colour = p.n.factionColour && p.n.factionColour === q.n.factionColour ? p.n.factionColour : LONER;
             return <line key={`${e.a}-${e.b}`} data-testid="graph-edge" className={cx(s.edge, ally ? s.ally : s.feud)} data-near={active && (e.a === active || e.b === active) ? '' : undefined}
               x1={p.x.toFixed(1)} y1={p.y.toFixed(1)} x2={q.x.toFixed(1)} y2={q.y.toFixed(1)} stroke={ally ? colour : undefined}
               strokeWidth={ally ? 1 + 2.4 * w : 1 + 1.2 * w} strokeOpacity={ally ? 0.3 : 0.2 + 0.5 * w} />;
@@ -304,7 +308,7 @@ function Key({ graph, factionNames, factionViews }: { graph: AgentGraph; faction
   const loners = graph.nodes.filter((n) => !n.factionId).length;
   return (
     <div className={s.key}>
-      {!graph.edges.length && <p className={s.note}>No alliances or feuds yet. They grow as agents trade and talk.</p>}
+      {!graph.edges.some((e) => isAlly(e) || isFeud(e)) && <p className={s.note}>No alliances or feuds yet. They grow as agents trade and talk.</p>}
       <ul className={s.marks} aria-label="How to read it">
         <li><Glyph><circle cx="9" cy="7" r="5" fill="none" stroke={LONER} strokeWidth="2" /></Glyph>Ring: faction</li>
         <li><Glyph><circle cx="4" cy="9" r="2.5" fill="var(--muted)" /><circle cx="12" cy="7" r="5" fill="var(--muted)" /></Glyph>Size: net worth</li>
@@ -351,12 +355,14 @@ function TiesTable({ graph, ties, factionNames }: { graph: AgentGraph; ties: Tie
 /** `/graph`: every agent as a node (size = net worth, ring = faction), allies pulled together and feuds pushed apart, trades flashing on the trader. */
 export function GraphPage() {
   const q = useAgentGraph();
-  // Faction names come with the overview's moods (the graph carries only ids and colours).
+  // The graph carries only faction ids and colours. Names come from the factions list (with each faction's banner and coin) and, until it loads, from the overview's moods.
   const overview = useOverview();
-  const factionNames = useMemo(() => new Map((overview.data?.moods ?? []).flatMap((m) => (m.faction ? [[m.faction.id, m.faction.name] as const] : []))), [overview.data]);
-  // Banners and coins come with the factions list.
   const factions = useFactions().data;
   const factionViews = useMemo(() => new Map((factions ?? []).map((f) => [f.id, f])), [factions]);
+  const factionNames = useMemo(() => new Map([
+    ...(overview.data?.moods ?? []).flatMap((m) => (m.faction ? [[m.faction.id, m.faction.name] as const] : [])),
+    ...(factions ?? []).map((f) => [f.id, f.name] as const),
+  ]), [overview.data, factions]);
   const page = useRef<HTMLElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const fit = useFit(box, page);
@@ -365,13 +371,13 @@ export function GraphPage() {
   const height = Math.round(Math.max(MIN_H, Math.min(width * ratioFor(width), fit.room)));
   const g = q.data;
   const ties = useMemo(() => (g ? tiesOf(g) : null), [g]);
-  const allies = g ? g.edges.filter((e) => e.score > 0).length : 0;
+  const allies = g ? g.edges.filter(isAlly).length : 0, feuds = g ? g.edges.filter(isFeud).length : 0;
 
   let body: ReactNode;
   // A failed background refresh keeps the graph on screen.
   if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} factionViews={factionViews} width={width} height={height} /> : <EmptyState title="No agents yet" />;
-  else if (q.isError) body = q.error instanceof ApiError && q.error.status === 404
-    ? <EmptyState title="No agent world here" body="This deployment runs without agents." />
+  else if (q.isError) body = isNotFound(q.error)
+    ? <NoAgentWorld />
     : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   else body = <Skeleton h={height} r={0} />;
 
@@ -382,7 +388,7 @@ export function GraphPage() {
         <section className={cx(a.panel, s.card)} aria-labelledby="graph-card">
           <div className={a.panelHead}>
             <h2 id="graph-card" className={a.panelTitle}><Network size={13} aria-hidden="true" />Who likes whom</h2>
-            {g && g.nodes.length > 0 && <span className={s.summary}>{plural(g.nodes.length, 'agent')} · {plural(allies, 'alliance')} · {plural(g.edges.length - allies, 'feud')}</span>}
+            {g && g.nodes.length > 0 && <span className={s.summary}>{plural(g.nodes.length, 'agent')} · {plural(allies, 'alliance')} · {plural(feuds, 'feud')}</span>}
           </div>
           <div ref={box} className={s.box}>{body}</div>
           {g && ties && g.nodes.length > 0 && <><Key graph={g} factionNames={factionNames} factionViews={factionViews} /><TiesTable graph={g} ties={ties} factionNames={factionNames} /></>}

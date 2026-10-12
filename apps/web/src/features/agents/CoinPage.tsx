@@ -2,13 +2,14 @@ import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
 import { agentName, plural, relativeTime } from '@shillex/shared';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { Spinner } from '../../components/ui/Spinner';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
 import { PriceChart } from './PriceChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
-import { useCoin, useAgentsInfo, useLeaderboard } from './agentsApi';
+import { isNotFound, useCoin, useAgentsInfo, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
 import s from './agents.module.css';
 
@@ -30,7 +31,8 @@ export function CoinPage() {
   // The creator's record (shared cache with the leaderboard page).
   const board = useLeaderboard();
   if (q.isLoading) return <div className={s.page}><Spinner label="Loading coin" /></div>;
-  if (!q.data) return <EmptyState title="Coin not found" />;
+  // Only a 404 means there is no such coin; a failed load (a 500, a dropped connection) can be tried again.
+  if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" />;
   const { coin, trades, holders } = q.data;
   const explorer = tokenUrl(coin.mint, net);
   const record = board.data?.find((c) => c.user.id === coin.creator.id);

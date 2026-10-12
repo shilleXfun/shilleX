@@ -8,7 +8,8 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { Avatar } from '../../components/ui/Avatar';
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { cx } from '../../lib/cx';
-import { useOverview } from './agentsApi';
+import { isNotFound, useOverview } from './agentsApi';
+import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary } from './MoodGrid';
 import s from './agents.module.css';
 
@@ -170,7 +171,7 @@ export function AgentsPage() {
       </PageHeader>
       <div className={s.overviewWrap}>
         {q.isPending ? <Loading /> : q.isError
-          ? <div className={s.overview}><div className={cx(s.panel, s.wide)}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div></div>
+          ? <div className={s.overview}><div className={cx(s.panel, s.wide)}>{isNotFound(q.error) ? <NoAgentWorld /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}</div></div>
           : <Overview o={q.data} />}
       </div>
     </section>
