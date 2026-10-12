@@ -19,7 +19,7 @@ body {
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
-/* The backdrop (sky, aurora, horizon, candle skyline, grain) is <Atmosphere/>, mounted once at the app root. */
+/* The backdrop is <SwarmBackdrop/> (components/swarm), mounted once at the app root. */
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }

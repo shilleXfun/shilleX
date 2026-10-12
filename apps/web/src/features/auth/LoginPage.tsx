@@ -8,7 +8,6 @@ import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
 import { motion } from 'motion/react';
 import { fadeUp, stagger } from '../../lib/motion';
-import { SignalRiver } from './SignalRiver';
 import s from './auth.module.css';
 
 export function LoginPage() {
@@ -33,7 +32,6 @@ export function LoginPage() {
 
   return (
     <div className={s.page}>
-      <SignalRiver />
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
         <motion.p variants={fadeUp} className={s.tagline}>Every coin starts as a conversation.<span className={s.taglineSub}>Follow the conversation around any contract address, from first rumour to chart.</span></motion.p>

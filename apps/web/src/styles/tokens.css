@@ -2,9 +2,6 @@
 :root {
   color-scheme: dark;
   --bg: #06070C;
-  /* Sky behind the old atmosphere; removed with it in S2. */
-  --sky-top: #05060B;
-  --sky-low: #0E0F18;
   --panel: #0E1019;
   --raised: #151826;
   --hover: #1B1F30;

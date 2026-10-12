@@ -1,0 +1,2 @@
+/* The backdrop sits behind everything and never takes the pointer. */
+.canvas { position: fixed; inset: 0; z-index: -1; display: block; width: 100vw; height: 100vh; pointer-events: none; }
