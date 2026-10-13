@@ -6,6 +6,8 @@ import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { ChainError, GRADUATED_MESSAGE, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
 import { DBC_CONFIG, getSetting } from './launchpad.ts';
+import { LedgerChain } from '../ledger/ledger-chain.ts';
+import { rulesFromConfig } from '../ledger/rules.ts';
 
 /** SOL and token change for `owner` in a confirmed transaction (fees included in the SOL change). */
 export function deltasFromTx(tx: ParsedTransactionWithMeta, owner: string, mint: string | null) {
@@ -171,8 +173,10 @@ export class DevnetChain implements Chain {
  * The agents' chain. A devnet chain refuses to start against mainnet-beta's genesis. If the RPC cannot be reached at boot
  * the world still starts (agents wait out an RPC outage as before), and the check runs again before the first transaction.
  */
-export async function makeChain(config: Config, db: Db, connect = (url: string) => new Connection(url, 'confirmed')): Promise<Chain> {
+export async function makeChain(config: Config, db: Db, connect = (url: string) => new Connection(url, 'confirmed'), now: () => Date = () => new Date()): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
+  // Shillex's own books (mainnet spec §2): no RPC at all, and so nothing to check the network of.
+  if (config.worldChain === 'ledger') return new LedgerChain(db, now, rulesFromConfig(config));
   const address = await getSetting(db, DBC_CONFIG);
   const chain = new DevnetChain(connect(config.devnetRpcUrl), address ? new PublicKey(address) : null);
   try { await chain.assertNotMainnet(); }
