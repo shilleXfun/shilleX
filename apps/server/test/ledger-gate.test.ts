@@ -8,6 +8,7 @@ import { ledgerReconciliations, ledgerWithdrawals } from '../src/db/schema.ts';
 import { gateStatus, recordLegalReview, rehearsalStatus } from '../src/ledger/gate.ts';
 import { publishNotice } from '../src/ledger/consent.ts';
 import { bootMainnet } from '../src/ledger/boot.ts';
+import { startSeason } from '../src/ledger/season.ts';
 import { MAINNET_GENESIS } from '../src/world/devnet-chain.ts';
 import { MemoryChain } from '../src/world/chain.ts';
 import { newId } from '../src/lib/ids.ts';
@@ -28,11 +29,12 @@ async function cleanRehearsal(db: Parameters<typeof rehearsalStatus>[0], now: Da
   await db.insert(ledgerWithdrawals).values({ id: newId(), season: 'rehearsal', agentId: null, userId: null, toAddress: 'x', lamports: 1, status: 'sent', reason: null, approvedBy: 'a', signature: 's', requestedAt: now, sentAt: now });
 }
 
-/** Every condition that needs no RPC: a notice, the legal review and a clean rehearsal. */
+/** Every condition that needs no RPC: a notice, the legal review, a clean rehearsal and Season 1's own books. */
 async function offlineGateOpen(c: Awaited<ReturnType<typeof ledgerCtx>>) {
   await publishNotice(c.t.db, 'Counsel: allowed for adults.', c.t.clock.now());
   await recordLegalReview(c.t.db, 'admin-id', { reviewer: 'A. Lawyer', date: '2026-11-01', note: 'Reviewed.', confirmedBy: 'admin' }, c.t.clock.now());
   await cleanRehearsal(c.t.db, c.t.clock.now());
+  await startSeason(c.t.db, 'season1', new Map(), c.t.clock.now());
 }
 
 /** A FakeRpc that counts every call, to prove a closed gate never reaches the mainnet RPC. */
@@ -77,6 +79,9 @@ describe('the launch gate', () => {
     const config: Config = loadConfig(onEnv());
     await recordLegalReview(c.t.db, 'admin-id', { reviewer: 'A. Lawyer', date: '2026-11-01', note: 'Reviewed.', confirmedBy: 'admin' }, c.t.clock.now());
     await cleanRehearsal(c.t.db, c.t.clock.now());
+    // Everything else holds, but the books are still a practice season's (devnet or paper SOL): closed (C1).
+    expect(await gateStatus({ db: c.t.db, config, rpc: c.rpc, custody: c.custody, now: c.t.clock.now })).toEqual([expect.stringMatching(/practice season/)]);
+    await startSeason(c.t.db, 'season1', new Map(), c.t.clock.now());
     expect(await gateStatus({ db: c.t.db, config, rpc: c.rpc, custody: c.custody, now: c.t.clock.now })).toEqual([]);
     c.rpc.genesis = 'Devnet';
     expect((await gateStatus({ db: c.t.db, config, rpc: c.rpc, custody: c.custody, now: c.t.clock.now }))[0]).toMatch(/mainnet-beta/);
@@ -86,19 +91,27 @@ describe('the launch gate', () => {
 describe('booting mainnet', () => {
   it('refuses to boot against the wrong network (review focus 5)', async () => {
     const c = await ledgerCtx(); close = () => c.t.close();
+    const mainnet = new FakeRpc(); mainnet.genesis = MAINNET_GENESIS;
+    c.t.app.deps.config = loadConfig(onEnv({ MAINNET: 'rehearsal' }));
+    await expect(bootMainnet(c.t.app, { chain: c.chain, worldKey: c.key, rpc: mainnet, intervals: false })).rejects.toThrow(/devnet only/);
     await offlineGateOpen(c);
     const devnet = new FakeRpc();
     c.t.app.deps.config = loadConfig(onEnv());
     await expect(bootMainnet(c.t.app, { chain: c.chain, worldKey: c.key, rpc: devnet, intervals: false })).rejects.toThrow(/mainnet-beta/);
-    const mainnet = new FakeRpc(); mainnet.genesis = MAINNET_GENESIS;
-    c.t.app.deps.config = loadConfig(onEnv({ MAINNET: 'rehearsal' }));
-    await expect(bootMainnet(c.t.app, { chain: c.chain, worldKey: c.key, rpc: mainnet, intervals: false })).rejects.toThrow(/devnet only/);
   });
   it('refuses MAINNET=on while the gate is closed, naming what is missing, without touching the RPC', async () => {
     const c = await ledgerCtx(); close = () => c.t.close();
     const rpc = new CountingRpc(); rpc.genesis = MAINNET_GENESIS;
     c.t.app.deps.config = loadConfig(onEnv());
     await expect(bootMainnet(c.t.app, { chain: c.chain, worldKey: c.key, rpc, intervals: false })).rejects.toThrow(/MAINNET=on refused.*legal review/s);
+    expect(rpc.calls).toBe(0);
+  });
+  it('refuses a rehearsal on books that hold real SOL (C1)', async () => {
+    const c = await ledgerCtx(); close = () => c.t.close();
+    await startSeason(c.t.db, 'season1', new Map(), c.t.clock.now());
+    c.t.app.deps.config = loadConfig(onEnv({ MAINNET: 'rehearsal' }));
+    const rpc = new CountingRpc();
+    await expect(bootMainnet(c.t.app, { chain: c.chain, worldKey: c.key, rpc, intervals: false })).rejects.toThrow(/real SOL/);
     expect(rpc.calls).toBe(0);
   });
   it('refuses a MAINNET_KEY equal to WORLD_KEY', async () => {

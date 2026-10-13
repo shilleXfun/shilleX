@@ -15,6 +15,11 @@ const POOL = 'pool:';
 export const poolAccount = (mint: string) => `${POOL}${mint}`;
 export const SEASON_KEY = 'mainnet_season';
 export const FROZEN_KEY = 'mainnet_frozen';
+/**
+ * Seasons whose books only ever held devnet or paper SOL (spec §10). Rehearsal custody runs only on these, MAINNET=on never
+ * does, and only these may be wiped by starting a new season.
+ */
+export const PRACTICE_SEASONS: ReadonlySet<string> = new Set(['dev', 'rehearsal']);
 
 export interface Entry { kind: JournalKind; ref: string; season: string; at: Date; mint?: string | null }
 

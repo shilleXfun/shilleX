@@ -646,7 +646,10 @@ export const ledgerDeposits = pgTable('ledger_deposits', {
 /** Every transfer to the hot vault the poller has handled, once: the primary key is what stops a second credit or refund. */
 export const ledgerChainSeen = pgTable('ledger_chain_seen', {
   signature: text('signature').primaryKey(),
-  outcome: text('outcome').$type<'credited' | 'refunding' | 'refunded' | 'refund_failed' | 'from_cold' | 'stake' | 'ignored'>().notNull(),
+  /** 'review': SOL arrived but not as one plain transfer from one payer; an admin decides where it goes back to. */
+  outcome: text('outcome').$type<'credited' | 'refunding' | 'refunded' | 'refund_failed' | 'from_cold' | 'stake' | 'ignored' | 'review'>().notNull(),
+  /** The custody network that saw it ('mainnet', 'devnet', 'local'): a rehearsal's rows never count on mainnet. */
+  network: text('network'),
   depositId: text('deposit_id'),
   fromAddress: text('from_address'),
   lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
@@ -669,7 +672,7 @@ export const ledgerWithdrawals = pgTable('ledger_withdrawals', {
   signature: text('signature'),
   requestedAt: ts('requested_at').notNull(),
   sentAt: ts('sent_at'),
-}, (t) => [index('ledger_withdrawals_status_idx').on(t.status, t.requestedAt)]);
+}, (t) => [index('ledger_withdrawals_status_idx').on(t.status, t.requestedAt), uniqueIndex('ledger_withdrawals_signature_idx').on(t.signature)]);
 
 export const ledgerReconciliations = pgTable('ledger_reconciliations', {
   id: text('id').primaryKey(),
@@ -706,7 +709,7 @@ export const adminAudit = pgTable('admin_audit', {
   prevHash: text('prev_hash'),
   hash: text('hash').notNull(),
   createdAt: ts('created_at').notNull(),
-});
+}, (t) => [uniqueIndex('admin_audit_prev_hash_idx').on(t.prevHash)]);
 
 export const ledgerSeasons = pgTable('ledger_seasons', {
   id: text('id').primaryKey(),

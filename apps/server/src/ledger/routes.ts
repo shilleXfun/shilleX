@@ -30,6 +30,6 @@ export async function registerMainnetRoutes(app: FastifyInstance, h: MainnetHand
       const b = z.object({ days: z.union([z.literal(7), z.literal(30)]) }).parse(req.body);
       return { until: (await excludeSelf(db, u.id, b.days, now())).toISOString() };
     });
-    r.get('/mainnet/reserves', async () => reservesView(db, h));
+    r.get('/mainnet/reserves', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async () => reservesView(db, h));
   }, { prefix: '/api' });
 }

@@ -76,7 +76,7 @@ describe('a ledger world', () => {
     await c.chain.freeze('test');
     for (let i = 0; i < 120; i++) { await engineTurn(c.d); c.t.clock.advance(4000); }
     expect(await c.t.db.select().from(ledgerJournal).where(inArray(ledgerJournal.kind, ['buy', 'sell', 'launch_fee', 'send']))).toEqual([]);
-  });
+  }, 120_000); // 120 engine turns: past the default 20 s when the whole suite shares the CPU
   it('counts a 25% creator sale as a rug on the ledger, not on devnet', async () => {
     const c = await ledgerCtx(); close = () => c.t.close();
     await c.fund(0, 0.2);

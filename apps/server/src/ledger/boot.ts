@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '../db/schema.ts';
 import { notify } from '../services/notify.ts';
 import type { Chain } from '../world/chain.ts';
+import { PRACTICE_SEASONS, currentSeason } from './accounts.ts';
 import { registerMainnetAdminRoutes } from './admin.ts';
 import { Custody, capsFromConfig } from './custody.ts';
 import { gateStatus } from './gate.ts';
@@ -34,6 +35,11 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
     if (!config.mainnetRpcUrl && !o.rpc) throw new Error(`MAINNET=${config.mainnet} needs MAINNET_RPC_URL`);
     const key = parseMainnetKey(config.mainnetKey);
     if (config.mainnetKey === config.worldKey) throw new Error('MAINNET_KEY must differ from WORLD_KEY');
+    if (config.mainnet === 'rehearsal') {
+      // Devnet custody never runs against books that hold real SOL: a withdrawal would pay devnet SOL for a real balance.
+      const season = await currentSeason(db);
+      if (!PRACTICE_SEASONS.has(season)) throw new Error(`MAINNET=rehearsal refused: the books are season ${season}'s, which hold real SOL`);
+    }
     if (config.mainnet === 'on') {
       // Every condition that needs no network first: while any of them fails, the server never contacts the mainnet RPC.
       const offline = await gateStatus({ db, config, rpc: null, custody: null, now });

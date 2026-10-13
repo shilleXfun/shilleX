@@ -24,7 +24,7 @@ export async function ledgerCtx(rules: Partial<LedgerRules> = {}) {
 /** A ledger world with custody on a FakeRpc (devnet genesis), a cold address, and one owner who accepted the notice and has a payout wallet. */
 export async function custodyCtx(over: Partial<CustodyDeps> = {}, env: Record<string, string> = {}) {
   const c = await ledgerCtx();
-  const rpc = new FakeRpc();
+  const rpc = new FakeRpc(c.t.clock.now);
   const payouts = new Map<string, string>();
   const notes: string[] = [];
   const cold = Keypair.generate().publicKey.toBase58();

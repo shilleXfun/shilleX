@@ -1,5 +1,5 @@
 import { Keypair } from '@solana/web3.js';
-import { and, asc, desc, eq, gte, inArray, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { DepositView, WithdrawalView } from '@shillex/shared';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
@@ -25,6 +25,15 @@ export const INTENT_MS = 30 * MIN;
 /** A refund returns the payment minus this, the network fee of sending it back. */
 export const REFUND_FEE_LAMPORTS = 5_000;
 export const CAPS_KEY = 'mainnet_caps';
+/** A refund still `refunding` after this has stalled (a restart between its claim and its send): an admin sees it. */
+export const STALE_REFUND_MS = 10 * MIN;
+/** How long after its expiry a request's reference is still watched, so a payment made in time but seen late is found. */
+const WATCH_EXPIRED_MS = DAY;
+const RESENDING = 'resending since ';
+type SeenRow = typeof ledgerChainSeen.$inferSelect;
+/** When a refund was last claimed: an admin's resend stamps its reason; otherwise when the payment was seen. */
+const claimedAt = (r: SeenRow) => (r.reason?.startsWith(RESENDING) ? Date.parse(r.reason.slice(RESENDING.length)) : r.createdAt.getTime());
+export interface PaymentView { signature: string; outcome: string; lamports: number; from: string | null; reason: string | null; refundSignature: string | null; at: Date }
 
 /** The caps of spec §4, in lamports. */
 export interface MainnetCaps { agentLifetime: number; agentDaily: number; userMonthly: number; world: number; hotMax: number; outflowDaily: number }
@@ -121,35 +130,58 @@ export class Custody {
    * Transfers from the cold address are left for an admin to record as house stake (Task 12). Each signature is handled once:
    * its ledger_chain_seen row is written in the same transaction as the credit, or claimed before a refund is sent.
    */
-  async pollDeposits(): Promise<{ credited: number; refunded: number; ignored: number; expired: number }> {
+  async pollDeposits(): Promise<{ credited: number; refunded: number; ignored: number; expired: number; review: number }> {
     const { db, rpc, now } = this.d;
-    const out = { credited: 0, refunded: 0, ignored: 0, expired: 0 };
+    const out = { credited: 0, refunded: 0, ignored: 0, expired: 0, review: 0 };
+    // The network and the key first: nothing is claimed or signed if either is wrong.
     await assertCustodyNetwork(rpc, this.d.network);
+    const signer = await this.signer();
     const hot = await this.hot();
-    const sigs = await rpc.signaturesFor(hot);
+    // The vault's own history, plus every open request's reference (Solana Pay's way to find a payment): a deposit is found
+    // even after newer transfers pushed it out of the vault's recent history.
+    const watched = await db.select({ ref: ledgerDeposits.reference }).from(ledgerDeposits)
+      .where(or(eq(ledgerDeposits.status, 'pending'), and(eq(ledgerDeposits.status, 'expired'), gte(ledgerDeposits.expiresAt, new Date(now().getTime() - WATCH_EXPIRED_MS)))));
+    const lists = [await rpc.signaturesFor(hot)];
+    for (const w of watched) lists.push(await rpc.signaturesFor(w.ref));
+    const sigs = [...new Set(lists.flatMap((l) => [...l].reverse()))]; // oldest first
     const seen = new Set(sigs.length ? (await db.select({ s: ledgerChainSeen.signature }).from(ledgerChainSeen).where(inArray(ledgerChainSeen.signature, sigs))).map((r) => r.s) : []);
-    for (const sig of sigs.filter((s) => !seen.has(s)).reverse()) {
-      const t = await rpc.transferIn(sig, hot);
-      if (!t || t.lamports <= 0) { await this.mark(sig, 'ignored', null, null); out.ignored++; continue; }
-      if (this.d.cold && t.from === this.d.cold) { await this.mark(sig, 'from_cold', t, null); continue; }
-      const [intent] = t.references.length ? await db.select().from(ledgerDeposits).where(inArray(ledgerDeposits.reference, t.references)).limit(1) : [];
-      const reason = await this.refusal(intent ?? null, t);
-      if (!reason) { if (await this.creditDeposit(sig, intent!, t)) out.credited++; continue; }
-      if (await this.refund(sig, t, intent ?? null, reason)) out.refunded++;
+    for (const sig of sigs.filter((s) => !seen.has(s))) {
+      // One payment that can't be read must not stall the others: it stays unseen and is tried again next poll.
+      try { const r = await this.handle(sig, hot, signer); if (r) out[r]++; }
+      catch (e) { console.error(`[mainnet] deposit ${sig} could not be handled; it is retried next poll`, e); }
     }
     out.expired = (await db.update(ledgerDeposits).set({ status: 'expired' })
       .where(and(eq(ledgerDeposits.status, 'pending'), lt(ledgerDeposits.expiresAt, now()))).returning({ id: ledgerDeposits.id })).length;
     return out;
   }
 
-  private async mark(sig: string, outcome: 'ignored' | 'from_cold', t: Transfer | null, reason: string | null) {
-    await this.d.db.insert(ledgerChainSeen).values({ signature: sig, outcome, depositId: null, fromAddress: t?.from ?? null, lamports: t?.lamports ?? 0, refundSignature: null, reason, createdAt: this.d.now() }).onConflictDoNothing();
+  /** One transfer to the hot vault: credit, refund, hold for review, or note it. Null: nothing to count (yet). */
+  private async handle(sig: string, hot: string, signer: Keypair): Promise<'credited' | 'refunded' | 'ignored' | 'review' | null> {
+    const r = await this.d.rpc.inbound(sig, hot);
+    if (r.kind === 'not_found') return null; // listed but not readable yet (an unindexed node): never mark it handled
+    if (r.kind === 'not_inbound') { await this.mark(sig, 'ignored', null, null); return 'ignored'; }
+    if (r.kind === 'unclear') {
+      await this.mark(sig, 'review', { from: r.payer, lamports: r.lamports }, 'SOL arrived, but not as one plain transfer from one payer: an admin decides where it goes back to');
+      return 'review';
+    }
+    const t = r.transfer;
+    if (t.lamports <= 0) { await this.mark(sig, 'ignored', null, null); return 'ignored'; }
+    if (this.d.cold && t.from === this.d.cold) { await this.mark(sig, 'from_cold', t, null); return null; }
+    const [intent] = t.references.length ? await this.d.db.select().from(ledgerDeposits).where(inArray(ledgerDeposits.reference, t.references)).limit(1) : [];
+    const reason = await this.refusal(intent ?? null, t);
+    if (!reason) return (await this.creditDeposit(sig, intent!, t)) ? 'credited' : null;
+    return (await this.refund(sig, t, intent ?? null, reason, signer)) ? 'refunded' : null;
+  }
+
+  private async mark(sig: string, outcome: 'ignored' | 'from_cold' | 'review', t: { from: string | null; lamports: number } | null, reason: string | null) {
+    await this.d.db.insert(ledgerChainSeen).values({ signature: sig, outcome, network: this.d.network, depositId: null, fromAddress: t?.from ?? null, lamports: t?.lamports ?? 0, refundSignature: null, reason, createdAt: this.d.now() }).onConflictDoNothing();
   }
 
   private async refusal(intent: DepositRow | null, t: Transfer): Promise<string | null> {
     if (!intent) return 'no matching deposit request';
-    if (intent.status !== 'pending') return `the request was already ${intent.status}`;
-    if (this.d.now() > intent.expiresAt) return 'the request had expired';
+    // An expired request still takes a payment made in time: lateness is the block's time, not when the poller saw it.
+    if (intent.status !== 'pending' && intent.status !== 'expired') return `the request was already ${intent.status}`;
+    if ((t.blockTime !== null ? new Date(t.blockTime * 1000) : this.d.now()) > intent.expiresAt) return 'the request had expired';
     if (t.from !== intent.sender) return 'paid from a wallet other than the payout wallet';
     if (t.lamports !== intent.lamports) return 'the amount differs from the request';
     if (this.d.chain.frozen) return 'deposits are paused while the books are checked';
@@ -165,9 +197,9 @@ export class Custody {
     try {
       await db.transaction(async (x) => {
         const tx = x as unknown as Db;
-        await tx.insert(ledgerChainSeen).values({ signature: sig, outcome: 'credited', depositId: intent.id, fromAddress: t.from, lamports: t.lamports, refundSignature: null, reason: null, createdAt: at });
+        await tx.insert(ledgerChainSeen).values({ signature: sig, outcome: 'credited', network: this.d.network, depositId: intent.id, fromAddress: t.from, lamports: t.lamports, refundSignature: null, reason: null, createdAt: at });
         const done = await tx.update(ledgerDeposits).set({ status: 'credited', signature: sig, settledAt: at })
-          .where(and(eq(ledgerDeposits.id, intent.id), eq(ledgerDeposits.status, 'pending'))).returning({ id: ledgerDeposits.id });
+          .where(and(eq(ledgerDeposits.id, intent.id), inArray(ledgerDeposits.status, ['pending', 'expired']))).returning({ id: ledgerDeposits.id });
         if (!done.length) throw new Skip();
         await move(tx, { from: EXTERNAL, to: pk, lamports: t.lamports, kind: 'deposit', ref: sig, season: await currentSeason(tx), at });
         await recordTx(tx, { signature: sig, agentId: intent.agentId, turnId: null, kind: 'deposit', counterparty: t.from, lamportsDelta: t.lamports, createdAt: at });
@@ -181,22 +213,75 @@ export class Custody {
   }
 
   /** Claims the signature first, so two polls can never both refund it; a failed send is left for an admin (it may have landed). */
-  private async refund(sig: string, t: Transfer, intent: DepositRow | null, reason: string): Promise<boolean> {
-    const { db, rpc, now } = this.d;
-    const claimed = await db.insert(ledgerChainSeen).values({ signature: sig, outcome: 'refunding', depositId: intent?.id ?? null, fromAddress: t.from, lamports: t.lamports, refundSignature: null, reason, createdAt: now() })
+  private async refund(sig: string, t: Transfer, intent: DepositRow | null, reason: string, signer: Keypair): Promise<boolean> {
+    const { db, now } = this.d;
+    const claimed = await db.insert(ledgerChainSeen).values({ signature: sig, outcome: 'refunding', network: this.d.network, depositId: intent?.id ?? null, fromAddress: t.from, lamports: t.lamports, refundSignature: null, reason, createdAt: now() })
       .onConflictDoNothing().returning({ s: ledgerChainSeen.signature });
     if (!claimed.length) return false;
     const back = t.lamports - REFUND_FEE_LAMPORTS;
     if (back <= 0) { await db.update(ledgerChainSeen).set({ outcome: 'ignored' }).where(eq(ledgerChainSeen.signature, sig)); return false; }
+    if (!(await this.sendRefund(sig, t.from, back, reason, signer))) return false;
+    if (intent) await db.update(ledgerDeposits).set({ status: 'refunded', signature: sig, settledAt: now() }).where(and(eq(ledgerDeposits.id, intent.id), inArray(ledgerDeposits.status, ['pending', 'expired'])));
+    return true;
+  }
+
+  /**
+   * Sends a claimed refund. Its signature is stored before the broadcast, so a refund that might have landed can always be
+   * checked. A send that throws becomes `refund_failed`; a database failure after a good send leaves it `refunding` with its
+   * signature, which an admin sees once it is stale (payments()).
+   */
+  private async sendRefund(sig: string, to: string, lamports: number, reason: string | null, signer: Keypair): Promise<boolean> {
+    const { db, rpc } = this.d;
+    let sent: { signature: string };
     try {
-      const r = await rpc.send(await this.signer(), t.from, back);
-      await db.update(ledgerChainSeen).set({ outcome: 'refunded', refundSignature: r.signature }).where(eq(ledgerChainSeen.signature, sig));
-      if (intent) await db.update(ledgerDeposits).set({ status: 'refunded', signature: sig, settledAt: now() }).where(and(eq(ledgerDeposits.id, intent.id), eq(ledgerDeposits.status, 'pending')));
-      return true;
+      sent = await rpc.send(signer, to, lamports, async (s) => { await db.update(ledgerChainSeen).set({ refundSignature: s }).where(eq(ledgerChainSeen.signature, sig)); });
     } catch (e) {
-      await db.update(ledgerChainSeen).set({ outcome: 'refund_failed', reason: `${reason}; refund failed: ${(e as Error).message}` }).where(eq(ledgerChainSeen.signature, sig));
+      await db.update(ledgerChainSeen).set({ outcome: 'refund_failed', reason: `${reason ?? 'refund'}; refund failed: ${(e as Error).message}` }).where(eq(ledgerChainSeen.signature, sig));
       return false;
     }
+    await db.update(ledgerChainSeen).set({ outcome: 'refunded', refundSignature: sent.signature }).where(eq(ledgerChainSeen.signature, sig));
+    return true;
+  }
+
+  /** Transfers to the hot vault that need an admin on this network: held for review, failed refunds, refunds that stalled. */
+  async payments(): Promise<PaymentView[]> {
+    const { db, now } = this.d, staleBefore = now().getTime() - STALE_REFUND_MS;
+    const rows = await db.select().from(ledgerChainSeen)
+      .where(and(eq(ledgerChainSeen.network, this.d.network), inArray(ledgerChainSeen.outcome, ['review', 'refund_failed', 'refunding'])))
+      .orderBy(desc(ledgerChainSeen.createdAt)).limit(100);
+    return rows.filter((r) => r.outcome !== 'refunding' || claimedAt(r) < staleBefore)
+      .map((r) => ({ signature: r.signature, outcome: r.outcome, lamports: r.lamports, from: r.fromAddress, reason: r.reason, refundSignature: r.refundSignature, at: r.createdAt }));
+  }
+
+  /**
+   * An admin's answer to one of payments(). 'refunded': the refund did land (checked on-chain). 'refund': send it (again) to
+   * its payer, or to `to` for a payment held for review; refused when its stored refund signature already landed.
+   */
+  async resolvePayment(sig: string, o: { action: 'refund'; to?: string } | { action: 'refunded'; refundSignature?: string }): Promise<void> {
+    const { db, rpc, now } = this.d;
+    const [row] = await db.select().from(ledgerChainSeen).where(and(eq(ledgerChainSeen.signature, sig), eq(ledgerChainSeen.network, this.d.network)));
+    const open = row && (row.outcome === 'review' || row.outcome === 'refund_failed' || (row.outcome === 'refunding' && claimedAt(row) < now().getTime() - STALE_REFUND_MS));
+    if (!row || !open) throw new CustodyError('NOT_OPEN', 'That payment does not need an answer');
+    const hot = await this.hot(), back = row.lamports - REFUND_FEE_LAMPORTS;
+    if (o.action === 'refunded') {
+      const s = o.refundSignature ?? row.refundSignature;
+      const r = s ? await rpc.inbound(s, row.fromAddress ?? '') : null;
+      if (!s || r?.kind !== 'transfer' || r.transfer.from !== hot || r.transfer.lamports !== back) throw new CustodyError('NOT_THIS_TRANSFER', 'That transaction is not this refund leaving the hot vault');
+      await db.update(ledgerChainSeen).set({ outcome: 'refunded', refundSignature: s }).where(and(eq(ledgerChainSeen.signature, sig), eq(ledgerChainSeen.outcome, row.outcome)));
+      return;
+    }
+    if (row.refundSignature && (await rpc.signatureStatus(row.refundSignature)) === 'landed') throw new CustodyError('LANDED', 'Its refund already landed: mark it refunded instead');
+    const to = o.to ?? (row.outcome === 'review' ? null : row.fromAddress);
+    if (!isAddress(to)) throw new CustodyError('BAD_ADDRESS', 'Give the Solana address to refund to');
+    if (back <= 0) throw new CustodyError('BAD_AMOUNT', 'Too little to refund after the network fee');
+    await assertCustodyNetwork(rpc, this.d.network);
+    const signer = await this.signer();
+    // Claimed on the row as it was read: a second press finds it changed and stops here.
+    const claimed = await db.update(ledgerChainSeen).set({ outcome: 'refunding', refundSignature: null, fromAddress: to, reason: `${RESENDING}${now().toISOString()}` })
+      .where(and(eq(ledgerChainSeen.signature, sig), eq(ledgerChainSeen.outcome, row.outcome), row.reason === null ? isNull(ledgerChainSeen.reason) : eq(ledgerChainSeen.reason, row.reason)))
+      .returning({ s: ledgerChainSeen.signature });
+    if (!claimed.length) throw new CustodyError('NOT_OPEN', 'Someone else is answering that payment');
+    await this.sendRefund(sig, to, back, row.reason, signer);
   }
 
   /** Sends hot-vault SOL to the cold address (reserves move, the books don't); the house pays the network fee. */
@@ -266,6 +351,9 @@ export class Custody {
     const { db, rpc } = this.d, out = { sent: 0, held: 0, failed: 0 };
     const queued = await db.select().from(ledgerWithdrawals).where(eq(ledgerWithdrawals.status, 'queued')).orderBy(asc(ledgerWithdrawals.requestedAt));
     if (!queued.length) return out;
+    // The network and the key before any claim: if either is wrong nothing is signed, so nothing is parked as "may have landed".
+    await assertCustodyNetwork(rpc, this.d.network);
+    const signer = await this.signer();
     const caps = await this.caps(), hot = await this.hot();
     for (const w of queued) {
       const hold = await this.holdReason(w, caps, hot);
@@ -276,24 +364,31 @@ export class Custody {
       const claimed = await db.update(ledgerWithdrawals).set({ status: 'sending', reason: null })
         .where(and(eq(ledgerWithdrawals.id, w.id), eq(ledgerWithdrawals.status, 'queued'))).returning({ id: ledgerWithdrawals.id });
       if (!claimed.length) continue;
+      let stored: string | null = null;
       try {
-        await assertCustodyNetwork(rpc, this.d.network);
-        const s = await rpc.send(await this.signer(), w.toAddress, w.lamports);
+        // The signature is stored before the broadcast: whatever happens next, the chain can be asked about this one transfer.
+        const s = await rpc.send(signer, w.toAddress, w.lamports, async (sig) => {
+          stored = sig;
+          await db.update(ledgerWithdrawals).set({ signature: sig }).where(eq(ledgerWithdrawals.id, w.id));
+        });
         await this.settleSent(w, s.signature, s.feeLamports);
         out.sent++;
       } catch (e) {
-        await db.update(ledgerWithdrawals).set({ reason: `send failed (${(e as Error).message}); it may still have landed: check the chain before resolving` }).where(eq(ledgerWithdrawals.id, w.id));
+        await db.update(ledgerWithdrawals).set({ reason: `send failed (${(e as Error).message}); it may still have landed: check the chain${stored ? ` for ${stored}` : ''} before resolving` }).where(eq(ledgerWithdrawals.id, w.id));
         out.failed++;
       }
     }
     return out;
   }
 
+  /** Books a withdrawal that left the hot vault. Only a `sending` row settles, once: a second call finds it already sent. */
   private async settleSent(w: WithdrawalRow, signature: string, feeLamports: number) {
     const { db, now } = this.d, at = now();
     await db.transaction(async (x) => {
       const tx = x as unknown as Db, season = await currentSeason(tx);
-      await tx.update(ledgerWithdrawals).set({ status: 'sent', signature, sentAt: at, reason: null }).where(eq(ledgerWithdrawals.id, w.id));
+      const done = await tx.update(ledgerWithdrawals).set({ status: 'sent', signature, sentAt: at, reason: null })
+        .where(and(eq(ledgerWithdrawals.id, w.id), eq(ledgerWithdrawals.status, 'sending'))).returning({ id: ledgerWithdrawals.id });
+      if (!done.length) throw new CustodyError('NOT_STUCK', 'That withdrawal is already settled');
       await move(tx, { from: WITHDRAWALS, to: EXTERNAL, lamports: w.lamports, kind: 'withdraw_sent', ref: signature, season, at });
       await move(tx, { from: HOUSE, to: EXTERNAL, lamports: Math.min(feeLamports, await lamportsOf(tx, HOUSE)), kind: 'network_fee', ref: signature, season, at });
     });
@@ -307,23 +402,33 @@ export class Custody {
   }
 
   /**
-   * A `sending` withdrawal after an admin checked the chain. 'sent': the given transaction must be a transfer of exactly this
-   * amount from the hot vault to this address. 'return': nothing left, so the SOL goes back to the agent (or the house).
+   * A `sending` withdrawal after an admin checked the chain. 'sent': the transaction must be the signature stored before the
+   * broadcast (or, for an older row without one, a transfer of exactly this amount from the hot vault to this address, made
+   * after the request and not booked for any other withdrawal). 'return': refused once the stored signature landed;
+   * otherwise the SOL goes back to the agent (or the house). Either answer applies once, however many times it is pressed.
    */
   async resolveStuck(id: string, outcome: 'sent' | 'return', signature?: string): Promise<void> {
     const { db, rpc, now } = this.d;
     const [w] = await db.select().from(ledgerWithdrawals).where(eq(ledgerWithdrawals.id, id));
     if (!w || w.status !== 'sending') throw new CustodyError('NOT_STUCK', 'Only a withdrawal stuck in sending can be resolved');
     if (outcome === 'sent') {
-      const t = signature ? await rpc.transferIn(signature, w.toAddress) : null;
-      if (!t || t.from !== (await this.hot()) || t.lamports !== w.lamports) throw new CustodyError('NOT_THIS_TRANSFER', 'That transaction is not this withdrawal leaving the hot vault');
-      await this.settleSent(w, signature!, t.feeLamports);
+      const sig = signature ?? w.signature;
+      if (!sig || (w.signature && sig !== w.signature)) throw new CustodyError('NOT_THIS_TRANSFER', 'That transaction is not this withdrawal leaving the hot vault');
+      const r = await rpc.inbound(sig, w.toAddress);
+      const t = r.kind === 'transfer' ? r.transfer : null;
+      const early = t?.blockTime != null && t.blockTime * 1000 < w.requestedAt.getTime() - 60_000;
+      const [other] = await db.select({ id: ledgerWithdrawals.id }).from(ledgerWithdrawals).where(and(eq(ledgerWithdrawals.signature, sig), ne(ledgerWithdrawals.id, w.id)));
+      if (!t || t.from !== (await this.hot()) || t.lamports !== w.lamports || early || other) throw new CustodyError('NOT_THIS_TRANSFER', 'That transaction is not this withdrawal leaving the hot vault');
+      await this.settleSent(w, sig, t.feeLamports);
       return;
     }
+    if (w.signature && (await rpc.signatureStatus(w.signature)) === 'landed') throw new CustodyError('LANDED', `Its transfer ${w.signature} landed: resolve it as sent`);
     const at = now(), back = w.agentId ? (await walletOf(db, w.agentId))!.publicKey : HOUSE;
     await db.transaction(async (x) => {
       const tx = x as unknown as Db;
-      await tx.update(ledgerWithdrawals).set({ status: 'failed', reason: 'returned after a failed send' }).where(eq(ledgerWithdrawals.id, w.id));
+      const done = await tx.update(ledgerWithdrawals).set({ status: 'failed', reason: 'returned after a failed send' })
+        .where(and(eq(ledgerWithdrawals.id, w.id), eq(ledgerWithdrawals.status, 'sending'))).returning({ id: ledgerWithdrawals.id });
+      if (!done.length) throw new CustodyError('NOT_STUCK', 'That withdrawal was already resolved');
       await move(tx, { from: WITHDRAWALS, to: back, lamports: w.lamports, kind: 'withdraw_return', ref: `return_${w.id}`, season: await currentSeason(tx), at });
       if (w.agentId) await recordTx(tx, { signature: `ldg_return_${w.id}`, agentId: w.agentId, turnId: null, kind: 'withdraw', counterparty: w.toAddress, lamportsDelta: w.lamports, createdAt: at });
     });

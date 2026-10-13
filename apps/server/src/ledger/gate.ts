@@ -3,6 +3,7 @@ import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { adminAudit, ledgerReconciliations, ledgerWithdrawals } from '../db/schema.ts';
 import { getSetting, setSetting } from '../world/launchpad.ts';
+import { PRACTICE_SEASONS, currentSeason } from './accounts.ts';
 import { audit, verifyAudit } from './audit.ts';
 import { books } from './books.ts';
 import { currentNotice } from './consent.ts';
@@ -72,6 +73,9 @@ export async function gateStatus(d: { db: Db; config: Config; rpc: CustodyRpc | 
   if (!c.mainnetRpcUrl) missing.push('MAINNET_RPC_URL is not set');
   else if (/api\.mainnet-beta\.solana\.com/.test(c.mainnetRpcUrl)) missing.push('MAINNET_RPC_URL must be a paid RPC: the public endpoint is rate-limited and unfit for custody');
   if (d.rpc) { try { await assertCustodyNetwork(d.rpc, 'mainnet'); } catch (e) { missing.unshift(`MAINNET_RPC_URL: ${(e as Error).message}`); } }
+  // Real SOL never runs on a practice season's books: their balances came from devnet or paper SOL, and they may be wiped.
+  const season = await currentSeason(d.db);
+  if (PRACTICE_SEASONS.has(season)) missing.push(`the books are the ${season} practice season's: start Season 1 (npm run mainnet:season -- start season1) before MAINNET=on`);
   const b = await books(d.db);
   if (!b.ok) missing.push('the books do not balance');
   if (d.custody) {

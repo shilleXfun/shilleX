@@ -69,7 +69,8 @@ export interface MainnetAdminView {
   lastReconciliation: { at: string; ok: boolean | null; details: unknown } | null;
   withdrawals: WithdrawalView[];
   fromCold: { signature: string; sol: number; at: string }[];
-  refundFailures: { signature: string; sol: number; from: string | null; reason: string | null }[];
+  /** Payments to the hot vault that need an admin: held for review, refunds that failed, refunds that stalled. */
+  refundFailures: { signature: string; sol: number; from: string | null; reason: string | null; outcome: string; refundSignature: string | null }[];
   caps: { agentCapSol: number; agentDailyCapSol: number; userMonthlyCapSol: number; worldCapSol: number; hotMaxSol: number; outflowDailyMaxSol: number };
   excessSol: number; hotCoversTop10: boolean;
   notice: { version: string; legalPosition: string; publishedAt: string } | null;
