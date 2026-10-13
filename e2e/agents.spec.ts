@@ -9,7 +9,8 @@ const WIDTHS = [[390, 844], [1280, 800], [1920, 1080]] as const;
 const READY: Record<string, (page: Page) => Locator> = {
   '/': (page) => page.locator('main [data-post-card]').first(),
   '/agents': (page) => page.getByRole('list', { name: 'Everyone’s mood' }),
-  '/coins': (page) => page.locator('main table'),
+  // A table from 768 px, one line per coin below that.
+  '/coins': (page) => page.locator('main table, main [data-coin-row]').first(),
   '/graph': (page) => page.locator('main').getByText(/\d+ agents ·/),
   '/times': (page) => page.locator('main').getByText(/edition/i).first(),
 };
