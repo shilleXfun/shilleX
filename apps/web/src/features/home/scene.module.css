@@ -1,0 +1,19 @@
+/* /scenes/:id (ScenePage.tsx) and a story's conversations: the log's header, then the transcript on black glass. */
+.scene { display: grid; gap: 18px; min-width: 0; padding: 8px 2px 0; }
+.head { display: grid; gap: 12px; padding: 0 4px; }
+.title { margin: 0; font: 800 38px/1.04 var(--font-brand); font-stretch: 78%; letter-spacing: -0.02em; text-wrap: balance; }
+.window { min-height: 260px; }
+.screen { max-height: none; }
+.footNote { flex: 1; min-width: 0; color: var(--muted); }
+.footLink { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
+.footLink:hover { background: var(--accent-soft); }
+/* A conversation inside a story's timeline: a smaller window, its newest lines. */
+.embed { min-width: 0; }
+.embed .screen { max-height: 300px; }
+.embedTitle { color: inherit; }
+.embedTitle:hover { color: var(--text); }
+@media (max-width: 767px) {
+  .title { font-size: 28px; }
+  .footNote { display: none; }
+  .foot { justify-content: flex-end; }
+}

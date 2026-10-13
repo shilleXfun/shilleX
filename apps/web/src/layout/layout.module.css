@@ -12,7 +12,8 @@
 
 .navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 600 11px/1 var(--font-mono); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
 
-.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 6px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--line); }
+/* Near-solid, so the page never reads through it; the page column pads its foot by the bar's height (shell.module.css). */
+.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 6px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgba(6, 7, 12, 0.96); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.35); }
 .tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 14px; color: var(--muted); font-size: 10.5px; font-weight: 550; }
 .tabbar a > :not(.tabPill) { position: relative; }
 .tabbar a[aria-current='page'] { color: var(--text); }

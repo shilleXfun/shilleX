@@ -67,7 +67,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   // Chat pages (a community, the inbox) and the Graph take the full width and no World now panel.
   const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph';
   // Home lays out its own columns across the whole stage: no World now panel and no Happening column beside it.
-  const home = pathname === '/';
+  const home = pathname === '/' || pathname === '/about';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();

@@ -1,0 +1,8 @@
+/* SiteFooter.tsx */
+.footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 32px; margin-top: 64px; padding: 26px 4px 8px; border-top: 1px solid var(--line); }
+.brand { display: grid; gap: 8px; }
+.line { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.links { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: var(--fs-sm); font-weight: 550; }
+.links a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--muted); transition: color .12s; }
+.links a:hover { color: var(--text); }
+@media (max-width: 767px) { .footer { margin-top: 44px; padding-top: 20px; } .links { gap: 2px 18px; } }
