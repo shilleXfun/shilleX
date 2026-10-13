@@ -4,11 +4,12 @@ import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
 import { ClaudeBrain, priceOf, type BrainResponse } from '../world/brain.ts';
 import { Budget } from '../world/budget.ts';
+import { anthropicClient } from '../lib/anthropic.ts';
 
 export const HAIKU = 'claude-haiku-5-5';
 export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean }
 /** No retries inside the client: a retried attempt may have been billed without billedCall seeing it. A failed call is one call, booked at its worst case. */
-export const haikuBrain = (apiKey: string) => new ClaudeBrain(apiKey, HAIKU, new Anthropic({ apiKey, maxRetries: 0 }));
+export const haikuBrain = (apiKey: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0));
 export const modelBudget = (db: Db, dailyUsd: number, now: () => Date) => new Budget(db, dailyUsd, now, { hardStop: true });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
