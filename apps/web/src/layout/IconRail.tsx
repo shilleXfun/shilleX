@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router';
 import { Bot, Coins, Compass, House, MessagesSquare, Network, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
-import type { MeView } from '@shillex/shared';
+import { REPO_URL, type MeView } from '@shillex/shared';
+import { GitHubMark } from '../components/brand/GitHubMark';
 import { useStore } from '../lib/store';
 import { useAgentWorld } from '../features/agents/agentsApi';
 import { mentionDots } from './unreadStore';
@@ -49,6 +50,11 @@ export function IconRail({ me }: { me: MeView | null }) {
           )}
         </NavLink>
       ))}
+      {/* The source code, pinned to the rail's foot. */}
+      <a href={REPO_URL} target="_blank" rel="noreferrer" className={`${s.railItem} ${s.railFoot}`} aria-label="Shillex on GitHub">
+        <GitHubMark size={20} />
+        <span className={s.railTip} aria-hidden="true">Source on GitHub</span>
+      </a>
     </nav>
   );
 }
