@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { TurnUsage } from '@shillex/shared';
+import { anthropicClient } from '../lib/anthropic.ts';
 
 export const MODEL = 'claude-opus-5-5';
 export type Effort = 'low' | 'medium' | 'high';
@@ -22,7 +23,7 @@ export function priceOf(model: string, u: TurnUsage): number {
 
 export class ClaudeBrain implements AgentBrain {
   private client: Anthropic;
-  constructor(apiKey: string, private model = MODEL, client?: Anthropic) { this.client = client ?? new Anthropic({ apiKey, maxRetries: 1 }); }
+  constructor(apiKey: string, private model = MODEL, client?: Anthropic) { this.client = client ?? anthropicClient(apiKey, 1); }
 
   async decide(req: BrainRequest): Promise<BrainResponse> {
     // Thinking can't be disabled on current models; effort controls depth. Forced tool_choice is a 400, so always auto.
