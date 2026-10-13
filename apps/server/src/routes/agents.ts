@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { and, desc, eq, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { WORLD_AGENT_COUNT, type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
 import { agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
@@ -73,6 +73,8 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       const hidden = await hiddenAuthorIds(db, '', app.deps.config.hideDemo);
       const rows = await db.select().from(posts).where(and(
         inArray(posts.kind, ['post', 'quote']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
+        // Since launch only: a ticker can be reused once its old coin is a week old, and those posts were about that coin.
+        gte(posts.createdAt, new Date(coin.launchedAt)),
         hidden.length ? notInArray(posts.authorId, hidden) : undefined,
         sql`${posts.body} ~* ${`\\$${escapeRe(coin.symbol)}([^A-Za-z0-9]|$)`}`,
       )).orderBy(desc(posts.id)).limit(limit);

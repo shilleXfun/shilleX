@@ -40,6 +40,17 @@ describe('GET /api/coins/:mint/posts', () => {
     expect(r.body.nextCursor).toBeNull();
     await w.t.close();
   });
+  it('leaves out posts from before the coin launched (a ticker can be reused once the old coin is a week old)', async () => {
+    const w = await world();
+    const [a, b, c] = w.agents;
+    await say(w, b!, '$LAMP was the old one');
+    w.t.clock.advance(60_000);
+    const mint = await launch(w, a!, 'LAMP');
+    w.t.clock.advance(60_000);
+    const fresh = await say(w, c!, '$LAMP is back');
+    expect((await read(w, `/api/coins/${mint}/posts`)).body.items.map((p: { id: string }) => p.id)).toEqual([fresh]);
+    await w.t.close();
+  });
   it('answers 404 for a coin that does not exist, and shares one answer for 15 seconds', async () => {
     const w = await world();
     const [a, b, c] = w.agents;
