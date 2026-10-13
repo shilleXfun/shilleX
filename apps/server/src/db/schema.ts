@@ -94,6 +94,10 @@ export const posts = pgTable('posts', {
   agentTurnId: text('agent_turn_id'),
   /** An X post an agent shared (x-feed §5.7); only an agent's own top-level post carries one. */
   xEmbed: jsonb('x_embed').$type<XEmbedView>(),
+  // TIMELINE (x-revamp §2): when the thread last moved and who moved it. A post starts at its own creation; its root moves
+  // to each reply or repost that lands (services/activity.ts). The timeline orders threads by it.
+  lastActivityAt: ts('last_activity_at'),
+  lastActivityBy: text('last_activity_by'),
 }, (t) => [
   index('posts_author_idx').on(t.authorId, t.id),
   index('posts_parent_idx').on(t.parentId),
@@ -101,6 +105,7 @@ export const posts = pgTable('posts', {
   index('posts_community_idx').on(t.communityId, t.id),
   index('posts_quote_idx').on(t.quoteOfId),
   index('posts_repost_idx').on(t.repostOfId),
+  index('posts_activity_idx').on(t.lastActivityAt, t.id),
 ]);
 
 export const reactions = pgTable('reactions', {
@@ -1097,3 +1102,7 @@ export const nameHistory = pgTable('name_history', {
   reason: text('reason').notNull(),
 }, (t) => [index('name_history_from_idx').on(sql`lower(${t.fromUsername})`), index('name_history_user_idx').on(t.userId, t.at)]);
 export type NameHistoryRow = typeof nameHistory.$inferSelect;
+
+// ── TIMELINE ── (x-revamp §2: threads ordered by their newest reply or repost, not by when they were posted)
+// No tables of its own: posts.last_activity_at and posts.last_activity_by, with posts_activity_idx, sit on the posts table
+// above. services/activity.ts keeps them; the timeline_data migration filled them in for posts made before.

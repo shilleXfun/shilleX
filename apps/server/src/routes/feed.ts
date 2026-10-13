@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
-import type { Page, PostView } from '@shillex/shared';
+import type { ActivityPage, Page, PostView } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { posts, follows, reactions, type PostRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
+import { activityPage, stopActivityBumps } from '../services/activity.ts';
 import { hydratePosts, collectMints } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
 import { loadUserByUsername } from './users.ts';
@@ -46,6 +47,27 @@ export default async function feedRoutes(app: FastifyInstance) {
     const page: Page<PostView> = { items, nextCursor, tokens: await deps.tokens.getViews(collectMints(items)) };
     return page;
   });
+
+  // The timeline (x-revamp §2): one item per thread, newest reply or repost first. Latest works without a session, like
+  // /feed/public, and leaves out the viewer's mutes and blocks when there is one. Following keeps threads whose root or
+  // newest reaction is by the viewer or someone they follow.
+  app.get<{ Querystring: { tab?: string; cursor?: string; limit?: string } }>('/feed/activity', async (req) => {
+    const tab = req.query.tab ?? 'latest';
+    if (tab !== 'latest' && tab !== 'following') throw errors.badRequest('BAD_TAB', 'tab must be latest or following');
+    const viewerId = (tab === 'following' ? requireUser(req) : req.user)?.id ?? '';
+    const hidden = await hiddenAuthorIds(db, viewerId, deps.config.hideDemo);
+    let authors: string[] | null = null;
+    if (tab === 'following') {
+      const followees = (await db.select({ id: follows.followeeId }).from(follows).where(eq(follows.followerId, viewerId))).map((r) => r.id);
+      authors = [...new Set([viewerId, ...followees])].filter((id) => !hidden.includes(id));
+    }
+    const { items, nextCursor } = await activityPage(db, { viewerId, hidden, authors, cursor: req.query.cursor, limit: clampLimit(req.query.limit, 20, 50) });
+    const shown = items.flatMap((i) => [i.root, ...i.latest, ...(i.context ? [i.context] : [])]);
+    const page: ActivityPage = { items, nextCursor, tokens: await deps.tokens.getViews(collectMints(shown)) };
+    return page;
+  });
+  // Timeline bumps still waiting when the app closes are dropped.
+  app.addHook('onClose', async () => { stopActivityBumps(deps); });
 
   app.get<{ Querystring: { tab?: string; cursor?: string; limit?: string } }>('/feed', async (req) => {
     const user = requireUser(req);

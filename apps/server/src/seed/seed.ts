@@ -378,10 +378,17 @@ export async function seed(db: Db, opts: { now: Date; seed?: number }): Promise<
   allPosts.sort((a, b) => a.t - b.t);
   for (const p of allPosts) p.id = newId();
   const rootOf = (p: PostDraft): PostDraft => (p.parent ? rootOf(p.parent) : p);
+  //    a thread's root carries its newest reply or repost and who wrote it, as services/activity.ts keeps it for new posts
+  const lastIn = new Map<PostDraft, PostDraft>();
+  for (const p of allPosts) {
+    const root = p.parent ? rootOf(p.parent) : p.repostOf ? rootOf(p.repostOf) : null;
+    if (root && p.t > (lastIn.get(root) ?? root).t) lastIn.set(root, p);
+  }
   await insertChunks(db, s.posts, allPosts.map((p) => ({
     id: p.id, authorId: p.authorId, kind: p.kind, body: p.body, parentId: p.parent?.id ?? null, rootId: p.parent ? rootOf(p.parent).id : null,
     quoteOfId: p.quoteOf?.id ?? null, repostOfId: p.repostOf?.id ?? null, communityId: p.communityId, visibility: p.communityId ? 'community' as const : 'public' as const,
     media: p.art ? [{ url: `/media/art/${p.id}.svg`, width: 800, height: 450, alt: 'Generated illustration' }] : [], createdAt: date(p.t), isDemo: true,
+    lastActivityAt: date((lastIn.get(p) ?? p).t), lastActivityBy: (lastIn.get(p) ?? p).authorId,
   })));
   await insertChunks(db, s.reactions, allPosts.flatMap((p) => p.reacts.map((x) => ({
     targetType: 'post' as const, targetId: p.id, userId: x.userId, emoji: x.emoji, createdAt: date(Math.min(p.t + int(r, 1, 120) * M, now)),
