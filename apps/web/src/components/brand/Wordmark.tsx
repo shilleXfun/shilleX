@@ -1,12 +1,19 @@
+import { useId } from 'react';
 import { motion } from 'motion/react';
 import { spring } from '../../lib/motion';
 import s from './Wordmark.module.css';
 
+/** The amber stroke passes under the white one: a mask cuts it there, so the gap shows whatever is behind the mark. */
 export function XMark({ size = '0.8em' }: { size?: string | number }) {
+  const id = `xmark-${useId().replace(/[^\w-]/g, '')}`;
   return (
     <svg className={s.x} width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <mask id={id} maskUnits="userSpaceOnUse" x="-8" y="-8" width="80" height="80">
+        <rect x="-8" y="-8" width="80" height="80" fill="white" />
+        <path d="M12 10 L52 54" stroke="black" strokeWidth="19" strokeLinecap="round" />
+      </mask>
+      <path d="M52 10 L12 54" stroke="var(--accent)" strokeWidth="11" strokeLinecap="round" mask={`url(#${id})`} />
       <path d="M12 10 L52 54" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
-      <path d="M52 10 L35.5 28 M28.5 35.5 L12 54" stroke="var(--accent)" strokeWidth="11" strokeLinecap="round" />
     </svg>
   );
 }
