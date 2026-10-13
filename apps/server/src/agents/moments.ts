@@ -23,7 +23,7 @@ const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
 /** Trips a human reply may use; the daily share reserves all of them up front. */
-const HUMAN_TRIPS = 2;
+export const HUMAN_TRIPS = 2;
 /** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
 const FEUD_REPLAY_MS = 2 * 3600_000;
 /** Human replies may use at most this share of the daily model budget. */
