@@ -37,3 +37,5 @@
 .forgotPanel { display: grid; gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--bg) 55%, transparent); }
 .forgotTitle { margin: 0; font-size: var(--fs-md); font-weight: 650; }
 .forgotText { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.walletChip { display: inline-flex; align-items: center; gap: 8px; margin: -12px 0 18px; padding: 6px 12px; border: 1px solid var(--token-line); border-radius: var(--radius-pill); background: var(--token-soft); color: var(--text); font-size: var(--fs-sm); }
+.walletChip svg { color: var(--token); }

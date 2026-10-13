@@ -2,6 +2,7 @@ import { createBrowserRouter, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
 import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
+import { WalletSignupPage } from './features/auth/WalletSignupPage';
 import { HomePage } from './features/feed/HomePage';
 import { ThreadPage } from './features/feed/ThreadPage';
 import { PublicHome } from './features/feed/PublicHome';
@@ -42,6 +43,7 @@ function ReceiptPage() {
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  { path: '/signup/wallet', element: <WalletSignupPage /> },
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
   { path: '/admindev', element: <AdminDevPage /> },
   {
