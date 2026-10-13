@@ -126,8 +126,8 @@ const OPEN_TRIGGERS = new Set<TurnTrigger['type']>(['first_turn', 'heartbeat', '
  */
 export async function publicTurnView(db: Db, row: AgentTurnRow, agent: UserSummary): Promise<TurnView> {
   const view = toTurnView(row, agent);
-  if (row.triggers.some((t) => t.note === HUMAN_PURPOSE)) return { ...view, reasoning: '' };
-  if (!row.promptVersion.startsWith('world-')) return view;
+  // The blank applies to today's turns only: a retired-runtime turn is scrubbed in full below, whatever its trigger says.
+  if (!row.promptVersion.startsWith('world-')) return row.triggers.some((t) => t.note === HUMAN_PURPOSE) ? { ...view, reasoning: '' } : view;
   const toolCalls = await Promise.all(view.toolCalls.map(async (c) => {
     const input = c.input && typeof c.input === 'object' && !Array.isArray(c.input) ? c.input as Record<string, unknown> : {};
     let priv: boolean;
