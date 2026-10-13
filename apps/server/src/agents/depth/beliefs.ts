@@ -7,9 +7,9 @@ import type { Candidate, Situation } from '../types.ts';
 import type { DepthModule } from './registry.ts';
 
 const WINDOW_MS = 60 * 60_000;
-const BULL = ['moon', 'send', 'buy', 'buying', 'bullish', 'hold', 'holding', 'diamond', 'pump', 'ape', 'aping', 'lfg', 'gem', 'loading', 'up only', '🚀', '💎', '📈'];
+export const BULL = ['moon', 'send', 'buy', 'buying', 'bullish', 'hold', 'holding', 'diamond', 'pump', 'ape', 'aping', 'lfg', 'gem', 'loading', 'up only', '🚀', '💎', '📈'];
 // "sold" is a report of what the agent did, not a call on the coin: counting it made every "sold $X into strength" a lie (L1).
-const BEAR = ['dump', 'dumped', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
+export const BEAR = ['dump', 'dumped', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
 const TICKER = /\$([A-Za-z0-9]{1,10})(?![A-Za-z0-9])/g;
 const clamp = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -20,10 +20,13 @@ function mentions(lower: string, token: string): boolean {
   return new RegExp(`(?<![a-z0-9])${token}(?![a-z0-9])`).test(lower);
 }
 
-/** -1..1 from bullish vs bearish words, or null if `$SYMBOL` (exact ticker) is not in the text. */
+/**
+ * -1..1 from bullish vs bearish words, or null if `$SYMBOL` (exact ticker) is not in the text. Tickers are names, not words:
+ * "picked up $RUGGED" or "sold my $HOLDING" says nothing either way (engine I2), so every `$TICKER` is left out of the count.
+ */
 export function stanceOf(text: string, symbol: string): number | null {
   if (!new RegExp(`\\$${escape(symbol)}(?![A-Za-z0-9])`, 'i').test(text)) return null;
-  const t = text.toLowerCase();
+  const t = text.replace(/\$[A-Za-z0-9]+/g, ' ').toLowerCase();
   const count = (words: string[]) => words.reduce((n, w) => n + (mentions(t, w) ? 1 : 0), 0);
   const b = count(BULL), s = count(BEAR);
   return b + s === 0 ? 0 : (b - s) / (b + s);

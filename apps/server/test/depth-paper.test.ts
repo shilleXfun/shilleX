@@ -4,6 +4,7 @@ import { depthTestCtx } from './depth-helpers.ts';
 import { paperFacts, localPaper, paperModule, handlePaperMoment } from '../src/agents/depth/paper.ts';
 import { rememberEvent } from '../src/agents/state.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
+import { Budget } from '../src/world/budget.ts';
 import { factions, papers } from '../src/db/schema.ts';
 import type { Moment, Moments } from '../src/agents/types.ts';
 
@@ -56,6 +57,22 @@ describe('the Shillex Times', () => {
     const [q] = await ctx.t.db.select().from(papers).where(eq(papers.day, '2026-10-08'));
     expect(q).toMatchObject({ headline: 'Quiet day on Shillex', body: { source: 'local' } });
     expect(brain.calls).toHaveLength(1);
+  });
+  it('on a day with news and the budget spent, writes the local paper from the facts and calls no model (4.10, engine M4)', async () => {
+    ctx = await depthTestCtx();
+    await rememberEvent(ctx.t.db, ctx.agents[0]!.id, 'rugged', { symbol: 'MOTH', mint: 'M', lamports: 1 }, ctx.t.clock.now());
+    const spent = new Budget(ctx.t.db, 0.01, ctx.t.clock.now, { hardStop: true });
+    spent.add(0.01);
+    const brain = new FakeBrain(() => { throw new Error('no model call past the cap'); });
+    const day = ctx.t.clock.now().toISOString().slice(0, 10);
+    expect((await paperFacts(ctx.t.db, day)).items.length).toBeGreaterThan(0); // not the quiet-day branch
+    await handlePaperMoment({ ...ctx.d, brain, budget: spent }, { kind: 'paper', agentId: ctx.agents[0]!.id, data: { day }, at: ctx.t.clock.now() });
+    const [p] = await ctx.t.db.select().from(papers).where(eq(papers.day, day));
+    expect(p).toMatchObject({ body: { source: 'local' } });
+    expect(p!.headline).toContain('$MOTH');
+    expect(p!.headline).not.toBe('Quiet day on Shillex');
+    expect(brain.calls).toHaveLength(0);
+    expect(spent.spentToday()).toBe(0.01);
   });
 
   it('keeps hostile model text off the front page, field by field, and allows only the named agents', async () => {

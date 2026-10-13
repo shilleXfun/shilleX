@@ -11,10 +11,21 @@ import { HUMAN_REPLIES_PER_HOUR, MOMENT_MAX_TOKENS, createMoments } from '../src
 import { act } from '../src/agents/act.ts';
 import { perceive } from '../src/agents/perceive.ts';
 import { candidates } from '../src/agents/decide.ts';
+import { lineKey } from '../src/agents/phrasebook.ts';
+import { runTool } from '../src/world/tools.ts';
+import { Indexer } from '../src/world/indexer.ts';
+import { registerAgentRoutes } from '../src/routes/agents.ts';
+import { registerDepthRoutes } from '../src/routes/depth.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
-beforeEach(async () => { w = await worldTestCtx(); });
+beforeEach(async () => {
+  w = await worldTestCtx();
+  // The public agent routes, so the privacy checks read what a visitor would (without them every /api/agents URL is a 404).
+  const indexer = new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 });
+  await registerAgentRoutes(w.t.app, { indexer, budget: new Budget(w.t.db, 1, w.t.clock.now), chain: w.chain, key: w.key, engine: null, moments: null, network: 'memory', startAgents: () => 'AGENTS is off' });
+  await registerDepthRoutes(w.t.app, { indexer });
+});
 afterEach(() => w.t.close());
 const base = (): EngineDeps => ({ app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, rng: mulberry32(2) });
 const replyCandidate = async (d: EngineDeps, agentId: string) => {
@@ -272,5 +283,104 @@ describe('replies to humans: fixes', () => {
       await sleep(150);
       expect(q2.enqueue(mk('d0'))).toBe(false); // 1.5 worst cases already spent today, 2 more would pass the cap
     } finally { config.agentDailyBudgetUsd = was; }
+  });
+});
+
+describe('a written reply to a human keeps no paraphrase of their post (server-rest M7)', () => {
+  it('stores no thinking for a reply to a human’s public post', async () => {
+    const a = w.agents[17]!;
+    const human = await w.t.createUser('lamp_human');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} my lamp collection is 41 lamps` });
+    const reply = fakeReply.tools({ name: 'reply', input: { post_id: p.body.post.id, body: 'respect the lamp count' } });
+    const brain = new FakeBrain((_r, call) => call === 0 ? { ...reply, content: [{ type: 'thinking', thinking: 'they own 41 lamps', signature: 'x' } as never, ...reply.content] } : fakeReply.end('', 'still about the 41 lamps'));
+    const moments = createMoments({ ...base(), brain, budget: budget() });
+    const d = { ...base(), moments };
+    const { v, c } = await replyCandidate(d, a.id);
+    await act(d, v, c);
+    await moments.drain();
+    const haiku = (await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id))).find((t) => t.model === HAIKU)!;
+    expect(haiku).toMatchObject({ status: 'acted', reasoning: '' });
+    expect(JSON.stringify((await w.t.as(null).get(`/api/receipts/${haiku.id}`)).body)).not.toContain('41 lamps');
+  });
+  it('blanks the thinking of such a reply sealed before this rule when it is served', async () => {
+    const a = w.agents[18]!;
+    const { id } = await startTurn(w.t.db, { agentId: a.id, triggers: [{ type: 'heartbeat', note: 'reply to a human' }], model: HAIKU, effort: 'low', promptVersion: 'moment-v1', snapshotId: null, now: w.t.clock.now() });
+    await finishTurn(w.t.db, id, { status: 'acted', context: [{ kind: 'moment', text: 'reply to a human' }], reasoning: 'they said their lamp count is 41, so I tease it', toolCalls: [], usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, costUsd: 0.001, finishedAt: w.t.clock.now() });
+    const single = await w.t.as(null).get(`/api/receipts/${id}`);
+    expect(single.status).toBe(200);
+    expect(single.body.turn).toMatchObject({ reasoning: '', costUsd: 0.001 });
+    expect(JSON.stringify((await w.t.as(null).get(`/api/agents/${a.username}/receipts`)).body)).not.toContain('lamp count');
+    // Other model turns keep their reasoning.
+    const other = await startTurn(w.t.db, { agentId: a.id, triggers: [{ type: 'heartbeat', note: 'launch announcement' }], model: HAIKU, effort: 'low', promptVersion: 'moment-v1', snapshotId: null, now: w.t.clock.now() });
+    await finishTurn(w.t.db, other.id, { status: 'acted', context: [], reasoning: 'a launch needs a loud post', toolCalls: [], usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, costUsd: 0.001, finishedAt: w.t.clock.now() });
+    expect(JSON.stringify((await w.t.as(null).get(`/api/receipts/${other.id}`)).body)).toContain('a launch needs a loud post');
+  });
+});
+
+describe('engine actions inside a community that went private (engine I1)', () => {
+  /** A public community made by a human; the agent joins it through the real route while it is public, then the owner makes it private. */
+  async function privatizedClub(idx: number, owner: string, slug: string) {
+    const a = w.agents[idx]!;
+    const human = await w.t.createUser(owner);
+    const made = await w.t.as(human).post('/api/communities', { name: `Club ${slug}`, slug, description: 'x', visibility: 'public' });
+    expect(made.status).toBe(201);
+    const ctx = await w.ctxFor(a);
+    expect((await runTool(ctx, 'join_community', { slug, invite_code: null })).ok).toBe(true);
+    await finishTurn(w.t.db, ctx.turnId, { status: 'acted', context: [], reasoning: 'test setup', toolCalls: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: w.t.clock.now() });
+    expect((await w.t.as(human).patch(`/api/communities/${slug}`, { visibility: 'private' })).status).toBe(200);
+    return { a, human, communityId: made.body.community.community.id as string, channelId: made.body.community.channels[0].id as string };
+  }
+  /** Every view a signed-out visitor can open about the agent, as one string. */
+  const publicViews = async (username: string, turnIds: string[]) => {
+    const urls = [`/api/agents/${username}/receipts`, ...turnIds.map((id) => `/api/receipts/${id}`), `/api/agents/${username}/depth`, `/api/agents/${username}`,
+      `/api/feed/public`, '/api/agents/backchannel'];
+    const out: string[] = [];
+    for (const u of urls) { const r = await w.t.as(null).get(u); expect(r.status, u).toBe(200); out.push(JSON.stringify(r.body)); }
+    return out.join('\n');
+  };
+
+  it('a phrasebook reply to a mention there leaves no handle, line or post id on any public receipt or view', async () => {
+    const { a, human, communityId } = await privatizedClub(14, 'club_owner', 'lamp-club');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} between us: the vault code is quokka-77`, communityId });
+    expect(p.status).toBe(201);
+    // No moment queue: no key, budget spent or the human's hourly cap reached, so the engine answers from its phrasebook.
+    const { v, c } = await replyCandidate(base(), a.id);
+    expect(c.target?.postId).toBe(p.body.post.id);
+    const r = await act(base(), v, c);
+    expect(r.ok).toBe(true);
+    expect(r.text).toBeUndefined();
+    expect(r.line).toBeUndefined();
+    const [reply] = await w.t.db.select().from(posts).where(and(eq(posts.authorId, a.id), eq(posts.parentId, p.body.post.id)));
+    expect(reply!.agentTurnId).toBe(r.turnId);
+    const [t] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.id, r.turnId));
+    expect(t!.toolCalls).toEqual([{ name: 'reply', input: { private: true }, ok: true, result: { private: true } }]);
+    const seen = await publicViews(a.username, [r.turnId]);
+    for (const leak of [human.username, reply!.body, reply!.id, p.body.post.id, 'quokka']) expect(seen).not.toContain(leak);
+  });
+  it('a reaction there (a dry reply, or a react the engine picked) is private too', async () => {
+    const { a, human, communityId } = await privatizedClub(15, 'quiet_owner', 'hush-room');
+    const p = await w.t.as(human).post('/api/posts', { body: `@${a.username} psst, the code is quokka-77`, communityId });
+    const { v, c } = await replyCandidate(base(), a.id);
+    // Every reply line used up: the engine reacts instead.
+    const dry = { ...v, phrasebook: { ...v.phrasebook, lines: { ...v.phrasebook.lines, reply_human: ['hi {user}'] } }, state: { ...v.state, recentLines: [lineKey('reply_human', 'hi {user}')] } };
+    const r = await act(base(), dry, c);
+    expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.id, r.turnId)))[0]!.toolCalls).toEqual([{ name: 'react', input: { private: true }, ok: true, result: { private: true } }]);
+    const other = await w.t.as(human).post('/api/posts', { body: 'quokka-78 is the backup', communityId });
+    w.t.clock.advance(60_000);
+    const r2 = await act(base(), await perceive(base(), a.id), { kind: 'react', score: 1, target: { postId: other.body.post.id, userId: human.id }, reason: 'reacting to a post' });
+    expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.id, r2.turnId)))[0]!.toolCalls).toEqual([{ name: 'react', input: { private: true }, ok: true, result: { private: true } }]);
+    const seen = await publicViews(a.username, [r.turnId, r2.turnId]);
+    for (const leak of [human.username, p.body.post.id, other.body.post.id, 'quokka']) expect(seen).not.toContain(leak);
+  });
+  it('a chat line in its room is private, even when the room was picked before the switch', async () => {
+    const { a, channelId } = await privatizedClub(16, 'room_owner2', 'back-room');
+    const v = await perceive(base(), a.id);
+    const r = await act(base(), v, { kind: 'chat', score: 1, situation: 'idle', target: { roomId: channelId }, reason: 'chatting in back-room' });
+    expect(r.ok).toBe(true);
+    expect(r.text).toBeUndefined();
+    const [m] = await w.t.db.select().from(messages).where(and(eq(messages.channelId, channelId), eq(messages.authorId, a.id)));
+    expect(m).toBeTruthy();
+    const seen = await publicViews(a.username, [r.turnId]);
+    for (const leak of [m!.body, channelId]) expect(seen).not.toContain(leak);
   });
 });

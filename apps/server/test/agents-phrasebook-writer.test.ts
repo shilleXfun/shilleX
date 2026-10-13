@@ -12,7 +12,7 @@ import { HAIKU } from '../src/agents/haiku.ts';
 import { FALLBACK_LINES, FALLBACK_SITUATIONS, composeLine, fallbackPhrasebook, phrasebookOf } from '../src/agents/phrasebook.ts';
 import { loadState, rememberEvent, setTraits } from '../src/agents/state.ts';
 import { isReservedUsername } from '../src/lib/reserved.ts';
-import { PHRASEBOOK_PROMPT_VERSION, REFRESHES_PER_DAY, RETRY_AFTER_MS, STUCK_TURNS, needsPhrasebook, validatePhrasebook, validateProfile, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
+import { PHRASEBOOK_MAX_TOKENS, PHRASEBOOK_PROMPT_VERSION, REFRESHES_PER_DAY, RETRY_AFTER_MS, STUCK_TURNS, needsPhrasebook, validatePhrasebook, validateProfile, writePhrasebook } from '../src/agents/phrasebook-writer.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 beforeEach(async () => { w = await worldTestCtx(); });
@@ -165,12 +165,13 @@ describe('writePhrasebook safety', () => {
     expect(result).toBe('failed');
     expect(await phrasebookOf(w.t.db, id)).toEqual(fallbackPhrasebook(id));
   });
-  it('records a failed receipt with zero cost and rethrows when the brain throws', async () => {
+  it('records a failed receipt at the call’s worst case (it may have been billed) and rethrows when the brain throws', async () => {
     const brain = new FakeBrain(() => { throw new Error('api down'); });
     const id = w.agents[6]!.id;
     await expect(writePhrasebook(deps(brain), id)).rejects.toThrow('api down');
     const [turn] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, id));
-    expect(turn).toMatchObject({ status: 'failed', costUsd: 0 });
+    expect(turn).toMatchObject({ status: 'failed' });
+    expect(turn!.costUsd).toBeCloseTo(PHRASEBOOK_MAX_TOKENS * 0.5 / 1_000_000, 12);
   });
 });
 

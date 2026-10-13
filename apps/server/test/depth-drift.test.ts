@@ -107,9 +107,9 @@ describe('trait drift', () => {
     // Another agent's afterAct (or an onEvent hook) drifts this agent while its own action is in flight.
     const drifted = await applyDrift(ctx.t.db, a.id, { pettiness: 0.03 }, ctx.t.clock.now());
     expect(drifted.pettiness).not.toBe(v.state.traits.pettiness);
-    await act(ctx.d, v, { kind: 'idle', score: 1, reason: 'resting' });
+    await act(ctx.d, v, { kind: 'post', score: 1, situation: 'idle', reason: 'felt like posting' });
     const after = await loadState(ctx.t.db, a.id, ctx.t.clock.now());
     expect(after.traits).toEqual(drifted);
-    expect(after.cooldowns.idle).toBeTruthy(); // the ordinary save still happened
+    expect(after.cooldowns.post).toBeTruthy(); // the ordinary save still happened
   });
 });

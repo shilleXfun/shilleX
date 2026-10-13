@@ -2,12 +2,12 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
 import type { TurnUsage } from '@shillex/shared';
 import { users } from '../../db/schema.ts';
-import { priceOf, type AgentBrain, type BrainRequest } from '../../world/brain.ts';
+import type { AgentBrain, BrainRequest, BrainResponse } from '../../world/brain.ts';
 import { finishTurn, startTurn } from '../../world/provenance.ts';
 import { runTool, type ToolOutcome } from '../../world/tools.ts';
 import { actorFor } from '../act.ts';
 import type { EngineDeps } from '../engine.ts';
-import { HAIKU, type ModelBudget } from '../haiku.ts';
+import { HAIKU, billedCall, type ModelBudget } from '../haiku.ts';
 import { MOMENT_MAX_TOKENS, MOMENT_PROMPT_VERSION, MOMENT_WORST, exclusiveTurn } from '../moments.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
 import { depthToolRecord } from './receipt.ts';
@@ -44,12 +44,6 @@ export async function systemAct(d: EngineDeps, agentId: string, tool: string, in
     : refused('AGENT_RUNNING', 'agent has an unsealed turn');
 }
 
-/** A sealed receipt for a model call made outside Phase 3's moment runner, so its cost is persisted and Budget.load() counts it after a restart. */
-export async function modelReceipt(d: EngineDeps, agentId: string, purpose: string, usage: TurnUsage, costUsd: number): Promise<void> {
-  const { id } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
-  await finishTurn(d.db, id, { status: 'quiet', context: [{ kind: 'moment', text: purpose }], reasoning: purpose, toolCalls: [], usage, costUsd, finishedAt: d.now() });
-}
-
 /** Deps of a Phase 4 handler that makes its own model call (a moment handler: faction naming, the daily paper). */
 export type ModelDeps = EngineDeps & { brain: AgentBrain; budget: ModelBudget };
 /** What a one-shot call sends; the effort ('low') and the token cap (MOMENT_MAX_TOKENS) are fixed by oneShotTool. */
@@ -82,10 +76,18 @@ function cleanStrings(v: unknown, key: string | undefined, o: OneShotClean): unk
 export async function oneShotTool(d: ModelDeps, agentId: string, purpose: string, req: OneShotRequest, toolName: string, clean: OneShotClean = {}): Promise<Record<string, unknown> | null> {
   const r = await exclusiveTurn(d, agentId, async () => {
     if (!d.budget.canSpend() || !d.budget.canAfford(MOMENT_WORST)) return null;
-    const res = await d.brain.decide({ ...req, effort: 'low', maxTokens: MOMENT_MAX_TOKENS });
-    const cost = priceOf(HAIKU, res.usage);
-    d.budget.add(cost);
-    await modelReceipt(d, agentId, purpose, res.usage, cost);
+    // The receipt opens before the call and billedCall books the cost on it, so Budget.load() counts the call after a crash.
+    const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
+    const spent = { usd: 0 };
+    const seal = (status: 'quiet' | 'failed', usage: TurnUsage) =>
+      finishTurn(d.db, turnId, { status, context: [{ kind: 'moment', text: purpose }], reasoning: purpose, toolCalls: [], usage, costUsd: spent.usd, finishedAt: d.now() });
+    let res: BrainResponse;
+    try { res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ ...req, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+    catch (e) {
+      await seal('failed', { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }).catch((err) => console.error('[agents] model receipt left unsealed until restart', turnId, err));
+      throw e;
+    }
+    await seal('quiet', res.usage);
     // A cut-off tool call is not trusted, and a refusal has none.
     if (res.stopReason === 'max_tokens' || res.stopReason === 'refusal') return null;
     const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === toolName);

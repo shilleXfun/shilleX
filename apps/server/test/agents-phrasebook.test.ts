@@ -4,7 +4,7 @@ import type { DbHandle } from '../src/db/client.ts';
 import { phrasebooks, users } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
-import { FALLBACK_LINES, FALLBACK_SITUATIONS, LINES_PER_AGENT, WEATHER_WORD, closerFits, composeLine, fallbackPhrasebook, feedSeen, fillLine, lineKey, phrasebookOf } from '../src/agents/phrasebook.ts';
+import { FALLBACK_LINES, FALLBACK_SITUATIONS, LINES_PER_AGENT, LINES_PER_AGENT_FOR, WEATHER_WORD, closerFits, composeLine, fallbackPhrasebook, feedSeen, fillLine, lineKey, phrasebookOf } from '../src/agents/phrasebook.ts';
 import { stanceOf } from '../src/agents/depth/beliefs.ts';
 import { normalizeBody } from '../src/services/moderation.ts';
 import { seededTraits } from '../src/agents/state.ts';
@@ -27,7 +27,7 @@ describe('fallback phrasebook', () => {
     expect(fallbackPhrasebook('agent-a')).toEqual(a);
     expect(fallbackPhrasebook('agent-b')).not.toEqual(a);
     expect(a.traits).toEqual(seededTraits('agent-a'));
-    for (const s of FALLBACK_SITUATIONS) expect(a.lines[s]!.length).toBe(LINES_PER_AGENT);
+    for (const s of FALLBACK_SITUATIONS) expect(a.lines[s]!.length).toBe(LINES_PER_AGENT_FOR[s] ?? LINES_PER_AGENT);
   });
   it('phrasebookOf returns the stored book, or the fallback when there is none', async () => {
     const id = newId();
@@ -78,6 +78,17 @@ describe('many voices (L6)', () => {
     expect(differ.length).toBeGreaterThanOrEqual(20);
     expect(a.openers).toHaveLength(5);
     expect(a.closers).toHaveLength(5);
+  });
+  it('gives every agent at least 10 fresh agreeing replies to a mention before it runs dry (Task S finding 3)', () => {
+    let worst = Infinity;
+    for (let i = 0; i < 50; i++) {
+      const pb = fallbackPhrasebook(`agent-${i}`);
+      const recent: string[] = [];
+      // A mention reply fills {user} but never {coin}.
+      for (let r = composeLine(pb, 'reply_agree', { user: '@lamp' }, recent, mulberry32(i)); r; r = composeLine(pb, 'reply_agree', { user: '@lamp' }, recent, mulberry32(i))) recent.push(r.key);
+      worst = Math.min(worst, recent.length);
+    }
+    expect(worst).toBeGreaterThanOrEqual(10);
   });
   it('keeps report lines free of bullish or bearish words, so posting one is never a call on the coin', () => {
     for (const s of ['bought', 'sold', 'took_profit', 'rugged_someone', 'launching', 'market_take', 'idle', 'gm', 'reply_agree', 'reply_disagree'] as const) {

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { depthTestCtx } from './depth-helpers.ts';
 import { normalizeLine, lineageId, recordLineage, adoptFromReactions, withBorrowed, lineageModule } from '../src/agents/depth/lineage.ts';
-import { adjustAffinity, loadState, saveState } from '../src/agents/state.ts';
+import { adjustAffinity, loadState, setTraits } from '../src/agents/state.ts';
 import { emptyDepth } from '../src/agents/depth/registry.ts';
 import { FALLBACK_LINES } from '../src/agents/phrasebook.ts';
 import { runTool } from '../src/world/tools.ts';
@@ -35,7 +35,10 @@ describe('lineage', () => {
     for (const f of fans) {
       await adjustAffinity(ctx.t.db, f.id, author.id, 0.6, ctx.t.clock.now());
       const s = await loadState(ctx.t.db, f.id, ctx.t.clock.now());
-      await saveState(ctx.t.db, f.id, { ...s, traits: { ...s.traits, curiosity: 1 } }, ctx.t.clock.now());
+      // saveState never writes traits (drift owns them); setTraits does. With saveState the 1 was dropped and an agent seeded at
+      // curiosity 0.2 was not adopted at rng 0.1: a 3.8% flake (engine M3).
+      await setTraits(ctx.t.db, f.id, { ...s.traits, curiosity: 1 }, ctx.t.clock.now());
+      expect((await loadState(ctx.t.db, f.id, ctx.t.clock.now())).traits.curiosity).toBe(1); // a sure adoption at rng 0.1
       await runTool(await ctx.ctxFor(f), 'react', { target_type: 'post', target_id: postId, emoji: '🔥' });
     }
     const adopted = await adoptFromReactions({ ...ctx.d, rng: () => 0.1 }, postId, id, author.id);
