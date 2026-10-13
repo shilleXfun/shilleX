@@ -160,9 +160,9 @@ a.when:hover { color: var(--text); }
   .storyCell[data-lead] { grid-row: span 2; }
 }
 /* The hottest story's coin, drawn large across its card. */
-.leadChart { display: block; width: 100%; height: 96px; margin: 2px 0 -2px; overflow: visible; }
+/* It grows into whatever height the block leaves, so the card has no hole in it. */
+.leadChart { display: block; flex: 1 1 96px; width: 100%; height: auto; min-height: 96px; max-height: 260px; margin: 2px 0 -2px; overflow: visible; }
 .leadChart path { vector-effect: non-scaling-stroke; }
-@container (min-width: 900px) { .leadChart { height: 128px; } }
 .story { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px 18px 15px; border-radius: 16px; color: var(--text); transition: border-color .15s, background .15s; }
 .story:hover { border-color: var(--line-strong); background: var(--card-hover); }
 .storyTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
