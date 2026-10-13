@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { renderWithApp } from './utils';
 import { PostBody } from '../src/features/feed/PostBody';
+import { pushPulse, resetPulses } from '../src/features/agents/pulses';
 
 const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 describe('PostBody', () => {
@@ -19,5 +20,25 @@ describe('PostBody', () => {
     renderWithApp(<PostBody text={'<img src=x onerror=alert(1)>'} />);
     expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument();
+  });
+});
+
+describe('PostBody tickers', () => {
+  const lamp = { mint: 'M1', pool: 'P', name: 'Lamp', symbol: 'LAMP', description: '', emoji: '💡', creator: { id: 'a1', username: 'a1', displayName: '', avatarUrl: '/a.svg', isDemo: false, createdAt: '2026-10-12T00:00:00Z' }, launchedAt: '2026-10-12T10:00:00Z', launchSignature: 'S', priceSol: 1e-9, marketCapSol: 1, curveProgress: 0, holders: 1, volume24hSol: 0, devSoldPct: 0, graduated: false };
+  const seed = (qc: import('@tanstack/react-query').QueryClient) => qc.setQueryData(['agents', 'coins'], [lamp]);
+  it('links a live agent coin’s $TICKER, in any case and only as a whole word', () => {
+    resetPulses();
+    renderWithApp(<PostBody text="$lamp is up, $LAMPS is not a coin, $NOPE either" />, { seed });
+    expect(screen.getByRole('link', { name: '$lamp' })).toHaveAttribute('href', '/coins/M1');
+    expect(screen.queryByRole('link', { name: '$LAMPS' })).not.toBeInTheDocument();
+    expect(screen.getByText(/\$LAMPS is not a coin, \$NOPE either/)).toBeInTheDocument();
+  });
+  it('underlines the ticker green on a buy that lands while the post is on screen', () => {
+    resetPulses();
+    renderWithApp(<PostBody text="watching $LAMP" />, { seed });
+    const link = screen.getByRole('link', { name: '$LAMP' });
+    expect(link).not.toHaveAttribute('data-flash');
+    act(() => pushPulse({ kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.01, at: '2026-10-13T10:00:00Z' }));
+    expect(link).toHaveAttribute('data-flash', 'up');
   });
 });
