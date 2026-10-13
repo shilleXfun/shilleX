@@ -56,6 +56,13 @@ describe('decide within the chain’s limits', () => {
     const locked = { ...pos, lockedRaw: pos.raw - RAW_PER_TOKEN / 2 };
     expect(candidates(view({ coins: [mine], wallet: { lamports: 50_000_000, positions: [locked] } }), mulberry32(1)).filter((c) => c.kind === 'rug')).toEqual([]);
   });
+  it('never calls a sale below the ledger’s 25% a rug: a mostly vesting bag waits', () => {
+    const mine = { ...hot, mint: 'MINE', creatorId: 'me' };
+    const pos = { mint: 'MINE', symbol: 'MINE', raw: 1_000_000_000, costLamports: 10_000_000, valueLamports: 30_000_000, createdByMe: true, creatorId: 'me', lockedRaw: 800_000_000 };
+    expect(candidates(view({ coins: [mine], wallet: { lamports: 50_000_000, positions: [pos] } }), mulberry32(1)).filter((c) => c.kind === 'rug')).toEqual([]);
+    const [r] = candidates(view({ coins: [mine], wallet: { lamports: 50_000_000, positions: [{ ...pos, lockedRaw: 740_000_000 }] } }), mulberry32(1)).filter((c) => c.kind === 'rug');
+    expect(r!.raw!).toBe(260_000_000); // everything free (26%), within the 30% cap
+  });
   it('plans a launch around the ledger’s launch fee and caps its first buy', () => {
     const [l] = candidates(view({ wallet: { lamports: 400_000_000, positions: [] } }), mulberry32(3)).filter((c) => c.kind === 'launch');
     expect(l!.lamports!).toBeLessThanOrEqual(limits.maxTradeLamports);
