@@ -42,7 +42,9 @@ const step = (v: number, target: number, d: number) => (v < target ? Math.min(ta
  */
 interface Look { zoom: number; light: number; size: number; band: number; stars: number; nebula: number; arc: number; arcAlpha: number; orbit: number; fibre: number; pulse: number; rate: number }
 const LOOKS: Record<SwarmStage['stage'], Look> = {
-  calm: { zoom: 1, light: 0.68, size: 1, band: 0.55, stars: 0.9, nebula: 0.7, arc: 1, arcAlpha: 0.7, orbit: 0.75, fibre: 0.7, pulse: 0.55, rate: 2.2 },
+  // Calm is what everyone sees most (the X layout over it), so the network stays visibly alive in the gutters: lights near
+  // full, fibres and signals up, the reading band light (the columns are glass of their own).
+  calm: { zoom: 1, light: 0.9, size: 1.05, band: 0.35, stars: 1.1, nebula: 0.95, arc: 1.4, arcAlpha: 0.9, orbit: 1, fibre: 1.35, pulse: 1.1, rate: 3.4 },
   hero: { zoom: 1.12, light: 0.94, size: 1.2, band: 0, stars: 1.25, nebula: 1, arc: 2, arcAlpha: 1, orbit: 1.15, fibre: 1.15, pulse: 1, rate: 3.6 },
 };
 const STAGE_S = 1.4;
@@ -352,7 +354,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const mx = () => W * 0.04, my = () => H * 0.07;
   /** The zoom's fixed point: the middle, a little high, where the hero's world sits. */
   const zx = () => W / 2, zy = () => H * 0.45;
-  const toX = (x: number) => zx() + (mx() + x * (W - 2 * mx()) - zx()) * Z, toY = (y: number) => zy() + (my() + y * (H - 2 * my()) - zy()) * Z;
+  /** On wide screens the network spreads sideways, past the reading column, so the gutters hold most of it. */
+  const spreadX = () => clamp(W / Math.max(1, H) / 1.15, 1, 1.32);
+  const toX = (x: number) => zx() + (mx() + (0.5 + (x - 0.5) * spreadX()) * (W - 2 * mx()) - zx()) * Z, toY = (y: number) => zy() + (my() + y * (H - 2 * my()) - zy()) * Z;
   const coinX = (i: number) => toX(model!.coins[i]!.x);
   const coinY = (i: number) => toY(model!.coins[i]!.y);
   const atX = (a: At) => ('node' in a ? px[a.node]! : 'coin' in a ? coinX(a.coin) : toX(a.spot.x));
@@ -371,11 +375,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     Z = zoom;
     if (!model) return;
     const nodes = model.nodes, x0 = mx(), y0 = my(), w = W - 2 * x0, h = H - 2 * y0, cx = zx(), cy = zy();
+    const spread = spreadX();
     const spin = 0.6 + 0.8 * speedNow, r = driftNow * amp, j = opts.reduced ? 0 : jitterNow, o = orbits;
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!, th = t * o.w[i]! * spin + n.phase, ox = Math.cos(th) * o.rx[i]! * r, oy = Math.sin(th) * o.ry[i]! * r;
       const dx = ox * o.cos[i]! - oy * o.sin[i]! + (j ? (Math.random() - 0.5) * j : 0), dy = ox * o.sin[i]! + oy * o.cos[i]! + (j ? (Math.random() - 0.5) * j : 0);
-      px[i] = cx + (x0 + n.x * w - cx + dx) * zoom;
+      px[i] = cx + (x0 + (0.5 + (n.x - 0.5) * spread) * w - cx + dx) * zoom;
       py[i] = cy + (y0 + n.y * h - cy + dy) * zoom;
     }
   }

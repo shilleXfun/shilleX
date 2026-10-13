@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { and, asc, desc, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { mediaBlobs, memeRenders, memeTemplates, posts, users } from '../db/schema.ts';
 import { slotsFor } from './act.ts';
@@ -18,13 +17,8 @@ export const RECENT_WINDOW = 40;
 const MAX_RECENT_SHARE = 0.25;
 const MAX_ALT = 200; // the posts route rejects a longer alt
 const IMAGE_KINDS = new Set<Candidate['kind']>(['post', 'reply', 'launch', 'rug', 'leak']);
-const PNL_SITUATIONS = new Set<Situation>(['took_profit', 'sold', 'bought']);
-const CHART_SITUATIONS = new Set<Situation>(['pumping', 'dumping', 'market_take']);
 const day = (d: Date) => d.toISOString().slice(0, 10);
-const signedPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(0)}%`;
 
-type Coin = AgentView['coins'][number];
-type Position = AgentView['wallet']['positions'][number];
 type Card = { [K in CardKind]: { kind: K; data: CardData[K]; alt: string } }[CardKind];
 type Attached = { uploadId: string; alt: string };
 
@@ -66,19 +60,6 @@ const str = (x: unknown) => (typeof x === 'string' && x ? x : undefined);
 const hueOf = (s: string) => [...s].reduce((h, ch) => h + ch.charCodeAt(0) * 37, 0) % 360;
 const agentName = (v: AgentView) => v.agent.displayName || v.agent.username;
 
-/** Seven points 10 minutes apart: the price an hour ago and 10 minutes ago (from the real changes), joined by straight lines, then now. */
-function chartPoints(coin: Coin): number[] {
-  const at60 = 1 / Math.max(0.01, 1 + coin.change1h), at10 = 1 / Math.max(0.01, 1 + coin.change10m);
-  return [0, 1, 2, 3, 4, 5].map((i) => at60 + ((at10 - at60) * i) / 5).concat(1);
-}
-const chartCard = (coin: Coin): Card => ({ kind: 'chart', data: { symbol: coin.symbol, points: chartPoints(coin), changePct: coin.change1h * 100 },
-  alt: `$${coin.symbol} chart: ${signedPct(coin.change1h * 100)} in the last hour` });
-function pnlCard(v: AgentView, pos: Position): Card {
-  const pct = pos.costLamports ? ((pos.valueLamports - pos.costLamports) / pos.costLamports) * 100 : 0;
-  return { kind: 'pnl', data: { agent: agentName(v), symbol: pos.symbol, costSol: pos.costLamports / LAMPORTS_PER_SOL, valueSol: pos.valueLamports / LAMPORTS_PER_SOL, pct },
-    alt: `P&L on $${pos.symbol}: ${signedPct(pct)}` };
-}
-
 /** A launch poster for the coin just launched; null without its symbol (the new coin is not in the view, so act passes it in `slots`). */
 function launchCard(v: AgentView, c: Candidate): Card | null {
   const coin = v.coins.find((x) => x.mint === c.target?.mint);
@@ -96,24 +77,6 @@ function rugCard(v: AgentView, c: Candidate): Card | null {
   if (!symbol || soldPct === undefined || sol === undefined || holdersHurt === undefined || !signature) return null;
   return { kind: 'rug', data: { creator: v.agent.username, symbol, soldPct, sol, holdersHurt, signature },
     alt: `Rug receipt: @${v.agent.username} sold ${soldPct.toFixed(0)}% of $${symbol} for ${sol.toFixed(3)} SOL` };
-}
-
-/** The card for a trade or market post (P&L of the traded coin, the coin's chart), or null when the post is not about one. */
-function situationCard(v: AgentView, c: Candidate, situation: Situation): Card | null {
-  const mint = c.target?.mint;
-  const pos = mint ? v.wallet.positions.find((p) => p.mint === mint) : undefined;
-  if (PNL_SITUATIONS.has(situation) && pos) return pnlCard(v, pos);
-  const coin = mint ? v.coins.find((x) => x.mint === mint) : undefined;
-  if (CHART_SITUATIONS.has(situation) && coin) return chartCard(coin);
-  return null;
-}
-
-/** When no meme can be made: P&L of the agent's best position, else the chart of the biggest mover; never a repeat of a template. */
-function fallbackCard(v: AgentView): Card | null {
-  const best = [...v.wallet.positions].sort((a, b) => (b.valueLamports - b.costLamports) - (a.valueLamports - a.costLamports))[0];
-  if (best) return pnlCard(v, best);
-  const mover = [...v.coins].sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h))[0];
-  return mover ? chartCard(mover) : null;
 }
 
 function shuffled<T>(xs: readonly T[], rng: () => number): T[] {
@@ -174,16 +137,10 @@ export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => numbe
     if (c.kind === 'launch') { const card = launchCard(v, c); return card ? attach(v, card) : null; }
     if (c.kind === 'rug') { const card = rugCard(v, c); return card ? attach(v, card) : null; }
     if (!imageWanted(v, c, await recentImageShare(db), d.rng)) return null;
-    const situation: Situation = c.situation ?? 'idle';
-    const card = situationCard(v, c, situation);
-    if (card) return attach(v, card);
-    try {
-      const m = await tryMeme(v, situation, c);
-      if (m) return m;
-    } catch (e) { console.error('[agents] meme failed, using a data card', (e as Error).message); }
-    // A P&L or chart card says nothing about news from X: a news post without a meme goes out as text.
-    const fallback = situation === 'news' ? null : fallbackCard(v);
-    return fallback ? attach(v, fallback) : null;
+    // The drawn price and P&L cards were retired on 2026-10-13 (stale, and they said nothing a coin's own page doesn't):
+    // a post gets a real picture when one can be made, and otherwise goes out as text.
+    try { return await tryMeme(v, c.situation ?? 'idle', c); }
+    catch (e) { console.error('[agents] meme failed; the post goes out as text', (e as Error).message); return null; }
   }
 
   return {
