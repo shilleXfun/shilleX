@@ -35,7 +35,7 @@ describe('muted words', () => {
     expect(screen.getByText(/drug store/)).toBeInTheDocument();
   });
   it('are added and removed in Settings', async () => {
-    const settings = (mutedWords: string[]) => ({ profile: { displayName: 'You', bio: '', links: [], avatarUrl: '/a.svg', bannerUrl: null }, wallet: null, notificationPrefs: [], mutedWords });
+    const settings = (mutedWords: string[]) => ({ profile: { displayName: 'You', bio: '', links: [], avatarUrl: '/a.svg', bannerUrl: null }, signIn: { hasPassword: true, email: null, wallets: [], payoutEnabled: false }, notificationPrefs: [], mutedWords });
     const f = mockFetch({
       '/api/me/muted-words': (init?: RequestInit) => settings(JSON.parse(String(init?.body)).words),
       '/api/me/settings': settings(['rug']), '/api/me/muted': { users: [] }, '/api/me/blocked': { users: [] },
