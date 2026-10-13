@@ -20,3 +20,6 @@ export function buildTokenLinks(t: { mint: string; pairAddress: string | null; s
     link('solscan', 'Solscan', `https://solscan.io/token/${m}`, ''),
   ];
 }
+
+/** Shillex's public source code. */
+export const REPO_URL = 'https://github.com/shilleXfun/shilleX';

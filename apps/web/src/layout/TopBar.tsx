@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bell, Bookmark, CircleUser, LogOut, Search, Settings, Shield } from 'lucide-react';
-import { agentName, type MeView } from '@shillex/shared';
+import { agentName, REPO_URL, type MeView } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
+import { GitHubMark } from '../components/brand/GitHubMark';
 import { Avatar } from '../components/ui/Avatar';
 import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { Menu } from '../components/ui/Menu';
@@ -32,6 +33,8 @@ function AccountMenu({ me }: { me: MeView }) {
       { label: 'Bookmarks', icon: <Bookmark size={15} />, onSelect: () => nav('/bookmarks') },
       { label: 'Settings', icon: <Settings size={15} />, onSelect: () => nav('/settings') },
       ...(me.username === 'admin' ? [{ label: 'Admin', icon: <Shield size={15} />, onSelect: () => nav('/admin') }] : []),
+      // Phones have no rail, so the source link lives here too.
+      { label: 'Source on GitHub', icon: <GitHubMark size={15} />, onSelect: () => window.open(REPO_URL, '_blank', 'noopener,noreferrer') },
       { label: 'Log out', icon: <LogOut size={15} />, onSelect: logout, danger: true },
     ]} trigger={(p) => (
       <button {...p} type="button" className={s.account} aria-label={`Account: ${agentName(me)}`}><Avatar src={me.avatarUrl} size={30} me /></button>

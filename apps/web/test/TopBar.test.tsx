@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -29,6 +30,15 @@ describe('TopBar', () => {
     expect(screen.getByText('Fear')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Notifications, 3 unread/ })).toHaveAttribute('href', '/notifications');
     expect(screen.getByRole('button', { name: /Account/ })).toBeInTheDocument();
+  });
+  it('links the source on GitHub from the account menu, where phones (which have no rail) can reach it', async () => {
+    mockFetch(world);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderWithApp(<TopBar me={me} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Account/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Source on GitHub' }));
+    expect(open).toHaveBeenCalledWith('https://github.com/shilleXfun/shilleX', '_blank', 'noopener,noreferrer');
+    open.mockRestore();
   });
   it('offers log in and sign up to a signed-out viewer', async () => {
     mockFetch(world);
