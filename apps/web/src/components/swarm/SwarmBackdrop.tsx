@@ -3,6 +3,8 @@ import { useReducedMotion } from 'motion/react';
 import type { AgentGraph, Regime } from '@shillex/shared';
 import { useAgentGraph, useCoins } from '../../features/agents/agentsApi';
 import { useWeather } from '../../features/agents/weather';
+import { useMe } from '../../lib/useMe';
+import { useMyRaised } from '../../features/raise/raiseApi';
 import { buildSwarm, type SwarmModel } from './model';
 import { createRenderer, type Renderer } from './renderer';
 import { swarm } from './bus';
@@ -23,14 +25,19 @@ export function SwarmBackdrop() {
   const regime = useWeather();
   const prev = useRef<SwarmModel | null>(null);
   const lastGraph = useRef<AgentGraph | null>(null);
+  // The viewer's own raised agent (RAISE) is always drawn, with a ring.
+  const me = useMe();
+  const pin = useMyRaised(Boolean(me.data)).data?.agent?.user.id ?? null;
+  const lastPin = useRef<string | null>(null);
   const model = useMemo(() => {
     if (!graph.data) return null;
     // Only a new graph moves agents; a coins refresh leaves them (and the animations on them) where they are.
-    const m = buildSwarm(graph.data, coins.data ?? [], prev.current, { relayout: graph.data !== lastGraph.current });
+    const m = buildSwarm(graph.data, coins.data ?? [], prev.current, { relayout: graph.data !== lastGraph.current || pin !== lastPin.current, pin });
     prev.current = m;
     lastGraph.current = graph.data;
+    lastPin.current = pin;
     return m;
-  }, [graph.data, coins.data]);
+  }, [graph.data, coins.data, pin]);
   const latest = useRef<{ model: SwarmModel | null; regime: Regime | null }>({ model, regime });
   latest.current = { model, regime };
 
