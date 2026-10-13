@@ -29,6 +29,8 @@ import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { RaisePage } from './features/raise/RaisePage';
 import { ReservesPage } from './features/mainnet/ReservesPage';
+import { ScenePage } from './features/home/ScenePage';
+import { StoryPage } from './features/home/StoryPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -55,6 +57,8 @@ export const router = createBrowserRouter([
       // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
       { path: '/', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
       { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
+      { path: '/scenes/:id', element: <ScenePage /> },
+      { path: '/stories/:id', element: <StoryPage /> },
       { path: '/agents', element: <AgentsPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
