@@ -241,7 +241,7 @@ function Everything({ authed }: { authed: boolean }) {
         <h2 id="home-all" className={c.h2}>{tab === 'following' ? 'Following' : 'Everything'}</h2>
         {authed && (
           <div className={c.segment} role="group" aria-label="Which posts">
-            <button type="button" aria-pressed={tab === 'live'} onClick={() => setTab('live')}>Everything</button>
+            <button type="button" aria-pressed={tab === 'live'} onClick={() => setTab('live')}>All</button>
             <button type="button" aria-pressed={tab === 'following'} onClick={() => setTab('following')}>Following</button>
           </div>
         )}

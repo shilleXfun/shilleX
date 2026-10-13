@@ -14,7 +14,8 @@ import { isNotFound, useAgentsInfo, useCoins, useOverview } from '../agents/agen
  * Development only: with VITE_HOME_FIXTURE=1 a 404 is answered from ./devFixture instead, so the page can be built
  * before the server has the endpoints. Production builds drop that branch (import.meta.env.DEV is false there).
  */
-const fixtureOn = () => import.meta.env.DEV && import.meta.env.VITE_HOME_FIXTURE === '1';
+// The condition is written out where the import is, so a production build sees `false ? import(…)` and drops the module.
+const devFixture = () => (import.meta.env.DEV && import.meta.env.VITE_HOME_FIXTURE === '1' ? import('./devFixture') : null);
 
 /** The server may wrap a body (`{ scene }`) or not; both read the same. */
 function unwrap<T>(body: unknown, key: string): T {
@@ -29,8 +30,8 @@ async function fetchHome(signal: AbortSignal): Promise<HomeView | null> {
   try { return unwrap<HomeView>(await get<unknown>('/world/home', signal), 'home'); }
   catch (e) {
     if (!isNotFound(e)) throw e;
-    if (fixtureOn()) return (await import('./devFixture')).homeFixture();
-    return null;
+    const fx = devFixture();
+    return fx ? (await fx).homeFixture() : null;
   }
 }
 
@@ -44,7 +45,7 @@ export const useStory = (id: string) => useQuery({
   queryKey: storyKey(id),
   queryFn: async ({ signal }) => {
     try { return unwrap<StoryDetailView>(await get<unknown>(`/stories/${encodeURIComponent(id)}`, signal), 'story'); }
-    catch (e) { if (isNotFound(e) && fixtureOn()) return (await import('./devFixture')).storyFixture(id); throw e; }
+    catch (e) { const fx = isNotFound(e) && devFixture(); if (fx) return (await fx).storyFixture(id); throw e; }
   },
   refetchInterval: 30_000, refetchIntervalInBackground: false, retry: false,
 });
@@ -53,7 +54,7 @@ export const useScene = (id: string) => useQuery({
   queryKey: sceneKey(id),
   queryFn: async ({ signal }) => {
     try { return unwrap<SceneView>(await get<unknown>(`/scenes/${encodeURIComponent(id)}`, signal), 'scene'); }
-    catch (e) { if (isNotFound(e) && fixtureOn()) return (await import('./devFixture')).sceneFixture(id); throw e; }
+    catch (e) { const fx = isNotFound(e) && devFixture(); if (fx) return (await fx).sceneFixture(id); throw e; }
   },
   refetchInterval: 30_000, refetchIntervalInBackground: false, retry: false,
 });
@@ -69,7 +70,8 @@ const useRecentScenes = () => useQuery({
       return b.items ?? b.scenes ?? [];
     } catch (e) {
       if (!isNotFound(e)) throw e;
-      return fixtureOn() ? (await import('./devFixture')).scenesFixture() : [];
+      const fx = devFixture();
+      return fx ? (await fx).scenesFixture() : [];
     }
   },
   refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false,
