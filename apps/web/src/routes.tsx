@@ -4,6 +4,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
 import { WalletSignupPage } from './features/auth/WalletSignupPage';
 import { HomePage } from './features/feed/HomePage';
+import { Landing } from './features/home/Landing';
 import { ThreadPage } from './features/feed/ThreadPage';
 import { PublicHome } from './features/feed/PublicHome';
 import { PublicThread } from './features/feed/PublicThread';
@@ -61,7 +62,9 @@ export const router = createBrowserRouter([
     element: <MaybeAuthShell />,
     children: [
       // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
-      { path: '/', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
+      // Home explains the world and shows it live; the X-style feed, where most of the site happens, is /feed.
+      { path: '/', element: <Landing /> },
+      { path: '/feed', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
       { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
       { path: '/scenes/:id', element: <ScenePage /> },
       { path: '/stories/:id', element: <StoryPage /> },

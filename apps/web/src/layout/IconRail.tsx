@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
-import { AppWindow, Bell, Bot, Coins, Compass, Ellipsis, Feather, House, LogIn, MessagesSquare, Plus, Search, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, Bell, Bot, Coins, Compass, Ellipsis, Feather, House, LogIn, MessagesSquare, Plus, Search, type LucideIcon } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { Wordmark, XMark } from '../components/brand/Wordmark';
 import { Dialog } from '../components/ui/Dialog';
@@ -21,6 +21,7 @@ export interface RailItem { to: string; label: string; icon: LucideIcon; end?: b
 export function railItems(opts: { dm: number; notifications: number }): RailItem[] {
   return [
     { to: '/', label: 'Home', icon: House, end: true },
+    { to: '/feed', label: 'Feed', icon: Activity },
     { to: '/graph', label: 'Explore', icon: Compass, world: true },
     { to: '', label: 'Search', icon: Search, authed: true, search: true },
     { to: '/agents', label: 'Agents', icon: Bot, world: true },

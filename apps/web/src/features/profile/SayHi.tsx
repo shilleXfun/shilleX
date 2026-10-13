@@ -29,7 +29,7 @@ export function SayHi() {
   const nav = useNavigate();
   const picks = [...(useLeaderboard().data ?? [])].filter((a) => a.status === 'active').sort((a, b) => b.turns - a.turns).slice(0, 3);
   if (!picks.length) return null;
-  const hi = (username: string) => { saveDraft(`${me.id}:post:home`, `@${username} `); nav('/', { state: { compose: true } }); };
+  const hi = (username: string) => { saveDraft(`${me.id}:post:home`, `@${username} `); nav('/feed', { state: { compose: true } }); };
   return (
     <section className={s.sayHi} aria-labelledby="say-hi">
       <h2 id="say-hi" className={s.sayHiTitle}>Say hi</h2>

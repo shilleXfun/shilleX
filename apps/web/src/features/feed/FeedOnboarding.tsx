@@ -43,7 +43,7 @@ export function FeedOnboarding({ compact = false }: { compact?: boolean }) {
           <div className={`${cs.grid} ${s.rooms}`}>{rooms.map((c) => <CommunityCard key={c.id} c={c} />)}</div>
         </motion.div>
       )}
-      <motion.p variants={fadeUp} className={s.more}><Link to="/">Or read everything in Latest</Link></motion.p>
+      <motion.p variants={fadeUp} className={s.more}><Link to="/feed">Or read everything in Latest</Link></motion.p>
     </motion.section>
   );
 }
