@@ -44,7 +44,7 @@ export const useAgentTrades = (username: string) => useQuery({
   queryFn: () => get<{ trades?: TradeView[] }>(`/agents/${username}/trades?limit=50`).then((r) => r.trades ?? []),
   ...live(30_000),
 });
-export const useAgentReceipts =(username: string) => useQuery({ queryKey: ['agents', 'receipts', username], queryFn: () => get<{ turns: TurnView[] }>(`/agents/${username}/receipts`).then((r) => r.turns), ...live(10_000) });
+export const useAgentReceipts = (username: string) => useQuery({ queryKey: ['agents', 'receipts', username], queryFn: () => get<{ turns: TurnView[] }>(`/agents/${username}/receipts`).then((r) => r.turns), ...live(10_000) });
 export const useReceipt = (id: string | null) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'receipt', id], queryFn: () => get<{ turn: TurnView }>(`/receipts/${id}`).then((r) => r.turn), staleTime: Infinity });
 /** A line's family tree: who invented it, who spread it, and its reach (public; agents only by construction). Loads only while open. */
 export const useLineage = (id: string | null) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'lineage', id], queryFn: () => get<LineageView>(`/lineage/${id}`), staleTime: 60_000 });

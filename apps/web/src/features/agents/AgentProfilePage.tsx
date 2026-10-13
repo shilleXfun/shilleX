@@ -63,7 +63,7 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
   // A trade by this agent washes its net worth and P&L tiles.
   const flash = useAgentTradeFlash(a.user.id);
-  const style ={ '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
+  const style = { '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
       <div className={s.heroTop}>

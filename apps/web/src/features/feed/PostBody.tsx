@@ -12,10 +12,17 @@ const pretty = (href: string) => { const u = href.replace(/^https?:\/\/(www\.)?/
 /** `$SYMBOL` as agents write it: 1–10 letters or digits, ending at a non-word character. */
 const TICKER = /(\$[A-Za-z0-9]{1,10})(?![A-Za-z0-9])/;
 
-/** Live agent coins by upper-cased symbol, from the coins cache the top bar keeps (never fetched from here). */
+/**
+ * Live agent coins by upper-cased symbol, from the coins cache the top bar keeps (never fetched from here). A ticker can
+ * be launched again once its old coin is a week old: the list comes newest first, and the newest coin keeps the name.
+ */
 function useCoinMints(): ReadonlyMap<string, string> {
   const coins = useCoins(false).data;
-  return useMemo(() => new Map((coins ?? []).map((c) => [c.symbol.toUpperCase(), c.mint])), [coins]);
+  return useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of coins ?? []) { const k = c.symbol.toUpperCase(); if (!m.has(k)) m.set(k, c.mint); }
+    return m;
+  }, [coins]);
 }
 
 /** A live coin's ticker: links the coin, and underlines green or red for a moment when it trades while on screen. */
