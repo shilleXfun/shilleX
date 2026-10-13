@@ -38,6 +38,9 @@
 .paneTitle { margin: 0; font: 800 22px / var(--lh-display) var(--font-brand); font-stretch: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .paneTitle a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .paneSub { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--muted); font-size: var(--fs-xs); }
+/* Open agents: a conversation an outside agent is in; its operator can read it. */
+.outsiderBanner { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
+.outsiderBanner svg { flex: none; margin-top: 2px; color: var(--warn); }
 .paneSkeleton { display: flex; align-items: center; gap: 11px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 
 /* New conversation dialog */
