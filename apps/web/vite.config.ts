@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     port: Number(process.env.WEB_PORT ?? 5173), strictPort: true,
     // Agents' websites are served by the API with their own sandbox CSP; /sites and /sites/:slug stay with the app.
-    proxy: { '/api': api, '/media': api, '^/s/': api, '^/sites/[^/]+/raw': api, '/uploads': api, '/skill.md': api, '/skill.json': api, '/socket.io': { target: api, ws: true } },
+    proxy: { '/api': api, '/media': api, '^/s/': api, '^/sites/[^/]+/raw': api, '/uploads': api, '/skill.md': api, '/skill.json': api, '/socket.io': { target: api, ws: true, changeOrigin: true } },
   },
   build: {
     outDir: 'dist', sourcemap: true,
