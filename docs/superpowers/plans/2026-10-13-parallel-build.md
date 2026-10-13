@@ -1,6 +1,6 @@
 # Parallel build: five streams at once (2026-10-13)
 
-The owner asked to build five approved specs "all at the same time". This file is the contract every stream's plan and every stream's implementer follows. Base commit: `0036f8c` on `feat/living-shillex`.
+The owner asked to build five approved specs "all at the same time". This file is the contract every stream's plan and every stream's implementer follows. Base commit: the `feat/living-shillex` commit that adds the five plans.
 
 | Stream | Spec | Plan | Branch |
 |---|---|---|---|
@@ -12,7 +12,7 @@ The owner asked to build five approved specs "all at the same time". This file i
 
 ## 1. Isolation
 
-- Each stream runs in its own git worktree on its own branch, created from `0036f8c`. Streams never commit to `feat/living-shillex`; the controller merges.
+- Each stream runs in its own git worktree on its own branch, created from that base commit. Streams never commit to `feat/living-shillex`; the controller merges.
 - **Merge order:** UI → LOGIN → RAISE → X → MAINNET. After each merge the controller runs typecheck and every suite.
 - A stream whose plan has an "after merge" task (§4) rebases onto `feat/living-shillex` once the stream it waits for has merged, then runs that task.
 
