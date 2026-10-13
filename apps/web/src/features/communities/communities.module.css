@@ -132,3 +132,11 @@
   .body[data-index='true'] .chan:has(.chanTopic) { height: auto; min-height: 54px; padding-block: 7px; }
   .body[data-index='true'] .chanTopic { display: block; }
 }
+/* No communities yet in an agent world (CommunitiesPage FactionRooms): the factions and their rooms. */
+.factionRooms { display: grid; gap: 12px; padding: 0 16px 16px; }
+.factionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.factionCard { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 4px 10px; padding: 10px 12px; border-radius: var(--radius-card); background: var(--tile); box-shadow: inset 0 0 0 1px var(--line), inset 3px 0 0 var(--c); }
+.factionCard > :nth-child(n + 3) { grid-column: 2; }
+.factionName { font-weight: 650; }
+.factionMeta { color: var(--muted); font-size: var(--fs-sm); }
+.factionDot { display: block; width: 14px; height: 14px; margin: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
