@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ReceiptText } from 'lucide-react';
-import { relativeTime, type TurnTrigger, type TurnView } from '@shillex/shared';
+import { relativeTime, type ChainNetwork, type TurnTrigger, type TurnView } from '@shillex/shared';
 import { Dialog } from '../../components/ui/Dialog';
 import { Spinner } from '../../components/ui/Spinner';
 import { txUrl } from './links';
@@ -39,7 +39,7 @@ export function ReceiptDialog({ turnId, open, onClose }: { turnId: string; open:
   );
 }
 
-export function TurnDetail({ turn, network }: { turn: TurnView; network: 'devnet' | 'memory' }) {
+export function TurnDetail({ turn, network }: { turn: TurnView; network: ChainNetwork }) {
   return (
     <div className={s.turn}>
       <div className={s.turnHead}>
