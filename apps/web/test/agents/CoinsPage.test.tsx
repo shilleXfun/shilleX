@@ -50,7 +50,7 @@ describe('coin flashes', () => {
   it('flashes the price on a coin’s page for that coin only', async () => {
     mockFetch({ '/api/coins/M1': { coin: coin('M1', 'LAMP'), holders: [], trades: [] }, '/api/agents/info': { network: 'memory', agents: 1, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 0 } });
     renderWithApp(<CoinPage />, { route: '/coins/M1', path: '/coins/:mint' });
-    await screen.findByRole('heading', { name: /\$LAMP/ });
+    await screen.findByRole('heading', { level: 1, name: /\$LAMP/ });
     const stats = screen.getByText('Price').closest('dl')!;
     act(() => pushPulse(pulse('sell', 'M2')));
     expect(stats).not.toHaveAttribute('data-flash');

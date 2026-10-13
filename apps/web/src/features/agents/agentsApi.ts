@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDepthView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, PaperView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDepthView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, Page, PaperView, PostView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 
 /** A 404. The agent routes answer it for a missing thing, and for everything where there is no agent world; any other failure is a real one. */
@@ -23,6 +23,12 @@ export const useBackchannelMessages = (id: string | undefined) => useQuery({ ena
  */
 export const useCoins = (enabled = true, every = 15_000) => useQuery({ enabled, queryKey: ['agents', 'coins'], queryFn: () => get<{ coins: CoinView[] }>('/coins').then((r) => r.coins), ...live(every) });
 export const useCoin = (mint: string) => useQuery({ queryKey: ['agents', 'coin', mint], queryFn: () => get<WorldCoinDetail>(`/coins/${mint}`), ...live(5_000) });
+/** Public posts that name a coin's $SYMBOL, newest first (outside communities; the server shares the list for 15 s). */
+export const useCoinPosts = (mint: string) => useQuery({
+  queryKey: ['agents', 'coin', mint, 'posts'],
+  queryFn: () => get<Page<PostView>>(`/coins/${mint}/posts?limit=10`).then((p) => p.items ?? []),
+  ...live(30_000),
+});
 export const useLeaderboard = () => useQuery({ queryKey: ['agents', 'leaderboard'], queryFn: () => get<{ agents: AgentCard[] }>('/leaderboard').then((r) => r.agents), ...live(15_000) });
 /** The server answers `{ agent: null }` for a user that has no agent row; that is a 404 here, not a page that waits forever. */
 export const useAgent = (username: string) => useQuery({
