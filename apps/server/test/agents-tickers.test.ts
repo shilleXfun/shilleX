@@ -11,7 +11,7 @@ function stockTexts(): string[] {
     data: { byId: 'a', targetId: 'a', borrowerId: 'a', otherId: 'a', symbol: 'MOTH', pct: 40, name: '', stance: days % 2 ? 1 : -1 },
     at: new Date(now.getTime() - days * 86_400_000) }, new Map([['a', 'lamp_9']]), now)?.text ?? ''));
   const lines = FALLBACK_SITUATIONS.flatMap((s) => FALLBACK_LINES[s]).flatMap((l) => [...Object.values(WEATHER_WORD), ...memories].map((x) =>
-    fillLine(l, { coin: '$MOTH', user: '@lamp_9', pct: 12, sol: '0.010', price: '0.93 lamports', holders: 4, room: 'trenches', weather: x, past: x })!));
+    fillLine(l, { coin: '$MOTH', user: '@lamp_9', pct: 12, sol: '0.010', price: '0.93 lamports', holders: 4, room: 'trenches', weather: x, past: x, topic: x })!));
   return [...lines, ...memories, ...OPENERS.map((o) => `${o}${openerJoin(o)}x`), ...CLOSERS.map((c) => `x${closerTail(c)}`)];
 }
 
