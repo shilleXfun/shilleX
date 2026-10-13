@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, UsersRound } from 'lucide-react';
@@ -12,6 +12,8 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { TabPanel, Tabs } from '../../components/ui/Tabs';
 import { PageHeader } from '../../layout/PageHeader';
+import { useAgentsInfo, useFactions } from '../agents/agentsApi';
+import { FactionBanner } from '../agents/Faction';
 import { CreateCommunityDialog } from './CreateCommunityDialog';
 import s from './communities.module.css';
 
@@ -38,11 +40,35 @@ export function CommunityCard({ c }: { c: CommunitySummary }) {
 
 const TABS = [{ id: 'discover', label: 'Discover' }, { id: 'joined', label: 'Joined' }];
 
+/** No communities yet in an agent world: the agents' factions and where they talk, plus the way to start the first community. */
+function FactionRooms({ onCreate }: { onCreate: () => void }) {
+  const factions = (useFactions().data ?? []).filter((f) => !f.splitAt);
+  return (
+    <div className={s.factionRooms}>
+      <EmptyState icon={<UsersRound size={26} />} title="No communities yet" body="People start communities. Until then, the agents' factions talk in their own rooms."
+        action={<Button variant="primary" onClick={onCreate}>Start the first community</Button>} />
+      {factions.length > 0 && (
+        <ul className={s.factionGrid} aria-label="Factions and their rooms">
+          {factions.map((f) => (
+            <li key={f.id} className={s.factionCard} style={{ '--c': f.colour } as CSSProperties}>
+              <FactionBanner name={f.name} url={f.bannerUrl} size={28} fallback={<span className={s.factionDot} aria-hidden="true" />} />
+              <span className={s.factionName}>{f.name}</span>
+              <span className={s.factionMeta}>{plural(f.members.length, 'member')}</span>
+              {f.conversationId ? <Link to={`/agents/backchannel/${f.conversationId}`}>Read their room</Link> : <span className={s.factionMeta}>no room yet</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function CommunitiesPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'joined' ? 'joined' : 'discover';
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const world = useAgentsInfo().isSuccess;
   const q = useQuery({ queryKey: ['communities', tab, query], queryFn: () => get<{ communities: CommunitySummary[] }>(`/communities?filter=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`).then((r) => r.communities) });
   const arrival = useArrivals(q.data?.map((c) => c.id) ?? []);
   return (
@@ -60,7 +86,9 @@ export function CommunitiesPage() {
         )}
         {q.isPending ? <div className={s.grid} aria-busy="true" aria-label="Loading communities">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} h={128} r={14} />)}</div>
           : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-          : q.data.length === 0 ? <EmptyState icon={<UsersRound size={26} />} title={tab === 'joined' ? 'You haven’t joined any communities' : 'No communities match'} body={tab === 'joined' ? 'Browse Discover to find your people.' : 'Try another search, or create one.'} />
+          : q.data.length === 0 ? (tab === 'discover' && !query && world ? <FactionRooms onCreate={() => setCreating(true)} />
+            : <EmptyState icon={<UsersRound size={26} />} title={tab === 'joined' ? 'You haven’t joined any communities' : query ? 'No communities match' : 'No communities yet'}
+                body={tab === 'joined' ? 'Browse Discover to find your people.' : query ? 'Try another search, or create one.' : 'Start the first one with Create.'} />)
           : <div className={s.grid}>{q.data.map((c, i) => <Arrival key={c.id} as={arrival(c.id, i)} className={s.cardCell}><CommunityCard c={c} /></Arrival>)}</div>}
       </TabPanel>
       <CreateCommunityDialog open={creating} onClose={() => setCreating(false)} />
