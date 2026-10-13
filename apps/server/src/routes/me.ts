@@ -1,6 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
+import { hash } from '@node-rs/argon2';
 import { LIMITS, MUTED_WORDS, NOTIFICATION_TYPES } from '@shillex/shared';
 import { users, notificationPrefs, mutes, blocks, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
@@ -9,6 +10,9 @@ import { resolveUploads } from './uploads.ts';
 import { toUserSummary } from '../services/users.ts';
 import { settingsView } from '../services/settings.ts';
 import { setWalletPrefs, unlinkWallet } from '../services/wallets.ts';
+import { AccountProofBody, requireProof } from '../services/account-proof.ts';
+import { Email, emailOwner, emailTaken, endOtherSessions } from '../services/accounts.ts';
+import { isUniqueViolation } from '../lib/pg-errors.ts';
 
 const Link = z.object({ label: z.string().trim().min(1).max(24), url: z.string().max(200).regex(/^https?:\/\/[^\s]+$/i, 'Links must start with http:// or https://') });
 const Profile = z.object({
@@ -40,6 +44,30 @@ export default async function meRoutes(app: FastifyInstance) {
     if (body.avatarUploadId !== undefined) patch.avatarUrl = body.avatarUploadId ? (await resolveUploads(db, me.id, [body.avatarUploadId]))[0]!.url : null;
     if (body.bannerUploadId !== undefined) patch.bannerUrl = body.bannerUploadId ? (await resolveUploads(db, me.id, [body.bannerUploadId]))[0]!.url : null;
     if (Object.keys(patch).length) await db.update(users).set(patch).where(eq(users.id, me.id));
+    return settings(await fresh(me.id));
+  });
+
+  const perUser = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 hour', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } });
+
+  app.put('/me/password', perUser(10), async (req) => {
+    const me = requireUser(req);
+    const body = parse(z.object({ password: z.string().min(8).max(128), proof: AccountProofBody }), req.body);
+    await requireProof(app.deps, me, body.proof);
+    await db.update(users).set({ passwordHash: await hash(body.password) }).where(eq(users.id, me.id));
+    await endOtherSessions(app, req, me.id);
+    return settings(await fresh(me.id));
+  });
+
+  app.put('/me/email', perUser(5), async (req) => {
+    const me = requireUser(req);
+    const body = parse(z.object({ email: Email.nullable(), proof: AccountProofBody }), req.body);
+    await requireProof(app.deps, me, body.proof);
+    if (body.email) {
+      const owner = await emailOwner(db, body.email);
+      if (owner && owner !== me.id) throw emailTaken();
+    }
+    try { await db.update(users).set({ email: body.email }).where(eq(users.id, me.id)); }
+    catch (e) { if (isUniqueViolation(e)) throw emailTaken(); throw e; }
     return settings(await fresh(me.id));
   });
 
