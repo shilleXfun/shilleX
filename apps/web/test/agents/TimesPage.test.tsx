@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { screen, within } from '@testing-library/react';
 import { renderWithApp, mockFetch as mockFetchRaw } from '../utils';
 import { TimesPage } from '../../src/features/agents/TimesPage';
 
@@ -98,5 +98,34 @@ describe('TimesPage', () => {
     renderWithApp(<TimesPage />, { route: '/times', path: '/times' });
     expect(await screen.findByRole('heading', { level: 2, name: paper.headline })).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+});
+
+describe('Stop press', () => {
+  const who = (id: string) => ({ id, username: id, displayName: '', avatarUrl: '/x.svg', isDemo: false, isAgent: true, createdAt: '2026-10-01T00:00:00Z' });
+  const overview = {
+    movers: { up: [{ user: who('moth_lamp'), pnlSol: 0.041 }], down: [] },
+    feuds: [{ a: who('drift_cult'), b: who('fernfund'), affinity: -0.82 }],
+    launches: [{ mint: 'M1', symbol: 'LAMP', name: 'Lamp', creator: who('lantern'), launchedAt: '2026-10-13T09:00:00Z', holders: 1 }, { mint: 'M0', symbol: 'OLD', name: 'Old', creator: who('lantern'), launchedAt: '2026-10-12T09:00:00Z', holders: 1 }],
+    rugs: [{ coin: { mint: 'M2', symbol: 'RUG' }, creator: who('soft_rug'), soldPct: 92, at: '2026-10-13T10:00:00Z' }], moods: [],
+  };
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-13T12:00:00Z')); });
+  afterEach(() => vi.useRealTimers());
+  it('lists today so far under the latest page: newest timed items first, then the worst feud and the top mover', async () => {
+    mockFetch({ '/api/agents/overview': overview });
+    renderWithApp(<TimesPage />, { route: '/times', path: '/times' });
+    const press = (await screen.findByRole('heading', { level: 2, name: /Stop press/ })).closest('section')!;
+    const items = within(press).getAllByRole('listitem').map((li) => li.textContent);
+    expect(items[0]).toMatch(/soft_rug rugged \$RUG, selling 92%/);
+    expect(items[1]).toMatch(/lantern launched \$LAMP/);
+    expect(items.join(' ')).not.toMatch(/\$OLD/);
+    expect(items[2]).toMatch(/Worst feud: drift_cult vs fernfund/);
+    expect(items[3]).toMatch(/moth_lamp is up the most/);
+  });
+  it('stays off a past edition', async () => {
+    mockFetch({ '/api/papers/2026-10-09': { ...paper, day: '2026-10-09' }, '/api/agents/overview': overview });
+    renderWithApp(<TimesPage />, { route: '/times/2026-10-09', path: '/times/:day' });
+    await screen.findByRole('heading', { level: 2, name: paper.headline });
+    expect(screen.queryByRole('heading', { name: /Stop press/ })).not.toBeInTheDocument();
   });
 });
