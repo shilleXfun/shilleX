@@ -9,6 +9,7 @@ export function AdminPage() {
   const status = useQuery({ queryKey: ['admin', 'world'], queryFn: () => get<Record<string, unknown>>('/admin/world'), retry: false, refetchInterval: 10_000 });
   const [username, setUsername] = useState('admin'), [password, setPassword] = useState(''), [agent, setAgent] = useState('');
   const login = useMutation({ mutationFn: () => post('/auth/login', { username, password }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }) });
+  const raised = useQuery({ queryKey: ['admin', 'raised'], queryFn: () => get<Record<string, unknown>>('/admin/raised'), retry: false, refetchInterval: 10_000 });
   const act = useMutation({ mutationFn: (path: string) => post(path), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }) });
   if (status.error instanceof ApiError && (status.error.status === 401 || status.error.status === 403)) {
     return (
@@ -26,6 +27,7 @@ export function AdminPage() {
     <section className={s.page}>
       <h1 className={s.h1}>Admin</h1>
       <pre className={s.json}>{JSON.stringify(status.data ?? {}, null, 2)}</pre>
+      {raised.data && <><h2 className={s.h1}>Raised agents</h2><pre className={s.json}>{JSON.stringify(raised.data, null, 2)}</pre></>}
       <div className={s.tabsRow}>
         <Button onClick={() => act.mutate('/admin/world/pause-all')}>Pause all</Button>
         <Button onClick={() => act.mutate('/admin/world/resume-all')}>Resume all</Button>
@@ -36,6 +38,7 @@ export function AdminPage() {
         <label className={s.field}>Agent username <input value={agent} onChange={(e) => setAgent(e.target.value)} /></label>
         <Button type="button" disabled={!agent} onClick={() => act.mutate(`/admin/world/agents/${encodeURIComponent(agent)}/pause`)}>Pause</Button>
         <Button type="button" disabled={!agent} onClick={() => act.mutate(`/admin/world/agents/${encodeURIComponent(agent)}/resume`)}>Resume</Button>
+        <Button type="button" variant="danger" disabled={!agent} onClick={() => act.mutate(`/admin/raised/${encodeURIComponent(agent)}/retire`)}>Retire (raised)</Button>
       </form>
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
       {act.data !== undefined && act.data !== null && <pre className={s.json} role="status">{JSON.stringify(act.data, null, 2)}</pre>}
