@@ -30,14 +30,14 @@ export function CoinPage() {
   const flash = useCoinFlashes().get(mint);
   // The creator's record (shared cache with the leaderboard page).
   const board = useLeaderboard();
-  if (q.isLoading) return <div className={s.page}><Spinner label="Loading coin" /></div>;
+  if (q.isLoading) return <div className={s.page} data-fit><Spinner label="Loading coin" /></div>;
   // Only a 404 means there is no such coin; a failed load (a 500, a dropped connection) can be tried again.
-  if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" />;
+  if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page} data-fit><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" />;
   const { coin, trades, holders } = q.data;
   const explorer = tokenUrl(coin.mint, net);
   const record = board.data?.find((c) => c.user.id === coin.creator.id);
   return (
-    <section className={s.page} aria-labelledby="coin-h">
+    <section className={s.page} aria-labelledby="coin-h" data-fit>
       <header className={s.coinHead}>
         <h1 id="coin-h" className={s.h1}>{coin.emoji} ${coin.symbol} <span className={s.muted}>{coin.name}</span></h1>
         {coin.description && <p className={s.text}>{coin.description}</p>}

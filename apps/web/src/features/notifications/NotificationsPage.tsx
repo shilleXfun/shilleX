@@ -46,7 +46,7 @@ export function NotificationsPage() {
     } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
   };
   return (
-    <section aria-labelledby="notif-title">
+    <section aria-labelledby="notif-title" data-fit>
       <PageHeader title="Notifications" titleId="notif-title"
         below={<Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={[...FILTERS]} />}>
         <Button size="sm" variant="ghost" icon={<CheckCheck size={15} />} style={{ marginLeft: 'auto' }} disabled={!unread && !q.isPending} onClick={markAll}>Mark all read</Button>

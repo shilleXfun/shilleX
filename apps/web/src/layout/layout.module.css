@@ -3,6 +3,8 @@
    the reading column's height (the column is a flex column), so a short page still reaches the foot of the screen. */
 .page { flex: 1 0 auto; background: var(--sheet); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .page:has([data-cards]) { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* A page marked data-fit fills its screen with content (density spec §1): its sheet ends where the content ends. */
+.page:has([data-fit]) { flex: 0 0 auto; }
 /* Phones draw no backdrop blur (cost): the sheet is the near-solid card colour instead, as the cards are. */
 @media (max-width: 767px) { .page { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
@@ -27,7 +29,7 @@
 /* On the glass sheet the page is its children's backdrop root (it has its own backdrop-filter), so the header's blur sees
    nothing and text scrolling under it reads straight through the title. There the header is solid ground instead. */
 .page:not(:has([data-cards])) .pageHeader { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.pageHeaderRow { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 8px 16px; }
+.pageHeaderRow { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 14px; }
 .pageTitle { margin: 0; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; }
 .pageHeaderRow .pageTitle { font-size: 24px; }
 

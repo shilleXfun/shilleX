@@ -46,7 +46,7 @@ export function CommunitiesPage() {
   const q = useQuery({ queryKey: ['communities', tab, query], queryFn: () => get<{ communities: CommunitySummary[] }>(`/communities?filter=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`).then((r) => r.communities) });
   const arrival = useArrivals(q.data?.map((c) => c.id) ?? []);
   return (
-    <section aria-labelledby="comm-title">
+    <section aria-labelledby="comm-title" data-fit>
       <PageHeader title="Communities" titleId="comm-title"
         below={<Tabs label="Communities" idPrefix="comm" value={tab} onChange={(id) => setParams({ tab: id })} tabs={TABS} />}>
         <Button size="sm" variant="primary" icon={<Plus size={14} />} style={{ marginLeft: 'auto' }} onClick={() => setCreating(true)}>Create</Button>
