@@ -17,6 +17,8 @@ export const COIN_MOVE = 0.15;
 export const RUG_WINDOW_MS = 6 * HOUR;
 /** A raised agent younger than this gets welcomed (once). */
 export const WELCOME_WINDOW_MS = 12 * HOUR;
+/** A coin, an agent talked about or a faction that just had a scene rests this long. */
+export const TOPIC_REST_MS = 45 * MIN;
 
 /** A scene the director could start: who, about what, and how much it wants it. */
 export interface SceneIdea {
@@ -86,7 +88,7 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   const elig = await eligibleAgents(db);
   const live = new Map([...elig].filter(([, e]) => !e.ghost));
   if (live.size < 2) return [];
-  const recent = await db.select({ kind: scenes.kind, cast: scenes.cast, startedAt: scenes.startedAt, endedAt: scenes.endedAt, premise: scenes.premise }).from(scenes)
+  const recent = await db.select({ kind: scenes.kind, cast: scenes.cast, startedAt: scenes.startedAt, endedAt: scenes.endedAt, premise: scenes.premise, coinMint: scenes.coinMint }).from(scenes)
     .where(or(isNull(scenes.endedAt), gte(scenes.startedAt, new Date(nowMs - 24 * HOUR)))).orderBy(desc(scenes.startedAt));
   const busy = new Set(recent.filter((s) => !s.endedAt).flatMap((s) => s.cast));
   const usedPairs = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - PAIR_REST_MS).flatMap((s) => pairsOf(s.cast)));
@@ -265,11 +267,15 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
     if (g && !i.cast.includes(g) && d.rng() < 0.35) { i.cast.push(g); i.ghosts.push(g); }
   }
 
-  // Never anyone mid-scene, never a pair that just had one; the kinds of the last three scenes count less, so the feed varies.
+  // Never anyone mid-scene, never a pair that just had one; the kinds of the last three scenes count less, and a topic (a coin,
+  // the agent talked about, a faction) that had a scene in the last 45 minutes counts much less, so the feed varies.
   const lastKinds = recent.slice(0, 3).map((s) => s.kind);
+  const topics = (i: { coinMint: string | null; subjectId: string | null; factionId: string | null }) =>
+    [i.coinMint && `coin:${i.coinMint}`, i.subjectId && `who:${i.subjectId}`, i.factionId && `faction:${i.factionId}`].filter((x): x is string => Boolean(x));
+  const recentTopics = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - TOPIC_REST_MS).flatMap((s) => topics({ coinMint: s.coinMint, subjectId: s.premise.subjectId, factionId: s.premise.factionId })));
   return ideas
     .filter((i) => new Set(i.cast).size === i.cast.length && i.cast.every((x) => (i.ghosts.includes(x) ? elig.has(x) && !busy.has(x) : free(x))) && !pairsOf(i.cast).some((p) => usedPairs.has(p)))
-    .map((i) => ({ ...i, score: i.score * 0.6 ** lastKinds.filter((k) => k === i.kind).length }));
+    .map((i) => ({ ...i, score: i.score * 0.6 ** lastKinds.filter((k) => k === i.kind).length * (topics(i).some((t) => recentTopics.has(t)) ? 0.2 : 1) }));
 }
 
 /** One idea, sampled from the best eight by score squared: the hottest is likeliest, but the world does not loop on one feud. */
