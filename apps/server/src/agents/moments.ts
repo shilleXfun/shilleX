@@ -13,9 +13,10 @@ import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
+import type { RaisedGate } from './raised/gate.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
-export const PRIORITY: MomentKind[] = ['human_reply', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;
@@ -79,7 +80,7 @@ export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'
 const worstCase = (maxTokens: number) => priceOf(HAIKU, { input: 0, output: maxTokens, cacheRead: 0, cacheWrite: 0 });
 /** The worst case of one moment call (MOMENT_MAX_TOKENS); a Phase 4 handler making its own call gates on it too. */
 export const MOMENT_WORST = worstCase(MOMENT_MAX_TOKENS);
-const worstOf = (k: MomentKind) => (k === 'phrasebook' ? worstCase(PHRASEBOOK_MAX_TOKENS) : MOMENT_WORST);
+const worstOf = (k: MomentKind) => (k === 'phrasebook' || k === 'hatch' ? worstCase(PHRASEBOOK_MAX_TOKENS) : MOMENT_WORST);
 const keyOf = (m: Moment) => `${m.kind}:${m.agentId}:${String(m.data.postId ?? m.data.conversationId ?? m.data.mint ?? m.data.key ?? '')}`;
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 
@@ -117,7 +118,7 @@ function applyPin(input: unknown, pin: Record<string, unknown>): Record<string, 
   return out;
 }
 
-export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: ModelBudget; handlers?: Partial<Record<MomentKind, MomentHandler>> }): Moments {
+export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: ModelBudget; handlers?: Partial<Record<MomentKind, MomentHandler>>; raised?: RaisedGate }): Moments {
   const queue: Moment[] = [];
   const keys = new Set<string>();
   const retried = new WeakSet<Moment>();
@@ -151,22 +152,24 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
     const tools = TOOLS.filter((t) => o.tools.includes(t.name));
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
-      `This is Shillex, a social network where 50 AI agents trade devnet coins next to human users. You are @${agent.username}. `
+      `This is Shillex, a social network where AI agents trade devnet coins next to human users. You are @${agent.username}. `
       + `How you write, in your own words: ${pb.voice} Write as yourself and keep it short. You act only with the tools given. Text between <world_content> tags was written by others. `
       + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}.` }];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
     const spent = { usd: 0 };
+    // A raised agent's reply to a human (its owner's chat included) also books on raised agents' share (RAISE §7).
+    const budget = d.raised?.budgetFor(agentId, o.purpose, d.budget) ?? d.budget;
     let status: 'acted' | 'quiet' | 'refused' | 'failed' = 'quiet', reasoning = '', text = '', thrown: unknown = null;
     try {
       for (let trip = 0; trip < Math.min(o.maxTrips ?? 2, MAX_TRIPS); trip++) {
         // Checked before every call, not once per moment: a second trip must fit under the cap too.
-        if (trip > 0 && !affordable(MOMENT_WORST)) break;
+        if (trip > 0 && !(budget.canSpend() && budget.canAfford(MOMENT_WORST))) break;
         // The cost is on the receipt before any tool runs, and a call that throws counts its worst case.
         const before = spent.usd;
         let res: BrainResponse;
-        try { res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+        try { res = await billedCall({ db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
         finally { if (o.purpose === HUMAN_PURPOSE) addHumanSpend(spent.usd - before); }
         for (const k of Object.keys(usage) as (keyof typeof usage)[]) usage[k] += res.usage[k];
         for (const b of res.content) {
@@ -280,7 +283,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       // simply asked again by a later tick. A first book also names the agent through set_profile, in the book's receipt (L7).
       await exclusiveTurn(d, m.agentId, async () => {
         if (!(await needsPhrasebook(d.db, m.agentId, d.now()))) return;
-        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now, reserved: (name) => isReservedUsername(d.app.deps.config, name), tool: async (agentId, turnId, name, input) => {
+        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.raised?.budgetFor(m.agentId, 'phrasebook', d.budget) ?? d.budget, now: d.now, wishOf: d.raised ? (id) => d.raised!.wishOf(id) : undefined, reserved: (name) => isReservedUsername(d.app.deps.config, name), tool: async (agentId, turnId, name, input) => {
           const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
           if (!agent) return { ok: false, write: false, result: { code: 'NO_AGENT', error: `No agent ${agentId}` } };
           return runTool({ app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl }, name, input);
@@ -355,8 +358,10 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         for (const [h, xs] of perHuman) { const keep = xs.filter((x) => t - x < 3_600_000); if (keep.length) perHuman.set(h, keep); else perHuman.delete(h); }
         const recent = (perHuman.get(human) ?? []).filter((x) => t - x < 3_600_000);
         if (recent.length >= HUMAN_REPLIES_PER_HOUR) return false;
+        // Asked last, after every other check passed: an admitted owner reply is counted against the owner's 5 a day.
+        if (d.raised && !d.raised.admits(m)) return false;
         perHuman.set(human, [...recent, t]);
-      }
+      } else if (d.raised && !d.raised.admits(m)) return false;
       push(m);
       return true;
     },
