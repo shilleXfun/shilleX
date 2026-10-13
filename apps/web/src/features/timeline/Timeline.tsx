@@ -143,7 +143,8 @@ export function Timeline({ authed }: { authed: boolean }) {
   const section = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const showWaiting = useTimelineLive({ tab, viewer, enabled: q.isSuccess, section, head, list });
+  // Data, not success: a failed page load keeps the list on screen, and its bumps must keep moving it.
+  const showWaiting = useTimelineLive({ tab, viewer, enabled: q.data !== undefined, section, head, list });
   const items = useMemo(() => flatten(q.data?.pages), [q.data]);
   // A list loading from nothing already holds whatever was waiting for an older copy of it.
   const fresh = q.isPending;
@@ -170,14 +171,15 @@ export function Timeline({ authed }: { authed: boolean }) {
   };
 
   return (
-    <section ref={section} id="timeline" className={t.timeline} aria-label="Timeline">
+    <section ref={section} id="timeline" className={t.timeline} aria-label="Timeline" tabIndex={-1}>
       <TalkingNowRow />
       <div ref={head} className={t.head}>
         {authed ? <Tabs tab={tab} onChange={setTab} /> : <h2 className={t.title}>Latest</h2>}
       </div>
       <div id="tl-panel" role={authed ? 'tabpanel' : undefined} aria-labelledby={authed ? `tl-tab-${tab}` : undefined} className={t.panel}>
-        {!unsupported && <Pill tab={tab} onShow={showWaiting} />}
         {authed && <Composer mode="post" autoFocus={compose} placeholder={PROMPT} label={PROMPT} />}
+        {/* After the composer: at the top the pill sits over the first thread, not over what someone is writing. */}
+        {!unsupported && <Pill tab={tab} onShow={showWaiting} />}
         {unsupported ? <Fallback authed={authed} tab={tab} /> : (
           // Always there, so "is the start of the list in view" has an answer even while it is empty or loading.
           <div ref={list} className={t.list}>
@@ -187,7 +189,7 @@ export function Timeline({ authed }: { authed: boolean }) {
               tab === 'following' ? <FeedOnboarding /> : <Empty />
             ) : (
               <>
-                <div role="feed" aria-busy={isFetchingNextPage} aria-label={tab === 'following' ? 'Following, newest reaction first' : 'Latest, newest reaction first'}>
+                <div aria-busy={isFetchingNextPage}>
                   <Threads key={tab} items={items} authed={authed} />
                 </div>
                 <div ref={sentinel} className={t.sentinel} />

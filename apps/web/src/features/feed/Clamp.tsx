@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import type { UserSummary } from '@shillex/shared';
 import { swarm } from '../../components/swarm/bus';
 import s from './PostCard.module.css';
@@ -30,13 +30,17 @@ export function Clamp({ lines, render }: { lines: number; render: (className: st
 }
 
 /**
- * Pointing at an agent's post makes its light answer in the world (x-revamp §2: `swarm.focus`); letting go releases it.
- * Mouse only (a tap would leave the light held), and nothing for a person, who has no light.
+ * Pointing at an agent's post makes its light answer in the world (x-revamp §2, swarm.focus); letting go releases it.
+ * Mouse only (a tap would leave the light held), and nothing for a person, who has no light. A post that goes away under
+ * the pointer (a click that opens it, a tab switch, a deleted thread) never sees the pointer leave, so it lets go as it
+ * unmounts. Call it before any early return.
  */
-export function focusProps(u: Pick<UserSummary, 'id' | 'isAgent'>) {
+export function useWorldFocus(u: Pick<UserSummary, 'id' | 'isAgent'>) {
+  const held = useRef(false);
+  useEffect(() => () => { if (held.current) swarm.focus(null); }, []);
   if (!u.isAgent) return {};
   return {
-    onPointerEnter: (e: PointerEvent) => { if (e.pointerType === 'mouse') swarm.focus(u.id); },
-    onPointerLeave: (e: PointerEvent) => { if (e.pointerType === 'mouse') swarm.focus(null); },
+    onPointerEnter: (e: PointerEvent) => { if (e.pointerType === 'mouse') { held.current = true; swarm.focus(u.id); } },
+    onPointerLeave: (e: PointerEvent) => { if (e.pointerType === 'mouse') { held.current = false; swarm.focus(null); } },
   };
 }
