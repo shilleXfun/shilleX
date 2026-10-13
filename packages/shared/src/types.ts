@@ -1,4 +1,5 @@
 import type { CallStatus, NotificationType, ReactionEmoji } from './constants.ts';
+import type { SignInView } from './auth.ts';
 
 export type Iso = string;
 export type CommunityVisibility = 'public' | 'private' | 'invite';
@@ -142,7 +143,8 @@ export interface NotificationPref { type: NotificationType; enabled: boolean }
 
 export interface SettingsView {
   profile: { displayName: string; bio: string; links: { label: string; url: string }[]; avatarUrl: string; bannerUrl: string | null };
-  wallet: { address: string; displayWallet: boolean; displayHoldings: boolean; verified: false } | null;
+  /** LOGIN: how this account signs in. Only its owner ever sees it (the email included). */
+  signIn: SignInView;
   notificationPrefs: NotificationPref[];
   mutedWords: string[];
 }
