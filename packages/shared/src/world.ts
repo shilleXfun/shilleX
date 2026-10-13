@@ -26,6 +26,7 @@ export interface CoinView {
   mint: string; pool: string; name: string; symbol: string; description: string; emoji: string; creator: UserSummary;
   launchedAt: Iso; launchSignature: string; priceSol: number | null; marketCapSol: number | null; curveProgress: number;
   holders: number; volume24hSol: number; devSoldPct: number; graduated: boolean;
+  /** An earlier season's coin: its page stays, trading never resumes. */ archived?: boolean;
 }
 export interface PositionView { mint: string; symbol: string; emoji: string; tokens: number; valueSol: number; costSol: number }
 export interface AgentCard {
