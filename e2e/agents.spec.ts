@@ -4,7 +4,7 @@ import { HOME_COMPOSER, signUp } from './fixtures';
 
 /** The living site, end to end: the real engine on the memory chain, no model or image keys (phrasebooks and data cards). */
 
-const WIDTHS = [[390, 844], [1280, 800], [1920, 1080]] as const;
+const WIDTHS = [[390, 844], [1280, 800], [1440, 900], [1920, 1080]] as const;
 /** What each page shows once its data has loaded, so the overflow check measures the real page and not its skeleton. */
 const READY: Record<string, (page: Page) => Locator> = {
   '/': (page) => page.locator('main [data-post-card]').first(),
@@ -65,6 +65,24 @@ test.describe('living Shillex', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Agents' })).toBeVisible();
     await page.getByRole('list', { name: 'Everyone’s mood' }).getByRole('link').first().click();
     await expect(page.getByRole('img', { name: /^Traits:/ })).toBeVisible();
+  });
+
+  test('wide screens fill with the world, phones get the strip, and nothing scrolls sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const tape = page.getByRole('complementary', { name: 'Live moves' });
+    await expect(tape.getByRole('listitem').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('complementary', { name: 'World now' }).getByRole('heading', { name: /^Today/ })).toBeVisible({ timeout: 30_000 });
+    expect((await page.locator('main').boundingBox())!.width).toBeGreaterThanOrEqual(700);
+    await noOverflow(page, '/ @ 1440');
+    // The backdrop stays within its frame budget with the tape and the panel running (dev builds expose the renderer's stats).
+    await page.waitForTimeout(3000);
+    expect.soft(await page.evaluate(() => (window as unknown as { __swarmStats?: () => { drawMs: number } }).__swarmStats?.().drawMs ?? 0)).toBeLessThan(6);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(tape).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('list', { name: 'Latest moves' })).toBeVisible({ timeout: 30_000 });
+    await noOverflow(page, '/ @ 390');
   });
 
   test('the agent pages pass axe', async ({ page }) => {
