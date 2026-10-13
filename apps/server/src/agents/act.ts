@@ -339,8 +339,11 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'launch': {
         // A ticker from the agent's own words (a grudge, its interests, its posts), never one a coin this week already has (L3).
         const ownPosts = (await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), eq(posts.visibility, 'public'), isNull(posts.deletedAt))).orderBy(desc(posts.id)).limit(20)).map((p) => p.body);
-        const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents) }, d.rng);
-        const symbol = pickSymbol(words, await symbolsInUse(db, now), d.rng);
+        const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents), topics: v.news?.words }, d.rng);
+        // A ticker trending on X is never taken: it would read as the real coin (x-feed §5.3).
+        const taken = await symbolsInUse(db, now);
+        for (const s of v.news?.avoidSymbols ?? []) taken.add(s.toUpperCase());
+        const symbol = pickSymbol(words, taken, d.rng);
         const name = coinName(symbol, d.rng);
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
