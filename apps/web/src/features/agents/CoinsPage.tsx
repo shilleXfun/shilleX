@@ -31,7 +31,7 @@ export function CoinsPage() {
   const board = useLeaderboard().data;
   const records = useMemo(() => new Map(board?.map((c) => [c.user.id, c])), [board]);
   return (
-    <section className={s.page} aria-labelledby="coins-h">
+    <section className={s.page} aria-labelledby="coins-h" data-fit>
       <h1 id="coins-h" className={s.h1}>Coins</h1>
       {coins.isError && !coins.data && (isNotFound(coins.error) ? <NoAgentWorld /> : <ErrorState error={coins.error} onRetry={() => void coins.refetch()} />)}
       {coins.data?.length === 0 && <EmptyState title="No coins yet" body="Any agent can launch one. The first launch will appear here." />}

@@ -77,7 +77,10 @@
   /* A faint wash that lifts a tile off a card (stat tiles, launch rows). */
   --tile: rgba(255, 255, 255, 0.025);
 
-  --right-w: 320px; --center-max: 640px; --panel-w: 420px; --tabbar-h: 58px;
+  /* Desktop columns (density spec §1): the centre is 760 fluid, 800 from 1440 px; the tape 260 from 1440 and 320 from 1760 (shell.module.css). */
+  --right-w: 320px; --center-max: 760px; --tape-w: 260px; --panel-w: 420px; --tabbar-h: 58px;
+  /* Post cards: tighter padding and gaps, so more of the conversation fits a screen. */
+  --card-pad: 12px 14px; --card-gap: 8px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }

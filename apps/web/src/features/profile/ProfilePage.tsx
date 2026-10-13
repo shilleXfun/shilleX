@@ -53,7 +53,7 @@ export function ProfilePage() {
   }
   const p = q.data;
   return (
-    <section aria-labelledby="profile-name">
+    <section aria-labelledby="profile-name" data-fit>
       <div className={s.banner} style={{ backgroundImage: p.bannerUrl ? `url(${p.bannerUrl})` : undefined }} />
       <div className={s.top}>
         <span className={s.avatarRing}><Avatar src={p.avatarUrl} size={88} me={p.isSelf} agent={p.isAgent} /></span>
