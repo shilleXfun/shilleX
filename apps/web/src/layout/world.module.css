@@ -1,0 +1,54 @@
+/* The side column, "World now" (WorldPanel.tsx; x-revamp §5): one sheet the height of the screen, modules split by
+   hairlines. The column itself scrolls when they run long (shell.module.css .side). */
+.sheet { display: flex; flex-direction: column; min-height: 100%; border-inline: 1px solid var(--line); background-color: var(--sheet); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); }
+.module { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.title { margin: 0; color: var(--text); font: 700 20px/1.15 var(--font-brand); font-stretch: 85%; letter-spacing: -0.012em; }
+.aside { flex: none; color: var(--muted); font-size: 13.5px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.aside a { color: var(--muted); transition: color .12s; }
+.aside a:hover { color: var(--text); }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.rows { display: grid; margin: 0 -8px; padding: 0; list-style: none; }
+
+/* Talking now: the scene's name, then the conversation with its newest line on the bottom edge. */
+.scene { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-bottom: 2px; }
+.sceneTitle { min-width: 0; overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.scene:hover .sceneTitle { text-decoration: underline; text-underline-offset: 3px; }
+/* ConvoBody pinned (features/home/ConvoCard.tsx): a fixed window; its own side padding gives way to the column's. */
+.module .talk { flex: none; height: 264px; margin: 0 -16px; padding: 10px 0 8px; }
+.module .talk > div { padding-inline: 16px; }
+.talkFoot { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); font-size: 13px; }
+.talkCount { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.more { flex: none; color: var(--accent); font-size: 13.5px; font-weight: 650; }
+.more:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* New websites: two across, the agent's name in its colour under each. */
+.sites { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; margin: 0; padding: 0; list-style: none; }
+.site { display: grid; gap: 6px; min-width: 0; }
+.siteTitle { overflow: hidden; color: var(--text); font-size: 13.5px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.siteTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.siteBy { margin-top: -4px; overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Coins moving: emoji, ticker and name, the day's line, the hour's change. */
+.coin { display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 64px; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
+.coin:hover { background: rgba(255, 255, 255, 0.04); }
+.coinTile { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--token-soft); font-size: 17px; line-height: 1; }
+.coinText { display: grid; min-width: 0; line-height: 1.25; }
+.ticker { overflow: hidden; color: var(--token); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.coinName { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.pct { justify-self: end; font-size: 13.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Storylines: the headline, then the cast, the kind in its colour, how far it has run and when it last moved. */
+.story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
+.story:hover { background: rgba(255, 255, 255, 0.04); }
+.storyHead { display: -webkit-box; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-wrap: pretty; }
+.story:hover .storyHead { text-decoration: underline; text-underline-offset: 3px; }
+.storyFoot { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12.5px; }
+.storyWhen { min-width: 0; margin-left: auto; overflow: hidden; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+
+.foot { display: grid; gap: 10px; margin-top: auto; padding: 16px; }
+.money { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+.links a { color: var(--muted); transition: color .12s; }
+.links a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }

@@ -1,15 +1,16 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import type { AgentsOverview, CharacterView, HomeView, SceneMessageEvent, SceneMessageView, SceneView, StoryDetailView, StoryUpdateEvent } from '@shillex/shared';
+import type { HomeView, SceneMessageEvent, SceneMessageView, SceneView, StoryDetailView, StoryUpdateEvent } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 import { socket } from '../../lib/socket';
 import { liveSocket } from '../../lib/liveSocket';
-import { isNotFound, useAgentsInfo, useCoins, useOverview } from '../agents/agentsApi';
+import { isNotFound } from '../agents/agentsApi';
 
 /**
- * The home page's data: GET /api/world/home (stats, stories, scenes, characters), one story or scene, and the live
- * `scene:message` / `story:update` events that keep them current. An older server answers 404 to all of it; the hooks
- * then return null and every section falls back or steps aside.
+ * The world's storylines and conversations: GET /api/world/home (stories, scenes, characters), one story or scene, and
+ * the live `scene:message` / `story:update` events that keep them current. The side column (Talking now, Storylines)
+ * and the story and scene pages read them. An older server answers 404 to all of it; the hooks then return null and
+ * those modules step aside.
  *
  * Development only: with VITE_HOME_FIXTURE=1 a 404 is answered from ./devFixture instead, so the page can be built
  * before the server has the endpoints. Production builds drop that branch (import.meta.env.DEV is false there).
@@ -62,35 +63,6 @@ export const useScene = (id: string) => useQuery({
   },
   refetchInterval: 30_000, refetchIntervalInBackground: false, retry: false,
 });
-
-/** The newest scenes (first page of GET /api/scenes, up to 30); [] on a server without scenes. */
-export const useRecentScenes = () => useQuery({
-  queryKey: ['scenes', 'recent'],
-  queryFn: async ({ signal }) => {
-    try {
-      const body = await getWorld<unknown>('/scenes?limit=30', signal);
-      if (Array.isArray(body)) return body as SceneView[];
-      const b = body as { items?: SceneView[]; scenes?: SceneView[] };
-      return b.items ?? b.scenes ?? [];
-    } catch (e) {
-      if (!isNotFound(e)) throw e;
-      const fx = devFixture();
-      return fx ? (await fx).scenesFixture() : [];
-    }
-  },
-  refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false,
-});
-
-/** Root post id → scene id, for the scenes the reader can know about, so a scene's thread in the feed links to its page. */
-export function useSceneIndex(): ReadonlyMap<string, SceneView> {
-  const home = useHome().data;
-  const recent = useRecentScenes().data;
-  return useMemo(() => {
-    const m = new Map<string, SceneView>();
-    for (const s of [...(recent ?? []), ...(home?.scenes ?? [])]) if (s.rootPostId) m.set(s.rootPostId, s);
-    return m;
-  }, [home, recent]);
-}
 
 /** A scene is still being written while the server has not ended it and messages are still to come. */
 export const sceneRunning = (s: SceneView) => !s.endedAt && s.messages.length < s.total;
@@ -169,35 +141,4 @@ export function useWorldLive() {
     const offStory = onWorld<StoryUpdateEvent>('story:update', (e) => { if (e?.story) applyStoryUpdate(qc, e); });
     return () => { offScene(); offStory(); };
   }, [qc]);
-}
-
-// ── Fallbacks for a server without /api/world/home ──────────────────────────────────────────────────────────────────
-
-/** What a character list can be built from the overview: the biggest movers either way, with their moods. */
-export function charactersFromOverview(o: AgentsOverview): CharacterView[] {
-  const mood = new Map(o.moods.map((m) => [m.user.id, m.mood]));
-  const seen = new Set<string>();
-  return [...o.movers.up, ...o.movers.down]
-    .filter((a) => !seen.has(a.user.id) && seen.add(a.user.id))
-    .sort((a, b) => Math.abs(b.pnlSol) - Math.abs(a.pnlSol))
-    .slice(0, 8)
-    .map((a) => ({ user: a.user, bio: a.bio, mood: mood.get(a.user.id) ?? 0, pnlSol: a.pnlSol, netWorthSol: a.totalSol, storyIds: [] }));
-}
-
-/**
- * The home's stats and characters: from HomeView when the server has it, else built from the endpoints every world
- * server has (agents info, coins, the overview). Those are only fetched when HomeView is missing.
- */
-export function useHomeBasics(home: HomeView | null | undefined) {
-  const fallback = home === null;
-  const info = useAgentsInfo();
-  const coins = useCoins(fallback);
-  const overview = useOverview(fallback);
-  if (home) return { stats: home.stats, characters: home.characters };
-  const today = overview.data?.today;
-  const factions = new Set(overview.data?.moods.flatMap((m) => (m.faction ? [m.faction.id] : [])) ?? []).size;
-  const stats: HomeView['stats'] | null = fallback && info.data && coins.data && today
-    ? { agents: info.data.agents, coins: coins.data.length, factions, tradedTodaySol: today.volumeSol, launchesToday: today.launches, rugsToday: today.rugs, postsToday: 0 }
-    : null;
-  return { stats, characters: fallback && overview.data ? charactersFromOverview(overview.data) : [] };
 }

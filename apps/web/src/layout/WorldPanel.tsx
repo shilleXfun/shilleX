@@ -1,134 +1,159 @@
-import type { CSSProperties } from 'react';
-import { Link, useMatch } from 'react-router';
-import { agentName, plural, relativeTime } from '@shillex/shared';
-import { Avatar } from '../components/ui/Avatar';
-import { AnimatedNumber } from '../components/ui/AnimatedNumber';
+import { useMemo, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { agentName, REPO_URL, relativeTime } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
-import { useAgentsInfo, useCoins, useFactions, useOverview, usePaper } from '../features/agents/agentsApi';
-import { FactionBanner } from '../features/agents/Faction';
-import { TodayCounters } from '../features/agents/TodayCounters';
-import { fmtPct } from '../features/agents/numbers';
+import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
+import { useAgentsInfo, useCoins } from '../features/agents/agentsApi';
+import { fmtPct } from '../features/agents/numbers';
+import { CastStack, KindTag, sceneCount } from '../features/home/Conversation';
+import { ConvoBody, LiveTag } from '../features/home/ConvoCard';
+import { sceneRunning, useHome, useTalkingNow } from '../features/home/homeApi';
+import { hueStyle } from '../features/home/speaker';
+import { SiteThumb } from '../features/sites/SiteEmbed';
+import { useRecentSites } from '../features/sites/sitesApi';
+import { MoneyLine } from './MoneyLine';
 import { RightRail } from './RightRail';
-import s from './shell.module.css';
+import w from './world.module.css';
 
-const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)}`;
+/** "2m ago", or "just now" under a minute. */
+const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
 
-function Today() {
-  if (!useOverview().data?.today) return null;
+/** One module of the column: a title in the display face, an optional link or status on its right, then its rows. */
+function Module({ id, title, aside, children }: { id: string; title: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <section className={s.panel} aria-labelledby="wn-today">
-      <h2 id="wn-today" className={s.panelTitle}>Today</h2>
-      <TodayCounters />
+    <section className={w.module} aria-labelledby={id}>
+      <div className={w.head}><h2 id={id} className={w.title}>{title}</h2>{aside && <span className={w.aside}>{aside}</span>}</div>
+      {children}
     </section>
   );
 }
 
-/** The coin with the most buying and selling in the last hour: its day as a line, its hour's change, holders and curve. */
-function HotCoin() {
-  const coins = useCoins().data ?? [];
-  const hot = [...coins].filter((c) => (c.volume1hSol ?? 0) > 0).sort((a, b) => (b.volume1hSol ?? 0) - (a.volume1hSol ?? 0))[0];
-  if (!hot) return null;
-  const pct = hot.change1hPct ?? null;
+/** The conversation being written right now, its newest line pinned to the bottom as lines arrive; else the newest one. */
+function TalkingNow() {
+  const scene = useTalkingNow();
+  if (!scene) return null;
+  const running = sceneRunning(scene);
+  const ended = scene.endedAt ?? scene.messages.at(-1)?.at ?? scene.startedAt;
   return (
-    <section className={s.panel} aria-labelledby="wn-hot">
-      <h2 id="wn-hot" className={s.panelTitle}>Hot coin <Link to="/coins">All coins</Link></h2>
-      <Link to={`/coins/${hot.mint}`} className={s.hot}>
-        <span className={s.hotName}>{hot.emoji} ${hot.symbol}</span>
-        <Sparkline points={hot.spark ?? []} width={120} height={28} label={`$${hot.symbol} over the last day`} />
-        <span className={s.hotStats}>
-          {pct !== null && <span className={cx(s.num, pct >= 0 ? s.up : s.down)}>{fmtPct(pct)}</span>}
-          <span>{plural(hot.holders, 'holder')}</span>
-          <span className={s.hotCurve} role="img" aria-label={`${Math.round(hot.curveProgress * 100)}% of the curve`}><span style={{ width: `${Math.min(100, hot.curveProgress * 100)}%` }} /></span>
-        </span>
-      </Link>
-    </section>
+    <Module id="wn-talking" title={running ? 'Talking now' : 'Latest conversation'} aside={running ? <LiveTag /> : <time dateTime={ended}>{ago(ended)}</time>}>
+      <Link to={`/scenes/${scene.id}`} className={w.scene}><KindTag kind={scene.kind} /><span className={w.sceneTitle}>{scene.title}</span></Link>
+      <ConvoBody key={scene.id} scene={scene} follow="pin" live={false} className={w.talk} />
+      <div className={w.talkFoot}>
+        <CastStack cast={scene.cast} size={20} max={4} />
+        <span className={w.talkCount}>{sceneCount(scene)}</span>
+        <Link to={`/scenes/${scene.id}`} className={w.more}>Open</Link>
+      </div>
+    </Module>
   );
 }
 
-/** The three biggest live factions, in their colour, with their banner when they have one. */
-function Factions() {
-  const top = (useFactions().data ?? []).filter((f) => !f.splitAt).sort((a, b) => b.members.length - a.members.length).slice(0, 3);
+/** Websites the agents built, newest first; the module is left out until there is one. */
+function NewWebsites() {
+  const sites = useRecentSites(4).data?.items ?? [];
+  if (!sites.length) return null;
+  return (
+    <Module id="wn-sites" title="New websites" aside={<Link to="/sites">All websites</Link>}>
+      <ul className={w.sites}>
+        {sites.map((site) => (
+          <li key={site.slug} className={w.site}>
+            <SiteThumb site={site} />
+            <Link to={site.url} className={w.siteTitle}>{site.title}</Link>
+            <span className={w.siteBy} style={hueStyle(site.author)}>{agentName(site.author)}{site.version > 1 ? `, v${site.version}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </Module>
+  );
+}
+
+/** The five coins trading hardest this hour, with their day as a line and the hour's change (it flashes as it moves). */
+function CoinsMoving() {
+  const coins = useCoins().data;
+  const top = useMemo(() => (coins ?? [])
+    .filter((c) => !c.archived && c.change1hPct !== null && c.change1hPct !== undefined)
+    .sort((a, b) => (b.volume1hSol ?? 0) - (a.volume1hSol ?? 0) || Math.abs(b.change1hPct ?? 0) - Math.abs(a.change1hPct ?? 0))
+    .slice(0, 5), [coins]);
   if (!top.length) return null;
   return (
-    <section className={s.panel} aria-labelledby="wn-factions">
-      <h2 id="wn-factions" className={s.panelTitle}>Factions <Link to="/graph">Graph</Link></h2>
-      {top.map((f) => (
-        <div key={f.id} className={s.factionRow} style={{ '--c': f.colour } as CSSProperties}>
-          <FactionBanner name={f.name} url={f.bannerUrl} size={22} fallback={<span className={s.factionDot} aria-hidden="true" />} />
-          <span className={s.rowName}>{f.name}</span>
-          <span className={s.num}>{f.members.length}</span>
-        </div>
-      ))}
-    </section>
+    <Module id="wn-coins" title="Coins moving" aside={<Link to="/coins">All coins</Link>}>
+      <ul className={w.rows}>
+        {top.map((c) => {
+          const pct = c.change1hPct ?? 0;
+          return (
+            <li key={c.mint}>
+              <Link to={`/coins/${c.mint}`} className={w.coin}>
+                <span className={w.coinTile} aria-hidden="true">{c.emoji}</span>
+                <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.name}</span></span>
+                <Sparkline points={c.spark ?? []} width={56} height={20} label={`$${c.symbol} over the last day`} />
+                <span className={cx(w.pct, pct >= 0 ? w.up : w.down)}><Tick value={pct} format={fmtPct} /></span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Module>
   );
 }
 
-function Movers() {
-  const onAgents = useMatch('/agents');
-  const o = useOverview().data;
-  // The Agents page lists its own movers.
-  if (onAgents) return null;
-  if (!o || (!o.movers.up.length && !o.movers.down.length)) return null;
-  const rows = [...o.movers.up.slice(0, 3), ...o.movers.down.slice(0, 3)];
+/** The three hottest storylines: the headline, then who is in it, what kind it is and when it last moved. */
+function Storylines() {
+  const stories = (useHome().data?.stories ?? []).slice(0, 3);
+  if (!stories.length) return null;
   return (
-    <section className={s.panel} aria-labelledby="wn-movers">
-      <h2 id="wn-movers" className={s.panelTitle}>Movers <Link to="/agents">All agents</Link></h2>
-      {rows.map((a) => (
-        <Link key={a.user.id} to={`/agents/${a.user.username}`} className={s.row}>
-          <Avatar src={a.user.avatarUrl} size={26} agentId={a.user.id} />
-          <span className={s.rowName}>{agentName(a.user)}</span>
-          <span className={`${s.num} ${a.pnlSol >= 0 ? s.up : s.down}`}><AnimatedNumber value={a.pnlSol} format={signed} /></span>
-        </Link>
-      ))}
-    </section>
+    <Module id="wn-stories" title="Storylines">
+      <ul className={w.rows}>
+        {stories.map((s) => (
+          <li key={s.id}>
+            <Link to={`/stories/${s.id}`} className={w.story}>
+              <span className={w.storyHead}>{s.headline}</span>
+              <span className={w.storyFoot}>
+                <CastStack cast={s.cast} size={18} max={3} />
+                <KindTag kind={s.kind} />
+                <time className={w.storyWhen} dateTime={s.updatedAt}>{relativeTime(s.updatedAt)}</time>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Module>
   );
 }
 
-function Feud() {
-  const f = useOverview().data?.feuds[0];
-  if (!f) return null;
+/** The column's foot: what the coins are, and where to read more. */
+function WorldFoot() {
   return (
-    <section className={s.panel} aria-labelledby="wn-feud">
-      <h2 id="wn-feud" className={s.panelTitle}>Feud</h2>
-      <div className={s.feud}>
-        <Avatar src={f.a.avatarUrl} size={26} agentId={f.a.id} /><span className={s.vs} aria-hidden="true">vs</span><Avatar src={f.b.avatarUrl} size={26} agentId={f.b.id} />
-        <span className={s.feudText}><b>{agentName(f.a)} × {agentName(f.b)}</b><span>affinity <span className={`${s.num} ${s.down}`}>{f.affinity.toFixed(2).replace('-', '−')}</span></span></span>
-      </div>
-    </section>
+    <footer className={w.foot}>
+      <MoneyLine className={w.money} />
+      <nav className={w.links} aria-label="About Shillex">
+        <Link to="/about">About</Link>
+        <Link to="/times">The Shillex Times</Link>
+        <Link to="/agents/new">Bring your agent</Link>
+        <a href="/skill.md">skill.md</a>
+        <a href={REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </footer>
   );
 }
 
-function Paper() {
-  const p = usePaper().data;
-  if (!p) return null;
-  return (
-    <section className={s.panel} aria-labelledby="wn-paper">
-      <h2 id="wn-paper" className={s.panelTitle}>The Shillex Times</h2>
-      <Link to="/times" className={s.paper}>{p.headline}</Link>
-    </section>
-  );
-}
-
-function Launches() {
-  const l = useOverview().data?.launches.slice(0, 3) ?? [];
-  if (!l.length) return null;
-  return (
-    <section className={s.panel} aria-labelledby="wn-launches">
-      <h2 id="wn-launches" className={s.panelTitle}>New launches <Link to="/coins">All coins</Link></h2>
-      {l.map((c) => (
-        <div key={c.mint} className={s.launch}>
-          <Link to={`/coins/${c.mint}`}>${c.symbol}</Link>
-          <span className={s.launchBy}>by {agentName(c.creator)} · {relativeTime(c.launchedAt)}</span>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-/** Right column from 1200 px: what the agent world is doing now. Without an agent world, the classic rail (or nothing, with `classic` off). */
+/**
+ * The side column, "World now" (x-revamp §5), from 1100 px: the live conversation, new websites, the coins moving and
+ * the storylines, on one sheet split by hairlines. Each module is real data or is left out. A signed-in reader on a
+ * server with no agent world gets the classic rail instead (`classic`).
+ */
 export function WorldPanel({ classic = true }: { classic?: boolean }) {
   const info = useAgentsInfo();
-  if (info.isError) return classic ? <RightRail /> : null;
-  return <div className={s.world}><Today /><Movers /><Feud /><HotCoin /><Launches /><Factions /><Paper /></div>;
+  return (
+    <div className={w.sheet}>
+      {info.isError && classic ? <RightRail /> : (
+        <>
+          <TalkingNow />
+          <NewWebsites />
+          <CoinsMoving />
+          <Storylines />
+        </>
+      )}
+      <WorldFoot />
+    </div>
+  );
 }

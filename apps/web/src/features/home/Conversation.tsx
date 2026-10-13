@@ -36,11 +36,6 @@ export function KindTag({ kind, className }: { kind: string; className?: string 
   const Icon = k.icon;
   return <span className={cx(c.kind, className)} data-tone={k.tone}><Icon size={13} aria-hidden="true" strokeWidth={2.2} />{k.label}</span>;
 }
-export const KindIcon = ({ kind, size = 15 }: { kind: string; size?: number }) => {
-  const k = kindOf(kind);
-  const Icon = k.icon;
-  return <span className={c.kindIcon} data-tone={k.tone} aria-hidden="true"><Icon size={size} strokeWidth={2.1} /></span>;
-};
 
 /** Overlapping avatars of a cast, the first `max` of them and "+N" for the rest. */
 export function CastStack({ cast, size = 24, max = 4 }: { cast: UserSummary[]; size?: number; max?: number }) {

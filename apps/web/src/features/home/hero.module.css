@@ -1,73 +1,44 @@
-/* The home hero (Hero.tsx): what Shillex is, a way in for a person or an agent, and the conversation happening now beside it. */
-.hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: center; padding: 28px 0 8px; }
-@media (min-width: 1100px) {
-  .hero { grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr); gap: 56px; min-height: min(640px, calc(100vh - var(--topbar-h) - 150px)); padding: 40px 0 24px; }
+/* A visitor's first screen on Home (Hero.tsx; x-revamp §1): no surface of its own, so the world behind is the picture.
+   The copy sits low and left, on the same left edge as the layout that scrolls up after it: --group is that layout's
+   width at each breakpoint (layout/shell.module.css), --edge the gutter that centres it. */
+.hero {
+  --group: calc(var(--rail-w) + var(--col-gap) + var(--main-max));
+  --edge: max(16px, calc((100% - var(--group)) / 2));
+  position: relative; display: grid; grid-template-rows: auto 1fr; min-height: clamp(560px, 92vh, 1040px); min-height: clamp(560px, 92svh, 1040px);
+  padding: 18px var(--edge) clamp(44px, 9vh, 104px);
 }
-.copy { display: grid; justify-items: start; min-width: 0; }
+@media (min-width: 1100px) { .hero { --group: calc(var(--rail-w) + var(--col-gap) * 2 + clamp(560px, 44vw, var(--main-max)) + var(--side-w)); } }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.brand { display: flex; flex: none; color: var(--text); }
+.way { display: flex; align-items: center; gap: 6px; }
+.login, .cta { display: inline-flex; align-items: center; height: 38px; border-radius: var(--radius-pill); font-size: 15px; white-space: nowrap; }
+.login { padding: 0 14px; color: var(--text); font-weight: 650; }
+.login:hover { background: rgba(255, 255, 255, 0.08); }
+.cta { padding: 0 16px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.cta:hover { background: var(--accent-hover); }
+
+.copy { align-self: end; min-width: 0; max-width: 780px; }
+/* The one loud thing on the page besides the world: condensed, heavy, tight. A soft dark halo keeps it legible over lights. */
 .title {
-  margin: 0; max-width: 11ch; font: 800 clamp(46px, 5.6vw, 80px)/0.96 var(--font-brand); font-stretch: 76%; letter-spacing: -0.024em; text-wrap: balance;
-  background: linear-gradient(180deg, #FFFFFF 35%, #C9CDE0); -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin: 0; color: #FFFFFF; font: 800 var(--fs-display)/0.9 var(--font-brand); font-stretch: 75%; letter-spacing: -0.03em;
+  text-shadow: 0 2px 32px rgba(4, 6, 13, 0.85);
 }
-.lede { max-width: 35em; margin: 22px 0 0; color: color-mix(in srgb, var(--text) 84%, var(--muted)); font-size: 18px; line-height: 1.55; text-wrap: pretty; }
-.honest { margin: 10px 0 0; color: var(--muted); font-size: 14.5px; }
+.lede { max-width: 34em; margin: 26px 0 0; color: color-mix(in srgb, var(--text) 88%, var(--muted)); font-size: var(--fs-lg); line-height: 1.5; text-wrap: pretty; text-shadow: 0 1px 18px rgba(4, 6, 13, 0.9); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.primary, .secondary { display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 24px; border: 0; border-radius: var(--radius-pill); font-size: 16px; font-weight: 700; white-space: nowrap; transition: background .15s, box-shadow .15s; }
+.primary { background: var(--accent); color: var(--accent-ink); }
+.primary:hover { background: var(--accent-hover); }
+.secondary { background: rgba(7, 9, 16, 0.55); box-shadow: inset 0 0 0 1px var(--line-hover); color: var(--text); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.secondary:hover { background: rgba(255, 255, 255, 0.1); }
+.money { margin: 18px 0 0; color: var(--muted); font-size: var(--fs-sm); text-shadow: 0 1px 14px rgba(4, 6, 13, 0.9); }
 
-/* "I'm a human" / "I'm an agent": a two-way switch with a sliding pill. */
-.switch { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; margin-top: 30px; padding: 4px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.switchPill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: var(--radius-pill); background: var(--text); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35); transition: transform .32s cubic-bezier(.16, 1, .3, 1); }
-.switch[data-role='agent'] .switchPill { transform: translateX(100%); }
-.switchBtn { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 22px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font-size: 14.5px; font-weight: 650; white-space: nowrap; transition: color .2s; }
-.switchBtn:hover { color: var(--text); }
-.switchBtn[aria-selected='true'] { color: #0B0C12; }
-.switchBtn:focus-visible { outline-offset: 3px; }
-
-.panel { display: grid; justify-items: start; gap: 14px; margin-top: 20px; min-width: 0; width: 100%; max-width: 560px; }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(255, 255, 255, 0.04); color: var(--text); font-size: 15px; font-weight: 650; white-space: nowrap; transition: background .15s, border-color .15s, box-shadow .2s, transform .15s; }
-.btn:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--line-hover); }
-.btn:active { transform: scale(.98); }
-.primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
-.primary:hover { background: var(--accent-hover); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow-accent); }
-.quiet { border-color: transparent; background: none; color: var(--muted); }
-.quiet:hover { background: rgba(255, 255, 255, 0.05); border-color: transparent; color: var(--text); }
-.note { margin: 0; color: var(--muted); font-size: 13.5px; }
-
-.copyBox { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 8px 8px 8px 16px; border-radius: 12px; background: rgba(3, 4, 8, 0.7); box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 30px rgba(255, 184, 107, 0.06); }
-.copyText { color: var(--text); font: 500 13.5px/1.55 var(--font-mono); overflow-wrap: anywhere; }
-.copyBtn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 650; transition: background .12s; }
-.copyBtn:hover { background: var(--accent-hover); }
-.steps { display: grid; gap: 10px; margin: 4px 0 0; padding: 0; list-style: none; }
-.steps li { display: flex; align-items: center; gap: 12px; color: color-mix(in srgb, var(--text) 86%, var(--muted)); font-size: 14.5px; }
-.stepNum { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 650 12.5px/1 var(--font-ui); }
-.more { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
-.more:hover { color: var(--text); }
-
-/* The conversation beside the copy. */
-.term { width: 100%; height: 460px; }
-.termCompact { height: 330px; }
-.termMeta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.termLink { flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
-.termLink:hover { background: var(--accent-soft); }
-
-/* Signed in: the same, smaller. */
-.compact { padding-top: 24px; }
-.compact .title { max-width: none; font-size: clamp(36px, 3.6vw, 52px); }
-.compact .lede { font-size: 16px; margin-top: 14px; }
-.compact .actions { margin-top: 22px; }
-@media (min-width: 1100px) { .compact { min-height: 0; } }
-
+/* Phones: the top bar already carries the way in; the hero is 72 % of the screen with a 44 px headline. */
 @media (max-width: 767px) {
-  .hero { gap: 22px; padding: 14px 4px 0; }
-  .title { font-size: clamp(40px, 12vw, 52px); }
+  .hero { --edge: 20px; grid-template-rows: 1fr; min-height: 72vh; min-height: 72svh; padding: 24px var(--edge) 32px; }
+  .top { display: none; }
+  .title { font-size: 44px; }
   .lede { margin-top: 16px; font-size: 16px; }
-  .switch { width: 100%; margin-top: 24px; }
-  .switchBtn { padding: 0 10px; }
-  .panel { margin-top: 16px; }
-  .actions { width: 100%; }
-  .actions .btn { flex: 1 1 auto; }
-  .primary { flex-basis: 100% !important; }
-  .copyBox { grid-template-columns: minmax(0, 1fr); padding: 12px; }
-  .copyBtn { justify-self: start; }
-  .term { height: 340px; }
-  .termCompact { height: 300px; }
+  .actions { margin-top: 22px; }
+  .primary { flex: 1 1 auto; }
 }
-@media (prefers-reduced-motion: reduce) { .switchPill { transition: none; } }
