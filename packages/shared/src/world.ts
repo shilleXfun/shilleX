@@ -17,7 +17,7 @@ export interface TurnView {
   usage: TurnUsage; costUsd: number; prevHash: string | null; hash: string | null; startedAt: Iso; finishedAt: Iso | null;
 }
 export type BudgetLevel = 'normal' | 'slow' | 'events' | 'stopped';
-export type ChainTxKind = 'fund' | 'launch' | 'buy' | 'sell' | 'send' | 'receive';
+export type ChainTxKind = 'fund' | 'launch' | 'buy' | 'sell' | 'send' | 'receive' | 'opening' | 'deposit' | 'withdraw';
 export interface TradeView {
   signature: string; agent: UserSummary | null; kind: ChainTxKind; mint: string | null; symbol: string | null;
   sol: number; tokens: number; counterparty: string | null; createdAt: Iso; turnId: string | null;
@@ -36,6 +36,47 @@ export interface AgentCard {
 export interface AgentDetail extends AgentCard {
   positions: PositionView[]; memory: { id: string; body: string; createdAt: Iso }[]; chainHead: { hash: string | null; count: number };
 }
-export interface AgentsInfo { network: 'devnet' | 'memory'; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number }
+export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode }
 /** Display name for agents that have not chosen one yet. */
 export const agentName = (u: Pick<UserSummary, 'displayName' | 'username'>) => u.displayName || u.username;
+
+// ── MAINNET (docs/superpowers/specs/2026-10-13-mainnet-design.md) ──
+export type MainnetMode = 'off' | 'rehearsal' | 'on';
+export type ChainNetwork = 'devnet' | 'memory' | 'ledger';
+/** The risk notice's fixed points (spec §6). The published notice adds the legal position as the review left it. */
+export const RISK_POINTS = [
+  'You can lose everything you put in.',
+  'Your agent decides on its own. Nudges never order trades.',
+  'Coins exist only inside Shillex and can’t be traded anywhere else.',
+  'Shillex holds the SOL, and withdrawals go only to your payout wallet.',
+  'This is not investment advice.',
+] as const;
+export interface MainnetNoticeView { version: string | null; points: readonly string[]; legalPosition: string | null; accepted: boolean; excludedUntil: string | null }
+export type DepositStatus = 'pending' | 'credited' | 'refunded' | 'expired';
+export interface DepositView { id: string; agentId: string; reference: string; lamports: number; sol: number; hot: string; url: string; status: DepositStatus; expiresAt: string }
+export type WithdrawalStatus = 'queued' | 'sending' | 'sent' | 'failed';
+export interface WithdrawalView {
+  id: string; agentId: string | null; lamports: number; sol: number; to: string; status: WithdrawalStatus; reason: string | null;
+  /** 1 = next in line; null once it is no longer queued. */ position: number | null;
+  requestedAt: string; sentAt: string | null; signature: string | null;
+}
+export interface ReservesView { mode: MainnetMode; network: 'mainnet' | 'devnet' | 'local' | null; hot: string | null; cold: string | null; ledgerTotalSol: number; onchainTotalSol: number | null; lastCheckAt: string | null; lastPassAt: string | null; frozen: boolean }
+export interface MainnetAdminView {
+  mode: MainnetMode; season: string; frozen: string | null;
+  hot: { address: string; sol: number | null } | null; cold: { address: string; sol: number | null } | null;
+  books: { ledgerTotalSol: number; houseSol: number; ok: boolean; mismatches: string[] };
+  lastReconciliation: { at: string; ok: boolean | null; details: unknown } | null;
+  withdrawals: WithdrawalView[];
+  fromCold: { signature: string; sol: number; at: string }[];
+  refundFailures: { signature: string; sol: number; from: string | null; reason: string | null }[];
+  caps: { agentCapSol: number; agentDailyCapSol: number; userMonthlyCapSol: number; worldCapSol: number; hotMaxSol: number; outflowDailyMaxSol: number };
+  excessSol: number; hotCoversTop10: boolean;
+  notice: { version: string; legalPosition: string; publishedAt: string } | null;
+  legalReview: { reviewer: string; date: string; note: string; confirmedBy: string } | null;
+  gate: string[];
+}
+export interface MainnetMeView {
+  mode: MainnetMode; agentId: string | null; agentUsername: string | null; balanceSol: number; payout: string | null;
+  payoutChange: { address: string; effectiveAt: string } | null; notice: MainnetNoticeView;
+  deposits: DepositView[]; withdrawals: WithdrawalView[]; roomSol: number | null;
+}
