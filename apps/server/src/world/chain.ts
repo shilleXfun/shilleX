@@ -4,9 +4,12 @@ export interface LaunchInput { name: string; symbol: string; uri: string; initia
 export interface TradeResult { signature: string; lamportsDelta: number; tokenDelta: number; feeLamports: number }
 export interface LaunchResult extends TradeResult { mint: string; pool: string }
 export interface CurveState { mint: string; pool: string; priceLamports: number; curveProgress: number; graduated: boolean; quoteReserveLamports: number }
-export interface WalletBalances { lamports: number; tokens: { mint: string; raw: number }[] }
+export interface WalletBalances { lamports: number; tokens: { mint: string; raw: number; /** Ledger only: a creator's launch buy still vesting (mainnet spec §3). */ lockedRaw?: number }[] }
+/** What a chain allows, for the engine to decide within (mainnet spec §3). Devnet and memory chains have none. */
+export interface ChainLimits { launchCostLamports: number; rugMinShare: number; maxCreatorSaleShare: number; maxTradeLamports: number; maxSendLamports: number; frozen: boolean }
 export interface Chain {
-  readonly network: 'devnet' | 'memory';
+  readonly network: 'devnet' | 'memory' | 'ledger';
+  readonly limits?: ChainLimits;
   balances(publicKey: string): Promise<WalletBalances>;
   launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult>;
   buy(signer: Keypair, mint: string, lamportsIn: number, slippageBps: number): Promise<TradeResult>;
@@ -27,6 +30,8 @@ export const LAUNCH_RENT = 26_500_000; // rent + creation, as measured against t
 const TRADE_FEE_BPS = 100;
 // Scaled to a 5 SOL economy (50 wallets × 0.1 SOL) so a few agents can visibly pump or rug a coin; tuned to match the devnet launchpad.
 const V_SOL = 1 * SOL, V_TOKENS = 1_073_000_000 * RAW_PER_TOKEN, CURVE_TOKENS = 793_100_000 * RAW_PER_TOKEN, GRADUATE_AT = 2_688_110_852; // the launchpad config's migration quote threshold
+/** The curve's constants, shared with the ledger's copy of this curve (ledger/curve.ts) so the two always match. */
+export const CURVE = { V_SOL, V_TOKENS, CURVE_TOKENS, GRADUATE_AT, TRADE_FEE_BPS } as const;
 
 interface Pool { mint: string; pool: string; sol: number; sold: number; graduated: boolean }
 interface Account { lamports: number; tokens: Map<string, number> }

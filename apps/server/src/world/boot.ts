@@ -36,10 +36,15 @@ import { registerRaisedRoutes } from '../routes/raised.ts';
 import { seedWorld } from './seed.ts';
 import { bootX } from '../x/boot.ts';
 import { xDigestHandler } from '../x/digest.ts';
+import { LedgerChain } from '../ledger/ledger-chain.ts';
+import { bootMainnet } from '../ledger/boot.ts';
+import type { MainnetHandles } from '../ledger/routes.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 export interface WorldHandles {
-  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: 'devnet' | 'memory';
+  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
+  /** A ledger world's custody and routes (mainnet spec); null or absent everywhere else. */
+  mainnet?: MainnetHandles | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -55,6 +60,7 @@ export async function worldNotReady(db: Db, chain: Chain): Promise<string | null
 
 /** One-time setup from the treasury: the launchpad config if it is missing, then 0.1 SOL to every unfunded agent. */
 export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => Date) {
+  if (chain instanceof LedgerChain) throw new TreasuryEmpty('A ledger world is funded by its season (npm run mainnet:season), not by the devnet treasury');
   let launchpad: string | null = null;
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) {
     // The launchpad transaction is signed outside DevnetChain's send, so it checks the network itself.
@@ -111,7 +117,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
-  const chain = opts.chain ?? (await makeChain(config, db));
+  const chain = opts.chain ?? (await makeChain(config, db, undefined, now));
+  // A ledger world: frozen state, the ledger's rug rule, custody and its routes. Throws (and so stops boot) when MAINNET is
+  // misconfigured or MAINNET=on meets a closed launch gate (mainnet spec §9).
+  const mainnet = await bootMainnet(app, { chain, worldKey: key });
   if (chain instanceof MemoryChain) {
     // The in-memory chain starts empty each boot (local and e2e use only): rebuild it from the database, or on a first boot give every wallet its 0.1 SOL.
     const restored = await restoreMemoryChain(db, chain);
@@ -141,7 +150,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet,
     startAgents() {
       if (handles.engine) return 'running';
       if (!config.agentsOn) return 'AGENTS is off';
@@ -186,5 +195,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }

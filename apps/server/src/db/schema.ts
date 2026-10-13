@@ -382,6 +382,8 @@ export const worldCoins = pgTable('world_coins', {
   curveProgress: doublePrecision('curve_progress').notNull().default(0),
   graduatedAt: ts('graduated_at'),
   refreshedAt: ts('refreshed_at'),
+  /** Set when a season ends (mainnet spec §10): the page stays, trading never resumes. */
+  archivedAt: ts('archived_at'),
 });
 
 export const worldSettings = pgTable('world_settings', {
@@ -779,3 +781,153 @@ export const worldModelCalls = pgTable('world_model_calls', {
   startedAt: ts('started_at').notNull(),
   finishedAt: ts('finished_at'),
 }, (t) => [index('world_model_calls_started_idx').on(t.startedAt)]);
+
+// ── MAINNET ── (docs/superpowers/specs/2026-10-13-mainnet-design.md; off until the launch gate opens)
+export type JournalKind = 'launch_fee' | 'buy' | 'sell' | 'trade_fee' | 'send' | 'deposit' | 'opening' | 'house_stake' | 'withdraw' | 'withdraw_sent' | 'withdraw_return' | 'network_fee';
+
+/** SOL per ledger account: agent wallets (by public key), 'house' and 'withdrawals' (paid-out SOL not sent yet). Pools keep theirs in ledger_pools. */
+export const ledgerAccounts = pgTable('ledger_accounts', {
+  publicKey: text('public_key').primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
+});
+
+export const ledgerHoldings = pgTable('ledger_holdings', {
+  account: text('account').notNull(),
+  mint: text('mint').notNull(),
+  raw: bigint('raw', { mode: 'number' }).notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.account, t.mint] })]);
+
+export const ledgerPools = pgTable('ledger_pools', {
+  mint: text('mint').primaryKey(),
+  pool: text('pool').notNull(),
+  creatorId: text('creator_id').notNull(),
+  creatorAccount: text('creator_account').notNull(),
+  sol: bigint('sol', { mode: 'number' }).notNull().default(0),
+  sold: bigint('sold', { mode: 'number' }).notNull().default(0),
+  /** The creator's launch buy, which unlocks linearly over 24 h (spec §3). */
+  vestedRaw: bigint('vested_raw', { mode: 'number' }).notNull().default(0),
+  graduated: boolean('graduated').notNull().default(false),
+  launchedAt: ts('launched_at').notNull(),
+  pausedUntil: ts('paused_until'),
+});
+
+/** Prices after each trade for the circuit breaker; pruned to the last hour. */
+export const ledgerPrices = pgTable('ledger_prices', {
+  id: text('id').primaryKey(),
+  mint: text('mint').notNull(),
+  at: ts('at').notNull(),
+  priceLamports: doublePrecision('price_lamports').notNull(),
+}, (t) => [index('ledger_prices_mint_at_idx').on(t.mint, t.at)]);
+
+/** Double entry: every movement writes one row per side, and the pair sums to zero. */
+export const ledgerJournal = pgTable('ledger_journal', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  kind: text('kind').$type<JournalKind>().notNull(),
+  account: text('account').notNull(),
+  counter: text('counter').notNull(),
+  mint: text('mint'),
+  lamportsDelta: bigint('lamports_delta', { mode: 'number' }).notNull().default(0),
+  tokenDelta: bigint('token_delta', { mode: 'number' }).notNull().default(0),
+  ref: text('ref').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('ledger_journal_account_idx').on(t.season, t.account), index('ledger_journal_ref_idx').on(t.ref)]);
+
+/** The hot vault, one per custody network ('hot:mainnet', 'hot:devnet', 'hot:local'), encrypted with MAINNET_KEY. */
+export const ledgerVault = pgTable('ledger_vault', {
+  id: text('id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  encryptedSecret: text('encrypted_secret').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const ledgerDeposits = pgTable('ledger_deposits', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  agentId: text('agent_id').notNull(),
+  userId: text('user_id').notNull(),
+  sender: text('sender').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  reference: text('reference').notNull(),
+  status: text('status').$type<'pending' | 'credited' | 'refunded' | 'expired'>().notNull(),
+  signature: text('signature'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  settledAt: ts('settled_at'),
+}, (t) => [uniqueIndex('ledger_deposits_reference_idx').on(t.reference), index('ledger_deposits_agent_idx').on(t.agentId, t.createdAt), index('ledger_deposits_user_idx').on(t.userId, t.createdAt)]);
+
+/** Every transfer to the hot vault the poller has handled, once: the primary key is what stops a second credit or refund. */
+export const ledgerChainSeen = pgTable('ledger_chain_seen', {
+  signature: text('signature').primaryKey(),
+  /** 'review': SOL arrived but not as one plain transfer from one payer; an admin decides where it goes back to. */
+  outcome: text('outcome').$type<'credited' | 'refunding' | 'refunded' | 'refund_failed' | 'from_cold' | 'stake' | 'ignored' | 'review'>().notNull(),
+  /** The custody network that saw it ('mainnet', 'devnet', 'local'): a rehearsal's rows never count on mainnet. */
+  network: text('network'),
+  depositId: text('deposit_id'),
+  fromAddress: text('from_address'),
+  lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
+  refundSignature: text('refund_signature'),
+  reason: text('reason'),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const ledgerWithdrawals = pgTable('ledger_withdrawals', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  /** Null for a house withdrawal to the cold address. */
+  agentId: text('agent_id'),
+  userId: text('user_id'),
+  toAddress: text('to_address').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  status: text('status').$type<'queued' | 'sending' | 'sent' | 'failed'>().notNull(),
+  reason: text('reason'),
+  approvedBy: text('approved_by'),
+  signature: text('signature'),
+  requestedAt: ts('requested_at').notNull(),
+  sentAt: ts('sent_at'),
+}, (t) => [index('ledger_withdrawals_status_idx').on(t.status, t.requestedAt), uniqueIndex('ledger_withdrawals_signature_idx').on(t.signature)]);
+
+export const ledgerReconciliations = pgTable('ledger_reconciliations', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  mode: text('mode').$type<'off' | 'rehearsal' | 'on'>().notNull(),
+  at: ts('at').notNull(),
+  /** null: the RPC could not be read (three in a row freeze the books). */
+  ok: boolean('ok'),
+  ledgerTotal: bigint('ledger_total', { mode: 'number' }).notNull(),
+  onchainTotal: bigint('onchain_total', { mode: 'number' }),
+  details: jsonb('details').$type<{ mismatches: string[]; shortBy: number; error: string | null }>().notNull(),
+}, (t) => [index('ledger_reconciliations_at_idx').on(t.mode, t.at)]);
+
+export const mainnetConsents = pgTable('mainnet_consents', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  noticeVersion: text('notice_version').notNull(),
+  adult: boolean('adult').notNull(),
+  acceptedAt: ts('accepted_at').notNull(),
+});
+
+export const mainnetExclusions = pgTable('mainnet_exclusions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  until: ts('until').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('mainnet_exclusions_user_idx').on(t.userId, t.until)]);
+
+/** Append-only (a trigger refuses UPDATE and DELETE), hash-chained: `payload` is the exact JSON the hash covers. */
+export const adminAudit = pgTable('admin_audit', {
+  id: text('id').primaryKey(),
+  adminId: text('admin_id').notNull(),
+  action: text('action').notNull(),
+  payload: text('payload').notNull(),
+  prevHash: text('prev_hash'),
+  hash: text('hash').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [uniqueIndex('admin_audit_prev_hash_idx').on(t.prevHash)]);
+
+export const ledgerSeasons = pgTable('ledger_seasons', {
+  id: text('id').primaryKey(),
+  startedAt: ts('started_at').notNull(),
+  endedAt: ts('ended_at'),
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+});
