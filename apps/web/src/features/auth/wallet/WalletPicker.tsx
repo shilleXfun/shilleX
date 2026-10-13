@@ -10,7 +10,7 @@ import { isMobile, phantomBrowse, registerMobileWalletAdapter, solflareBrowse } 
 import { WalletGlyph } from './WalletGlyph';
 import s from './wallet.module.css';
 
-const TITLES: Record<WalletPurpose, string> = { login: 'Continue with a wallet', reset: 'Sign with your wallet', link: 'Add a wallet', confirm: 'Confirm with a wallet' };
+const TITLES: Record<WalletPurpose, string> = { login: 'Continue with a wallet', reset: 'Sign with your wallet', link: 'Add a wallet', confirm: 'Confirm with a wallet', claim: 'Claim with a wallet' };
 
 export interface WalletPickerProps { open: boolean; onClose: () => void; purpose: WalletPurpose; onProof: (proof: WalletProof) => Promise<void> }
 
