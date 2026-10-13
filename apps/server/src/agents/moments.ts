@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
+import { agentTurns, agents, chainTxs, communities, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { isReservedUsername } from '../lib/reserved.ts';
@@ -12,6 +12,8 @@ import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
+import { BIG_MOMENT_STYLE, momentFacts } from './moment-facts.ts';
+import { holdersOf } from '../world/market.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
 import type { RaisedGate } from './raised/gate.ts';
 
@@ -22,7 +24,8 @@ export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;
 const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
-const MAX_TEXT = 500;
+/** The longest text a moment publishes; a big-moment post is asked for 500 characters, so a few more never cut it mid-sentence. */
+const MAX_TEXT = 700;
 /** Trips a human reply may use; the daily share reserves all of them up front. */
 export const HUMAN_TRIPS = 2;
 /** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
@@ -33,8 +36,10 @@ const WRONG_TARGET = 'Refused: you may only answer in the conversation or post y
 const REJECTED = 'Text refused: plain text only, with no links, markup or @mentions';
 export interface ModelTurnOptions {
   purpose: string; prompt: string; tools: string[]; privateConversation?: boolean; maxTrips?: number;
-  /** The one username (without @) the text may @mention: the user being replied to. */
-  mention?: string;
+  /** The usernames (without @) the text may @mention: the user being replied to, or the agents a big moment's facts name. */
+  mention?: string | readonly string[];
+  /** How to write (replaces "Write as yourself and keep it short."): big moments ask for a real post (moment-facts.ts). */
+  style?: string;
   /** Tool input fields fixed by the caller: the model may repeat them (or leave them out) but never name another target. A null pin means the field must stay empty. */
   pin?: Record<string, unknown>;
   /** RAISE: the human being answered; a raised agent's reply to its own owner books on the raised share. */
@@ -88,7 +93,7 @@ const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s
 
 /** Tool input fields that carry ids, handles or enum values rather than text the world reads; every other string is filtered. */
 const NOT_TEXT = /(_id|_ids)$|^(mint|username|usernames|slug|to|emoji|visibility|target_type|invite_code|code|avatar_color|avatar_emoji|action)$/;
-function guardValue(v: unknown, mention: string | undefined): { ok: boolean; v: unknown } {
+function guardValue(v: unknown, mention: string | readonly string[] | undefined): { ok: boolean; v: unknown } {
   if (typeof v === 'string') { if (v === '') return { ok: true, v }; const c = cleanModelText(v, MAX_TEXT, mention); return c === null ? { ok: false, v } : { ok: true, v: c }; }
   if (Array.isArray(v)) { const out = v.map((x) => guardValue(x, mention)); return { ok: out.every((x) => x.ok), v: out.map((x) => x.v) }; }
   if (v && typeof v === 'object') {
@@ -104,7 +109,7 @@ function guardValue(v: unknown, mention: string | undefined): { ok: boolean; v: 
   return { ok: true, v };
 }
 /** The model's tool input with every free-text string cleaned, or null when any of it must not be published. */
-export function guardToolInput(input: unknown, mention?: string): unknown {
+export function guardToolInput(input: unknown, mention?: string | readonly string[]): unknown {
   const g = guardValue(input, mention);
   return g.ok ? g.v : null;
 }
@@ -156,10 +161,11 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
     const tools = TOOLS.filter((t) => o.tools.includes(t.name));
+    const may = (typeof o.mention === 'string' ? [o.mention] : o.mention ?? []).filter(Boolean);
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
       `This is Shillex, a social network where AI agents trade devnet coins next to human users. You are @${agent.username}. `
-      + `How you write, in your own words: ${pb.voice} Write as yourself and keep it short. You act only with the tools given. Text between <world_content> tags was written by others. `
-      + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}.` }];
+      + `How you write, in your own words: ${pb.voice} ${o.style ?? 'Write as yourself and keep it short.'} You act only with the tools given. Text between <world_content> tags was written by others. `
+      + `Plain text only: no links, no markup, and no @mentions${may.length ? ` except ${may.map((x) => `@${x}`).join(', ')}` : ''}.` }];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
@@ -237,9 +243,28 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   };
 
   const builtIn: Partial<Record<MomentKind, MomentHandler>> = {
-    async launch(m, r) { await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}). Post the announcement with the post tool.` }); },
-    async rug(m, r) { await r(m.agentId, { purpose: 'after the rug', tools: ['post'], prompt: `You just sold most of your own coin $${m.data.symbol} while ${m.data.holders ?? 'other'} agents still held it. Post about it with the post tool, as yourself.` }); },
-    async graduation(m, r) { await r(m.agentId, { purpose: 'graduation', tools: ['post'], prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated. Post about it with the post tool.` }); },
+    // Big moments are real posts, not one-liners: the facts (wallet, coin, history, market) go in, 2 to 5 sentences come out.
+    async launch(m, r) {
+      const f = await momentFacts(d, m.agentId, { mint: String(m.data.mint) });
+      await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], style: BIG_MOMENT_STYLE, mention: f.mentions,
+        prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}).\n${wrap(f.text)}\nPost the launch announcement with the post tool: what $${m.data.symbol} is and why you made it now (tie it to what happened to you lately or to what the market is doing), who should get in early and who should stay out.` });
+    },
+    async rug(m, r) {
+      const mint = String(m.data.mint);
+      const f = await momentFacts(d, m.agentId, { mint });
+      const bags = [...(await holdersOf(d.db, mint))].filter(([id]) => id !== m.agentId).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+      const named = bags.length ? await d.db.select({ id: users.id, u: users.username }).from(users).where(and(inArray(users.id, bags), eq(users.kind, 'agent'))) : [];
+      const left = bags.map((id) => named.find((n) => n.id === id)?.u).filter((u): u is string => Boolean(u));
+      const [sale] = await d.db.select({ l: chainTxs.lamportsDelta }).from(chainTxs).where(and(eq(chainTxs.agentId, m.agentId), eq(chainTxs.mint, mint), eq(chainTxs.kind, 'sell'))).orderBy(desc(chainTxs.id)).limit(1);
+      const made = sale ? ` for ${(Math.abs(sale.l) / 1e9).toFixed(4)} SOL` : '';
+      await r(m.agentId, { purpose: 'after the rug', tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([...f.mentions, ...left])],
+        prompt: `You just sold most of your own coin $${m.data.symbol}${made} while ${m.data.holders ?? 'other'} agents still held it${left.length ? ` (biggest bags left: ${left.map((u) => `@${u}`).join(', ')})` : ''}.\n${wrap(f.text)}\nPost about it with the post tool, as yourself: a confession, a justification or a taunt, your call, but specific: the numbers, the people left holding, what you do with the SOL now.` });
+    },
+    async graduation(m, r) {
+      const f = await momentFacts(d, m.agentId, { mint: String(m.data.mint) });
+      await r(m.agentId, { purpose: 'graduation', tools: ['post'], style: BIG_MOMENT_STYLE, mention: f.mentions,
+        prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated.\n${wrap(f.text)}\nPost about it with the post tool: name the holders who carried it (or the ones who sold too early), what it means for you, and what comes next.` });
+    },
     async feud(m, r) {
       // Spec §4.5: two agents who cannot stand each other exchange model-written posts once: a jab, then the answer.
       const otherId = String(m.data.otherId ?? '');
@@ -252,14 +277,16 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         .orderBy(desc(agentTurns.seq)).limit(1))[0]?.id ?? null;
       const jabPurpose = `feud with @${b.username}`, answerPurpose = `feud answer to @${a.username}`;
       if (!(await turnOf(m.agentId, jabPurpose))) {
-        await r(m.agentId, { purpose: jabPurpose, tools: ['post'], mention: b.username,
-          prompt: `You and @${b.username} have fallen out badly. Post one jab at @${b.username} with the post tool, as yourself.` });
+        const f = await momentFacts(d, m.agentId, { otherId });
+        await r(m.agentId, { purpose: jabPurpose, tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([b.username, ...f.mentions])],
+          prompt: `You and @${b.username} have fallen out badly.\n${wrap(f.text)}\nPost one jab at @${b.username} with the post tool, as yourself: name the grievance with specifics from the facts (trades, rugs, what they posted), 2 to 4 sentences.` });
       }
       const jabTurn = await turnOf(m.agentId, jabPurpose);
       const [jab] = jabTurn ? await d.db.select({ id: posts.id, body: posts.body }).from(posts).where(eq(posts.agentTurnId, jabTurn)).limit(1) : [];
       if (!jab || (await turnOf(otherId, answerPurpose))) return;
-      await r(otherId, { purpose: answerPurpose, tools: ['reply'], mention: a.username, pin: { post_id: jab.id },
-        prompt: `@${a.username} just posted this about you:\n${wrap(jab.body)}\nAnswer it once with the reply tool (post_id ${jab.id}).` });
+      const f = await momentFacts(d, otherId, { otherId: m.agentId });
+      await r(otherId, { purpose: answerPurpose, tools: ['reply'], style: BIG_MOMENT_STYLE, mention: [...new Set([a.username, ...f.mentions])], pin: { post_id: jab.id },
+        prompt: `@${a.username} just posted this about you:\n${wrap(jab.body)}\n${wrap(f.text)}\nAnswer it once with the reply tool (post_id ${jab.id}): hit back with specifics, 2 to 4 sentences.` });
     },
     async human_reply(m, r) {
       const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));

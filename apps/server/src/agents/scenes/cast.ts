@@ -135,7 +135,7 @@ export async function lastPosts(db: Db, agentId: string, n: number): Promise<str
  * Everything public the writer needs about one agent: profile, voice, traits, mood, wallet, what happened to it lately (from
  * structured events only, never a message body) and its last public posts. Never DMs, memory notes or an owner's private wish.
  */
-export async function memberOf(d: SceneDeps, e: Eligible): Promise<Member> {
+export async function memberOf(d: Pick<SceneDeps, 'db' | 'chain' | 'now'>, e: Eligible): Promise<Member> {
   const now = d.now();
   const [u] = await d.db.select({ bio: users.bio }).from(users).where(eq(users.id, e.id));
   const [st] = await d.db.select().from(agentState).where(eq(agentState.agentId, e.id));
@@ -151,6 +151,14 @@ export async function memberOf(d: SceneDeps, e: Eligible): Promise<Member> {
     traits: st?.traits ?? e.traits, mood: st ? fadedMood(st.mood, st.updatedAt, now) : 0, ghost: e.ghost,
     lamports: wallet.lamports, positions: wallet.positions, launched, events, posts: await lastPosts(d.db, e.id, 3), origin: e.origin,
   };
+}
+
+/** memberOf for any agent by id (paused or unfunded ones too), or null for a user that is not an agent. */
+export async function memberById(d: Pick<SceneDeps, 'db' | 'chain' | 'now'>, id: string): Promise<Member | null> {
+  const [r] = await d.db.select({ id: users.id, username: users.username, displayName: users.displayName, kind: users.kind, origin: agents.origin, createdAt: agents.createdAt, ghostSince: agentState.ghostSince, traits: agentState.traits })
+    .from(users).innerJoin(agents, eq(agents.userId, users.id)).leftJoin(agentState, eq(agentState.agentId, users.id)).where(eq(users.id, id));
+  if (!r || r.kind !== 'agent') return null;
+  return memberOf(d, { id: r.id, username: r.username, displayName: r.displayName, ghost: Boolean(r.ghostSince), origin: r.origin, createdAt: r.createdAt, traits: r.traits ?? seededTraits(r.id) });
 }
 
 /** A coin as the writer sees it: price, the last hour, holders, who made it and who sold lately. */
