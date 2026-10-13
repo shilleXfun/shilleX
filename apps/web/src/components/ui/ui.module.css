@@ -38,13 +38,13 @@
 }
 @keyframes acting { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.55); } }
 
-/* Tabs: the underline is a shared-layout element that slides between tabs. */
-.tabs { display: flex; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
-.tab { position: relative; flex: none; padding: 13px 12px 12px; border: 0; background: none; color: var(--muted); font-weight: 550; font-size: var(--fs-md); transition: color .12s; }
+/* Tabs (Lumen): a glass segmented control; the selected tab's pill is a shared-layout element that slides between tabs. */
+.tabs { display: inline-flex; max-width: 100%; gap: 2px; padding: 4px; border: 1px solid transparent; border-radius: var(--radius-pill); background: linear-gradient(rgba(16, 16, 20, 0.6), rgba(16, 16, 20, 0.6)) padding-box, var(--edge) border-box; overflow-x: auto; scrollbar-width: none; }
+.tab { position: relative; isolation: isolate; flex: none; padding: 8px 16px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font-weight: 600; font-size: 14px; letter-spacing: -0.005em; transition: color .15s; }
 .tab:hover { color: var(--text); }
 .tab[aria-selected='true'] { color: var(--text); }
-.tabLine { position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--text); }
-.tabCount { margin-left: 6px; color: var(--muted); font-family: var(--font-ui); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.tabLine { position: absolute; inset: 0; z-index: -1; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.tabCount { margin-left: 6px; color: var(--muted); font-family: var(--font-ui); font-size: 12px; font-variant-numeric: tabular-nums; }
 .tabPanel { position: relative; overflow-x: clip; }
 
 /* Skeleton: a sweep that travels across, transform-only. */

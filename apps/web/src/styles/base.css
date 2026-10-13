@@ -39,3 +39,10 @@ p, h1, h2, h3, blockquote, figcaption, dd { overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+/* Lumen glass, for any card: a few percent of white over the world, a luminous edge lit from the top left, deep soft shadow.
+   .glass-row is a list row inside one: it lifts on hover. Phones drop the blur. */
+.glass { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(rgba(14, 14, 18, 0.7), rgba(14, 14, 18, 0.7)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
+.glass-row { border-radius: 14px; transition: background .15s; }
+.glass-row:hover { background: rgba(255, 255, 255, 0.045); }
+@media (max-width: 767px) { .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } }
