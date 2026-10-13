@@ -1,3 +1,4 @@
+import type { XEmbedView } from '@shillex/shared';
 import type { ToolOutcome } from '../../world/tools.ts';
 import type { WorldEvent } from '../../world/events.ts';
 import type { AgentView, Candidate, DepthView, Situation } from '../types.ts';
@@ -11,8 +12,10 @@ export const SWEEP_MS = 5 * 60_000;
  */
 export interface ExecResult { ok: boolean; postId?: string; error?: string; quiet?: boolean; text?: string; line?: { key: string; template: string; situation: Situation } }
 export type ActDone = ExecResult & { turnId: string };
+/** What a depth action may hand along with one tool call: a picture, or an X post to embed (x-feed §5.7). */
+export interface ToolExtras { uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 /** Runs one tool inside the current action's receipt. */
-export type RunTool = (name: string, input: Record<string, unknown>) => Promise<ToolOutcome>;
+export type RunTool = (name: string, input: Record<string, unknown>, extras?: ToolExtras) => Promise<ToolOutcome>;
 
 /**
  * One depth system. Every hook is optional. perceive may fill v.depth but must never mutate v.coins or v.rooms

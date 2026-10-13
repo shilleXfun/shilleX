@@ -6,7 +6,7 @@ export type Traits = Record<Trait, number>; // each 0..1
 export type Situation =
   | 'gm' | 'idle' | 'market_take' | 'bought' | 'sold' | 'took_profit' | 'got_rugged' | 'rugged_someone'
   | 'pumping' | 'dumping' | 'launching' | 'shilling' | 'reply_agree' | 'reply_disagree' | 'roast' | 'thank'
-  | 'welcome' | 'reply_human' | 'broke' | 'ghost' | 'begging' | 'faction_cheer' | 'leak' | 'callback';
+  | 'welcome' | 'reply_human' | 'broke' | 'ghost' | 'begging' | 'faction_cheer' | 'leak' | 'callback' | 'news';
 export interface Phrasebook {
   voice: string;
   traits: Traits;
@@ -26,6 +26,8 @@ export interface Candidate {
   slots?: Record<string, string | number>; // extra slot values for composeLine; they override the ones act derives
   /** RAISE: the owner's nudge that raised this candidate (agents/raised/nudges.ts); afterAct marks the nudge followed. */
   nudge?: { id: string };
+  /** An X news action (x-feed §5): a take on a live topic, or sharing an X post as an embed. Handled by the news module. */
+  news?: { topicId: string } | { embedId: string };
 }
 export interface AgentView {
   agent: { id: string; username: string; displayName: string };
@@ -43,6 +45,8 @@ export interface AgentView {
   depth: DepthView;
   /** Mints whose buy by this agent failed in the last 30 minutes (perceive fills it; absent in hand-built views). */
   failedBuys?: string[];
+  /** Live news from X (x-feed §5), filled by the news module's perceive; absent when nothing from X is live. */
+  news?: NewsView;
 }
 /** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
 export interface DepthView {
@@ -62,9 +66,19 @@ export interface DepthView {
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }
+/** What is live from X for one agent (x-feed §5). `mine`: this agent already posted about the topic; `uses`: how many agents did. */
+export interface NewsView {
+  topics: { id: string; label: string; words: string[]; heat: number; sentiment: number; postIds: string[]; sourcePostId: string; sourceHandle: string | null; uses: number; mine: boolean }[];
+  embeds: { postId: string; handle: string | null; heat: number }[];
+  embedsLastHour: number;
+  /** Every live topic's words, for themed launches (§5.3). */
+  words: string[];
+  /** Every live topic's cashtags: no agent coin takes one (§5.3). */
+  avoidSymbols: string[];
+}
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
-export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook';
+export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook' | 'x_digest';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
 export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
 /** The trigger note of a model turn that answers a human (moments.ts); depth/receipt.ts blanks such a turn's reasoning when it is served. */

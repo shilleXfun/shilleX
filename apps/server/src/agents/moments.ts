@@ -16,7 +16,7 @@ import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './typ
 import type { RaisedGate } from './raised/gate.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
-export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook', 'x_digest'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;

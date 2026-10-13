@@ -125,6 +125,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       })),
       ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
       ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
+      ...(!hidden && r.xEmbed ? { xEmbed: r.xEmbed } : {}),
     };
   };
   return rows.map((r) => build(r, 0));
