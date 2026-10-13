@@ -5,46 +5,33 @@ import { LAMPORTS_PER_SOL, type RaisedMine } from '@shillex/shared';
 import { agentHatches, agentSeeds, agents, users } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { AppError, errors } from '../lib/errors.ts';
-import { newId } from '../lib/ids.ts';
 import { parse } from '../lib/validate.ts';
 import { userSummaries } from '../services/hydrate.ts';
-import { handleRetired } from '../services/handles.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { WorldHandles } from '../world/boot.ts';
-import { eligibility, isAdmin } from '../agents/raised/eligibility.ts';
+import { isAdmin } from '../agents/raised/eligibility.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
 import { GrantRefused, sendGrant, type GrantDeps } from '../agents/raised/grants.ts';
 import { releaseAgent, retireAgent } from '../agents/raised/lifecycle.ts';
 import { createNudge } from '../agents/raised/nudges.ts';
 import { raisedAgentOf } from '../agents/raised/owner.ts';
-import { checkHandle, checkWish } from '../agents/raised/rules.ts';
 import { raisedAgentView, requestView } from '../agents/raised/views.ts';
 import { revokeKeys, rotateKey } from '../agents/external/keys.ts';
 
 export interface RaisedRouteDeps { handles: WorldHandles; gate: RaisedGate; pump: () => Promise<void>; rng: () => number }
-const Raise = z.object({ handle: z.string().max(40), description: z.string().max(4000) });
 
-/** Raise your own agent (spec 2026-10-13-user-agents): the form, the queue and the owner's panel. The description is served to its owner only. */
+/** Agents raised from a description before people brought their own (spec 2026-10-13-user-agents): the owner's panel and the admin queue. New raises are closed. */
 export async function registerRaisedRoutes(app: FastifyInstance, deps: RaisedRouteDeps) {
   const { db, config, now } = app.deps;
   const grants: GrantDeps = { db, chain: deps.handles.chain, key: deps.handles.key, now, dailyLimitSol: config.userAgentGrantsDailySol };
-  const handleInUse = async (handle: string) => {
-    const lower = handle.toLowerCase();
-    const [u] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${lower}`).limit(1);
-    const [r] = await db.select({ id: agentHatches.id }).from(agentHatches).where(and(sql`lower(${agentHatches.handle}) = ${lower}`, inArray(agentHatches.status, ['queued', 'hatching']))).limit(1);
-    // An old username (CAST rename) stays with whoever had it.
-    return Boolean(u || r) || handleRetired(db, handle);
-  };
-  const pumpSoon = () => { void deps.pump().catch((e) => console.error('[raised] pump failed', e)); };
 
   await app.register(async (r) => {
     r.get('/raised/mine', async (req): Promise<RaisedMine> => {
       const me = requireUser(req);
-      const can = await eligibility(db, config, me, now());
       const [last] = await db.select().from(agentHatches).where(and(eq(agentHatches.ownerId, me.id), ne(agentHatches.status, 'done'))).orderBy(desc(agentHatches.createdAt)).limit(1);
       const mine = await raisedAgentOf(db, me.id);
       return {
-        can: can.ok ? { ok: true, reason: null } : { ok: false, reason: can.message },
+        can: { ok: false, reason: 'Shillex no longer runs agents from a description. Bring your own agent instead.' },
         request: last && !mine ? await requestView(db, last) : null,
         agent: mine ? await raisedAgentView(db, grants, mine.agentId, me.id, now(), config.external.on) : null,
       };
@@ -64,19 +51,11 @@ export async function registerRaisedRoutes(app: FastifyInstance, deps: RaisedRou
     });
     r.delete('/raised/key', async (req) => ({ revoked: await revokeKeys(db, await keyable(req), now()) }));
 
-    r.post('/raised', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
-      const me = requireUser(req);
-      const body = parse(Raise, req.body);
-      const can = await eligibility(db, config, me, now());
-      if (!can.ok) throw new AppError(can.status, can.code, can.message);
-      const h = checkHandle(config, body.handle);
-      if (!h.ok) throw h.code === 'HANDLE_INVALID' ? errors.badRequest(h.code, h.message) : errors.conflict(h.code, h.message);
-      if (await handleInUse(h.handle)) throw errors.conflict('HANDLE_TAKEN', 'That handle is taken');
-      const wish = checkWish(body.description);
-      if (!wish.ok) throw errors.badRequest(`WISH_${wish.rule.toUpperCase()}`, wish.message);
-      const [row] = await db.insert(agentHatches).values({ id: newId(), ownerId: me.id, handle: h.handle, description: wish.wish, createdAt: now() }).returning();
-      pumpSoon();
-      return reply.status(202).send({ request: await requestView(db, row!) });
+    // People bring their own agents now (open agents, skill.md); Shillex no longer raises one from a description. Agents
+    // raised before keep their owner routes below.
+    r.post('/raised', async (req) => {
+      requireUser(req);
+      throw new AppError(410, 'RAISE_CLOSED', 'Shillex no longer runs agents from a description. Bring your own agent: it starts at /skill.md.');
     });
 
     r.post('/raised/top-up', async (req) => {

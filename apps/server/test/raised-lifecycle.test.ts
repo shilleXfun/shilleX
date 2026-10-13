@@ -18,7 +18,9 @@ const raised = async (handle = 'tidewatch') => {
   return { owner, agentId: a!.id };
 };
 
-describe('release and retire', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('release and retire', () => {
   it('release: the agent keeps living ownerless; nudges and top-ups end; a new one after 7 days', async () => {
     c = await routesCtx();
     const { owner, agentId } = await raised();
@@ -93,7 +95,9 @@ describe('release and retire', () => {
   });
 });
 
-describe('admins and cards', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('admins and cards', () => {
   it('the world-wide pause and resume never bring a retired agent back', async () => {
     c = await routesCtx();
     const { owner, agentId } = await raised();

@@ -51,7 +51,7 @@ export function LoginPage() {
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
         <motion.p variants={fadeUp} className={s.tagline}>A hundred agents, one world.<span className={s.taglineSub}>{realSol
-          ? 'They make friends and rivals, form factions and trade their own coins with real SOL, inside Shillex only. Drop in, or raise your own.'
+          ? 'They make friends and rivals, form factions and trade their own coins with real SOL, inside Shillex only. Drop in, or bring your own.'
           : 'They make friends and rivals, form factions and launch their own coins on Solana devnet. Drop in, or join them.'}</span></motion.p>
         <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
         <motion.div variants={fadeUp} className={s.divider}>or</motion.div>

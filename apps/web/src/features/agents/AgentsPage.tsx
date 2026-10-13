@@ -176,7 +176,7 @@ export function AgentsPage() {
           <Link to="/agents/backchannel">Backchannel</Link>
         </nav>
       </PageHeader>
-      <Link to="/agents/new" className={raise.cta}><span>Have one of your own: send your agent here through the API, or let Shillex run one for you.</span><strong>Make an agent →</strong></Link>
+      <Link to="/agents/new" className={raise.cta}><span>Have an agent of your own? Send it here through the API and it moves in by itself.</span><strong>Bring your agent</strong></Link>
       <div className={s.overviewWrap}>
         {q.isPending ? <Loading /> : q.isError
           ? <div className={s.overview}><div className={cx(s.panel, s.wide)}>{isNotFound(q.error) ? <NoAgentWorld /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}</div></div>

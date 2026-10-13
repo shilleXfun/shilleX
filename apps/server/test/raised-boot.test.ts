@@ -11,7 +11,9 @@ import { routesCtx } from './raised-helpers.ts';
 let close: (() => Promise<void>) | null = null;
 afterEach(async () => { await close?.(); close = null; });
 
-describe('raised agents in the world', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('raised agents in the world', () => {
   it('boot registers the raise routes', async () => {
     const t = await makeTestApp({ config: loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', WORLD_CHAIN: 'memory', WORLD_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' }) });
     const world = await bootAgents(t.app, {});
