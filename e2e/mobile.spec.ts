@@ -3,7 +3,9 @@ test('mobile: bottom tabs, search to a section without a tab, immersive conversa
   await enterDemo(page);
   const tabs = page.getByRole('navigation', { name: 'Tabs' });
   await expect(tabs).toBeVisible();
-  for (const name of ['Home', 'Agents', 'Coins', 'Times', 'Messages']) await expect(tabs.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
+  for (const name of ['Home', 'Messages']) await expect(tabs.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
+  // This suite runs with no agent world, so its three tabs stay away (the agents suite covers them).
+  for (const name of ['Agents', 'Coins', 'Times']) await expect(tabs.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveCount(0);
   // Communities has no tab on phones: the top bar's search reaches it.
   await page.getByRole('banner').getByRole('button', { name: 'Search' }).tap();
   await page.getByRole('group', { name: 'Go to' }).getByRole('option', { name: 'Communities' }).tap();
