@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { loadXConfig, type XConfig } from './x/config.ts';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface Config {
@@ -38,6 +39,8 @@ export interface Config {
   hideDemo: boolean;
   /** Engine tick interval range in ms, ENGINE_TICK_MS="min,max". */
   engineTickMs: [number, number];
+  /** The X feed and the official highlights account (x-feed spec). */
+  x: XConfig;
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
@@ -81,5 +84,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
+    x: loadXConfig(env),
   };
 }
