@@ -1,6 +1,6 @@
 import type { Regime } from '@shillex/shared';
-import { mulberry32 } from '../../lib/forceLayout';
-import type { SwarmModel } from './model';
+import { mulberry32, type Pt } from '../../lib/forceLayout';
+import { coinSpot, type SwarmModel } from './model';
 import { targetsFor, type SwarmEvent } from './bus';
 import { readColours } from './palette';
 
@@ -45,7 +45,8 @@ export function nodeAlpha(n: { glow: number; ghost: boolean; breath: number; pha
   return Math.min(1, Math.max(0, n.glow + heat * 0.5 + 0.25 * recent + breath));
 }
 
-type At = { node: number } | { coin: number };
+/** What an animation is on: an agent, a coin of the model, or a normalised spot (where a coin launched since the coins were fetched will sit). */
+type At = { node: number } | { coin: number } | { spot: Pt };
 interface Streak { from: number; to: At; t0: number; dur: number; col: string; hit: boolean }
 interface Ring { at: At; r0: number; r1: number; t0: number; dur: number; col: string; w: number }
 
@@ -73,6 +74,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const stars = Array.from({ length: 120 }, () => ({ x: rnd(), y: rnd(), a: 0.08 + rnd() * 0.32, ph: rnd() * 6.28 }));
   const glowCache = new Map<string, HTMLCanvasElement>();
   const deadNow = new Set<string>();
+  /** Coins launched since the model's coins were fetched, by mint: their creator, so trades on one streak to where it will sit. */
+  const launched = new Map<string, string>();
   let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
   let model: SwarmModel | null = null;
   let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0);
@@ -101,10 +104,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r);
   }
   const mx = () => W * 0.04, my = () => H * 0.07;
-  const coinX = (i: number) => mx() + model!.coins[i]!.x * (W - 2 * mx());
-  const coinY = (i: number) => my() + model!.coins[i]!.y * (H - 2 * my());
-  const atX = (a: At) => ('node' in a ? px[a.node]! : coinX(a.coin));
-  const atY = (a: At) => ('node' in a ? py[a.node]! : coinY(a.coin));
+  const toX = (x: number) => mx() + x * (W - 2 * mx()), toY = (y: number) => my() + y * (H - 2 * my());
+  const coinX = (i: number) => toX(model!.coins[i]!.x);
+  const coinY = (i: number) => toY(model!.coins[i]!.y);
+  const atX = (a: At) => ('node' in a ? px[a.node]! : 'coin' in a ? coinX(a.coin) : toX(a.spot.x));
+  const atY = (a: At) => ('node' in a ? py[a.node]! : 'coin' in a ? coinY(a.coin) : toY(a.spot.y));
   const skyAt = (t: number) => { const k = Math.min(1, (t - fadeAt) / FADE_S); return k >= 1 ? to : mixSky(from, to, k); };
 
   function frame(t: number, dt: number) {
@@ -139,11 +143,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       c.setLineDash([2, 7]); c.strokeStyle = hexA(DOWN, 0.1); c.beginPath();
       for (const [a, b] of m.feuds) { c.moveTo(px[a]!, py[a]!); c.lineTo(px[b]!, py[b]!); }
       c.stroke(); c.setLineDash([]);
-      // Coins are small quiet diamonds and never labelled: under the cards a $TICKER only clutters the text.
+      // Coins are small quiet diamonds and never labelled: under the cards a $TICKER only clutters the text. Past the
+      // busiest MAX_COINS a coin shows only while a trade or launch lights it, fading with its pulse.
       m.coins.forEach((coin, i) => {
+        const p = pulse[i]!;
+        if (!coin.shown && !(p > 0)) return;
         const x = coinX(i), y = coinY(i), dead = coin.dead || deadNow.has(coin.mint);
-        if (pulse[i]! > 0) { const s = 28 + pulse[i]! * 24; c.globalAlpha = 0.55; c.drawImage(glow(AMBER), x - s / 2, y - s / 2, s, s); pulse[i] = Math.max(0, pulse[i]! - dt * 1.4); }
-        c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.globalAlpha = dead ? 0.1 : 0.4; c.fillStyle = dead ? WHITE : COIN; c.fillRect(-2.5, -2.5, 5, 5); c.restore();
+        if (p > 0) { const s = 28 + p * 24; c.globalAlpha = 0.55; c.drawImage(glow(AMBER), x - s / 2, y - s / 2, s, s); pulse[i] = Math.max(0, p - dt * 1.4); }
+        c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.globalAlpha = (dead ? 0.1 : 0.4) * (coin.shown ? 1 : p); c.fillStyle = dead ? WHITE : COIN; c.fillRect(-2.5, -2.5, 5, 5); c.restore();
       });
       c.globalAlpha = 1;
       // An agent that acted glows brighter for 20 s, by the clock (a still frame passes a fixed t).
@@ -166,7 +173,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         const [x, y] = at(k), [tx, ty] = at(Math.max(0, k - 0.16));
         c.strokeStyle = hexA(s.col, 0.28); c.lineWidth = 1; c.beginPath(); c.moveTo(tx, ty); c.lineTo(x, y); c.stroke();
         c.globalAlpha = 0.55; c.drawImage(glow(s.col), x - 6, y - 6, 12, 12); c.globalAlpha = 1;
-        if (k > 0.92 && !s.hit) { s.hit = true; if ('coin' in s.to) pulse[s.to.coin] = 1; else hot[s.to.node] = 0.6; }
+        if (k > 0.92 && !s.hit) { s.hit = true; if ('coin' in s.to) pulse[s.to.coin] = 1; else if ('node' in s.to) hot[s.to.node] = 0.6; }
       }
       rings = rings.filter((r) => t - r.t0 < r.dur);
       for (const r of rings) {
@@ -228,7 +235,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         for (const [mint, i] of m.coinIndex) { const o = old.coinIndex.get(mint); if (o !== undefined) pulse[i] = oldPulse[o] ?? 0; }
         const node = (i: number) => { const id = old.nodes[i]?.id; return id === undefined ? undefined : m.index.get(id); };
         const coin = (i: number) => { const mint = old.coins[i]?.mint; return mint === undefined ? undefined : m.coinIndex.get(mint); };
-        const at = (a: At): At | null => { const i = 'node' in a ? node(a.node) : coin(a.coin); return i === undefined ? null : 'node' in a ? { node: i } : { coin: i }; };
+        const at = (a: At): At | null => {
+          if ('spot' in a) return a;
+          const i = 'node' in a ? node(a.node) : coin(a.coin);
+          return i === undefined ? null : 'node' in a ? { node: i } : { coin: i };
+        };
         streaks = streaks.flatMap((s) => { const f = node(s.from), to = at(s.to); return f === undefined || !to ? [] : [{ ...s, from: f, to }]; });
         rings = rings.flatMap((r) => { const to = at(r.at); return to ? [{ ...r, at: to }] : []; });
       } else { streaks = []; rings = []; }
@@ -243,28 +254,44 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     },
     event(e) {
       if (!model) return;
-      const tg = targetsFor(model, e);
-      if (e.kind === 'rug' && tg.coin !== null) deadNow.add(model.coins[tg.coin]!.mint);
+      const m = model, tg = targetsFor(m, e);
+      if (e.kind === 'rug' && tg.coin !== null) deadNow.add(m.coins[tg.coin]!.mint);
+      if (e.kind === 'launch' && e.mint && tg.coin === null) {
+        launched.set(e.mint, e.agentId);
+        if (launched.size > 64) launched.delete(launched.keys().next().value as string);
+      }
       // Who acted glows brighter for 20 s; set before the still-frame return, so the still frame shows it too.
       if (tg.from !== null) actedAt[tg.from] = now();
       if (opts.reduced) { still(); return; }
       const t = now();
       const ring = (at: At, r1: number, col: string, w: number, dur: number, r0 = 4, delay = 0) => rings.push({ at, r0, r1, t0: t + delay, dur, col, w });
+      // The coin an event names; one the model does not have yet is the spot it will take, beside its creator if that launch was seen.
+      const coinAt = (): At | null => {
+        if (tg.coin !== null) return { coin: tg.coin };
+        if (!('mint' in e) || !e.mint) return null;
+        const owner = m.index.get(launched.get(e.mint) ?? '');
+        return { spot: coinSpot(e.mint, owner === undefined ? undefined : m.nodes[owner]) };
+      };
       if (tg.from !== null) hot[tg.from] = e.kind === 'transfer' ? 0.6 : e.kind === 'buy' || e.kind === 'sell' ? 0.8 : 1;
       switch (e.kind) {
-        case 'buy': case 'sell':
-          if (tg.from !== null && tg.coin !== null) streaks.push({ from: tg.from, to: { coin: tg.coin }, t0: t, dur: 1.1, col: e.kind === 'buy' ? UP : DOWN, hit: false });
+        case 'buy': case 'sell': {
+          const to = coinAt();
+          if (tg.from !== null && to) streaks.push({ from: tg.from, to, t0: t, dur: 1.1, col: e.kind === 'buy' ? UP : DOWN, hit: false });
           break;
+        }
         case 'transfer':
           if (tg.from !== null && tg.toNode !== null) streaks.push({ from: tg.from, to: { node: tg.toNode }, t0: t, dur: 1.3, col: WHITE, hit: false });
           break;
         case 'post':
           if (tg.from !== null) ring({ node: tg.from }, 22, CYAN, 1, 1.2);
           break;
-        case 'launch':
-          if (tg.coin !== null) { pulse[tg.coin] = 1; ring({ coin: tg.coin }, 56, AMBER, 2, 1.8, 6); }
+        case 'launch': {
+          const at = coinAt();
+          if (at && 'coin' in at) pulse[at.coin] = 1;
+          if (at) ring(at, 56, AMBER, 2, 1.8, 6);
           else if (tg.from !== null) ring({ node: tg.from }, 56, AMBER, 2, 1.8, 6);
           break;
+        }
         case 'rug': {
           const at: At | null = tg.coin !== null ? { coin: tg.coin } : tg.from !== null ? { node: tg.from } : null;
           if (!at) break;

@@ -59,22 +59,27 @@ export function forceLayout(
   const feudCount = new Int32Array(n);
   for (const key of feuds.keys()) { feudCount[Math.floor(key / n)]!++; feudCount[key % n]!++; }
   const feudScale = (i: number) => Math.min(1, MAX_FEUD_PUSH / Math.max(1, feudCount[i]!));
-  const boost = new Map<number, number>();
-  for (const [key, w] of feuds) boost.set(key, 1 + w * Math.min(feudScale(Math.floor(key / n)), feudScale(key % n)));
-  const k = Math.sqrt((width * height) / Math.max(1, n)), cx = width / 2, cy = height / 2;
+  // Dense, at i * n + j (i < j), rather than a Map: the pair loop reads it for every close pair on every iteration.
+  const boost = new Float64Array(n * n).fill(1);
+  for (const [key, w] of feuds) boost[key] = 1 + w * Math.min(feudScale(Math.floor(key / n)), feudScale(key % n));
+  const k = Math.sqrt((width * height) / Math.max(1, n)), cx = width / 2, cy = height / 2, reach = 4 * k * k;
   const start = opts.temperature ?? k / 2;
   for (let it = 0; it < iterations; it++) {
     const temp = Math.max(start * 0.02, start * (1 - it / iterations));
     dx.fill(0); dy.fill(0);
+    // The O(n²) part, kept tight for every agent in the world (300 lay out in ~60 ms, not ~420): squared distances first,
+    // so pairs past 2k skip the square root.
     for (let i = 0; i < n; i++) {
+      const xi = xs[i]!, yi = ys[i]!, row = i * n;
+      let fx = 0, fy = 0;
       for (let j = i + 1; j < n; j++) {
-        let ex = xs[i]! - xs[j]!, ey = ys[i]! - ys[j]!;
-        if (ex * ex + ey * ey < 0.01) { ex = rnd() - 0.5; ey = rnd() - 0.5; }
-        const d = Math.max(0.1, Math.hypot(ex, ey));
-        if (d > 2 * k) continue;
-        const f = ((k * k) / d) * 0.08 * (boost.get(i * n + j) ?? 1);
-        dx[i]! += (ex / d) * f; dy[i]! += (ey / d) * f; dx[j]! -= (ex / d) * f; dy[j]! -= (ey / d) * f;
+        let ex = xi - xs[j]!, ey = yi - ys[j]!, d2 = ex * ex + ey * ey;
+        if (d2 < 0.01) { ex = rnd() - 0.5; ey = rnd() - 0.5; d2 = ex * ex + ey * ey; }
+        if (d2 > reach) continue;
+        const d = Math.max(0.1, Math.sqrt(d2)), f = ((k * k) / (d * d)) * 0.08 * boost[row + j]!;
+        fx += ex * f; fy += ey * f; dx[j]! -= ex * f; dy[j]! -= ey * f;
       }
+      dx[i]! += fx; dy[i]! += fy;
     }
     for (const [i, j, w] of springs) {
       const ex = xs[j]! - xs[i]!, ey = ys[j]! - ys[i]!, d = Math.max(0.1, Math.hypot(ex, ey));
