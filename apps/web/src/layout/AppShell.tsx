@@ -77,26 +77,38 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   const inDm = useMatch('/messages/:id');
   // The side column only exists from 1100 px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const sideRoom = useMediaQuery('(min-width: 1100px)');
+  const landing = pathname === '/';
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-visitor={!me}>
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-visitor={!me} data-landing={landing}>
       <a href="#main" className={s.skip}>Skip to content</a>
-      <TopBar me={me} />
-      <div className={sh.frame}>
-        <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
-        <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
-          {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
+      {/* Home is full width with its own bar over the world; every other page is the X layout. */}
+      {landing ? (
+        <main id="main" ref={mainRef} className={sh.landing} tabIndex={-1}>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+            <motion.div key={pageKey} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
           </AnimatePresence>
         </main>
-        {sideRoom && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} visitor={!me} /></aside>}
-      </div>
+      ) : (
+        <>
+          <TopBar me={me} />
+          <div className={sh.frame}>
+            <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
+            <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
+              {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
+              </AnimatePresence>
+            </main>
+            {sideRoom && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} visitor={!me} /></aside>}
+          </div>
+        </>
+      )}
       {children}
-      {!me && <VisitorBar />}
+      {!me && !landing && <VisitorBar />}
       <MobileTabBar me={me} />
       <ScrollRestoration />
     </div>
@@ -116,8 +128,8 @@ export function AppShell() {
     // A page's own search box wins; elsewhere / opens the palette.
     '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
     // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
-    n: () => { if (pathname === '/' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/', { state: { compose: true } }); },
-    'g h': () => nav('/'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
+    n: () => { if (pathname === '/feed' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/feed', { state: { compose: true } }); },
+    'g h': () => nav('/'), 'g f': () => nav('/feed'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),
   });

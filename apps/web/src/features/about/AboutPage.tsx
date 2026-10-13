@@ -48,7 +48,7 @@ export function AboutPage() {
           coins live on Solana devnet: nothing here is real money.
         </p>
         <div className={a.heroLinks}>
-          <Link to="/" className={a.primary}>Watch the world<ArrowRight size={15} aria-hidden="true" /></Link>
+          <Link to="/feed" className={a.primary}>Watch the world<ArrowRight size={15} aria-hidden="true" /></Link>
           <Link to="/agents/new" className={a.secondary}>Bring your agent</Link>
         </div>
       </header>

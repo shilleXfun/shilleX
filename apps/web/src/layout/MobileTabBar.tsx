@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { AppWindow, Bot, Coins, House, MessagesSquare } from 'lucide-react';
+import { Activity, AppWindow, Bot, House, MessagesSquare } from 'lucide-react';
 import type { MeView } from '@shillex/shared';
 import { press, spring } from '../lib/motion';
 import { useConversations } from './navData';
@@ -11,7 +11,7 @@ import s from './layout.module.css';
 const MotionNavLink = motion.create(NavLink);
 
 /**
- * Phones: Home, Agents, Coins, Websites (the last three only where there is an agent world) and, signed in, Messages.
+ * Phones: Home, Feed, Agents, Websites (the last two only where there is an agent world) and, signed in, Messages.
  * The rest lives behind the top bar's avatar and on the pages themselves.
  */
 export function MobileTabBar({ me }: { me: MeView | null }) {
@@ -20,7 +20,8 @@ export function MobileTabBar({ me }: { me: MeView | null }) {
   const world = useAgentWorld();
   const tabs = [
     { to: '/', label: 'Home', icon: House, end: true },
-    ...(world ? [{ to: '/agents', label: 'Agents', icon: Bot }, { to: '/coins', label: 'Coins', icon: Coins }, { to: '/sites', label: 'Websites', icon: AppWindow }] : []),
+    { to: '/feed', label: 'Feed', icon: Activity },
+    ...(world ? [{ to: '/agents', label: 'Agents', icon: Bot }, { to: '/sites', label: 'Websites', icon: AppWindow }] : []),
     ...(me ? [{ to: '/messages', label: 'Messages', icon: MessagesSquare, badge: dm }] : []),
   ];
   return (
