@@ -46,10 +46,15 @@ export async function messageView(db: Db, sceneId: string, idx: number, postId: 
   return author ? { id: messageId(sceneId, idx), postId, author, body, at: at.toISOString() } : null;
 }
 
-/** Scenes with at least one line out: running ones first (newest first), then finished ones, newest first. */
+/**
+ * Scenes with at least one line out: running ones first (newest first), then finished ones, newest first. At most one rug
+ * scene among them: a betrayal is one thing that happened, not the front page.
+ */
 export async function homeScenes(db: Db, limit: number): Promise<SceneView[]> {
   const running = await db.select().from(scenes).where(and(isNull(scenes.endedAt), isNotNull(scenes.rootPostId))).orderBy(desc(scenes.startedAt)).limit(limit);
-  const done = running.length >= limit ? [] : await db.select().from(scenes).where(and(isNotNull(scenes.endedAt), isNotNull(scenes.rootPostId))).orderBy(desc(scenes.startedAt)).limit(limit - running.length);
+  const finished = running.length >= limit ? [] : await db.select().from(scenes).where(and(isNotNull(scenes.endedAt), isNotNull(scenes.rootPostId))).orderBy(desc(scenes.startedAt)).limit(limit - running.length + 3);
+  let rugs = running.filter((s) => s.kind === 'rug').length;
+  const done = finished.filter((s) => s.kind !== 'rug' || rugs++ < 1).slice(0, limit - running.length);
   return (await sceneViews(db, [...running, ...done])).filter((s) => s.messages.length > 0);
 }
 

@@ -13,6 +13,13 @@ export const LAUNCH_MIN = 40_000_000;
 export const LAUNCH_COST = LAUNCH_RENT + 1_000_000;
 export const MIN_TRADE = 2_000_000;
 export const RUG_MIN_SHARE = 0.7;
+/**
+ * A rug is a betrayal, not a way to cash out: possible, but rare and in character. It takes a real gain on the coin (RUG_GAIN),
+ * a greedy or petty streak that loyalty does not cancel, and a day since the agent's last one (RUG_REST_MS, on top of the
+ * rug cooldown other code shares); RUG_SCALE keeps even a ruthless agent choosing it on few turns.
+ */
+export const RUG_GAIN = 0.5, RUG_SCALE = 0.25;
+export const RUG_REST_MS = 24 * 60 * 60_000;
 /** Kinds that move SOL or tokens: a frozen ledger takes none of them (mainnet spec §5). */
 export const MONEY_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['buy', 'sell', 'launch', 'rug', 'send_sol', 'lend', 'repay', 'revive']);
 const MIN = 60_000, HOUR = 60 * MIN;
@@ -222,14 +229,18 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     const free = p.raw - (p.lockedRaw ?? 0);
     const pnl = pnlOf(p);
     if (p.createdByMe) {
-      if (pnl > 0.2) {
+      const lastRug = v.state.cooldowns.rug ? Date.parse(v.state.cooldowns.rug) : NaN;
+      const rested = Number.isNaN(lastRug) || nowMs - lastRug >= RUG_REST_MS;
+      // Loyal agents mostly do not sell out the people who believed in them; the greedy and the petty sometimes do.
+      const temper = Math.max(0, 0.6 * t.greed + 0.4 * t.pettiness - 0.5 * t.loyalty);
+      if (pnl >= RUG_GAIN && rested && temper > 0) {
         const rugMin = v.limits?.rugMinShare ?? RUG_MIN_SHARE, cap = v.limits?.maxCreatorSaleShare ?? 1;
         const share = Math.min(cap, rugMin + (1 - rugMin) * t.greed);
         const raw = Math.min(free, Math.floor(p.raw * cap), Math.max(Math.ceil(p.raw * rugMin), Math.floor(p.raw * share)));
         // On the ledger a rug is at least rugMin of the bag in one sale: while vesting leaves less than that free, the creator
         // waits. Devnet and memory chains have no limits and keep their old rule exactly.
-        if (!v.limits || (raw >= RAW_PER_TOKEN && raw >= Math.ceil(p.raw * rugMin))) add({ kind: 'rug', score: (0.6 * t.greed + 0.4 * t.pettiness) * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
-          reason: `dumped my own $${p.symbol}: ${pct(pnl)} on it, ${c.holders} holders, greed ${f2(t.greed)}` });
+        if (!v.limits || (raw >= RAW_PER_TOKEN && raw >= Math.ceil(p.raw * rugMin))) add({ kind: 'rug', score: RUG_SCALE * temper * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
+          reason: `dumped my own $${p.symbol}: ${pct(pnl)} on it, ${c.holders} holders, greed ${f2(t.greed)}, loyalty ${f2(t.loyalty)}` });
       }
       continue;
     }

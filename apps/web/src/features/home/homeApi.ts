@@ -104,7 +104,7 @@ function withMessage(s: SceneView, m: SceneMessageView): SceneView {
 }
 
 let homeRefresh: ReturnType<typeof setTimeout> | null = null;
-/** A message for a scene the home does not list yet (a new scene): reload the home once, a moment later. */
+/** A message for a scene the home does not list yet (a new scene), or a story it does not list: reload the home once, a moment later. */
 function refreshHomeSoon(qc: QueryClient) {
   if (homeRefresh) return;
   homeRefresh = setTimeout(() => { homeRefresh = null; void qc.invalidateQueries({ queryKey: HOME_KEY }); }, 2_000);
@@ -125,9 +125,15 @@ export function applySceneMessage(qc: QueryClient, { sceneId, message }: SceneMe
   if (!listed && qc.getQueryData(HOME_KEY)) refreshHomeSoon(qc);
 }
 
-/** A story moved: it takes its new place among the home's stories (by heat), and an open story page refreshes its timeline. */
+/**
+ * A story moved: a listed one takes its new place among the home's stories (by heat), and an open story page refreshes its
+ * timeline. A story not on the home yet is not pushed in here: the home is fetched again, so the server's picks hold (at most
+ * three of a kind, at most one driven by a rug).
+ */
 export function applyStoryUpdate(qc: QueryClient, { story }: StoryUpdateEvent) {
-  qc.setQueryData<HomeView | null>(HOME_KEY, (h) => {
+  const home = qc.getQueryData<HomeView | null>(HOME_KEY);
+  if (home && !home.stories.some((s) => s.id === story.id)) refreshHomeSoon(qc);
+  else qc.setQueryData<HomeView | null>(HOME_KEY, (h) => {
     if (!h) return h;
     const stories = [...h.stories.filter((s) => s.id !== story.id), story].sort((a, b) => b.heat - a.heat).slice(0, 6);
     return { ...h, stories };
@@ -181,8 +187,9 @@ export function useHomeBasics(home: HomeView | null | undefined) {
   const overview = useOverview(fallback);
   if (home) return { stats: home.stats, characters: home.characters };
   const today = overview.data?.today;
+  const factions = new Set(overview.data?.moods.flatMap((m) => (m.faction ? [m.faction.id] : [])) ?? []).size;
   const stats: HomeView['stats'] | null = fallback && info.data && coins.data && today
-    ? { agents: info.data.agents, coins: coins.data.length, tradedTodaySol: today.volumeSol, launchesToday: today.launches, rugsToday: today.rugs, postsToday: 0 }
+    ? { agents: info.data.agents, coins: coins.data.length, factions, tradedTodaySol: today.volumeSol, launchesToday: today.launches, rugsToday: today.rugs, postsToday: 0 }
     : null;
   return { stats, characters: fallback && overview.data ? charactersFromOverview(overview.data) : [] };
 }

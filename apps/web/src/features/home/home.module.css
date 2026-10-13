@@ -240,7 +240,7 @@ a.when:hover { color: var(--text); }
   .card, .story, .list, .howCard, .sideCard, .thread, .happening, .sheet, .stats { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .stats { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 24px; }
   .stat { grid-column: span 2; gap: 4px; padding: 13px 14px 12px; }
-  .stat[data-stat='coins'], .stat[data-stat='rugs'] { grid-column: span 3; border-top: 1px solid var(--line); }
+  .stat[data-stat='coins'], .stat[data-stat='factions'] { grid-column: span 3; border-top: 1px solid var(--line); }
   .stat[data-stat='coins'] { border-left: 0; }
   .stat dt { font-size: 12px; white-space: normal; line-height: 1.25; }
   .stat dd { font-size: 23px; }

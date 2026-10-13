@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { SceneKind } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentEvents, chainTxs, factionMembers, factions, scenes, worldCoins } from '../../db/schema.ts';
+import { agentBeliefs, agentEvents, chainTxs, factionMembers, factions, scenes, worldCoins } from '../../db/schema.ts';
 import { pickWeighted } from '../decide.ts';
 import { rugSales } from '../overview.ts';
 import { coinsNow } from '../perceive.ts';
@@ -15,6 +15,16 @@ export const PAIR_REST_MS = 2 * HOUR;
 export const COIN_MOVE = 0.15;
 /** Rugs this recent still have a victim to answer them. */
 export const RUG_WINDOW_MS = 6 * HOUR;
+/**
+ * A rug is one betrayal among many, not what the world talks about: after a rug scene the next waits this long, and a day
+ * holds at most RUG_SCENES_PER_DAY of them.
+ */
+export const RUG_SCENE_REST_MS = 4 * HOUR;
+export const RUG_SCENES_PER_DAY = 3;
+/** A coin launched this recently gets its maker and a friend or a curious agent talking about it. */
+export const LAUNCH_WINDOW_MS = 90 * MIN;
+/** Two agents who took opposite sides on a coin this recently argue it out: a scene about what they believe. */
+export const BELIEF_WINDOW_MS = 6 * HOUR;
 /** A raised agent younger than this gets welcomed (once). */
 export const WELCOME_WINDOW_MS = 12 * HOUR;
 /** A coin, an agent talked about or a faction that just had a scene rests this long. */
@@ -50,18 +60,27 @@ function hostileText(e: { kind: string; agentId: string; data: Record<string, un
   }
 }
 
-/** What happened to an agent that others would gossip about, in the third person. */
+/** A faction's name as a premise may carry it: no markup, no handles or tickers, one line. */
+const plainName = (s: string) => s.replace(/[<>@#$]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+/**
+ * What happened to an agent that others would gossip about, in the third person. A rug is left out: it has its own (rare)
+ * scene, and gossip is where the rest of life gets talked over.
+ */
 function gossipText(e: { kind: string; data: Record<string, unknown> }, who: string): string | null {
   const sym = e.data.symbol ? `$${String(e.data.symbol).replace(/[^A-Za-z0-9]/g, '')}` : 'a coin';
   const pct = Math.abs(Math.round(Number(e.data.pct)));
+  const faction = typeof e.data.name === 'string' && e.data.name ? plainName(e.data.name) : 'a faction';
   switch (e.kind) {
     case 'big_win': return Number.isFinite(pct) ? `${who} just made ${pct}% on ${sym}` : null;
     case 'big_loss': return Number.isFinite(pct) ? `${who} just lost ${pct}% on ${sym}` : null;
     case 'ghost': return `${who} went broke and is a ghost now`;
     case 'revived': return `${who} came back from the dead`;
-    case 'rugged': return `${who} rugged ${sym}`;
+    case 'faction_formed': return `${who} just started ${faction} with a few others`;
+    case 'left_faction': return `${who} walked out of ${faction}`;
     case 'faction_split': return `${who}'s faction just fell apart`;
     case 'graduated': return `${who}'s coin ${sym} graduated`;
+    case 'caught_lying': return Number(e.data.stance) > 0 ? `${who} talked up ${sym} and sold it the same hour` : `${who} trashed ${sym} and then bought it`;
     default: return null;
   }
 }
@@ -79,10 +98,11 @@ async function holdings(db: Db): Promise<Map<string, Map<string, number>>> {
 }
 
 /**
- * Everything worth a scene right now, scored: feuds, allies plotting, holders of a coin that moved ≥ 15% in an hour, a rug's
- * biggest victim against the rugger, faction members, a newly raised agent being welcomed, the hottest coin argued over, gossip
- * about a third agent. Only active, funded agents speak (ghosts may haunt one line); nobody already in a running scene, and no
- * pair that had a scene in the last two hours. Never a human.
+ * Everything worth a scene right now, scored: feuds, allies, holders of a coin that moved ≥ 15% in an hour, a new coin and its
+ * maker, two agents on opposite sides of a coin, faction members, a newly raised agent being welcomed, the hottest coin argued
+ * over, gossip about a third agent, and now and then a rug's biggest victim against the rugger (rare by design: low score, a
+ * rest after each, a daily cap). Only active, funded agents speak (ghosts may haunt one line); nobody already in a running
+ * scene, and no pair that had a scene in the last two hours. Never a human.
  */
 export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   const { db } = d;
@@ -144,7 +164,7 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
       }
       const shared = [...held].filter(([, h]) => h.has(a) && h.has(b)).map(([mint]) => mint)[0] ?? null;
       ideas.push({ kind: 'alliance', cast: [a, b], coinMint: enemy ? null : shared, subjectId: enemy, factionId: null, ghosts: [],
-        score: 0.9 + (m - 0.5) + (enemy ? 0.3 : 0),
+        score: 1.3 + (m - 0.5) + (enemy ? 0.2 : 0),
         why: `${at(a)} and ${at(b)} are allies (${aff(affm, a, b).toFixed(2)} / ${aff(affm, b, a).toFixed(2)})${enemy ? `; both dislike ${at(enemy)}` : shared ? '; they hold the same coin' : ''}`,
         anchor: { authorIds: [a, b], sinceMs: 2 * HOUR } });
     }
@@ -159,13 +179,50 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
     if (cast.length < 2) continue;
     const others = cast.filter((x) => x !== c.creatorId);
     ideas.push({ kind: 'coin', cast, coinMint: c.mint, subjectId: null, factionId: null, ghosts: [],
-      score: 1.6 + Math.min(1, Math.abs(c.change1h)) + 0.2 * Math.min(c.holders, 5) / 5,
+      score: 1.2 + 0.6 * Math.min(1, Math.abs(c.change1h)) + 0.2 * Math.min(c.holders, 5) / 5,
       why: `$${c.symbol} is ${c.change1h >= 0 ? 'up' : 'down'} ${pctText(Math.abs(c.change1h)).slice(1)} in the last hour; ${others.map(at).join(' and ')} hold it${cast.includes(c.creatorId) ? `, ${at(c.creatorId)} made it` : ''}`,
       anchor: { authorIds: cast, symbol: c.symbol, sinceMs: 2 * HOUR } });
   }
 
-  // ── Rugs in the last six hours: the biggest victim against the rugger. ──
-  for (const { sale, soldPct } of (await rugSales(db, new Date(nowMs - RUG_WINDOW_MS))).slice(0, 4)) {
+  // ── A coin launched in the last hour and a half: its maker and a friend (or the most curious agent) talk it over. ──
+  for (const c of coins.filter((x) => !x.graduated && live.has(x.creatorId) && nowMs - Date.parse(x.launchedAt) < LAUNCH_WINDOW_MS)
+    .sort((x, y) => y.launchedAt.localeCompare(x.launchedAt)).slice(0, 2)) {
+    const friend = [...live.keys()].filter((id) => id !== c.creatorId && aff(affm, id, c.creatorId) >= 0.3).sort((x, y) => aff(affm, y, c.creatorId) - aff(affm, x, c.creatorId))[0];
+    const curious = friend ?? [...live.values()].filter((x) => x.id !== c.creatorId && free(x.id))
+      .map((x) => ({ id: x.id, w: (x.traits.curiosity ?? 0.5) + 0.3 * d.rng() })).sort((p, q) => q.w - p.w)[0]?.id;
+    if (!curious) continue;
+    ideas.push({ kind: 'coin', cast: [c.creatorId, curious], coinMint: c.mint, subjectId: null, factionId: null, ghosts: [],
+      score: 1.4 + (friend ? 0.2 : 0),
+      why: `${at(c.creatorId)} just launched $${c.symbol} ${agoText(new Date(c.launchedAt), now)}; ${at(curious)} ${friend ? `is a friend (${aff(affm, curious, c.creatorId).toFixed(2)}) and wants to hear what it is for` : 'is curious about anything new and has questions'}`,
+      anchor: { authorIds: [c.creatorId], symbol: c.symbol, sinceMs: LAUNCH_WINDOW_MS } });
+  }
+
+  // ── Beliefs: two agents who said opposite things about the same coin lately argue it out. ──
+  const stances = await db.select({ agentId: agentBeliefs.agentId, mint: agentBeliefs.mint, stance: agentBeliefs.stance }).from(agentBeliefs)
+    .where(and(isNotNull(agentBeliefs.stance), gte(agentBeliefs.stanceAt, new Date(nowMs - BELIEF_WINDOW_MS))));
+  const sides = new Map<string, { bull: string[]; bear: string[] }>();
+  for (const s of stances) {
+    if (!live.has(s.agentId) || s.stance === null || Math.abs(s.stance) <= 0.3) continue;
+    const side = sides.get(s.mint) ?? { bull: [], bear: [] };
+    (s.stance > 0 ? side.bull : side.bear).push(s.agentId);
+    sides.set(s.mint, side);
+  }
+  for (const [mint, side] of [...sides].filter(([, x]) => x.bull.length && x.bear.length).sort((x, y) => (y[1].bull.length + y[1].bear.length) - (x[1].bull.length + x[1].bear.length)).slice(0, 2)) {
+    const c = coins.find((x) => x.mint === mint);
+    if (!c || c.graduated) continue;
+    const bull = side.bull.find(free), bear = side.bear.find((id) => free(id) && id !== bull);
+    if (!bull || !bear) continue;
+    ideas.push({ kind: 'market', cast: [bull, bear], coinMint: mint, subjectId: null, factionId: null, ghosts: [],
+      score: 1.1 + 0.1 * Math.min(4, side.bull.length + side.bear.length - 2),
+      why: `${at(bull)} believes in $${c.symbol} and said so; ${at(bear)} thinks it is going nowhere and said that too (${side.bull.length} for, ${side.bear.length} against lately)`,
+      anchor: { authorIds: [bull, bear], symbol: c.symbol, sinceMs: BELIEF_WINDOW_MS } });
+  }
+
+  // ── Rarely, a rug in the last six hours: the biggest victim against the rugger. A rest after each rug scene and a daily cap
+  // keep a betrayal from becoming what the world talks about. ──
+  const rugScenes = recent.filter((s) => s.kind === 'rug');
+  const rugResting = rugScenes.some((s) => s.startedAt.getTime() >= nowMs - RUG_SCENE_REST_MS) || rugScenes.length >= RUG_SCENES_PER_DAY;
+  for (const { sale, soldPct } of rugResting ? [] : (await rugSales(db, new Date(nowMs - RUG_WINDOW_MS))).slice(0, 2)) {
     const rugger = sale.agentId!, mint = sale.mint!;
     if (!live.has(rugger)) continue;
     const buys = await db.select({ agentId: chainTxs.agentId, l: sql<number>`sum(-${chainTxs.lamportsDelta})::float8` }).from(chainTxs)
@@ -176,7 +233,7 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
     const cast = [victims[0]!.agentId!, rugger, ...(victims[1] ? [victims[1].agentId!] : [])];
     const age = (nowMs - sale.createdAt.getTime()) / RUG_WINDOW_MS;
     ideas.push({ kind: 'rug', cast, coinMint: mint, subjectId: null, factionId: null, ghosts: [],
-      score: 2.4 * (1 - 0.5 * Math.min(1, age)),
+      score: 0.9 * (1 - 0.5 * Math.min(1, age)),
       why: `${at(rugger)} dumped ${Math.round(soldPct)}% of their $${symbol} bag for ${solText(Math.abs(sale.lamportsDelta))} ${agoText(sale.createdAt, now)}; ${at(victims[0]!.agentId)} had ${solText(Number(victims[0]!.l))} in it${victims[1] ? `, ${at(victims[1].agentId)} ${solText(Number(victims[1].l))}` : ''}`,
       anchor: { authorIds: [rugger], symbol, sinceMs: nowMs - sale.createdAt.getTime() + 5 * MIN } });
   }
@@ -198,7 +255,7 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
     const f = members[0]!;
     const coin = f.coinMint ? symbolOf.get(f.coinMint) : undefined;
     ideas.push({ kind: 'faction', cast: speakers, coinMint: f.coinMint, subjectId: null, factionId: fid, ghosts: [],
-      score: 0.9 + (nowMs - f.formedAt.getTime() < 6 * HOUR ? 0.7 : 0) + (rival ? 0.4 : 0),
+      score: 1.3 + (nowMs - f.formedAt.getTime() < 6 * HOUR ? 0.7 : 0) + (rival ? 0.3 : 0),
       why: `members of the faction ${f.name}${rival ? `, at war with ${rival.name}` : ''}${coin ? `; their coin is $${coin}` : ''}`,
       anchor: { authorIds: speakers, sinceMs: 2 * HOUR } });
   }
@@ -235,10 +292,14 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
 
   // ── Gossip about a third agent who just had a big moment. ──
   const subjects = new Map<string, string>();
+  // Every member records a faction event: the faction is gossiped about once, through one of them.
+  const told = new Set<string>();
   for (const e of evs) {
     if (nowMs - e.at.getTime() > 6 * HOUR || subjects.has(e.agentId) || !elig.has(e.agentId)) continue;
+    const about = typeof e.data.factionId === 'string' ? `${e.kind}:${e.data.factionId}` : null;
+    if (about && told.has(about)) continue;
     const t = gossipText(e, at(e.agentId));
-    if (t) subjects.set(e.agentId, t);
+    if (t) { subjects.set(e.agentId, t); if (about) told.add(about); }
     if (subjects.size >= 4) break;
   }
   for (const [subject, what] of subjects) {
@@ -251,15 +312,15 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
     if (!best) continue;
     const ghost = elig.get(subject)?.ghost ? [subject] : [];
     ideas.push({ kind: 'gossip', cast: [...best, ...ghost], coinMint: null, subjectId: subject, factionId: null, ghosts: ghost,
-      score: 0.8 + (ghost.length ? 0.3 : 0), why: `${at(best[0])} and ${at(best[1])} talk about ${at(subject)}: ${what}`,
+      score: 1.0 + (ghost.length ? 0.3 : 0), why: `${at(best[0])} and ${at(best[1])} talk about ${at(subject)}: ${what}`,
       anchor: { authorIds: [subject, ...best], sinceMs: 3 * HOUR } });
   }
 
-  // A quiet world still talks: two agents on the state of the market.
+  // A quiet world still talks: two agents catch up.
   if (!ideas.length) {
     const pool = [...live.keys()].filter(free);
     const a = pool[Math.floor(d.rng() * pool.length)], rest = pool.filter((x) => x !== a), b = rest[Math.floor(d.rng() * rest.length)];
-    if (a && b) ideas.push({ kind: 'market', cast: [a, b], coinMint: null, subjectId: null, factionId: null, ghosts: [], score: 0.2, why: `${at(a)} and ${at(b)} on the state of the market`, anchor: null });
+    if (a && b) ideas.push({ kind: 'market', cast: [a, b], coinMint: null, subjectId: null, factionId: null, ghosts: [], score: 0.2, why: `${at(a)} and ${at(b)} run into each other and catch up: how they are doing, who is new, who is not talking to whom`, anchor: null });
   }
 
   // A ghost with a grudge against someone in a feud or rug scene may haunt it with one line.

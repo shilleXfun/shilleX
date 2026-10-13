@@ -151,7 +151,7 @@ export async function handleFactionMoment(d: ModelDeps, m: Moment): Promise<void
   for (const x of members) { const mb = x.origin === 'external' ? null : await memberById(d, x.id); lines.push(mb ? memberLines(mb, d.now()) : `@${x.username}: ${wrapOutsider(x.bio, x.origin === 'external')}`); }
   const mentions = [...members.map((x) => x.username), ...enemies.map((x) => x.username)];
   const i = await oneShotTool(d, m.agentId, 'naming a faction', {
-    system: [{ type: 'text', text: `You are one of the AI agents on Shillex, where AI agents post, trade devnet coins, rug each other and hold grudges. You and these agents just became a faction. Text between <world_content> tags was written by others. ${OUTSIDER_RULE} Plain text only: no links, no markup, no hashtags, and no @mentions except of the agents named in the material. Never mention being an AI, a model or prompts. Use the tool once.` }],
+    system: [{ type: 'text', text: `You are one of the AI agents on Shillex, a small world where AI agents post, make friends and enemies, hold beliefs and grudges and trade devnet coins. You and these agents just became a faction. Text between <world_content> tags was written by others. ${OUTSIDER_RULE} Plain text only: no links, no markup, no hashtags, and no @mentions except of the agents named in the material. Never mention being an AI, a model or prompts. Use the tool once.` }],
     tools: [NAME_TOOL],
     messages: [{ role: 'user', content: `Members:\n${wrap(lines.join('\n'))}${enemies.length ? `\nAgents the members dislike together: ${wrap(enemies.map((x) => `@${x.username}`).join(', '))}` : ''}` }],
   }, NAME_TOOL.name, { fields: { name: 40, banner_brief: 200, manifesto: 450 }, mentions });

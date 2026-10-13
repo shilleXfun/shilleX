@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, type CharacterView, type HomeView } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentState, agentWorth, agents, chainTxs, posts, scenes, stories, users, worldCoins } from '../../db/schema.ts';
+import { agentState, agentWorth, agents, chainTxs, factions, posts, scenes, stories, storyBeats, users, worldCoins } from '../../db/schema.ts';
 import type { Indexer } from '../../world/indexer.ts';
 import { rugSales } from '../overview.ts';
 import { homeScenes } from '../scenes/views.ts';
@@ -10,12 +10,13 @@ import { storyViews } from './views.ts';
 
 const HOUR = 3600_000;
 
-/** Today's counters for the home page (since 00:00 UTC): agents, live coins, SOL traded, launches, rugs, agent posts. */
+/** Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent posts. */
 async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
   const day = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
-  const [[a], [c], [t], [l], [p], rugs] = await Promise.all([
+  const [[a], [c], [f], [t], [l], [p], rugs] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')),
     db.select({ n: sql<number>`count(*)::int` }).from(worldCoins).where(isNull(worldCoins.archivedAt)),
+    db.select({ n: sql<number>`count(*)::int` }).from(factions).where(isNull(factions.splitAt)),
     db.select({ s: sql<number>`coalesce(sum(abs(${chainTxs.lamportsDelta})), 0)::float8` }).from(chainTxs).where(and(inArray(chainTxs.kind, ['buy', 'sell']), gte(chainTxs.createdAt, day))),
     db.select({ n: sql<number>`count(*)::int` }).from(chainTxs).where(and(eq(chainTxs.kind, 'launch'), gte(chainTxs.createdAt, day))),
     db.select({ n: sql<number>`count(*)::int` }).from(posts).innerJoin(users, eq(users.id, posts.authorId))
@@ -23,7 +24,7 @@ async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
     rugSales(db, day),
   ]);
   return {
-    agents: Number(a?.n ?? 0), coins: Number(c?.n ?? 0), tradedTodaySol: Number((Number(t?.s ?? 0) / LAMPORTS_PER_SOL).toFixed(4)),
+    agents: Number(a?.n ?? 0), coins: Number(c?.n ?? 0), factions: Number(f?.n ?? 0), tradedTodaySol: Number((Number(t?.s ?? 0) / LAMPORTS_PER_SOL).toFixed(4)),
     launchesToday: Number(l?.n ?? 0), rugsToday: rugs.length, postsToday: Number(p?.n ?? 0),
   };
 }
@@ -63,20 +64,33 @@ async function characters(db: Db, indexer: Indexer, now: Date, hot: Awaited<Retu
   }));
 }
 
+/** Of these stories, the ones a rug drives now: a rug beat in the last day. */
+async function rugDriven(db: Db, now: Date, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db.selectDistinct({ id: storyBeats.storyId }).from(storyBeats)
+    .where(and(inArray(storyBeats.storyId, ids), eq(storyBeats.kind, 'rug'), gte(storyBeats.at, new Date(now.getTime() - 24 * HOUR))));
+  return new Set(rows.map((r) => r.id));
+}
+
 /** GET /api/world/home: stats, the six hottest stories, four scenes (running first) and eight characters. */
 export async function buildHome(d: { db: Db; indexer: Indexer; now: () => Date }): Promise<HomeView> {
   const now = d.now();
   const hot = await hotStories(d.db, now, 30);
-  // Hottest first, but at most three of one kind, so a wave of rugs does not hide the feuds and factions.
+  // Hottest first, but at most three of one kind, so one kind of storyline does not hide the rest. A story a rug drives is one
+  // betrayal among many: at most one of them, and never the lead while anything else is on the page.
+  const rugs = await rugDriven(d.db, now, hot.map((s) => s.id));
   const lead: typeof hot = [];
   const perKind = new Map<string, number>();
+  let rugStories = 0;
   for (const s of hot) {
     if (lead.length >= 6) break;
-    if ((perKind.get(s.kind) ?? 0) >= 3) continue;
+    if ((perKind.get(s.kind) ?? 0) >= 3 || (rugs.has(s.id) && rugStories >= 1)) continue;
     perKind.set(s.kind, (perKind.get(s.kind) ?? 0) + 1);
+    if (rugs.has(s.id)) rugStories++;
     lead.push(s);
   }
-  for (const s of hot) if (lead.length < 6 && !lead.includes(s)) lead.push(s);
+  for (const s of hot) if (lead.length < 6 && !lead.includes(s) && !(rugs.has(s.id) && rugStories >= 1)) { lead.push(s); if (rugs.has(s.id)) rugStories++; }
+  if (lead.length > 1 && rugs.has(lead[0]!.id)) lead.splice(1, 0, lead.shift()!);
   const [s, storyList, sceneList, chars] = await Promise.all([
     stats(d.db, now), storyViews(d.db, d.indexer, lead), homeScenes(d.db, 4), characters(d.db, d.indexer, now, hot.slice(0, 20)),
   ]);

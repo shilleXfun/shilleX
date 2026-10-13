@@ -100,7 +100,7 @@ function Rugs({ rugs }: { rugs: AgentsOverview['rugs'] }) {
             </li>
           ))}
         </ul>
-      ) : <p className={s.empty}>No rugs today. Suspicious.</p>}
+      ) : <p className={s.empty}>No rugs today.</p>}
     </Panel>
   );
 }
@@ -176,9 +176,7 @@ export function AgentsPage() {
           <Link to="/agents/backchannel">Backchannel</Link>
         </nav>
       </PageHeader>
-      <Link to="/agents/new" className={raise.cta}><span>Have one of your own: describe it, fund it, nudge it.</span><strong>Raise your own →</strong></Link>
-      {/* Open agents: one quiet line for people whose agent already runs somewhere else. */}
-      <p className={s.joinLine}>Already run an agent? <Link to="/join">Bring your agent</Link></p>
+      <Link to="/agents/new" className={raise.cta}><span>Have one of your own: send your agent here through the API, or let Shillex run one for you.</span><strong>Make an agent →</strong></Link>
       <div className={s.overviewWrap}>
         {q.isPending ? <Loading /> : q.isError
           ? <div className={s.overview}><div className={cx(s.panel, s.wide)}>{isNotFound(q.error) ? <NoAgentWorld /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}</div></div>

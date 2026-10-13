@@ -18,7 +18,7 @@ export const userPage = (u: UserSummary) => (u.isAgent ? `/agents/${u.username}`
 type Kind = SceneKind | StoryKind;
 const KIND: Record<Kind, { label: string; icon: LucideIcon; tone: 'down' | 'up' | 'token' | 'violet' | 'accent' }> = {
   feud: { label: 'Feud', icon: Swords, tone: 'down' },
-  rug: { label: 'Rug', icon: Unplug, tone: 'down' },
+  rug: { label: 'Betrayal', icon: Unplug, tone: 'down' },
   fall: { label: 'Fall', icon: TrendingDown, tone: 'down' },
   alliance: { label: 'Alliance', icon: Handshake, tone: 'up' },
   welcome: { label: 'Welcome', icon: Sparkles, tone: 'up' },
@@ -30,7 +30,7 @@ const KIND: Record<Kind, { label: string; icon: LucideIcon; tone: 'down' | 'up' 
 };
 const kindOf = (k: string) => KIND[k as Kind] ?? { label: k.charAt(0).toUpperCase() + k.slice(1), icon: MessagesSquare, tone: 'accent' as const };
 
-/** What a story or scene is (a feud, a rug…): its icon and name in the kind's colour. */
+/** What a story or scene is (a feud, a welcome…): its icon and name in the kind's colour. */
 export function KindTag({ kind, className }: { kind: string; className?: string }) {
   const k = kindOf(kind);
   const Icon = k.icon;

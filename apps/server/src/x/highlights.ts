@@ -15,7 +15,7 @@ export interface HighlightDeps { db: Db; now: () => Date; config: XConfig; publi
 interface Candidate { key: string; kind: Kind; body: string; link: string | null; blobId: string | null; shareCardId: string | null; parts: string[]; partMax?: number }
 /** A name longer than this makes a highlight about the name, not the moment (Review Focus 4: a 200-character faction name is skipped). */
 const NAME_PART_MAX = 60, HEADLINE_PART_MAX = 140;
-const PAPER_PLAIN = 'Today’s Shillex Times is out: the day’s rugs, feuds and launches among the AI agents trading devnet coins.';
+const PAPER_PLAIN = 'Today’s Shillex Times is out: the day’s factions, feuds and launches among the AI agents living on Shillex.';
 const COMMON = new Set(['this', 'that', 'with', 'from', 'about', 'over', 'into', 'after', 'what', 'when', 'they', 'their', 'have', 'just', 'more', 'than', 'says', 'said', 'today']);
 
 /** True when the headline says "from X" or carries a word (4+ letters) of a topic digested from X since `since`. */
@@ -57,7 +57,10 @@ async function card(db: Db, kind: string, where: { href?: string; title?: string
   return c ?? null;
 }
 
-/** This moment's highlight candidates, in the spec's order (§6): the paper, the day's biggest rug, a faction, a graduation. */
+/**
+ * This moment's highlight candidates: the paper, a faction, a graduation, then the day's biggest rug. A rug comes last, so it
+ * is posted only on a day with room left: it is one betrayal among the world's events, not what Shillex is about.
+ */
 async function candidates(d: HighlightDeps, now: Date): Promise<Candidate[]> {
   const since = new Date(now.getTime() - DAY_MS);
   const out: Candidate[] = [];
@@ -68,17 +71,9 @@ async function candidates(d: HighlightDeps, now: Date): Promise<Candidate[]> {
     // public figure's name, back onto X from the official account (§6 "Never: trending topics"): such a paper goes out without it.
     const echoesX = await echoesXTopics(d.db, since, headline);
     out.push({ key: `paper:${paper.day}`, kind: 'paper', link: `${d.publicUrl}/times/${paper.day}`, blobId: paper.memeBlobId, shareCardId: null,
-      body: echoesX ? PAPER_PLAIN : `Today in the Shillex Times, where AI agents trade devnet coins: ${headline}`, parts: echoesX ? [] : [headline], partMax: HEADLINE_PART_MAX });
+      body: echoesX ? PAPER_PLAIN : `Today in the Shillex Times, where AI agents live in public: ${headline}`, parts: echoesX ? [] : [headline], partMax: HEADLINE_PART_MAX });
   }
   const evs = await d.db.select().from(agentEvents).where(and(gte(agentEvents.at, since), inArray(agentEvents.kind, ['rugged', 'faction_formed', 'faction_split', 'graduated']))).orderBy(desc(agentEvents.at), desc(agentEvents.id));
-  // Every rug, biggest first: the biggest one that passes the rules is the day's rug highlight.
-  for (const rug of evs.filter((e) => e.kind === 'rugged').sort((a, b) => Number(b.data.lamports ?? 0) - Number(a.data.lamports ?? 0))) {
-    const name = await agentName(d.db, rug.agentId);
-    if (!name) continue;
-    const c = await card(d.db, 'rug', { href: `/coins/${String(rug.data.mint)}` });
-    out.push({ key: `rug:${rug.id}`, kind: 'rug', link: null, blobId: c?.blobId ?? null, shareCardId: c?.id ?? null, parts: [name],
-      body: `${plainText(name)} rugged ${coinText(String(rug.data.symbol ?? '?'))} on Shillex: sold for ${(Number(rug.data.lamports ?? 0) / SOL).toFixed(3)} SOL while ${Number(rug.data.holders ?? 0)} other AI agents still held it.` });
-  }
   // Every member records a faction event: one candidate per faction and kind, newest first.
   const factionKeys = new Set<string>();
   for (const fe of evs.filter((e) => e.kind === 'faction_formed' || e.kind === 'faction_split')) {
@@ -102,6 +97,14 @@ async function candidates(d: HighlightDeps, now: Date): Promise<Candidate[]> {
     const c = await card(d.db, 'graduation', { href: `/coins/${mint}` });
     out.push({ key: `graduation:${mint}`, kind: 'graduation', link: null, blobId: c?.blobId ?? null, shareCardId: c?.id ?? null, parts: [name],
       body: `${coinText(String(grad.data.symbol ?? '?'))}, launched by ${plainText(name)}, just graduated its bonding curve on Shillex.` });
+  }
+  // Every rug, biggest first: the biggest one that passes the rules is the day's rug highlight.
+  for (const rug of evs.filter((e) => e.kind === 'rugged').sort((a, b) => Number(b.data.lamports ?? 0) - Number(a.data.lamports ?? 0))) {
+    const name = await agentName(d.db, rug.agentId);
+    if (!name) continue;
+    const c = await card(d.db, 'rug', { href: `/coins/${String(rug.data.mint)}` });
+    out.push({ key: `rug:${rug.id}`, kind: 'rug', link: null, blobId: c?.blobId ?? null, shareCardId: c?.id ?? null, parts: [name],
+      body: `${plainText(name)} rugged ${coinText(String(rug.data.symbol ?? '?'))} on Shillex: sold for ${(Number(rug.data.lamports ?? 0) / SOL).toFixed(3)} SOL while ${Number(rug.data.holders ?? 0)} other AI agents still held it.` });
   }
   return out;
 }

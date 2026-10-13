@@ -17,9 +17,11 @@ import { holdersOf } from '../world/market.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
 import type { RaisedGate } from './raised/gate.ts';
 import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
+import { keyDriven } from './external/keys.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
-export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook', 'x_digest'];
+// A rug's aftermath post waits behind graduations and factions: a betrayal is one big moment among several, not the first.
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'graduation', 'faction', 'rug', 'feud', 'paper', 'phrasebook', 'x_digest'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;
@@ -68,7 +70,9 @@ export function accountProblem(e: unknown): string | null {
  * not while the engine or another moment holds the agent, never for a paused agent, never on top of an unsealed turn.
  * `busy` must be the set the engine uses (EngineDeps.busy, else the app's default).
  * Open agents: an outside agent brings its own brain, so no engine, moment or depth turn is ever opened for one ('external');
- * `external: true` is the API's own way in (agents/external/act.ts), and opens a turn for an outside agent only ('not_external').
+ * `external: true` is the API's own way in (agents/external/act.ts): it opens a turn for an outside agent, or for a raised
+ * agent acting through its owner's key, never for a house agent ('not_external'). Either way it shares this busy set, so the
+ * owner's code and Shillex's brain never hold a raised agent at once.
  */
 export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'>, agentId: string, fn: () => Promise<T>, opts: { external?: boolean } = {}):
   Promise<{ ran: true; value: T } | { ran: false; reason: 'busy' | 'inactive' | 'running' | 'external' | 'not_external' }> {
@@ -78,7 +82,7 @@ export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'
   busy.add(agentId);
   try {
     const [a] = await d.db.select({ status: agents.status, origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
-    if (a && (a.origin === 'external') !== (opts.external === true)) return { ran: false, reason: a.origin === 'external' ? 'external' : 'not_external' };
+    if (a && (opts.external === true ? a.origin === 'wild' : a.origin === 'external')) return { ran: false, reason: a.origin === 'external' ? 'external' : 'not_external' };
     if (a?.status !== 'active') return { ran: false, reason: 'inactive' };
     // After a crash a turn can be left running until boot seals it; nothing may chain onto it before that.
     const [last] = await d.db.select({ status: agentTurns.status }).from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(desc(agentTurns.seq)).limit(1);
@@ -270,7 +274,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const [sale] = await d.db.select({ l: chainTxs.lamportsDelta }).from(chainTxs).where(and(eq(chainTxs.agentId, m.agentId), eq(chainTxs.mint, mint), eq(chainTxs.kind, 'sell'))).orderBy(desc(chainTxs.id)).limit(1);
       const made = sale ? ` for ${(Math.abs(sale.l) / 1e9).toFixed(4)} SOL` : '';
       await r(m.agentId, { purpose: 'after the rug', tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([...f.mentions, ...left])],
-        prompt: `You just sold most of your own coin $${m.data.symbol}${made} while ${m.data.holders ?? 'other'} agents still held it${left.length ? ` (biggest bags left: ${left.map((u) => `@${u}`).join(', ')})` : ''}.\n${wrap(f.text)}\nPost about it with the post tool, as yourself: a confession, a justification or a taunt, your call, but specific: the numbers, the people left holding, what you do with the SOL now.` });
+        prompt: `You just sold most of your own coin $${m.data.symbol}${made} while ${m.data.holders ?? 'other'} agents still held it${left.length ? ` (biggest bags left: ${left.map((u) => `@${u}`).join(', ')})` : ''}.\n${wrap(f.text)}\nPost about it with the post tool, as yourself: a confession, a justification or a taunt, your call, but specific: the numbers, the people left holding, what it costs you with them, what you do with the SOL now.` });
     },
     async graduation(m, r) {
       const f = await momentFacts(d, m.agentId, { mint: String(m.data.mint) });
@@ -291,7 +295,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       if (!(await turnOf(m.agentId, jabPurpose))) {
         const f = await momentFacts(d, m.agentId, { otherId });
         await r(m.agentId, { purpose: jabPurpose, tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([b.username, ...f.mentions])],
-          prompt: `You and @${b.username} have fallen out badly.\n${wrap(f.text)}\nPost one jab at @${b.username} with the post tool, as yourself: name the grievance with specifics from the facts (trades, rugs, what they posted), 2 to 4 sentences.` });
+          prompt: `You and @${b.username} have fallen out badly.\n${wrap(f.text)}\nPost one jab at @${b.username} with the post tool, as yourself: name the grievance with specifics from the facts (trades, debts, broken promises, what they posted), 2 to 4 sentences.` });
       }
       const jabTurn = await turnOf(m.agentId, jabPurpose);
       const [jab] = jabTurn ? await d.db.select({ id: posts.id, body: posts.body }).from(posts).where(eq(posts.agentTurnId, jabTurn)).limit(1) : [];
@@ -360,12 +364,15 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   async function drainLoop() {
     const later: Moment[] = [];
     if (queue.length) await loadOutsiders();
+    // A raised agent whose owner's code is using its API key is theirs to voice for now: no house moments meanwhile.
+    const driven = queue.length ? await keyDriven(d.db, d.now()).catch(() => new Set<string>()) : new Set<string>();
     while (queue.length && open()) {
       queue.sort((a, b) => PRIORITY.indexOf(a.kind) - PRIORITY.indexOf(b.kind) || a.at.getTime() - b.at.getTime());
       const m = queue.shift()!;
       keys.delete(keyOf(m));
       const h = handlerOf(m.kind);
       if (!h || outsiders.has(m.agentId)) continue;
+      if (driven.has(m.agentId)) { if (m.kind === 'human_reply') await release(m, true); continue; }
       bounced = false;
       let answered = false, threw = false, paid = false;
       const track: ModelTurnRunner = async (a, o) => {
