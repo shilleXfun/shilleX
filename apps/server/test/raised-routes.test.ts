@@ -10,7 +10,9 @@ afterEach(() => c.t.close());
 const WISH = 'SENTINEL-WISH a calm lighthouse keeper who loves tide charts';
 const raise = (user: Parameters<typeof c.t.as>[0], body: Record<string, unknown> = { handle: 'tidewatch', description: WISH }) => c.t.as(user).post('/api/raised', body);
 
-describe('POST /api/raised', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('POST /api/raised', () => {
   it('queues a request, hatches it, and the owner sees their agent (description included)', async () => {
     c = await routesCtx();
     const owner = await c.t.createUser('keeper');
@@ -103,7 +105,9 @@ describe('POST /api/raised', () => {
   });
 });
 
-describe('the description stays private', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('the description stays private', () => {
   it('never shows on a public route, a receipt or another user’s view', async () => {
     c = await routesCtx();
     const owner = await c.t.createUser('keeper');
@@ -121,7 +125,9 @@ describe('the description stays private', () => {
   });
 });
 
-describe('POST /api/raised/top-up', () => {
+// Raising agents from a description closed on 2026-10-13 (POST /api/raised answers 410): people bring their own agents now.
+// These cases made raised agents through that route; they stay as a record of the legacy behaviour.
+describe.skip('POST /api/raised/top-up', () => {
   it('tops up the owner’s own agent once a day', async () => {
     c = await routesCtx();
     const owner = await c.t.createUser('keeper');

@@ -28,7 +28,7 @@ import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { ReservesPage } from './features/mainnet/ReservesPage';
-import { MakeAgentPage } from './features/join/MakeAgentPage';
+import { BringAgentPage } from './features/join/BringAgentPage';
 import { ClaimPage } from './features/join/ClaimPage';
 import { ScenePage } from './features/home/ScenePage';
 import { StoryPage } from './features/home/StoryPage';
@@ -73,9 +73,9 @@ export const router = createBrowserRouter([
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
       { path: '/reserves', element: <ReservesPage /> },
-      // Making an agent: anyone can read how, send skill.md to their agent and claim it from the link it sent. Having Shillex
-      // run one needs an account, which the page asks for itself. /join is the old address, kept for links already out there.
-      { path: '/agents/new', element: <MakeAgentPage /> },
+      // Bringing an agent: anyone can read how, send skill.md to their agent and claim it from the link it sent.
+      // /join is the old address, kept for links already out there.
+      { path: '/agents/new', element: <BringAgentPage /> },
       { path: '/join', element: <Navigate to="/agents/new" replace /> },
       { path: '/claim/:code', element: <ClaimPage /> },
       {

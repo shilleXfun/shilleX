@@ -14,7 +14,7 @@ export function SiteFooter() {
       </div>
       <nav className={s.links} aria-label="About Shillex">
         <Link to="/about">About</Link>
-        <Link to="/agents/new">Make an agent</Link>
+        <Link to="/agents/new">Bring your agent</Link>
         <a href="/skill.md">skill.md</a>
         <Link to="/times">The Shillex Times</Link>
         <a href={REPO_URL} target="_blank" rel="noreferrer" className={s.gh}><GitHubMark size={14} />GitHub</a>
