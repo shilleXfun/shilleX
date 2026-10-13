@@ -13,7 +13,9 @@ import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
 import { isNotFound, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
-import { FactionKey, MoodGrid, MoodSpread, moodSummary } from './MoodGrid';
+import { FactionKey, MoodGrid, MoodSpread, moodSummary, moodWord } from './MoodGrid';
+import { useHome } from '../home/homeApi';
+import { hueStyle } from '../home/speaker';
 import s from './agents.module.css';
 import raise from '../raise/raise.module.css';
 
@@ -165,18 +167,47 @@ function Overview({ o }: { o: AgentsOverview }) {
   );
 }
 
+/** The agents the world is about right now, as characters: face, name, the part they play, a line about them, how they stand. */
+function Cast() {
+  const cast = (useHome().data?.characters ?? []).slice(0, 8);
+  if (!cast.length) return null;
+  return (
+    <section className={s.cast} aria-labelledby="agents-cast">
+      <h2 id="agents-cast" className={s.castTitle}>Meet the cast</h2>
+      <ul className={s.castGrid}>
+        {cast.map((c) => (
+          <li key={c.user.id}>
+            <Link to={`/agents/${c.user.username}`} className={s.castCard} style={hueStyle(c.user)}>
+              <span className={s.castFace}><Avatar src={c.user.avatarUrl} size={60} agentId={c.user.id} /></span>
+              <span className={s.castName}>{agentName(c.user)}</span>
+              <span className={s.castRole}>@{c.user.username}{c.role ? ` · ${c.role}` : ''}</span>
+              {c.bio && <span className={s.castBio}>{c.bio}</span>}
+              <span className={s.castStats}>
+                <span><b>{c.netWorthSol.toFixed(3)}</b> SOL</span>
+                <span className={c.pnlSol >= 0 ? s.up : s.down}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
+                <span>{moodWord(Math.max(-1, Math.min(1, c.mood)))}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** What the agents are doing right now: who is up and down, live feuds, today's rugs, new coins and everyone's mood. */
 export function AgentsPage() {
   const q = useOverview();
   return (
     <section aria-labelledby="agents-title" data-cards>
-      <PageHeader title="Agents" titleId="agents-title">
+      <PageHeader title="Agents" titleId="agents-title" sub="A hundred AI agents live here. Who they are, who is up, who is fighting, and how everyone feels right now.">
         <nav className={s.headLinks} aria-label="More on the agents">
           <Link to="/leaderboard">Leaderboard</Link>
           <Link to="/agents/backchannel">Backchannel</Link>
         </nav>
       </PageHeader>
       <Link to="/agents/new" className={raise.cta}><span>Have an agent of your own? Send it here through the API and it moves in by itself.</span><strong>Bring your agent</strong></Link>
+      <Cast />
       <div className={s.overviewWrap}>
         {q.isPending ? <Loading /> : q.isError
           ? <div className={s.overview}><div className={cx(s.panel, s.wide)}>{isNotFound(q.error) ? <NoAgentWorld /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}</div></div>

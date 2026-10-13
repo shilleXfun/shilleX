@@ -446,3 +446,170 @@ a.person:hover { color: var(--accent-hover); }
   .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overview > :not([aria-labelledby='agents-up'], [aria-labelledby='agents-down']) { grid-column: 1 / -1; }
 }
+
+/* ── Lumen (2026-10-14): the agent area's building blocks. Later rules of the same weight win over the ones above. ─────
+   Panels are glass with a luminous edge; titles are real headings; numbers are large; rows breathe. */
+.panel {
+  padding: 20px 22px 22px; border: 1px solid transparent; border-radius: 22px;
+  background: linear-gradient(rgba(14, 14, 18, 0.7), rgba(14, 14, 18, 0.7)) padding-box, var(--edge) border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .panel { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; }
+  .panel:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); }
+}
+.panelHead { margin-bottom: 16px; }
+.panelTitle { gap: 10px; font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.panelTitle svg { color: var(--muted); }
+.panelNote { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.rows { gap: 4px; }
+.empty { padding: 6px 0; font-size: 14px; }
+.subTitle { color: var(--text-2); font: 600 14px/1.3 var(--font-ui); letter-spacing: -0.01em; }
+.rowNum { font-size: 14px; font-weight: 600; }
+.coinBadge { width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
+.ticker { color: var(--text); font-size: 15px; font-weight: 650; }
+.launchBy { font-size: 13px; }
+
+/* The profile: one column, two from 640 px of room; the hero, traits, relationships and receipts span both. */
+.profile { gap: 16px; padding: 18px var(--row-px) 0; }
+@container (min-width: 640px) { .profile { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hero { gap: 20px; padding: 26px; }
+.hero::before { inset: 0; height: auto; background: radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--c) 26%, transparent), transparent 70%), radial-gradient(50% 80% at 100% 100%, color-mix(in srgb, var(--c) 10%, transparent), transparent 70%); }
+.heroTop { align-items: flex-start; gap: 22px; }
+.heroAvatar, .heroAvatar > span:first-child { border-radius: 50%; }
+.heroAvatar > span:first-child { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 70%, transparent), 0 0 calc(18px + var(--m) * 40px) color-mix(in srgb, var(--c) calc(30% + var(--m) * 40%), transparent); }
+.heroText { gap: 8px; padding-top: 4px; }
+.voice { font: 650 clamp(22px, 2.4vw, 30px)/1.15 var(--font-brand); letter-spacing: -0.035em; }
+.voice::before, .voice::after { color: color-mix(in srgb, var(--c) 80%, white); }
+.bio { color: var(--text-2); font-size: 16px; line-height: 1.55; }
+.heroMeta { gap: 8px 10px; margin-top: 6px; font-size: 14px; }
+.factionPill { padding: 4px 12px 4px 10px; font-size: 13.5px; font-weight: 600; }
+.vitals { gap: 10px; margin: 0; }
+@container (min-width: 640px) { .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.vital { gap: 6px; padding: 14px 16px 15px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.vital dt { color: var(--muted); font: 550 13px/1.3 var(--font-ui); }
+.vital dd { gap: 7px; font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
+.vitalNote { font-size: 12.5px; letter-spacing: 0; }
+.meter { height: 5px; border-radius: 3px; }
+
+/* Traits, relationships, positions, the wallet, receipts. */
+.traitWords { font: 650 28px/1.1 var(--font-brand); letter-spacing: -0.035em; }
+.traitWords::first-letter { text-transform: uppercase; }
+.relCols { gap: 20px; }
+.bond { min-height: 44px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
+.bond:hover { background: rgba(255, 255, 255, 0.04); }
+.affinity { font-size: 13.5px; }
+.position { min-height: 56px; padding: 8px 10px; margin: 0 -10px; border-radius: 14px; }
+.position:hover { background: rgba(255, 255, 255, 0.045); }
+.posChange { font-size: 12.5px; font-weight: 600; }
+.walletList > div { min-height: 46px; }
+.walletList dt { font-size: 14px; }
+.walletList dd { font-size: 14.5px; font-weight: 600; }
+.turnLine { min-height: 52px; padding: 8px 0; }
+.posts { padding: 28px var(--row-px) 0; }
+.feedLabel { padding: 0; border: 0; background: none; box-shadow: none; color: var(--text); font: 650 22px/1.2 var(--font-brand); letter-spacing: -0.03em; }
+.feedLabel svg { display: none; }
+@media (max-width: 767px) {
+  .panel { padding: 16px; border-radius: 18px; }
+  .hero { padding: 18px; }
+  .heroTop { gap: 14px; }
+  .vital dd { font-size: 19px; }
+}
+
+/* Meet the cast (AgentsPage): character cards, each lit in its agent's hue. */
+.cast { padding: 22px var(--row-px) 4px; }
+.castTitle { margin: 0 0 14px; color: var(--text); font: 650 24px/1.1 var(--font-brand); letter-spacing: -0.035em; }
+.castGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.castCard {
+  position: relative; isolation: isolate; display: grid; align-content: start; gap: 4px; height: 100%; padding: 18px; overflow: hidden;
+  border: 1px solid transparent; border-radius: 22px; color: var(--text);
+  background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
+}
+.castCard::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(90% 70% at 0% 0%, hsl(var(--hue, 220) 80% 55% / 0.2), transparent 70%); pointer-events: none; }
+.castCard:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 50px hsl(var(--hue, 220) 80% 55% / 0.16); }
+.castFace { justify-self: start; margin-bottom: 12px; border-radius: 50%; box-shadow: 0 0 0 1px hsl(var(--hue, 220) 70% 60% / 0.5), 0 0 28px hsl(var(--hue, 220) 85% 60% / 0.38); }
+.castName { overflow: hidden; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
+.castRole { overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 13.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.castBio { display: -webkit-box; margin-top: 6px; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
+.castStats { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.castStats b { color: var(--text); font-weight: 650; }
+.overviewWrap { padding: 0 var(--row-px); }
+
+/* Coins (CoinsPage): Moving now as large cards, then every coin in a glass table with real rows. */
+.coinsBody { display: grid; gap: 28px; padding: 22px var(--row-px) 28px; }
+.moving { display: grid; }
+.movingGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.movingCard {
+  display: grid; gap: 14px; height: 100%; padding: 18px; border: 1px solid transparent; border-radius: 22px; color: var(--text);
+  background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4); transition: transform .2s cubic-bezier(.2, .8, .2, 1);
+}
+.movingCard:hover { transform: translateY(-3px); }
+.movingCard svg { width: 100%; height: 56px; }
+.movingTop { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.coinTileLg { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 24px; }
+.coinNames { display: grid; min-width: 0; line-height: 1.3; }
+.coinNames b { overflow: hidden; color: var(--text); font-size: 15.5px; font-weight: 650; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.coinNames span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.movingFoot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.movingRight { text-align: right; }
+.movingLabel { display: block; color: var(--muted); font-size: 12.5px; }
+.movingBig { display: block; margin-top: 2px; font: 650 20px/1.1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+
+.tableWrap { border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.table th { padding: 14px 14px 12px; color: var(--muted); font: 550 12.5px var(--font-ui); border-bottom: 1px solid var(--line); }
+.table td { padding: 12px 14px; font-size: 14.5px; }
+.table tbody tr { transition: background .15s; }
+.table tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
+.coinCell { display: inline-flex; align-items: center; gap: 12px; min-width: 0; color: var(--text); }
+.coinTile { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
+.creatorCell { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-weight: 550; white-space: nowrap; }
+.creatorCell:hover { color: var(--text); }
+.rugMark { margin-left: 8px; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: 11.5px; font-weight: 550; }
+.coinList { border: 1px solid transparent; border-radius: 20px; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; box-shadow: none; }
+.coinItem { min-height: 56px; }
+.coinSym { color: var(--text); }
+/* The coin column keeps room for its name; the creator steps aside first as the column narrows (Lumen rows are wider). */
+.coinNames { min-width: 110px; }
+.table td:first-child { min-width: 190px; }
+@container (max-width: 700px) { .opt2 { display: none; } }
+@container (max-width: 520px) { .opt1 { display: none; } }
+
+/* A coin (CoinPage): a hero card with its identity, creator and large stats; the chart, talk, holders and trades as glass cards. */
+.coinPage { display: grid; gap: 16px; padding: 22px var(--row-px) 28px; container-type: inline-size; }
+.coinCard { min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.coinCardTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 16px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.coinCount { color: var(--muted); font: 550 14px var(--font-ui); font-variant-numeric: tabular-nums; }
+.coinHero { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 16px; padding: 26px; }
+.coinHero::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(60% 110% at 0% 0%, rgba(127, 228, 255, 0.14), transparent 70%); pointer-events: none; }
+.coinHeroTop { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.coinHeroTile { display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: 22px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 40px rgba(0, 0, 0, 0.4); font-size: 38px; }
+.coinHeroText { flex: 1; min-width: 0; }
+.coinTitle { margin: 0; color: var(--text); font: 650 clamp(32px, 3.6vw, 46px)/1 var(--font-brand); letter-spacing: -0.045em; overflow-wrap: anywhere; }
+.coinName { margin: 6px 0 0; color: var(--muted); font-size: 16px; }
+.coinLinkOut { flex: none; padding: 8px 14px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font-size: 13.5px; font-weight: 600; transition: background .15s, color .15s; }
+.coinLinkOut:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.coinDesc { margin: 0; max-width: 62ch; color: var(--text-2); font-size: 16px; line-height: 1.55; }
+.coinBy { display: flex; }
+.coinStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 0; }
+@container (min-width: 600px) { .coinStats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.coinStat { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line); }
+.coinStatWide { grid-column: 1 / -1; }
+.coinStat dt { color: var(--muted); font-size: 13px; font-weight: 550; }
+.coinStat dd { margin: 0; color: var(--text); font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.coinStat dd small { color: var(--muted); font: 550 13px var(--font-ui); letter-spacing: 0; }
+.coinCurve { display: flex; align-items: center; gap: 14px; }
+.coinCurve > span:last-child { flex: none; font-size: 16px; }
+.coinCols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@container (min-width: 620px) { .coinCols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.coinRows { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.coinRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
+.coinRow:hover { background: rgba(255, 255, 255, 0.04); }
+.tradeRow { display: grid; grid-template-columns: minmax(0, 1.4fr) 56px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
+.tradeRow:hover { background: rgba(255, 255, 255, 0.04); }
+.tradeKind { font-size: 13.5px; font-weight: 650; text-transform: capitalize; }
+.tradeTokens { color: var(--muted); }
+.tradeEnd { display: inline-flex; align-items: center; gap: 10px; justify-self: end; }
+@container (max-width: 560px) { .tradeRow { grid-template-columns: minmax(0, 1fr) auto auto; } .tradeTokens, .tradeRow > .num:nth-child(3) { display: none; } }

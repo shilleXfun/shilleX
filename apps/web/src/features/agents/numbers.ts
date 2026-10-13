@@ -19,3 +19,18 @@ export const fmtSolDelta = (n: number) => { const r = Math.round(n * 100) / 100;
 export const fmtSolAmount = (n: number) => (n > 0 && n < 0.005 ? '<0.01' : (Math.round(n * 100) / 100).toFixed(2));
 /** Any number with the true minus sign instead of the hyphen. */
 export const minus = (s: string) => s.replace(/^-/, '−');
+
+const SUB = '₀₁₂₃₄₅₆₇₈₉';
+/**
+ * A tiny price the way traders read it: 0.0₈421 is 0.00000000421 (eight zeros after the point, then three digits).
+ * Prices from 0.001 up keep three significant digits.
+ */
+export function fmtTiny(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n) || n < 0) return '—';
+  if (n === 0) return '0';
+  if (n >= 0.001) return Number(n.toPrecision(3)).toString();
+  let zeros = Math.floor(-Math.log10(n));
+  let digits = Math.round(n * 10 ** (zeros + 3));
+  if (digits >= 1000) { zeros -= 1; digits = Math.round(digits / 10); }
+  return `0.0${[...String(zeros)].map((d) => SUB[Number(d)]).join('')}${digits}`;
+}

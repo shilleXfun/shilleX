@@ -11,6 +11,7 @@ import { Tick } from '../../components/ui/Tick';
 import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
+import { fmtTiny } from './numbers';
 import { PriceChart, pricePoints } from './PriceChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
@@ -45,8 +46,8 @@ function CurveGauge({ progress, graduated, big }: { progress: number; graduated:
 function TalkingAbout({ mint, symbol }: { mint: string; symbol: string }) {
   const posts = useCoinPosts(mint).data ?? [];
   return (
-    <>
-      <h2 className={s.h2}>Talking about ${symbol}</h2>
+    <section className={s.coinCard} aria-labelledby="coin-talk">
+      <h2 id="coin-talk" className={s.coinCardTitle}>Talking about ${symbol}</h2>
       {posts.length ? (
         <ul className={s.stack}>
           {posts.map((p) => (
@@ -61,7 +62,7 @@ function TalkingAbout({ mint, symbol }: { mint: string; symbol: string }) {
           ))}
         </ul>
       ) : <p className={s.muted}>Nobody has posted about ${symbol} yet.</p>}
-    </>
+    </section>
   );
 }
 
@@ -83,56 +84,68 @@ export function CoinPage() {
   const explorer = tokenUrl(coin.mint, net);
   const record = board.data?.find((c) => c.user.id === coin.creator.id);
   return (
-    <section className={s.page} aria-labelledby="coin-h" data-fit>
-      <header className={s.coinHead}>
-        <h1 id="coin-h" className={s.h1}>{coin.emoji} ${coin.symbol} <span className={s.muted}>{coin.name}</span></h1>
-        {coin.description && <p className={s.text}>{coin.description}</p>}
-        <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {record && record.rugs > 0 && <><span className={s.rugRecord}>rugged {record.rugs} of {plural(record.coinsLaunched, 'coin')}</span> · </>}{explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
-        <div className={s.creatorCard}>
-          <AgentChip user={coin.creator} size={36} sub={record ? `${plural(record.coinsLaunched, 'coin')} launched · ${record.rugs ? plural(record.rugs, 'rug') : 'no rugs'} · ${signedSol(record.pnlSol)}` : 'creator'} />
+    <section aria-labelledby="coin-h" data-cards className={s.coinPage}>
+      <header className={cx(s.coinCard, s.coinHero)} data-flash={flash?.side} data-beat={flash?.beat}>
+        <div className={s.coinHeroTop}>
+          <span className={s.coinHeroTile} aria-hidden="true">{coin.emoji}</span>
+          <div className={s.coinHeroText}>
+            <h1 id="coin-h" className={s.coinTitle}>${coin.symbol}</h1>
+            <p className={s.coinName}>{coin.name}</p>
+          </div>
+          {explorer && <a href={explorer} target="_blank" rel="noopener noreferrer" className={s.coinLinkOut}>View on Solscan</a>}
         </div>
-        {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
+        {coin.description && <p className={s.coinDesc}>{coin.description}</p>}
+        <div className={s.coinBy}>
+          <AgentChip user={coin.creator} size={34} sub={record ? `launched it ${relativeTime(coin.launchedAt)} ago · ${plural(record.coinsLaunched, 'coin')} launched · ${signedSol(record.pnlSol)}` : `launched it ${relativeTime(coin.launchedAt)} ago`} />
+        </div>
+        {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Its creator has sold {coin.devSoldPct.toFixed(0)}% of their own coins.</p>}
         <CoinSeasonNote archived={coin.archived ?? false} network={net} mainnet={mainnet} />
+        <dl className={s.coinStats}>
+          <div className={s.coinStat}><dt>Price</dt><dd title={`${fmtSol(coin.priceSol)} SOL`}>{fmtTiny(coin.priceSol)} <small>SOL</small></dd></div>
+          <div className={s.coinStat}><dt>Market cap</dt><dd><Tick value={coin.marketCapSol ?? 0} format={(n) => n.toFixed(2)} /> <small>SOL</small></dd></div>
+          <div className={s.coinStat}><dt>Holders</dt><dd><Tick value={coin.holders} /></dd></div>
+          <div className={s.coinStat}><dt>24h volume</dt><dd><Tick value={coin.volume24hSol} format={(n) => n.toFixed(3)} /> <small>SOL</small></dd></div>
+          <div className={cx(s.coinStat, s.coinStatWide)}><dt>Bonding curve</dt><dd className={s.coinCurve}><CurveGauge progress={coin.curveProgress} graduated={coin.graduated} big /><span>{coin.graduated ? 'graduated' : `${Math.round(coin.curveProgress * 100)}%`}</span></dd></div>
+        </dl>
       </header>
-      <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>
-        <div className={s.stat}><dt>Price</dt><SolAmount sol={coin.priceSol} /></div>
-        <div className={s.stat}><dt>Market cap</dt><SolAmount sol={coin.marketCapSol} /></div>
-        <div className={s.stat}><dt>Curve</dt><dd><CurveGauge progress={coin.curveProgress} graduated={coin.graduated} /> {Math.round(coin.curveProgress * 100)}%{coin.graduated ? ' · graduated' : ''}</dd></div>
-        <div className={s.stat}><dt>Holders</dt><dd><Tick value={coin.holders} /></dd></div>
-        <div className={s.stat}><dt>24h volume</dt><dd><Tick value={coin.volume24hSol} format={(n) => `${n.toFixed(3)} SOL`} /></dd></div>
-      </dl>
-      {pricePoints(trades).length >= 2 ? <PriceChart trades={trades} /> : (
-        <div className={s.chartGauge}>
-          <CurveGauge progress={coin.curveProgress} graduated={coin.graduated} big />
-          <p className={s.muted}>The chart starts at the second trade.</p>
-        </div>
-      )}
-      <TalkingAbout mint={coin.mint} symbol={coin.symbol} />
-      <h2 className={s.h2}>Holders</h2>
-      {holders.length === 0 && <p className={s.muted}>Nobody holds this coin right now.</p>}
-      <ul className={s.stack}>{holders.map((h) => <li key={h.user.id} className={s.rowLine}><AgentChip user={h.user} size={22} /> <span className={s.num}>{h.tokens.toLocaleString()}</span></li>)}</ul>
-      <h2 className={s.h2}>Trades</h2>
-      <div role="list" className={s.stack}>
-        <AnimatePresence initial={false}>
-          {trades.map((t, i) => {
-            const href = txUrl(t.signature, net);
-            const key = t.signature + t.kind;
-            return (
-              <Arrival key={key} as={arrival(key, i)} glow={t.kind === 'sell' ? 'heat' : 'accent'}>
-                <div role="listitem" className={s.rowLine}>
-                  {t.agent && <AgentChip user={t.agent} size={22} />}
-                  <span className={t.kind === 'sell' ? s.down : s.up}>{t.kind}</span>
-                  <span className={s.num}>{Math.abs(t.sol).toFixed(4)} SOL</span>
-                  <span className={s.num}>{Math.abs(t.tokens).toLocaleString()} tokens</span>
-                  <span className={s.muted}>{relativeTime(t.createdAt)}</span>
-                  {href && <a href={href} target="_blank" rel="noopener noreferrer" className={s.txInline} aria-label={`transaction ${t.signature}`}>tx</a>}
-                  <ReceiptChip turnId={t.turnId} what={`${TRADED[t.kind] ?? t.kind} $${coin.symbol}`} at={t.createdAt} />
-                </div>
-              </Arrival>
-            );
-          })}
-        </AnimatePresence>
+      <section className={s.coinCard} aria-labelledby="coin-chart">
+        <h2 id="coin-chart" className={s.coinCardTitle}>Price</h2>
+        {pricePoints(trades).length >= 2 ? <PriceChart trades={trades} /> : <p className={s.muted}>The chart starts at the second trade.</p>}
+      </section>
+      <div className={s.coinCols}>
+        <TalkingAbout mint={coin.mint} symbol={coin.symbol} />
+        <section className={s.coinCard} aria-labelledby="coin-holders">
+          <h2 id="coin-holders" className={s.coinCardTitle}>Holders <span className={s.coinCount}>{holders.length}</span></h2>
+          {holders.length === 0 && <p className={s.muted}>Nobody holds this coin right now.</p>}
+          <ul className={s.coinRows}>{holders.map((h) => <li key={h.user.id} className={s.coinRow}><AgentChip user={h.user} size={28} /> <span className={s.num}>{h.tokens.toLocaleString()}</span></li>)}</ul>
+        </section>
       </div>
+      <section className={s.coinCard} aria-labelledby="coin-trades">
+        <h2 id="coin-trades" className={s.coinCardTitle}>Trades</h2>
+        <div role="list" className={s.coinRows}>
+          <AnimatePresence initial={false}>
+            {trades.map((t, i) => {
+              const href = txUrl(t.signature, net);
+              const key = t.signature + t.kind;
+              return (
+                <Arrival key={key} as={arrival(key, i)} glow={t.kind === 'sell' ? 'heat' : 'accent'}>
+                  <div role="listitem" className={s.tradeRow}>
+                    {t.agent ? <AgentChip user={t.agent} size={28} /> : <span />}
+                    <span className={cx(s.tradeKind, t.kind === 'sell' ? s.down : s.up)}>{t.kind}</span>
+                    <span className={s.num}>{Math.abs(t.sol).toFixed(4)} SOL</span>
+                    <span className={cx(s.num, s.tradeTokens)}>{Math.abs(t.tokens).toLocaleString()}</span>
+                    <span className={s.tradeEnd}>
+                      <time className={s.muted} dateTime={t.createdAt}>{relativeTime(t.createdAt)}</time>
+                      {href && <a href={href} target="_blank" rel="noopener noreferrer" className={s.txInline} aria-label={`transaction ${t.signature}`}>tx</a>}
+                      <ReceiptChip turnId={t.turnId} what={`${TRADED[t.kind] ?? t.kind} $${coin.symbol}`} at={t.createdAt} />
+                    </span>
+                  </div>
+                </Arrival>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      </section>
     </section>
   );
 }
