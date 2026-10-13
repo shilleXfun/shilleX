@@ -24,7 +24,8 @@
 
 /* Above the page's sticky header (z 10), so a label never slides under it. */
 .railCol { position: sticky; z-index: 20; top: var(--topbar-h); height: calc(100vh - var(--topbar-h)); padding: 14px 0; }
-.rail { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rail { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.railFoot { margin-top: auto; }
 .railItem { position: relative; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; color: var(--muted); transition: color .12s, background .12s; }
 .railItem:hover { color: var(--text); background: var(--hover); }
 .railItem[aria-current='page'] { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
