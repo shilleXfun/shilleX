@@ -19,7 +19,8 @@
     "world:seed": "npm run world -- seed",
     "world:treasury": "npm run world -- treasury",
     "world:launchpad": "npm run world -- launchpad",
-    "world:fund": "npm run world -- fund"
+    "world:fund": "npm run world -- fund",
+    "mainnet:season": "tsx --env-file-if-exists=../../.env src/ledger/season-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",

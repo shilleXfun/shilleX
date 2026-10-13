@@ -45,7 +45,7 @@ export function averageCost(rows: CostRow[], launchFee: number = LAUNCH_RENT): {
 }
 
 async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSelect)[], fee: number = LAUNCH_RENT): Promise<AgentView['coins']> {
-  const coins = rows ?? await db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt)).limit(60);
+  const coins = rows ?? await db.select().from(worldCoins).where(isNull(worldCoins.archivedAt)).orderBy(desc(worldCoins.launchedAt)).limit(60);
   if (!coins.length) return [];
   const mints = coins.map((c) => c.mint);
   const tenAgo = new Date(now.getTime() - 10 * MIN).toISOString(), hourAgo = new Date(now.getTime() - 60 * MIN).toISOString();
@@ -207,7 +207,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   // Merged into a new array: the shared cached array is never touched.
   const have = new Set(globalCoins.map((c) => c.mint));
   const heldMints = wallet.positions.map((p) => p.mint).filter((m) => !have.has(m));
-  const extraRows = await d.db.select().from(worldCoins).where(heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId));
+  const extraRows = await d.db.select().from(worldCoins).where(and(isNull(worldCoins.archivedAt), heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId)));
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing, launchFeeFor.get(d.db) ?? LAUNCH_RENT))] : globalCoins;
   const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null };

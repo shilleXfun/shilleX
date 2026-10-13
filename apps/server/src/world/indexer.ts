@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
@@ -76,11 +76,12 @@ export class Indexer {
         mint: c.mint, pool: c.pool, name: c.name, symbol: c.symbol, description: c.description, emoji: c.emoji, creator: people.get(c.creatorId)!,
         launchedAt: c.launchedAt.toISOString(), launchSignature: c.launchSignature, priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY,
         curveProgress: c.curveProgress, holders: holders.get(c.mint) ?? 0, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
+        ...(c.archivedAt ? { archived: true } : {}),
       };
     });
   }
 
-  async coins() { return this.views(await this.db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt))); }
+  async coins() { return this.views(await this.db.select().from(worldCoins).where(isNull(worldCoins.archivedAt)).orderBy(desc(worldCoins.launchedAt))); }
   async coin(mint: string) { const [c] = await this.db.select().from(worldCoins).where(eq(worldCoins.mint, mint)); return c ? (await this.views([c]))[0]! : null; }
 
   async trades(f: { mint?: string; agentId?: string; limit?: number }): Promise<TradeView[]> {
