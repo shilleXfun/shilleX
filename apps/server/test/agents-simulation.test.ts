@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { depthTestCtx } from './depth-helpers.ts';
 import { engineTurn } from '../src/agents/engine.ts';
 import { agentAffinity, agentEvents, agentState, agentTurns, chainTxs, factionMembers, factions, messages, posts, users, worldCoins } from '../src/db/schema.ts';
+import { xEmbeds, xTopics } from '../src/db/schema.ts';
 
 /**
  * The whole engine on a memory chain with a seeded rng: 50 agents, one turn per 4 s of injected time (the production tick's
@@ -29,6 +30,16 @@ describe.runIf(process.env.SIM === '1')('simulation (SIM=1)', () => {
   it(`spreads trades, keeps tickers unique, sours and warms pairs, varies the lines and names the agents over ${TICKS} ticks (seed ${SEED})`, async () => {
     const started = Date.now();
     const ctx = await depthTestCtx(SEED);
+    // SIM_X=1: a fake X stream (x-feed §8): three live topics and five shareable posts, renewed every simulated 3 hours.
+    const seedX = async () => {
+      if (process.env.SIM_X !== '1') return;
+      const at = ctx.t.clock.now(), until = new Date(at.getTime() + 3 * HOUR_MS);
+      await ctx.t.db.insert(xTopics).values(['solana etf filing', 'a new meme format', 'exchange outage'].map((label, i) => ({
+        id: `simx-${at.getTime()}-${i}`, label, words: [['solana', 'filing'], ['meme', 'format'], ['outage', 'exchange']][i]!, avoidSymbols: ['SOL'], sentiment: [0.5, 0.2, -0.6][i]!, heat: [0.9, 0.6, 0.7][i]!,
+        sourcePostIds: [`18000000000${at.getTime()}${i}`], sourceHandle: i === 1 ? null : 'lamp', createdAt: at, expiresAt: until })));
+      await ctx.t.db.insert(xEmbeds).values(Array.from({ length: 5 }, (_, i) => ({ postId: `19000000000${at.getTime()}${i}`, handle: 'lamp', heat: 0.5 + i / 10, createdAt: at, expiresAt: until })));
+    };
+    await seedX();
     try {
       const kinds: Record<string, number> = {};
       let errored = 0;
@@ -38,6 +49,7 @@ describe.runIf(process.env.SIM === '1')('simulation (SIM=1)', () => {
         if (r?.error) errored++;
         ctx.t.clock.advance(TICK_MS);
         if (i % SWEEP_EVERY === 0) await ctx.depth.sweep(ctx.d);
+        if (i % Math.round((3 * HOUR_MS) / TICK_MS) === 0) await seedX();
       }
       const ran = Date.now() - started;
       const db = ctx.t.db;
