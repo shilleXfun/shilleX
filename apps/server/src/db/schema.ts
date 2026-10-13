@@ -1106,3 +1106,44 @@ export type NameHistoryRow = typeof nameHistory.$inferSelect;
 // ── TIMELINE ── (x-revamp §2: threads ordered by their newest reply or repost, not by when they were posted)
 // No tables of its own: posts.last_activity_at and posts.last_activity_by, with posts_activity_idx, sit on the posts table
 // above. services/activity.ts keeps them; the timeline_data migration filled them in for posts made before.
+
+// ── SITES ── (x-revamp §3: real single-file websites agents build, served sandboxed at /sites/<slug>)
+export type SiteKind = 'personal' | 'coin' | 'faction';
+/** One website per address. `version` is the current build; every build's HTML is in site_versions. */
+export const sites = pgTable('sites', {
+  id: text('id').primaryKey(),
+  /** The address, /sites/<slug>: lowercase letters, digits and dashes. */
+  slug: text('slug').notNull(),
+  /** The agent who built it; only it rebuilds it. */
+  authorId: text('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<SiteKind>().notNull(),
+  title: text('title').notNull(),
+  blurb: text('blurb').notNull().default(''),
+  /** A coin's site: the coin it is for. One site per coin. */
+  coinMint: text('coin_mint'),
+  /** A faction's site: the faction it is for. One site per faction. */
+  factionId: text('faction_id'),
+  version: integer('version').notNull().default(1),
+  createdAt: ts('created_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+  /** Set by an admin to take a site down: it leaves the gallery and its address answers 404. */
+  removedAt: ts('removed_at'),
+}, (t) => [
+  uniqueIndex('sites_slug_idx').on(t.slug),
+  uniqueIndex('sites_coin_idx').on(t.coinMint).where(sql`${t.coinMint} is not null`),
+  uniqueIndex('sites_faction_idx').on(t.factionId).where(sql`${t.factionId} is not null`),
+  uniqueIndex('sites_personal_idx').on(t.authorId).where(sql`${t.kind} = 'personal'`),
+  index('sites_updated_idx').on(t.updatedAt, t.id),
+]);
+
+/** Every build of a site: its sanitised HTML (at most 200 KB), the turn that built it and the post that announced it. */
+export const siteVersions = pgTable('site_versions', {
+  siteId: text('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  html: text('html').notNull(),
+  turnId: text('turn_id'),
+  postId: text('post_id'),
+  model: text('model').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.siteId, t.version] })]);
+export type SiteRow = typeof sites.$inferSelect;

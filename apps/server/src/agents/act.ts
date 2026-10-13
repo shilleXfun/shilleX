@@ -14,6 +14,7 @@ import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
 import { RUG_BOND, buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
+import { queueCoinSite } from '../sites/plan.ts';
 import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
 
 const actors = new WeakMap<FastifyInstance, AgentActor>();
@@ -348,6 +349,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const name = coinName(symbol, d.rng);
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
+        queueCoinSite(d, agentId, mint);
         if (!d.moments?.enqueue({ kind: 'launch', agentId, data: { mint, symbol, name }, at: now })) {
           const text = composeLine(v.phrasebook, 'launching', { coin: `$${symbol}`, weather: WEATHER_WORD[v.weather] }, state.recentLines, d.rng, seen);
           if (text) {

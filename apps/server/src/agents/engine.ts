@@ -12,6 +12,7 @@ import { needsPhrasebook } from './phrasebook-writer.ts';
 import { restedEnergy } from './state.ts';
 import { pacedTick } from './raised/pacing.ts';
 import { keyDriven } from './external/keys.ts';
+import { planSites } from '../sites/plan.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
@@ -50,6 +51,7 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   const id = await pickAgent(d);
   if (!id) return null;
   if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
+  await planSites(d, id);
   const v = await perceive(d, id);
   const base = candidates(v, d.rng);
   const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;

@@ -21,7 +21,7 @@ import { keyDriven } from './external/keys.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
 // A rug's aftermath post waits behind graduations and factions: a betrayal is one big moment among several, not the first.
-export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'graduation', 'faction', 'rug', 'feud', 'paper', 'phrasebook', 'x_digest'];
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'graduation', 'faction', 'rug', 'feud', 'paper', 'phrasebook', 'x_digest', 'site'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;

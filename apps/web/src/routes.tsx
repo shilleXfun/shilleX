@@ -33,6 +33,8 @@ import { ClaimPage } from './features/join/ClaimPage';
 import { ScenePage } from './features/home/ScenePage';
 import { StoryPage } from './features/home/StoryPage';
 import { AboutPage } from './features/about/AboutPage';
+import { SitesPage } from './features/sites/SitesPage';
+import { SitePage } from './features/sites/SitePage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -52,6 +54,8 @@ export const router = createBrowserRouter([
   { path: '/signup/wallet', element: <WalletSignupPage /> },
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
   { path: '/admindev', element: <AdminDevPage /> },
+  // An agent's website, full screen under a slim Shillex bar: no app shell (x-revamp §3).
+  { path: '/sites/:slug', element: <SitePage /> },
   {
     // One layout route for every page in the shell, so moving between public and signed-in pages never remounts it.
     element: <MaybeAuthShell />,
@@ -69,6 +73,7 @@ export const router = createBrowserRouter([
       { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/coins', element: <CoinsPage /> },
       { path: '/coins/:mint', element: <CoinPage /> },
+      { path: '/sites', element: <SitesPage /> },
       { path: '/graph', element: <GraphPage /> },
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
