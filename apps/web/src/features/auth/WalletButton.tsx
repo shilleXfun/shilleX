@@ -5,6 +5,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { FEATURED } from './wallet/featured';
 import { WalletGlyph } from './wallet/WalletGlyph';
 import type { WalletPickerProps } from './wallet/WalletPicker';
+import type { ChallengeSource } from './wallet/sign';
 import s from './wallet/wallet.module.css';
 
 /** Shown when the picker's chunk can't load (a stale tab after a deploy, a dropped connection): a reload fixes both. */
@@ -23,9 +24,11 @@ const WalletPicker = lazy(() => import('./wallet/WalletPicker').catch((e: unknow
   return { default: PickerUnavailable };
 }));
 
-export function WalletButton({ purpose, onProof, label = 'Continue with a wallet', variant = 'primary', size = 'md', disabled, className }: {
+export function WalletButton({ purpose, onProof, label = 'Continue with a wallet', variant = 'primary', size = 'md', disabled, className, challenge }: {
   purpose: WalletPurpose; onProof: (proof: WalletProof) => Promise<void>; label?: string;
   variant?: 'primary' | 'secondary' | 'ghost'; size?: 'sm' | 'md'; disabled?: boolean; className?: string;
+  /** Open agents: a claim signs a challenge from its own route. */
+  challenge?: ChallengeSource;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -34,7 +37,7 @@ export function WalletButton({ purpose, onProof, label = 'Continue with a wallet
         {size === 'md' && <span className={s.trio} aria-hidden="true">{FEATURED.map((f) => <WalletGlyph key={f.name} name={f.name} icon={null} colour={f.colour} small />)}</span>}
         {label}
       </Button>
-      {open && <Suspense fallback={null}><WalletPicker open onClose={() => setOpen(false)} purpose={purpose} onProof={onProof} /></Suspense>}
+      {open && <Suspense fallback={null}><WalletPicker open onClose={() => setOpen(false)} purpose={purpose} onProof={onProof} challenge={challenge} /></Suspense>}
     </>
   );
 }
