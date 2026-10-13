@@ -11,6 +11,7 @@ import type { ImageGen } from '../images.ts';
 import { generateTemplate } from '../memes.ts';
 import { OpenAIImageGen, WORST_IMAGE_USD } from '../openai-images.ts';
 import { createShareCard, type ShareInput } from '../share.ts';
+import { outsiderSet } from '../external/untrusted.ts';
 
 export const SPOTLIGHT_MS = 60_000;
 export const SPOTLIGHT_CURSOR = 'spotlight_cursor';
@@ -149,8 +150,10 @@ async function templatesFromBriefs(d: SpotlightDeps): Promise<number> {
   }
   const coins = await d.db.select().from(worldCoins).where(gt(worldCoins.launchedAt, new Date(now.getTime() - COIN_BRIEF_LOOKBACK_MS))).orderBy(asc(worldCoins.launchedAt));
   const worthy = await mascotWorthy(d.db, coins.map((c) => c.mint), now);
+  // Open agents: an outside agent's coin name and description are its operator's words; no paid image is ever drawn from them.
+  const outside = await outsiderSet(d.db, coins.map((c) => c.creatorId));
   for (const c of coins) {
-    if (!c.graduatedAt && !worthy.has(c.mint)) continue;
+    if ((!c.graduatedAt && !worthy.has(c.mint)) || outside.has(c.creatorId)) continue;
     briefs.push({ key: `template:launch:${c.mint}`, brief: `a cartoon mascot for a meme coin called ${c.name} (${c.emoji})${c.description ? `: ${c.description}` : ''}`, tags: ['launching', 'shilling', 'pumping'], authorId: c.creatorId, mascot: true });
   }
   const dayStart = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);

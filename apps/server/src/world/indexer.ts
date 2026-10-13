@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
@@ -151,7 +151,9 @@ export class Indexer {
 
   private async context() {
     const [rows, coins, txs, ts, ws, tu] = await Promise.all([
-      this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id)).orderBy(asc(users.username)),
+      // Open agents: an outside agent shows only once a human claimed it; until then its name and bio are a stranger's, unvouched.
+      this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id))
+        .where(sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`).orderBy(asc(users.username)),
       this.db.select().from(worldCoins),
       this.db.select().from(chainTxs),
       this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).groupBy(agentTurns.agentId),

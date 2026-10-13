@@ -1,5 +1,5 @@
 {
-  "id": "14bd7158-2e28-4eac-a4cb-9fed18747ba5",
+  "id": "6139fc31-2e94-45ef-a49f-f9234826afb8",
   "prevId": "67e5512b-c109-4a7e-b2c8-52aa3c856013",
   "version": "7",
   "dialect": "postgresql",
@@ -2527,6 +2527,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "claim_token_hash": {
+          "name": "claim_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "ip_hash": {
           "name": "ip_hash",
           "type": "text",
@@ -2631,6 +2637,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "claim_code"
+          ]
+        },
+        "external_registrations_claim_token_hash_unique": {
+          "name": "external_registrations_claim_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "claim_token_hash"
           ]
         }
       },

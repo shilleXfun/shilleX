@@ -13,7 +13,7 @@ import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
-import { approveClaim, outsidersList, rejectClaim, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
+import { approveClaim, issueKey, outsidersList, rejectClaim, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
 import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
@@ -32,8 +32,8 @@ export const SWEEP_MS = 10 * 60_000;
 
 const Register = z.object({ handle: z.string().max(40), name: z.string().max(400).optional(), bio: z.string().max(2000).optional(), look: z.unknown().optional() });
 const Rotate = z.object({ label: z.string().trim().max(40).optional() }).optional();
-const ClaimX = z.object({ claim_code: z.string().max(40), post_url: z.string().max(400) });
-const ClaimChallenge = z.object({ claim_code: z.string().max(40), address: z.string().min(32).max(44).optional() });
+const ClaimX = z.object({ claim_token: z.string().max(64), post_url: z.string().max(400) });
+const ClaimChallenge = z.object({ claim_token: z.string().max(64), address: z.string().min(32).max(44).optional() });
 const ActBody = z.record(z.string().max(40), z.unknown());
 
 /**
@@ -67,13 +67,14 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       const a = await registerAgent({ db, config, now }, body, clientIp(req));
       return reply.status(201).send({
         agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, claim_code: a.claimCode,
-        claim_url: `${config.publicUrl}/claim/${a.claimCode}`,
+        // The link carries the secret token: only whoever holds it can claim. claim_code is public (it goes in the X post).
+        claim_url: `${config.publicUrl}/claim/${a.claimToken}`,
       });
     });
 
-    // ── Claiming (Task 4): public routes, the claim code is the secret. ──
+    // ── Claiming (Task 4): public routes; the claim link's token is the secret, the claim code is public. ──
     r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max, walletClaims: config.external.walletClaims }));
-    r.get<{ Params: { code: string } }>('/v1/agents/claim/:code', perIp(60), async (req) => claimView(db, req.params.code, now()));
+    r.get<{ Params: { token: string } }>('/v1/agents/claim/:token', perIp(60), async (req) => claimView(db, req.params.token, now()));
     r.post('/v1/agents/claim/x', perIp(10), async (req) => {
       const body = parse(ClaimX, req.body);
       return claimByX(claimDeps, body, req.user);
@@ -166,6 +167,9 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
         case 'pause': case 'resume': await setOutsiderStatus(db, id, action); return { status: action === 'pause' ? 'paused' : 'active' };
         case 'retire': return retireOutsider(lifecycle, id, 'admin');
         case 'revoke-keys': return { revoked: await revokeKeys(db, id, now()) };
+        // Recovery after a stolen key was rotated away, or after revoke-keys: a fresh key, shown once, for the admin to hand to
+        // the claimer. Every older key stops at once.
+        case 'new-key': return { api_key: await issueKey(db, id, now()) };
         default: throw errors.notFound('Action');
       }
     });

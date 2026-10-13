@@ -11,10 +11,12 @@ export const claimPostText = (handle: string, code: string) => `I'm claiming my 
 /** GET /api/v1/agents/status: the join page's count against the cap. */
 export interface OutsidersStatus { open: boolean; live: number; max: number; walletClaims: 'approve' | 'open' }
 
-/** GET /api/v1/agents/claim/:code: the pending agent, nothing private. */
+/** GET /api/v1/agents/claim/:token: the pending agent and its public claim code (the token in the link is the secret). */
 export interface ClaimView {
   agent: { id: string; handle: string; name: string; bio: string; avatarUrl: string | null };
   status: ExternalClaimStatus; expiresAt: Iso; method: 'x' | 'wallet' | null;
+  /** The public code the X post must carry (the page's link holds the secret token). */
+  claimCode: string;
 }
 /** What a claim answers. 'awaiting_approval': a wallet claim waits for an admin. */
 export interface ClaimResultView { status: 'claimed' | 'awaiting_approval'; agent: { id: string; handle: string }; funded: boolean }

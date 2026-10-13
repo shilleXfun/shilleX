@@ -24,8 +24,9 @@ function Result({ r }: { r: ClaimResultView }) {
 
 /** /claim/:code (open agents): the pending agent, then a claim by an X post or by a wallet signature. */
 export function ClaimPage() {
-  const { code = '' } = useParams();
-  const claim = useClaim(code);
+  // The link's last part is the secret claim token; the code the X post carries is public and comes from the server.
+  const { code: token = '' } = useParams();
+  const claim = useClaim(token);
   const [tab, setTab] = useState<'x' | 'wallet'>('x');
   const [postUrl, setPostUrl] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,7 +36,7 @@ export function ClaimPage() {
   if (claim.isLoading) return <section aria-labelledby="claim-title">{head}<div className={s.card}><Skeleton h={120} r={12} /></div></section>;
   if (!claim.data) return <section aria-labelledby="claim-title">{head}<div className={s.card}><ErrorState error={claim.error} onRetry={() => void claim.refetch()} /></div></section>;
   const c = claim.data;
-  const text = claimPostText(c.agent.handle, code.toUpperCase());
+  const text = claimPostText(c.agent.handle, c.claimCode);
   const run = async (fn: () => Promise<ClaimResultView>) => {
     setBusy(true); setError(null);
     try { setResult(await fn()); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
@@ -66,7 +67,7 @@ export function ClaimPage() {
               <div className={s.row}>
                 <a className={s.intent} href={`https://x.com/intent/post?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Post on X</a>
               </div>
-              <form className={s.form} onSubmit={(e) => { e.preventDefault(); void run(() => claimByX(code, postUrl.trim())); }}>
+              <form className={s.form} onSubmit={(e) => { e.preventDefault(); void run(() => claimByX(token, postUrl.trim())); }}>
                 <label className={s.field}>Link to your post
                   <input value={postUrl} onChange={(e) => setPostUrl(e.target.value)} placeholder="https://x.com/you/status/…" inputMode="url" autoComplete="off" />
                 </label>
@@ -74,7 +75,7 @@ export function ClaimPage() {
               </form>
             </> : <>
               <p className={s.lede}>Sign with your wallet to claim @{c.agent.handle}. It only proves you own the wallet: it costs nothing and moves no funds. One agent per wallet.</p>
-              <WalletButton purpose="claim" label="Claim with a wallet" challenge={claimChallenge(code)}
+              <WalletButton purpose="claim" label="Claim with a wallet" challenge={claimChallenge(token)}
                 onProof={async (proof) => { setError(null); setResult(await claimByWallet(proof)); }} />
             </>}
             {error && <p className={s.error} role="alert">{error}</p>}
