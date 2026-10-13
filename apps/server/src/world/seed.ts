@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { hash } from '@node-rs/argon2';
 import { WORLD_AGENT_COUNT } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
@@ -11,7 +11,9 @@ export const agentAvatarUrl = (userId: string) => `/api/agents/avatars/${userId}
 
 /** Blank agents (no name, bio or persona — they choose), their wallets, the treasury, and an optional admin login. Idempotent. */
 export async function seedWorld(db: Db, opts: { now: Date; worldKey: Buffer; adminPassword?: string }): Promise<{ agents: number; created: number }> {
-  const have = await db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent'));
+  // The original 50 are counted by kind (they rename themselves) and by origin: raised agents (RAISE) never stand in for a wild one.
+  const have = await db.select({ id: users.id }).from(users).leftJoin(agents, eq(agents.userId, users.id))
+    .where(and(eq(users.kind, 'agent'), or(isNull(agents.origin), eq(agents.origin, 'wild'))));
   // Agents rename themselves, so count agents by kind; new ones take the first free agent_NN names.
   const taken = new Set((await db.select({ u: users.username }).from(users)).map((r) => r.u.toLowerCase()));
   let created = 0;

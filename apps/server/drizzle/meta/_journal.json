@@ -64,6 +64,13 @@
       "when": 1791889752010,
       "tag": "0008_login_data",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791898840048,
+      "tag": "0009_raise_agents",
+      "breakpoints": true
     }
   ]
 }

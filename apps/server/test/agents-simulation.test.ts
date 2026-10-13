@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { depthTestCtx } from './depth-helpers.ts';
 import { engineTurn } from '../src/agents/engine.ts';
-import { agentAffinity, agentEvents, agentState, agentTurns, chainTxs, factionMembers, factions, messages, posts, users, worldCoins } from '../src/db/schema.ts';
+import { agentAffinity, agentEvents, agentState, agentTurns, agents, chainTxs, factionMembers, factions, messages, posts, users, worldCoins } from '../src/db/schema.ts';
 
 /**
  * The whole engine on a memory chain with a seeded rng: 50 agents, one turn per 4 s of injected time (the production tick's
@@ -206,4 +206,45 @@ describe.runIf(process.env.SIM === '1')('simulation (SIM=1)', () => {
       await ctx.t.close();
     }
   }, 30 * 60_000);
+
+  it('stays healthy with 250 agents (50 wild, 200 raised, some nudged)', async () => {
+    const { addRaisedAgents } = await import('./raised-helpers.ts');
+    const { agentNudges } = await import('../src/db/schema.ts');
+    const { createDepth } = await import('../src/agents/depth/index.ts');
+    const started = Date.now();
+    const ctx = await depthTestCtx(SEED);
+    try {
+      const raised = await addRaisedAgents(ctx, 200);
+      const now = ctx.t.clock.now();
+      // A fifth of them carry a "launch a coin" or "take a break" nudge, renewed every two simulated hours below.
+      const nudge = async (at: Date) => {
+        for (const [i, id] of raised.entries()) if (i % 5 === 0) {
+          const [{ ownerId }] = await ctx.t.db.select({ ownerId: agents.ownerId }).from(agents).where(eq(agents.userId, id)) as [{ ownerId: string }];
+          await ctx.t.db.insert(agentNudges).values({ id: `sim-${i}-${at.getTime()}`, agentId: id, ownerId, kind: i % 10 === 0 ? 'launch' : 'rest', createdAt: at, expiresAt: new Date(at.getTime() + 7_200_000) });
+        }
+      };
+      await nudge(now);
+      const depth = createDepth();
+      const d = { ...ctx.d, depth };
+      const actors = new Set<string>();
+      let errored = 0, dry = 0;
+      for (let i = 1; i <= TICKS; i++) {
+        const r = await engineTurn(d);
+        if (r?.error) errored++;
+        ctx.t.clock.advance(TICK_MS / 5); // the paced tick: × 50 / 250
+        if (i % SWEEP_EVERY === 0) await depth.sweep(d);
+        if (i % 1800 === 0) await nudge(ctx.t.clock.now());
+      }
+      const turns = await ctx.t.db.select({ agentId: agentTurns.agentId, reasoning: agentTurns.reasoning }).from(agentTurns).where(eq(agentTurns.model, 'engine'));
+      for (const t of turns) { actors.add(t.agentId); if (t.reasoning.includes('nothing fresh to say')) dry++; }
+      const followed = (await ctx.t.db.select().from(agentNudges)).filter((n) => n.outcome === 'followed').length;
+      const ran = Date.now() - started;
+      console.log('[sim250] ticks', TICKS, 'ms/tick', (ran / TICKS).toFixed(0), 'actors', actors.size, 'dry', (dry / Math.max(1, turns.length)).toFixed(3), 'nudges followed', followed, 'errored', errored);
+      expect.soft(errored / TICKS).toBeLessThanOrEqual(0.01);
+      expect.soft(actors.size).toBeGreaterThanOrEqual(200); // of 250; one turn per agent per ~12 ticks
+      expect.soft(dry / Math.max(1, turns.length)).toBeLessThanOrEqual(0.08);
+      expect.soft(followed).toBeGreaterThan(0);
+      expect.soft(ran / TICKS).toBeLessThanOrEqual(250); // ms per tick: perceive's caches keep it flat
+    } finally { await ctx.t.close(); }
+  }, 60 * 60_000);
 });
