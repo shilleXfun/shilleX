@@ -1,0 +1,99 @@
+/* The timeline (Timeline.tsx, ThreadRow.tsx; x-revamp §2). It sits on the reading column's sheet, so rows are clear:
+   threads split by hairlines, the posts in a thread joined by a line in their authors' colours. */
+.timeline { position: relative; min-width: 0; }
+.panel { position: relative; min-width: 0; }
+
+/* ── The bar: tabs signed in, the list's name for visitors. Frosted, so the rows read through it as they pass under. */
+.head { position: sticky; top: var(--sticky-top, 0px); z-index: 10; height: 53px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); }
+.tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 100%; }
+.tab { display: grid; place-items: center; height: 100%; padding: 0 16px; border: 0; background: none; color: var(--muted); font-size: 15px; font-weight: 600; transition: background .12s, color .12s; }
+.tab:hover { background: rgba(255, 255, 255, 0.035); color: var(--text); }
+.tab[aria-selected='true'] { color: var(--text); font-weight: 700; }
+.tab:focus-visible { outline-offset: -4px; box-shadow: none; }
+.tabLabel { position: relative; display: inline-flex; align-items: center; height: 100%; }
+.tabLine { position: absolute; left: -2px; right: -2px; bottom: 0; height: 4px; border-radius: 4px 4px 0 0; background: var(--accent); }
+.title { display: flex; align-items: center; height: 100%; margin: 0; padding: 0 var(--row-px); font: 800 24px/1 var(--font-brand); font-stretch: 75%; letter-spacing: -0.02em; }
+
+/* ── The pill: just under the bar while bumps wait. The holder takes no room, so nothing moves when it shows. */
+.pillHolder { position: sticky; top: calc(var(--sticky-top, 0px) + 53px); z-index: 9; display: grid; justify-items: center; height: 0; overflow: visible; pointer-events: none; }
+.pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; height: 38px; margin-top: 12px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: 14.5px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); }
+.pill:hover { background: var(--accent-hover); }
+.pillFaces { display: inline-flex; margin-left: -10px; }
+.pillFaces > * + * { margin-left: -8px; }
+.pillFaces > span { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ── Talking now, as one slim row (no side column below 1100 px). */
+.talking { display: none; }
+@media (max-width: 1099px) {
+  .talking { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px var(--row-px); border-bottom: 1px solid var(--line); color: var(--text); transition: background-color .12s; }
+  .talking:hover { background-color: var(--row-hover); }
+}
+.talkingText { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+.talkingLabel { flex: none; font-size: 14.5px; font-weight: 700; }
+.talkingTitle { min-width: 0; overflow: hidden; color: var(--muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.live { position: relative; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .live::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent); animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
+}
+@keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+
+/* ── The list. Rows off screen skip their layout and paint (content-visibility), so a long list stays smooth. */
+.list { position: relative; min-width: 0; }
+.slot { overflow: clip; content-visibility: auto; contain-intrinsic-size: auto 240px; }
+.sentinel { height: 1px; }
+.thread { position: relative; border-bottom: 1px solid var(--line); }
+.empty { margin: 0; padding: 40px var(--row-px); color: var(--muted); font-size: var(--fs-md); text-wrap: pretty; }
+.empty b { color: var(--text); font-weight: 650; }
+
+/* What lifted the thread: the icon right-aligned under where the avatars stand, the words in the text column. */
+.social { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap); align-items: center; padding: 10px var(--row-px) 0; color: var(--muted); font-size: 13px; font-weight: 650; line-height: 16px; }
+.social svg { justify-self: end; }
+.socialText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.socialText a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+/* The root right under it starts higher, so the two read as one. */
+.social + .post { --row-pt: 4px; }
+
+/* One post of the thread, and its stretch of the thread line: from 4 px under its avatar to 4 px above the next one. */
+.post { position: relative; isolation: isolate; }
+.post[data-line]::before, .more[data-line]::before {
+  content: ''; position: absolute; z-index: 1; left: calc(var(--row-px) + 19px); width: 2px; border-radius: 2px; pointer-events: none;
+  background: linear-gradient(hsl(var(--h1, 220) 46% 52%), hsl(var(--h2, 220) 46% 52%));
+}
+.post[data-line]::before { top: calc(var(--row-pt, 12px) + 44px); bottom: calc(-1 * var(--reach, 8px)); }
+.small[data-line]::before { top: 36px; }
+/* A bump's landing: the new reply's row takes the replier's colour, then lets it go. */
+.post[data-wash]::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: hsl(var(--wash-hue, 220) 90% 62% / 0.14); box-shadow: inset 3px 0 0 hsl(var(--wash-hue, 220) 90% 68% / 0.9); animation: wash .7s ease-out forwards; }
+@keyframes wash { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .post[data-wash]::after { display: none; } }
+
+/* The post the newest reply answers: smaller, two lines. */
+.context { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap); padding: 8px var(--row-px) 6px; cursor: pointer; }
+@media (hover: hover) { .context:hover { background-image: linear-gradient(var(--row-hover), var(--row-hover)); } }
+.contextFace { justify-self: center; align-self: start; display: grid; }
+.contextMain { min-width: 0; }
+.contextName { min-width: 0; overflow: hidden; }
+.contextName:hover > span { text-decoration: underline; text-underline-offset: 3px; }
+.context .contextText { display: -webkit-box; margin: 1px 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: 14.5px; line-height: 1.4; }
+
+.more { position: relative; display: block; padding: 8px var(--row-px) 12px calc(var(--row-px) + 40px + var(--card-gap)); color: var(--accent); font-size: 15px; font-weight: 600; }
+.more:hover { text-decoration: underline; text-underline-offset: 3px; }
+.more[data-line] { padding-bottom: 4px; }
+.more[data-line]::before { top: 0; bottom: -4px; }
+
+/* Who is writing the next line of a running conversation. */
+.typing { display: grid; grid-template-columns: 40px auto auto; justify-content: start; align-items: center; column-gap: var(--card-gap); padding: 8px var(--row-px) 12px; color: var(--muted); font-size: 14px; }
+.typingFace { justify-self: center; display: grid; }
+.typingText { font-weight: 550; }
+.dots { display: inline-flex; gap: 4px; margin-left: -6px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--hue, 220) 72% 72%); opacity: .45; }
+@media (prefers-reduced-motion: no-preference) {
+  .dots i { animation: typing 1.25s ease-in-out infinite; }
+  .dots i:nth-child(2) { animation-delay: .16s; }
+  .dots i:nth-child(3) { animation-delay: .32s; }
+}
+@keyframes typing { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+
+/* Phones draw no backdrop blur (cost): the bar goes near-solid. */
+@media (max-width: 767px) {
+  .head { background: rgba(4, 6, 13, 0.96); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
