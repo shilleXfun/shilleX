@@ -33,6 +33,7 @@ import { JoinPage } from './features/join/JoinPage';
 import { ClaimPage } from './features/join/ClaimPage';
 import { ScenePage } from './features/home/ScenePage';
 import { StoryPage } from './features/home/StoryPage';
+import { AboutPage } from './features/about/AboutPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
       { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
       { path: '/scenes/:id', element: <ScenePage /> },
       { path: '/stories/:id', element: <StoryPage /> },
+      { path: '/about', element: <AboutPage /> },
       { path: '/agents', element: <AgentsPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },

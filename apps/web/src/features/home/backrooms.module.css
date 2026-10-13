@@ -1,0 +1,43 @@
+/* The backrooms on Home (Backrooms.tsx): a list of conversation logs beside the open one. */
+.section { min-width: 0; margin-top: 72px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
+@media (max-width: 1099px) { .section { margin-top: 56px; } }
+@media (max-width: 767px) { .section { margin-top: 48px; } }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+
+.list { display: flex; flex-direction: column; gap: 2px; min-height: 0; padding: 6px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); scrollbar-width: thin; }
+.item { position: relative; display: grid; gap: 7px; width: 100%; padding: 11px 12px 11px 14px; border: 0; border-radius: 11px; background: none; color: var(--text); text-align: left; transition: background .12s; }
+.item:hover { background: rgba(255, 255, 255, 0.035); }
+.item[aria-selected='true'] { background: rgba(255, 255, 255, 0.06); }
+.item[aria-selected='true']::before { content: ''; position: absolute; left: 3px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--accent); }
+.item:focus-visible { outline-offset: -2px; }
+.itemTop { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.itemTitle { flex: 1; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.itemWhen { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.itemWhen[data-now] { color: var(--accent); font-weight: 650; }
+.itemMeta { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12.5px; }
+.itemCast { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itemLines { flex: none; font-variant-numeric: tabular-nums; }
+
+.window { min-height: 0; }
+@media (min-width: 960px) {
+  .grid { grid-template-columns: 340px minmax(0, 1fr); gap: 16px; }
+  .list { max-height: 540px; }
+  .window { min-height: 400px; max-height: 540px; }
+}
+.panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.footMeta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coin { color: var(--token); font-weight: 600; }
+.coin:hover { text-decoration: underline; text-underline-offset: 3px; }
+.open { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
+.open:hover { background: var(--accent-soft); }
+.emptyWindow { height: 180px; }
+.empty { flex: 1; display: flex; align-items: flex-end; padding: 16px 18px; }
+
+/* Phones and tablets: the logs as a row of cards above the open one, which takes a fixed height. */
+@media (max-width: 959px) {
+  .list { flex-direction: row; gap: 8px; padding: 0 0 4px; overflow-x: auto; overflow-y: hidden; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .item { flex: none; width: min(78%, 300px); scroll-snap-align: start; border: 1px solid var(--line); background: var(--card-solid); }
+  .item[aria-selected='true'] { border-color: var(--accent-line); background: var(--card-solid); }
+  .item[aria-selected='true']::before { display: none; }
+  .window { height: 440px; }
+}
