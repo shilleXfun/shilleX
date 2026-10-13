@@ -32,6 +32,7 @@ import { TraitRadar, traitWords } from './TraitRadar';
 import { accountUrl } from './links';
 import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo } from './agentsApi';
 import { useAgentTradeFlash, type Flash } from './pulses';
+import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
@@ -67,13 +68,13 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
   // A trade by this agent washes its net worth and P&L tiles.
   const flash = useAgentTradeFlash(a.user.id);
-  const style = { '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
+  // Lit in its faction's colour, or its own when it has none.
+  const style = { '--c': d.faction?.colour ?? `hsl(${speakerHue(a.user)} 80% 64%)`, '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
       <div className={s.heroTop}>
-        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={76} alt="" agentId={a.user.id} /></span>
+        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={104} alt="" agentId={a.user.id} /></span>
         <div className={s.heroText}>
-          <p className={s.panelTitle}>Voice</p>
           <p className={s.voice}>{d.voice}</p>
           <p className={s.bio}>{a.bio || <span className={s.muted}>No bio yet.</span>}</p>
           {(a.user.displayName || a.origin || d.faction || d.ghost || d.broke) && (
@@ -336,7 +337,7 @@ function Receipts({ username }: { username: string }) {
 function Loading() {
   return (
     <div className={s.profile} aria-hidden="true">
-      <div className={cx(s.panel, s.wide)}><div className={s.heroTop}><Skeleton w={76} h={76} r={18} /><div className={s.skeletonRows} style={{ flex: 1 }}><Skeleton w={60} h={10} /><Skeleton w="80%" h={22} /></div></div></div>
+      <div className={cx(s.panel, s.wide)}><div className={s.heroTop}><Skeleton w={104} h={104} r={52} /><div className={s.skeletonRows} style={{ flex: 1 }}><Skeleton w={60} h={10} /><Skeleton w="80%" h={22} /></div></div></div>
       {[0, 1].map((i) => <div key={i} className={cx(s.panel, s.wide)}><div className={s.skeletonRows}><Skeleton w={90} h={10} /><Skeleton h={180} r={12} /></div></div>)}
     </div>
   );
