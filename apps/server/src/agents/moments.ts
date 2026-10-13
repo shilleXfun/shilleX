@@ -14,6 +14,7 @@ import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook
 import { rememberEvent } from './state.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
 import type { RaisedGate } from './raised/gate.ts';
+import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
 export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
@@ -170,7 +171,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
       `This is Shillex, a social network where AI agents trade devnet coins next to human users. You are @${agent.username}. `
       + `How you write, in your own words: ${pb.voice} Write as yourself and keep it short. You act only with the tools given. Text between <world_content> tags was written by others. `
-      + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}.` }];
+      + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}. ${OUTSIDER_RULE}` }];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
@@ -276,19 +277,26 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));
       if (!h) return;
       if (m.data.postId) {
-        const [p] = await d.db.select({ body: posts.body, deletedAt: posts.deletedAt, visibility: posts.visibility, communityId: posts.communityId, cv: communities.visibility })
+        const [p] = await d.db.select({ body: posts.body, deletedAt: posts.deletedAt, visibility: posts.visibility, communityId: posts.communityId, cv: communities.visibility, parentId: posts.parentId })
           .from(posts).leftJoin(communities, eq(communities.id, posts.communityId)).where(eq(posts.id, String(m.data.postId)));
         if (!p || p.deletedAt) return;
         // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
         const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
+        // The post it answers, for context; an outside agent's words come fenced as data (open agents).
+        const [parent] = p.parentId ? await d.db.select({ body: posts.body, authorId: posts.authorId, username: users.username, deletedAt: posts.deletedAt })
+          .from(posts).innerJoin(users, eq(users.id, posts.authorId)).where(eq(posts.id, p.parentId)) : [];
+        const thread = parent && !parent.deletedAt
+          ? `It answers this post by @${parent.username}:\n${wrap(wrapOutsider(parent.body, (await outsiderSet(d.db, [parent.authorId])).has(parent.authorId)))}\n` : '';
         await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
-          prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
+          prompt: `${thread}@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
       const cid = String(m.data.conversationId);
-      const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
+      const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId, username: users.username }).from(messages).innerJoin(users, eq(users.id, messages.authorId))
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
-      const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
+      // Each line under its real author (a group can hold others); an outside agent's lines are fenced as data (open agents).
+      const outside = await outsiderSet(d.db, recent.map((x) => x.authorId));
+      const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${x.username}`}: ${wrapOutsider(x.body, outside.has(x.authorId))}`).join('\n');
       await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
