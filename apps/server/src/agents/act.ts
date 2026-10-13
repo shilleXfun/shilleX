@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type ToolCallRecord } from '@shillex/shared';
-import { agentTurns, communities, channels, conversationMembers, posts, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, communities, channels, posts, users, worldCoins } from '../db/schema.ts';
 import { AgentActor } from '../world/actor.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdersOf } from '../world/market.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { runTool, symbolsInUse, type ToolContext, type ToolOutcome } from '../world/tools.ts';
-import { depthToolRecord } from './depth/receipt.ts';
+import { depthToolRecord, isPrivateCall } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
@@ -75,16 +75,20 @@ export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, s
   return out;
 }
 
-/** True when any member of the conversation is not an agent. */
-async function hasHumanMember(db: EngineDeps['db'], conversationId: string): Promise<boolean> {
-  const [h] = await db.select({ id: users.id }).from(conversationMembers).innerJoin(users, eq(users.id, conversationMembers.userId))
-    .where(and(eq(conversationMembers.conversationId, conversationId), ne(users.kind, 'agent'))).limit(1);
-  return Boolean(h);
-}
+/**
+ * True when a tool call on this target must stay off the public receipt: a post, room or conversation that is private by
+ * depth/receipt.ts's rule (a non-public community, a community or conversation with a human in it, or one that cannot be checked).
+ * The check runs before the action, against the target as it is now: a community made private after an agent joined it counts (engine I1).
+ */
+const privateTarget = (db: EngineDeps['db'], name: string, input: Record<string, unknown>) => isPrivateCall(db, name, input).catch(() => true);
 
 export interface ActResult { ok: boolean; turnId: string; postId?: string; error?: string; text?: string; line?: { key: string; template: string; situation: Situation } }
 
 export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<ActResult> {
+  // Resting writes nothing (server-rest M6). No receipt: idle turns were most of agent_turns, and nothing needs them (the
+  // chain links real turns only; receipts, "last turn" and the turn counts read better without them). No state save either:
+  // energy and mood are worked out from the stored row's time on every load, so saving them now would change nothing.
+  if (c.kind === 'idle') return { ok: false, turnId: '' };
   // One turn at a time per agent across the engine and the moment queue. has+add with no await in between is atomic on
   // Node's one thread; the database running-turn check below stays as the guard after a crash.
   const busy = d.busy ?? busyFor(d.app);
@@ -192,7 +196,6 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       if (custom.line) state.recentLines = [...state.recentLines, custom.line.key];
       if (custom.text && custom.line) used.first = { text: custom.text, line: custom.line };
     } else switch (c.kind) {
-      case 'idle': break;
       case 'post': {
         postId = (await postLine(c.situation ?? 'idle')) ?? undefined;
         if (!postId) note = 'nothing fresh to say';
@@ -201,6 +204,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'reply': {
         // Never a roast or pushback at a human: their post is answered as reply_human, or not at all (L4 fix).
         if (human && (c.situation === 'roast' || c.situation === 'reply_disagree')) { note = 'no roast or pushback at a human'; break; }
+        // A mention can come from inside a private community: the reply, or the reaction that stands in for it, is then private.
+        privateCall = await privateTarget(db, 'reply', { post_id: c.target!.postId });
         if (c.situation === 'reply_human' && human && d.moments) {
           const ref = c.target!.postId!;
           if (!(await fallbackRef(ref)) && d.moments.enqueue({ kind: 'human_reply', agentId, data: { humanId: c.target!.userId, postId: ref }, at: now })) {
@@ -223,6 +228,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         break;
       }
       case 'react':
+        privateCall = await privateTarget(db, 'react', { target_type: 'post', target_id: c.target!.postId });
         await reactTo('post', c.target!.postId!, c.target?.userId);
         break;
       case 'follow': case 'unfollow':
@@ -231,9 +237,10 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'chat': {
         const text = line(c.situation ?? 'idle');
         if (!text) { note = 'nothing fresh to say'; break; }
-        // A conversation with a human in it (anyone can be added to a group) is private, as a DM is: the receipt records
-        // { private: true } and the result carries no text or line. A failed lookup counts as private.
-        if (c.target!.conversationId) privateCall = await hasHumanMember(db, c.target!.conversationId).catch(() => true);
+        // A conversation with a human in it (anyone can be added to a group) is private, as a DM is, and so is a room whose
+        // community is private or has a human in it (perceive's room list is cached, and a community can go private): the receipt
+        // records { private: true } and the result carries no text or line. A failed lookup counts as private.
+        privateCall = await privateTarget(db, 'chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null });
         // A room (community channel) or an agent group conversation (a faction chat); only a room can be joined on the fly.
         const send = () => call('chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null, body: text, reply_to_id: null });
         try { await send(); }

@@ -31,6 +31,16 @@ describe('stances', () => {
     expect(stanceOf('$MOTH up only', 'MOTH')).toBe(1);
     expect(stanceOf('$MOTH 🚀🚀', 'MOTH')).toBe(1);
   });
+  it('never reads a coin’s own name, or another coin’s, as a call on it (engine I2)', () => {
+    expect(stanceOf('picked up $RUGGED', 'RUGGED')).toBe(0);
+    expect(stanceOf('keep an eye on $DEAD', 'DEAD')).toBe(0);
+    expect(stanceOf('sold my $HOLDING', 'HOLDING')).toBe(0);
+    expect(stanceOf('bought some $MOON', 'moon')).toBe(0);
+    expect(stanceOf('$MOTH dumped on $PUMP holders', 'MOTH')).toBe(-1);
+    // The words around the ticker still count.
+    expect(stanceOf('$MOON to the moon', 'MOON')).toBe(1);
+    expect(stanceOf('$RUGGED got rugged', 'RUGGED')).toBe(-1);
+  });
   it('expects a coin to rise with momentum and trust, bounded to -1..1', () => {
     expect(expectFor(0.5, 0.9)).toBeGreaterThan(0.5);
     expect(expectFor(-0.5, 0.1)).toBeLessThan(-0.5);
@@ -97,6 +107,24 @@ describe('said vs did', () => {
     expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toBeNull();
     await ctx.t.db.insert(posts).values({ ...base, id: newId(), visibility: 'public' });
     expect(await checkSaidVsDid(ctx.t.db, liar.id, mint, ctx.t.clock.now())).toMatchObject({ side: 'sell' });
+  });
+  it('gives no "said vs did" badge for naming a coin whose ticker is a bullish word, then selling it (engine I2)', async () => {
+    ctx = await depthTestCtx();
+    const [creator, trader, holder] = [ctx.agents[0]!, ctx.agents[1]!, ctx.agents[2]!];
+    const l = await runTool(await ctx.ctxFor(creator), 'launch_coin', { name: 'Moon Club', symbol: 'MOON', description: '', emoji: '🌙', initial_buy_sol: 0.01 });
+    const mint = (l.result as { mint: string }).mint;
+    await runTool(await ctx.ctxFor(holder), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    await runTool(await ctx.ctxFor(trader), 'buy', { mint, sol: 0.02, slippage_pct: null });
+    const posted = await runTool(await ctx.ctxFor(trader), 'post', { body: 'picked up $MOON' }); // a stock "bought" line
+    ctx.t.clock.advance(20 * 60_000);
+    await runTool(await ctx.ctxFor(trader), 'sell', { mint, tokens: null, all: true, slippage_pct: null });
+    const v = { agent: { id: trader.id, username: trader.username, displayName: '' }, coins: [{ mint, symbol: 'MOON', creatorId: creator.id }], affinity: {}, depth: emptyDepth() } as unknown as AgentView;
+    await beliefsModule.afterAct!(ctx.d, v, { kind: 'sell', score: 1, reason: 't', target: { mint } }, { ok: true, turnId: 't' });
+    expect(await ctx.t.db.select().from(saidVsDid)).toEqual([]);
+    expect((await recentEvents(ctx.t.db, trader.id)).map((e) => e.kind)).not.toContain('caught_lying');
+    expect((await ctx.t.db.select().from(agentAffinity).where(eq(agentAffinity.agentId, holder.id)))).toEqual([]);
+    const viewer = await ctx.t.createUser('moon_viewer');
+    expect((await ctx.t.as(viewer).get(`/api/posts/${(posted.result as { post_id: string }).post_id}`)).body.post.saidVsDid ?? null).toBeNull();
   });
   it('does not read a report of a sale as a bearish call (L1)', async () => {
     ctx = await depthTestCtx();

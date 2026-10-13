@@ -43,6 +43,13 @@
       "when": 1791740049516,
       "tag": "0005_pictures",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791848379217,
+      "tag": "0006_agent_turns_running",
+      "breakpoints": true
     }
   ]
 }

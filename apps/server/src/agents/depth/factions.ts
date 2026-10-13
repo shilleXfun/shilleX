@@ -173,7 +173,8 @@ export const factionsModule: DepthModule = {
     const out: Candidate[] = [];
     if (f.conversationId) out.push({ kind: 'chat', situation: 'faction_cheer', target: { conversationId: f.conversationId }, score: 0.25 * t.chattiness, reason: `checking in with ${f.name}` });
     if (f.coinMint && v.wallet.lamports > 30_000_000) out.push({ kind: 'buy', target: { mint: f.coinMint }, lamports: 10_000_000, score: 0.35 * t.loyalty, reason: `buying ${f.name}'s coin out of loyalty (${t.loyalty.toFixed(2)})` });
-    for (const p of v.feed.filter((x) => f.rivalMemberIds.includes(x.authorId)).slice(0, 2)) {
+    // As decide's own roast: a post this agent already answered is not answered again, and a human's never (engine M2).
+    for (const p of v.feed.filter((x) => f.rivalMemberIds.includes(x.authorId) && !x.replied && x.isAgent !== false).slice(0, 2)) {
       out.push({ kind: 'reply', situation: 'roast', target: { postId: p.postId, userId: p.authorId }, score: 0.3 * t.pettiness, reason: 'roasting a rival faction member' });
     }
     return out;

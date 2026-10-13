@@ -62,5 +62,7 @@ export interface DepthView {
 export type MomentKind = 'human_reply' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
 export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
+/** The trigger note of a model turn that answers a human (moments.ts); depth/receipt.ts blanks such a turn's reasoning when it is served. */
+export const HUMAN_PURPOSE = 'reply to a human';
 export interface ImagePolicy { maybeAttach(v: AgentView, c: Candidate, text: string): Promise<{ uploadId: string; alt: string } | null> }
 export type { FastifyInstance };

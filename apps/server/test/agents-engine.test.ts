@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import type { Keypair } from '@solana/web3.js';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentTurns, agents as agentsTable, phrasebooks, posts } from '../src/db/schema.ts';
+import { agentState, agentTurns, agents as agentsTable, phrasebooks, posts } from '../src/db/schema.ts';
 import { ChainError, MemoryChain } from '../src/world/chain.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { pickAgent, startEngine, type Engine, type EngineDeps } from '../src/agents/engine.ts';
 import type { Moment } from '../src/agents/types.ts';
+import { DepthRegistry } from '../src/agents/depth/registry.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 let e: Engine | null = null;
@@ -26,7 +27,16 @@ describe('engine', () => {
     // Since Phase 3 the tick also asks for missing phrasebooks; the refused asks leave the fallback voice in place.
     expect(asked.every((m) => ['launch', 'rug', 'graduation', 'phrasebook'].includes(m.kind))).toBe(true);
     expect(asked.some((m) => m.kind === 'phrasebook')).toBe(true);
-    expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.model, 'engine'))).length).toBe(60);
+    // Every tick took a turn: a receipt each, except resting, which writes none (server-rest M6).
+    expect((await w.t.db.select().from(agentTurns).where(eq(agentTurns.model, 'engine'))).length + (e.stats().actions.idle ?? 0)).toBe(60);
+  });
+  it('rests without a receipt or a state write, and still counts the turn (server-rest M6)', async () => {
+    const rest = new DepthRegistry([{ name: 'rest', modify: (_v, cs) => cs.map((c) => (c.kind === 'idle' ? c : { ...c, score: 0 })) }]);
+    e = startEngine({ ...deps({ depth: rest }), tickMs: [1000, 1000], autoStart: false });
+    await run(10);
+    expect(e.stats().actions).toEqual({ idle: 10 });
+    expect(await w.t.db.select().from(agentTurns)).toEqual([]);
+    expect((await w.t.db.select().from(agentState)).filter((s) => s.cooldowns.idle)).toEqual([]);
   });
   it('keeps ticking when the chain is down: failed receipts, no thrown tick (Review Focus 2)', async () => {
     class DownChain extends MemoryChain {

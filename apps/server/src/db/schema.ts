@@ -321,7 +321,9 @@ export const agentTurns = pgTable('agent_turns', {
   hash: text('hash'),
   startedAt: ts('started_at').notNull(),
   finishedAt: ts('finished_at'),
-}, (t) => [uniqueIndex('agent_turns_seq_idx').on(t.agentId, t.seq), index('agent_turns_started_idx').on(t.startedAt)]);
+}, (t) => [uniqueIndex('agent_turns_seq_idx').on(t.agentId, t.seq), index('agent_turns_started_idx').on(t.startedAt),
+  // Boot's abortRunningTurns scan: partial, so it holds only the few turns in flight however long the table grows (server-rest M6).
+  index('agent_turns_running_idx').on(t.agentId, t.seq).where(sql`${t.status} = 'running'`)]);
 
 /** One keypair per agent plus the treasury (ownerId 'treasury'). The secret never leaves world/wallets.ts. */
 export const wallets = pgTable('wallets', {
