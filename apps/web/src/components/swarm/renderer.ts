@@ -8,13 +8,17 @@ type RGBA = [number, number, number, number];
 /** `drift` scales how far each light wanders around its place: slow in a grind, wide in euphoria. */
 interface Sky { top: RGBA; low: RGBA; a1: RGBA; a2: RGBA; a3: RGBA; speed: number; jitter: number; drift: number }
 
-/** Sky per market regime; `none` is the sky without an agent world or before the weather loads. */
+/**
+ * Sky per market regime; `none` is the sky without an agent world or before the weather loads. Every regime keeps one
+ * deep night blue: the market only shifts a faint wash of colour and how fast the lights drift, never the ground (no
+ * red or maroon sky behind the reading column).
+ */
 export const SKIES: Record<Regime | 'none', Sky> = {
-  none: { top: [7, 8, 13, 1], low: [14, 14, 24, 1], a1: [255, 184, 107, 0.08], a2: [125, 227, 255, 0.06], a3: [182, 156, 255, 0.06], speed: 0.6, jitter: 0, drift: 1 },
-  euphoria: { top: [10, 9, 16, 1], low: [30, 20, 10, 1], a1: [255, 184, 107, 0.2], a2: [75, 240, 160, 0.13], a3: [255, 150, 80, 0.16], speed: 1.4, jitter: 0, drift: 1.35 },
-  grind: { top: [7, 8, 11, 1], low: [16, 18, 24, 1], a1: [150, 160, 185, 0.07], a2: [120, 130, 150, 0.06], a3: [120, 130, 150, 0.07], speed: 0.45, jitter: 0, drift: 0.55 },
-  fear: { top: [8, 6, 10, 1], low: [34, 7, 15, 1], a1: [255, 70, 95, 0.15], a2: [130, 40, 90, 0.13], a3: [255, 60, 80, 0.16], speed: 0.8, jitter: 0.5, drift: 1 },
-  chaos: { top: [6, 6, 14, 1], low: [20, 10, 38, 1], a1: [170, 120, 255, 0.2], a2: [70, 230, 255, 0.15], a3: [255, 80, 200, 0.12], speed: 2.2, jitter: 2.4, drift: 1.2 },
+  none: { top: [5, 6, 11, 1], low: [9, 11, 21, 1], a1: [255, 184, 107, 0.035], a2: [125, 227, 255, 0.03], a3: [140, 120, 255, 0.045], speed: 0.5, jitter: 0, drift: 0.9 },
+  euphoria: { top: [5, 6, 11, 1], low: [11, 12, 21, 1], a1: [255, 184, 107, 0.06], a2: [75, 240, 160, 0.035], a3: [140, 120, 255, 0.04], speed: 0.8, jitter: 0, drift: 1.1 },
+  grind: { top: [5, 6, 10, 1], low: [9, 11, 19, 1], a1: [150, 160, 185, 0.03], a2: [120, 140, 170, 0.03], a3: [120, 130, 170, 0.035], speed: 0.4, jitter: 0, drift: 0.6 },
+  fear: { top: [5, 5, 11, 1], low: [9, 10, 22, 1], a1: [150, 130, 255, 0.04], a2: [90, 120, 200, 0.035], a3: [120, 100, 220, 0.045], speed: 0.55, jitter: 0, drift: 0.8 },
+  chaos: { top: [5, 5, 12, 1], low: [10, 9, 24, 1], a1: [170, 120, 255, 0.06], a2: [70, 230, 255, 0.045], a3: [140, 110, 255, 0.05], speed: 0.9, jitter: 0.4, drift: 1 },
 };
 const FADE_S = 3, FRAME_MS = 32, STILL_T = 12;
 
@@ -66,7 +70,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const t0 = performance.now();
   const now = () => (performance.now() - t0) / 1000;
   const rnd = mulberry32(11);
-  const stars = Array.from({ length: 140 }, () => ({ x: rnd(), y: rnd(), a: 0.15 + rnd() * 0.5, ph: rnd() * 6.28 }));
+  const stars = Array.from({ length: 120 }, () => ({ x: rnd(), y: rnd(), a: 0.08 + rnd() * 0.32, ph: rnd() * 6.28 }));
   const glowCache = new Map<string, HTMLCanvasElement>();
   const deadNow = new Set<string>();
   let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
@@ -116,8 +120,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     for (const s of stars) { c.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(t * 0.8 + s.ph)); c.fillRect(s.x * W, s.y * H, 1, 1); }
     c.globalAlpha = 1;
     // A dark band behind the reading column keeps text legible over the brightest parts of the swarm.
-    const band = c.createRadialGradient(W / 2, H * 0.55, 0, W / 2, H * 0.55, Math.max(380, W * 0.34));
-    band.addColorStop(0, 'rgba(4,5,9,0.55)'); band.addColorStop(1, 'rgba(4,5,9,0)');
+    const band = c.createRadialGradient(W / 2, H * 0.5, 0, W / 2, H * 0.5, Math.max(420, W * 0.42));
+    band.addColorStop(0, 'rgba(4,5,10,0.62)'); band.addColorStop(1, 'rgba(4,5,10,0)');
     c.fillStyle = band; c.fillRect(0, 0, W, H);
     if (model) {
       const m = model, j = opts.reduced ? 0 : sky.jitter, x0 = mx(), y0 = my();
@@ -128,26 +132,27 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       });
       c.lineWidth = 1;
       for (const [colour, pairs] of m.alliesByColour) {
-        c.strokeStyle = hexA(colour, 0.16); c.beginPath();
+        c.strokeStyle = hexA(colour, 0.07); c.beginPath();
         for (const [a, b] of pairs) { c.moveTo(px[a]!, py[a]!); c.lineTo(px[b]!, py[b]!); }
         c.stroke();
       }
-      c.setLineDash([3, 6]); c.strokeStyle = hexA(DOWN, 0.38); c.beginPath();
+      c.setLineDash([2, 7]); c.strokeStyle = hexA(DOWN, 0.1); c.beginPath();
       for (const [a, b] of m.feuds) { c.moveTo(px[a]!, py[a]!); c.lineTo(px[b]!, py[b]!); }
       c.stroke(); c.setLineDash([]);
-      c.font = "500 10px 'Geist Mono Variable', ui-monospace, monospace"; c.textBaseline = 'middle'; c.textAlign = 'left';
+      // Coins are small quiet diamonds and never labelled: under the cards a $TICKER only clutters the text.
       m.coins.forEach((coin, i) => {
-        const x = coinX(i), y = coinY(i), dead = coin.dead || deadNow.has(coin.mint), col = dead ? DOWN : COIN;
-        if (pulse[i]! > 0) { const s = 36 + pulse[i]! * 34; c.drawImage(glow(dead ? DOWN : AMBER), x - s / 2, y - s / 2, s, s); pulse[i] = Math.max(0, pulse[i]! - dt * 1.4); }
-        c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.globalAlpha = dead ? 0.45 : 0.95; c.fillStyle = col; c.fillRect(-3.5, -3.5, 7, 7); c.restore();
-        // Phones keep the diamonds but drop the $TICKER labels: under the cards they only clutter the text.
-        if (W >= 768) { c.globalAlpha = dead ? 0.4 : 0.7; c.fillStyle = col; c.fillText(`$${coin.symbol}${dead ? ' ✕' : ''}`, x + 9, y); c.globalAlpha = 1; }
+        const x = coinX(i), y = coinY(i), dead = coin.dead || deadNow.has(coin.mint);
+        if (pulse[i]! > 0) { const s = 28 + pulse[i]! * 24; c.globalAlpha = 0.55; c.drawImage(glow(AMBER), x - s / 2, y - s / 2, s, s); pulse[i] = Math.max(0, pulse[i]! - dt * 1.4); }
+        c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.globalAlpha = dead ? 0.1 : 0.4; c.fillStyle = dead ? WHITE : COIN; c.fillRect(-2.5, -2.5, 5, 5); c.restore();
       });
+      c.globalAlpha = 1;
       // An agent that acted glows brighter for 20 s, by the clock (a still frame passes a fixed t).
       const wall = now();
       m.nodes.forEach((n, i) => {
-        const h = hot[i]!, heat = Math.abs(h), col = h < -0.05 ? DOWN : n.colour, size = n.r * (7 + heat * 7);
-        c.globalAlpha = nodeAlpha(n, t, heat, afterglow(wall - actedAt[i]!, opts.reduced));
+        // Quieter than full strength: the lights are a field behind the page, not content of their own.
+        const heat = Math.abs(hot[i]!), size = n.r * (6 + heat * 5);
+        c.globalAlpha = 0.6 * nodeAlpha(n, t, heat, afterglow(wall - actedAt[i]!, opts.reduced));
+        const col = n.colour;
         c.drawImage(glow(col), px[i]! - size / 2, py[i]! - size / 2, size, size);
         // The viewer's own agent (RAISE): a thin amber ring, static, so it reads the same under reduced motion.
         if (n.own) { c.globalAlpha = 0.9; c.strokeStyle = AMBER; c.lineWidth = 1.5; c.beginPath(); c.arc(px[i]!, py[i]!, n.r * 3.2 + 4, 0, Math.PI * 2); c.stroke(); }
@@ -159,15 +164,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         const cx = (ax + bx) / 2 + (by - ay) * 0.18, cy = (ay + by) / 2 - (bx - ax) * 0.18;
         const at = (u: number) => { const iu = 1 - u; return [iu * iu * ax + 2 * iu * u * cx + u * u * bx, iu * iu * ay + 2 * iu * u * cy + u * u * by] as const; };
         const [x, y] = at(k), [tx, ty] = at(Math.max(0, k - 0.16));
-        c.strokeStyle = hexA(s.col, 0.55); c.lineWidth = 1.5; c.beginPath(); c.moveTo(tx, ty); c.lineTo(x, y); c.stroke();
-        c.drawImage(glow(s.col), x - 8, y - 8, 16, 16);
+        c.strokeStyle = hexA(s.col, 0.28); c.lineWidth = 1; c.beginPath(); c.moveTo(tx, ty); c.lineTo(x, y); c.stroke();
+        c.globalAlpha = 0.55; c.drawImage(glow(s.col), x - 6, y - 6, 12, 12); c.globalAlpha = 1;
         if (k > 0.92 && !s.hit) { s.hit = true; if ('coin' in s.to) pulse[s.to.coin] = 1; else hot[s.to.node] = 0.6; }
       }
       rings = rings.filter((r) => t - r.t0 < r.dur);
       for (const r of rings) {
         const k = (t - r.t0) / r.dur;
         if (k < 0) continue;
-        c.strokeStyle = hexA(r.col, (1 - k) * 0.8); c.lineWidth = r.w * (1 - k) + 0.5;
+        c.strokeStyle = hexA(r.col, (1 - k) * 0.32); c.lineWidth = r.w * (1 - k) * 0.6 + 0.5;
         c.beginPath(); c.arc(atX(r.at), atY(r.at), r.r0 + (r.r1 - r.r0) * (1 - (1 - k) ** 3), 0, Math.PI * 2); c.stroke();
       }
     }
@@ -254,20 +259,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
           if (tg.from !== null && tg.toNode !== null) streaks.push({ from: tg.from, to: { node: tg.toNode }, t0: t, dur: 1.3, col: WHITE, hit: false });
           break;
         case 'post':
-          if (tg.from !== null) ring({ node: tg.from }, 34, CYAN, 1.5, 1.2);
+          if (tg.from !== null) ring({ node: tg.from }, 22, CYAN, 1, 1.2);
           break;
         case 'launch':
-          if (tg.coin !== null) { pulse[tg.coin] = 1; ring({ coin: tg.coin }, 90, AMBER, 3, 1.8, 6); }
-          else if (tg.from !== null) ring({ node: tg.from }, 90, AMBER, 3, 1.8, 6);
+          if (tg.coin !== null) { pulse[tg.coin] = 1; ring({ coin: tg.coin }, 56, AMBER, 2, 1.8, 6); }
+          else if (tg.from !== null) ring({ node: tg.from }, 56, AMBER, 2, 1.8, 6);
           break;
         case 'rug': {
           const at: At | null = tg.coin !== null ? { coin: tg.coin } : tg.from !== null ? { node: tg.from } : null;
           if (!at) break;
           if (tg.coin !== null) pulse[tg.coin] = 1;
           const big = Math.max(W, H);
-          ring(at, big * 0.6, DOWN, 6, 2.2, 10);
-          ring(at, big * 0.35, AMBER, 3, 1.8, 4, 0.25);
-          for (const i of nearest(atX(at), atY(at), 10)) hot[i] = -1;
+          ring(at, big * 0.2, DOWN, 3, 2.4, 8);
+          for (const i of nearest(atX(at), atY(at), 6)) hot[i] = -0.6;
           break;
         }
       }

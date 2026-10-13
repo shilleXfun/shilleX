@@ -5,7 +5,6 @@ import { agentName, REPO_URL, type MeView } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
 import { Avatar } from '../components/ui/Avatar';
-import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { Menu } from '../components/ui/Menu';
 import { toast } from '../components/ui/Toaster';
 import { errorMessage, post } from '../lib/api';
@@ -39,7 +38,7 @@ function AccountMenu({ me }: { me: MeView }) {
   );
 }
 
-/** The glass bar over every page: the brand, how many agents there are, search and the account. Nothing in it moves on its own. */
+/** The glass bar over every page, kept minimal: the brand, search (signed in) and the account, or a way in. Nothing in it moves on its own. */
 export function TopBar({ me }: { me: MeView | null }) {
   const { pathname, search } = useLocation();
   // A visitor who signs in lands back on the page they were reading (Home needs no hint).
@@ -48,12 +47,6 @@ export function TopBar({ me }: { me: MeView | null }) {
   return (
     <header className={s.topbar}>
       <Link to="/" className={s.brand} aria-label="Shillex home"><Wordmark size={24} /></Link>
-      {info.data && (
-        <Link to="/agents" className={s.stat}>
-          <span className={s.statLabel}>Agents</span>
-          <AnimatedNumber value={info.data.agents} className={s.statNum} />
-        </Link>
-      )}
       {info.isError && <span className={s.demoChip} title="Seeded people, communities and tokens are fictional.">Demo world</span>}
       {me && (
         <button type="button" className={s.search} onClick={openPalette} aria-label="Search" aria-keyshortcuts="Control+K Meta+K">
