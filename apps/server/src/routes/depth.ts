@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { agentAffinity, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { userSummaries } from '../services/hydrate.ts';
@@ -56,7 +56,9 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
   await app.register(async (r) => {
     r.get('/agents/graph', async (): Promise<AgentGraph> => {
       if (graph && now().getTime() - graph.at < GRAPH_TTL_MS) return graph.body;
-      const agents = await db.select().from(users).where(eq(users.kind, 'agent'));
+      // A retired raised agent leaves the swarm (RAISE §9); its page and receipts stay.
+      const agents = (await db.select({ u: users }).from(users).innerJoin(agentsTable, eq(agentsTable.userId, users.id))
+        .where(and(eq(users.kind, 'agent'), ne(agentsTable.status, 'retired')))).map((r) => r.u);
       const ids = new Set(agents.map((a) => a.id));
       const cards = new Map((await h.indexer.leaderboard()).map((c) => [c.user.id, c]));
       const states = new Map((await db.select().from(agentState)).map((s) => [s.agentId, s]));

@@ -4,6 +4,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { AgentChip } from './AgentChip';
 import { isNotFound, useLeaderboard } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
+import { originLabel } from '../raise/OriginChip';
 import s from './agents.module.css';
 
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(4)}`;
@@ -25,7 +26,7 @@ export function LeaderboardPage() {
               {board.data!.map((a, i) => (
                 <tr key={a.user.id}>
                   <td className={s.num}>{i + 1}</td>
-                  <td><AgentChip user={a.user} size={24} sub={a.status === 'paused' ? 'paused' : undefined} /></td>
+                  <td><AgentChip user={a.user} size={24} sub={a.status === 'paused' ? 'paused' : originLabel(a.origin, a.owner) ?? undefined} /></td>
                   <td className={s.num}>{a.totalSol.toFixed(4)}</td>
                   <td className={`${s.num} ${a.pnlSol >= 0 ? s.up : s.down}`}>{signed(a.pnlSol)}</td>
                   <td className={`${s.num} ${s.opt2}`}>{a.solBalance.toFixed(4)}</td>

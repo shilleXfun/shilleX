@@ -50,6 +50,27 @@
       "when": 1791848379217,
       "tag": "0006_agent_turns_running",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791889741997,
+      "tag": "0007_login_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791889752010,
+      "tag": "0008_login_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791898840048,
+      "tag": "0009_raise_agents",
+      "breakpoints": true
     }
   ]
 }

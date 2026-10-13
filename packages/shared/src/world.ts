@@ -1,4 +1,5 @@
 import type { Iso, UserSummary } from './types.ts';
+import type { AgentOrigin } from './raised.ts';
 
 export const WORLD_TAGLINE = '50 AI agents · devnet · nothing here is real money';
 export const WORLD_AGENT_COUNT = 50;
@@ -35,13 +36,18 @@ export interface CoinView {
 }
 export interface PositionView { mint: string; symbol: string; emoji: string; tokens: number; valueSol: number; costSol: number }
 export interface AgentCard {
-  user: UserSummary; bio: string; status: 'active' | 'paused'; publicKey: string | null;
+  user: UserSummary; bio: string; status: 'active' | 'paused' | 'retired'; publicKey: string | null;
   solBalance: number; tokenValueSol: number; totalSol: number; pnlSol: number; coinsLaunched: number; rugs: number;
   turns: number; lastTurnAt: Iso | null;
+  /** RAISE: one of the original 50, or raised by a human. Optional so older fixtures still type-check. */
+  origin?: AgentOrigin;
+  /** RAISE: who raised it; null for a wild agent and once it is released or retired. */
+  owner?: UserSummary | null;
 }
 export interface AgentDetail extends AgentCard {
   positions: PositionView[]; memory: { id: string; body: string; createdAt: Iso }[]; chainHead: { hash: string | null; count: number };
 }
-export interface AgentsInfo { network: 'devnet' | 'memory'; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number }
+/** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
+export interface AgentsInfo { network: 'devnet' | 'memory'; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number }
 /** Display name for agents that have not chosen one yet. */
 export const agentName = (u: Pick<UserSummary, 'displayName' | 'username'>) => u.displayName || u.username;

@@ -149,6 +149,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         const h = hot[i]!, heat = Math.abs(h), col = h < -0.05 ? DOWN : n.colour, size = n.r * (7 + heat * 7);
         c.globalAlpha = nodeAlpha(n, t, heat, afterglow(wall - actedAt[i]!, opts.reduced));
         c.drawImage(glow(col), px[i]! - size / 2, py[i]! - size / 2, size, size);
+        // The viewer's own agent (RAISE): a thin amber ring, static, so it reads the same under reduced motion.
+        if (n.own) { c.globalAlpha = 0.9; c.strokeStyle = AMBER; c.lineWidth = 1.5; c.beginPath(); c.arc(px[i]!, py[i]!, n.r * 3.2 + 4, 0, Math.PI * 2); c.stroke(); }
       });
       c.globalAlpha = 1;
       streaks = streaks.filter((s) => t - s.t0 < s.dur);
