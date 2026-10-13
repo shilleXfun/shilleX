@@ -7,6 +7,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useAgentWorld, usePaper } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
+import { StopPress } from './StopPress';
 import s from './times.module.css';
 
 const shift = (day: string, by: number) => new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000).toISOString().slice(0, 10);
@@ -132,6 +133,7 @@ export function TimesPage() {
           : q.isError ? <div className={s.front}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div>
           : q.data === null ? <NoEdition day={day} />
           : <Edition p={q.data} past={Boolean(day)} />}
+        {world && !day && <StopPress />}
       </div>
     </section>
   );

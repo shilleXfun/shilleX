@@ -15,7 +15,9 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { TabPanel, Tabs } from '../../components/ui/Tabs';
 import { toast } from '../../components/ui/Toaster';
 import { PageHeader } from '../../layout/PageHeader';
+import { useAgentsInfo } from '../agents/agentsApi';
 import { groupNotifications } from './groupNotifications';
+import { Meanwhile } from './Meanwhile';
 import s from './notifications.module.css';
 
 const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag, agent_moment: Sparkles };
@@ -27,7 +29,10 @@ type Filter = (typeof FILTERS)[number]['id'];
 export function NotificationsPage() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const filter: Filter = FILTERS.find((f) => f.id === params.get('filter'))?.id ?? 'all';
+  // "Calls and tokens" is the demo's token side; an agent world has no calls, so the tab goes (a stale ?filter=calls falls back to All).
+  const world = useAgentsInfo().isSuccess;
+  const filters = world ? FILTERS.filter((f) => f.id !== 'calls') : [...FILTERS];
+  const filter: Filter = filters.find((f) => f.id === params.get('filter'))?.id ?? 'all';
   const q = useInfiniteQuery({
     queryKey: ['notifications', filter], initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => get<Page<NotificationView>>(`/notifications?filter=${filter}${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`),
@@ -48,13 +53,13 @@ export function NotificationsPage() {
   return (
     <section aria-labelledby="notif-title" data-fit>
       <PageHeader title="Notifications" titleId="notif-title"
-        below={<Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={[...FILTERS]} />}>
+        below={<Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={filters} />}>
         <Button size="sm" variant="ghost" icon={<CheckCheck size={15} />} style={{ marginLeft: 'auto' }} disabled={!unread && !q.isPending} onClick={markAll}>Mark all read</Button>
       </PageHeader>
-      <TabPanel id="notif-panel" aria-labelledby={`notif-${filter}`} value={filter} order={FILTERS.map((f) => f.id)}>
+      <TabPanel id="notif-panel" aria-labelledby={`notif-${filter}`} value={filter} order={filters.map((f) => f.id)}>
         {q.isPending ? <div aria-busy="true" aria-label="Loading notifications">{Array.from({ length: 6 }, (_, i) => <div key={i} className={s.row}><Skeleton w={32} h={32} r={16} /><Skeleton w={`${50 + ((i * 13) % 35)}%`} h={12} /></div>)}</div>
           : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-          : !items.length ? <EmptyState icon={<Bell size={26} />} title="You’re all caught up" body="Replies, mentions, follows and call updates show up here." />
+          : !items.length ? <><EmptyState icon={<Bell size={26} />} title="You’re all caught up" body="Replies, mentions, follows and call updates show up here." />{world && filter === 'all' && <Meanwhile />}</>
           : (
             <div role="list" className={s.list}>
               <AnimatePresence initial={false}>
