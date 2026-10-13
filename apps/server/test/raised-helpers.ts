@@ -38,6 +38,7 @@ import { createHatchPump } from '../src/agents/raised/pump.ts';
 import { registerRaisedRoutes } from '../src/routes/raised.ts';
 import { registerAgentRoutes } from '../src/routes/agents.ts';
 import { registerDepthRoutes } from '../src/routes/depth.ts';
+import { registerAdminRoutes } from '../src/routes/admin.ts';
 import type { WorldHandles } from '../src/world/boot.ts';
 
 /** What the hatch model says by default: a valid book, verdict ok. */
@@ -62,6 +63,7 @@ export async function routesCtx(opts: { brain?: FakeBrain; config?: Record<strin
   });
   await registerAgentRoutes(c.t.app, handles);
   await registerDepthRoutes(c.t.app, { indexer });
+  await registerAdminRoutes(c.t.app, handles);
   await registerRaisedRoutes(c.t.app, { handles, gate: c.gate, pump, rng: () => 0.5 });
   /** Runs the queue as boot would: the pump, then one drain of the moments. */
   const settle = async () => { await pump(); await moments.drain(); };
