@@ -20,7 +20,7 @@ export async function addOutsideAgents(
     const id = opts.ids?.[i] ?? newId(), now = ctx.now(), username = `${opts.prefix ?? 'outsider'}_${i}`;
     await ctx.db.insert(users).values({ id, username, displayName: `Outsider ${i}`, bio: '', kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: now });
     await ctx.db.insert(agents).values({ userId: id, status: 'active', origin: 'external', createdAt: now });
-    await ctx.db.insert(externalRegistrations).values({ agentId: id, claimCode: newId().slice(-12).toUpperCase(), ipHash: 'test', createdAt: now, expiresAt: new Date(now.getTime() + 86_400_000), claimedAt: now, method: 'x', status: 'claimed' });
+    await ctx.db.insert(externalRegistrations).values({ agentId: id, claimCode: newId().slice(-12).toUpperCase(), claimTokenHash: `test-${id}`, ipHash: 'test', createdAt: now, expiresAt: new Date(now.getTime() + 86_400_000), claimedAt: now, method: 'x', status: 'claimed' });
     await ctx.db.insert(agentClaims).values({ agentId: id, method: 'x', xHandle: `${username}_x`.toLowerCase(), claimedAt: now });
     await setTraits(ctx.db, id, NEUTRAL, now);
     ctx.chain.airdrop(await createWallet(ctx.db, id, ctx.key, now), opts.lamports ?? 100_000_000);

@@ -24,7 +24,7 @@ describe('open agents schema', () => {
     h = await testDb();
     await agent(h.db, 'ext_a');
     await h.db.insert(agentApiKeys).values({ id: 'a'.repeat(64), agentId: 'ext_a', createdAt: at, label: 'laptop' });
-    await h.db.insert(externalRegistrations).values({ agentId: 'ext_a', claimCode: 'ABCDEFGHJKLM', ipHash: 'f'.repeat(64), createdAt: at, expiresAt: new Date(at.getTime() + 86_400_000), status: 'pending' });
+    await h.db.insert(externalRegistrations).values({ agentId: 'ext_a', claimCode: 'ABCDEFGHJKLM', claimTokenHash: 'e'.repeat(64), ipHash: 'f'.repeat(64), createdAt: at, expiresAt: new Date(at.getTime() + 86_400_000), status: 'pending' });
     await h.db.delete(users).where(sql`${users.id} = 'ext_a'`);
     expect(await h.db.select().from(agentApiKeys)).toHaveLength(0);
     expect(await h.db.select().from(externalRegistrations)).toHaveLength(0);
@@ -34,7 +34,7 @@ describe('open agents schema', () => {
     h = await testDb();
     await agent(h.db, 'ext_a');
     await agent(h.db, 'ext_b');
-    const row = (agentId: string) => ({ agentId, claimCode: 'ABCDEFGHJKLM', ipHash: 'f'.repeat(64), createdAt: at, expiresAt: at, status: 'pending' as const });
+    const row = (agentId: string) => ({ agentId, claimCode: 'ABCDEFGHJKLM', claimTokenHash: `t-${agentId}`, ipHash: 'f'.repeat(64), createdAt: at, expiresAt: at, status: 'pending' as const });
     await h.db.insert(externalRegistrations).values(row('ext_a'));
     await expect(h.db.insert(externalRegistrations).values(row('ext_b'))).rejects.toThrow();
   });

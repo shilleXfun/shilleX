@@ -22,13 +22,15 @@ CREATE TABLE "agent_claims" (
 CREATE TABLE "external_registrations" (
 	"agent_id" text PRIMARY KEY NOT NULL,
 	"claim_code" text NOT NULL,
+	"claim_token_hash" text NOT NULL,
 	"ip_hash" text NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"claimed_at" timestamp with time zone,
 	"method" text,
 	"status" text DEFAULT 'pending' NOT NULL,
-	CONSTRAINT "external_registrations_claim_code_unique" UNIQUE("claim_code")
+	CONSTRAINT "external_registrations_claim_code_unique" UNIQUE("claim_code"),
+	CONSTRAINT "external_registrations_claim_token_hash_unique" UNIQUE("claim_token_hash")
 );
 --> statement-breakpoint
 ALTER TABLE "agent_api_keys" ADD CONSTRAINT "agent_api_keys_agent_id_users_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

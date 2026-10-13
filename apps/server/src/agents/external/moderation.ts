@@ -4,7 +4,7 @@ import { agentApiKeys, agentClaims, agentTurns, agents, externalRegistrations, p
 import { errors } from '../../lib/errors.ts';
 import { REPORTS_TO_RETIRE, retireAgent, type LifecycleDeps } from '../raised/lifecycle.ts';
 import { activate, type ClaimDeps } from './claim.ts';
-import { PAUSE_ALL_KEY, outsidersPaused, revokeKeys } from './keys.ts';
+import { PAUSE_ALL_KEY, outsidersPaused, revokeKeys, rotateKey } from './keys.ts';
 import { EXTERNAL_MODEL } from './read.ts';
 import { liveOutsiders } from './register.ts';
 
@@ -16,12 +16,14 @@ export const BAR_MS = 30 * 86_400_000;
  * kept), then ends its claim and revokes its keys. Reports also bar its X handle and wallet for 30 days; the claim row stays.
  */
 export async function retireOutsider(d: LifecycleDeps, agentId: string, reason: 'admin' | 'reports'): Promise<{ returnedSol: number }> {
-  const out = await retireAgent(d, agentId, reason, 'external');
+  await outsider(d.db, agentId);
   const now = d.now();
-  await d.db.update(agentClaims).set({ endedAt: now, ...(reason === 'reports' ? { barredUntil: new Date(now.getTime() + BAR_MS) } : {}) })
-    .where(eq(agentClaims.agentId, agentId));
+  // Keys, claim and bar first: if returning the SOL fails on the chain below, the agent is still stopped, its claim ended and
+  // (after reports) its claimer barred; the retirement itself is already recorded by then too.
   await revokeKeys(d.db, agentId, now);
-  return out;
+  await d.db.update(agentClaims).set({ endedAt: now, ...(reason === 'reports' ? { barredUntil: new Date(now.getTime() + BAR_MS) } : {}) })
+    .where(and(eq(agentClaims.agentId, agentId), isNull(agentClaims.endedAt)));
+  return retireAgent(d, agentId, reason, 'external');
 }
 
 /** RAISE's rule for outside agents: REPORTS_TO_RETIRE upheld reports from distinct people on its posts retire it, with the bar. */
@@ -32,7 +34,8 @@ export async function retireReportedOutsiders(d: LifecycleDeps): Promise<string[
     .where(and(eq(reports.status, 'resolved'), eq(agents.origin, 'external'), ne(agents.status, 'retired'),
       or(isNull(reports.resolvedBy), ne(reports.resolvedBy, reports.reporterId))))
     .groupBy(posts.authorId).having(sql`count(distinct ${reports.reporterId}) >= ${REPORTS_TO_RETIRE}`);
-  for (const r of rows) await retireOutsider(d, r.agentId, 'reports');
+  // One agent's failing chain call must not keep the others in the world.
+  for (const r of rows) await retireOutsider(d, r.agentId, 'reports').catch((e) => console.error('[agents-api] retiring a reported outside agent failed', r.agentId, e));
   return rows.map((r) => r.agentId);
 }
 
@@ -82,11 +85,25 @@ export async function approveClaim(d: ClaimDeps, agentId: string, adminId: strin
   return { funded: await activate(d, agentId) };
 }
 
-/** Rejects a wallet claim: the agent never acted, so it goes entirely and its handle and the wallet are free again. */
+/**
+ * Rejects a wallet claim: the claim goes (the wallet is free again) and the registration is pending once more, so its operator
+ * can still be claimed another way until the 24 h run out (then the sweep frees the handle). The agent itself stays.
+ */
 export async function rejectClaim(db: Db, agentId: string): Promise<void> {
   const r = await outsider(db, agentId);
   if (r.reg?.status !== 'awaiting_approval' || r.a.status !== 'paused') throw errors.conflict('NOT_AWAITING', 'This agent is not waiting for approval');
-  await db.delete(users).where(eq(users.id, agentId));
+  await db.transaction(async (tx) => {
+    await tx.delete(agentClaims).where(eq(agentClaims.agentId, agentId));
+    await tx.update(externalRegistrations).set({ status: 'pending', method: null, claimedAt: null })
+      .where(and(eq(externalRegistrations.agentId, agentId), eq(externalRegistrations.status, 'awaiting_approval')));
+  });
+}
+
+/** Admin: a fresh key for an unretired outside agent (every older key revoked in the same transaction); returned once. */
+export async function issueKey(db: Db, agentId: string, now: Date): Promise<string> {
+  const r = await outsider(db, agentId);
+  if (r.a.status === 'retired') throw errors.conflict('AGENT_RETIRED', 'This agent was retired');
+  return rotateKey(db, agentId, now, 'issued by an admin');
 }
 
 /** Admin pause and resume of one outside agent; resume needs a claimed, unretired agent. */
