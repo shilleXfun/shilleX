@@ -8,7 +8,7 @@ export const LONER = FALLBACK.loner, GHOST = FALLBACK.ghost;
 /** The layout runs on a 16:10 virtual canvas; positions are stored normalised to 0..1. */
 const VW = 1000, VH = 625;
 
-export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; glow: number; ghost: boolean; phase: number }
+export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; glow: number; ghost: boolean; phase: number; breath: number }
 export interface SwarmCoin { mint: string; symbol: string; creatorId: string; x: number; y: number; dead: boolean }
 export interface SwarmModel {
   nodes: SwarmNode[]; index: Map<string, number>;
@@ -18,6 +18,8 @@ export interface SwarmModel {
 
 function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+/** Seconds per breath of an agent's light: 6 at the lowest mood, 3 at the highest (happier lights breathe quicker). */
+export const breathOf = (mood: number) => 6 - 3 * ((clamp(mood, -1, 1) + 1) / 2);
 
 /**
  * The world as the backdrop draws it. `prev` seeds the layout so a new graph nudges agents instead of reshuffling them.
@@ -68,6 +70,7 @@ function layoutAgents(graph: AgentGraph, prev: SwarmModel | null): Pick<SwarmMod
       colour: n.ghost ? GHOST : n.factionColour ?? LONER,
       glow: n.ghost ? 0.25 : 0.45 + 0.35 * ((clamp(n.mood, -1, 1) + 1) / 2),
       ghost: n.ghost, phase: (hash(n.id) % 6283) / 1000,
+      breath: breathOf(n.mood),
     };
   });
   const index = new Map(nodes.map((n, i) => [n.id, i]));

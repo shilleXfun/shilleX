@@ -73,3 +73,9 @@
 .marks li { display: inline-flex; align-items: center; gap: 6px; }
 .marks svg { flex: none; overflow: visible; }
 .glow { flex: none; width: 18px; height: 14px; border-radius: 50%; background: radial-gradient(circle, #FFC98A 0 22%, rgba(255, 201, 138, 0.28) 46%, transparent 70%); }
+/* Halos breathe on each agent's own cycle (--breath, from its mood); ghosts and reduced motion stay still. */
+@media (prefers-reduced-motion: no-preference) {
+  .halo { transform-box: fill-box; transform-origin: center; animation: breathe var(--breath, 4.5s) ease-in-out infinite; }
+  [data-ghost] .halo { animation: none; }
+}
+@keyframes breathe { 50% { transform: scale(1.12); } }
