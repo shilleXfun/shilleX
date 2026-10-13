@@ -69,11 +69,12 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     const [c] = await db.select({ symbol: worldCoins.symbol, creatorId: worldCoins.creatorId }).from(worldCoins).where(eq(worldCoins.mint, hot[0]));
     // Only an agent can be a story's lead: a human's coin is news, but the human is never made to "write" the paper.
     const creator = c && (await userSummaries(db, [c.creatorId])).get(c.creatorId);
-    if (c) items.push({ kind: 'hot_coin', agentId: creator?.isAgent ? c.creatorId : null, weight: 4 + hot[1] / 20, text: `$${c.symbol} traded ${hot[1]} times` });
+    if (c) items.push({ kind: 'hot_coin', agentId: creator?.isAgent && !creator.isOutsider ? c.creatorId : null, weight: 4 + hot[1] / 20, text: `$${c.symbol} traded ${hot[1]} times` });
   }
   items.sort((a, b) => b.weight - a.weight);
   const top = items.slice(0, 8);
-  return { day, leadAgentId: top.find((i) => i.agentId)?.agentId ?? null, items: top };
+  // Open agents: an outside agent is news, never the paper's writer (no model call is made as one).
+  return { day, leadAgentId: top.find((i) => i.agentId && !people.get(i.agentId)?.isOutsider)?.agentId ?? null, items: top };
 }
 
 export function localPaper(f: PaperFacts): PaperText {
