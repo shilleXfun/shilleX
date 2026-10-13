@@ -1,0 +1,69 @@
+/* Shared by every README composition. Rendered by scripts/readme/build.mjs, which serves the repo root over HTTP,
+   so these font paths resolve to the same @fontsource files the app ships. */
+@font-face { font-family: 'Geist'; font-weight: 100 900; src: url(/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2) format('woff2-variations'); }
+@font-face { font-family: 'Geist Mono'; font-weight: 100 900; src: url(/node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2) format('woff2-variations'); }
+@font-face { font-family: 'Bricolage'; font-weight: 200 800; font-stretch: 75% 100%; src: url(/node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-standard-normal.woff2) format('woff2-variations'); }
+
+:root {
+  --bg: #06070C;
+  --panel: #0E1019;
+  --text: #EEF0F7;
+  --muted: #9AA0B6;
+  --faint: #5D6378;
+  --accent: #FFB86B;
+  --up: #4BF0A0;
+  --down: #FF5A6E;
+  --line: rgba(255, 255, 255, 0.08);
+  --font-ui: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --font-brand: 'Bricolage', 'Geist', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; }
+body { font-family: var(--font-ui); color: var(--text); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+
+/* The card every image is cut from. Transparent outside the radius, so it sits well on GitHub's light and dark themes. */
+.card {
+  position: relative; overflow: hidden; isolation: isolate;
+  border-radius: 20px; background: var(--bg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+/* The inset hairline has to sit above the content, so it is drawn again on top. */
+.card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); pointer-events: none; z-index: 10; }
+
+/* The swarm itself (captured from the app with the UI hidden), dimmed into atmosphere. */
+.atmos { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center; opacity: 0.55; }
+.glow { position: absolute; z-index: -1; border-radius: 50%; filter: blur(70px); pointer-events: none; }
+
+/* The browser window: a thin edge, a quiet title bar, a long soft shadow. */
+.window {
+  position: absolute; overflow: hidden;
+  border-radius: 13px; background: #0A0C14;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -20px rgba(0, 0, 0, 0.9),
+    0 60px 140px -30px rgba(0, 0, 0, 0.7);
+}
+.bar { position: relative; display: flex; align-items: center; height: 34px; padding: 0 14px; background: #0C0E17; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.dots { display: flex; gap: 7px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.11); }
+.url { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; height: 22px; padding: 0 12px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 450 10.5px/1 var(--font-mono); letter-spacing: 0; white-space: nowrap; }
+.url b { color: #C9CDDB; font-weight: 450; }
+.url svg { width: 10px; height: 10px; opacity: 0.6; }
+.view { position: relative; overflow: hidden; }
+.view img { position: absolute; display: block; transform-origin: 0 0; image-rendering: auto; }
+
+/* A phone, for compositions that show the mobile layout too. */
+.phone {
+  position: absolute; overflow: hidden; border-radius: 34px; background: #0A0C14;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 7px #10121B, 0 0 0 8px rgba(255, 255, 255, 0.08), 0 40px 90px -10px rgba(0, 0, 0, 0.95);
+}
+.phone img { display: block; width: 100%; }
+
+/* The wordmark, as apps/web/src/components/brand/Wordmark.tsx draws it: lowercase "shille" and an X whose amber stroke passes under the white one. */
+.wordmark { display: inline-flex; align-items: baseline; font-family: var(--font-brand); font-weight: 800; font-stretch: 80%; letter-spacing: -0.02em; line-height: 1; color: var(--text); }
+.wordmark .x { display: block; width: 0.8em; height: 0.8em; transform: translateY(0.07em); margin-left: 0.02em; }
+
+.fade-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; pointer-events: none; background: linear-gradient(to bottom, rgba(6, 7, 12, 0), var(--bg) 92%); }
