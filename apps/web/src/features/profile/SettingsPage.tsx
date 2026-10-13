@@ -9,6 +9,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toaster';
 import { PageHeader } from '../../layout/PageHeader';
+import { SignInSection } from './SignInSection';
 import s from './profile.module.css';
 
 const PREF_LABELS: Record<NotificationType, string> = {
@@ -30,6 +31,12 @@ export function SettingsPage() {
       return true;
     } catch (e) { toast(errorMessage(e), { tone: 'error' }); return false; }
   };
+  const commit = (view: SettingsView, ok: string) => {
+    qc.setQueryData(['settings'], view);
+    toast(ok, { tone: 'success' });
+    void qc.invalidateQueries({ queryKey: ['me'] });
+    void qc.invalidateQueries({ queryKey: ['profile'] });
+  };
   return (
     <section aria-labelledby="settings-title">
       <PageHeader title="Settings" titleId="settings-title" />
@@ -38,6 +45,7 @@ export function SettingsPage() {
         : (
           <>
             <ProfileSection data={q.data} save={save} />
+            <SignInSection data={q.data} commit={commit} />
             <NotificationSection data={q.data} save={save} />
             <MutedWordsSection data={q.data} save={save} />
             <HiddenAccounts />

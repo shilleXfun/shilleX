@@ -78,3 +78,9 @@ textarea.input { height: 76px; padding: 10px 12px; resize: vertical; }
 .mutedChip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; border-radius: var(--radius-pill); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-strong); font-size: var(--fs-sm); }
 .mutedChip span { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mutedChip button { width: 26px; height: 26px; min-width: 0; padding: 0; border-radius: 50%; }
+.walletList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.walletRow { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.walletRowHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.walletRowName { font-weight: 650; }
+.walletVerified { display: inline-flex; align-items: center; gap: 4px; color: var(--token); font-size: var(--fs-sm); font-weight: 600; }
+.walletRowHead > :last-child { margin-left: auto; }
