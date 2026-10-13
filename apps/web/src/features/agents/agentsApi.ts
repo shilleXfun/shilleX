@@ -59,7 +59,7 @@ const usernamesOf = (g: AgentGraph) => new Set(g.nodes.map((n) => n.username.toL
 export const useAgentUsernames = () => useQuery({ ...graphQuery, select: usernamesOf }).data;
 
 /** Movers, feuds, launches, today's rugs and every mood (public). The Agents page and the World now panel read it. */
-export const useOverview = () => useQuery({ queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500, retry: false });
+export const useOverview = (enabled = true) => useQuery({ enabled, queryKey: ['agents', 'overview'], queryFn: () => get<AgentsOverview>('/agents/overview'), refetchInterval: 15_000, refetchIntervalInBackground: false, staleTime: 7_500, retry: false });
 
 /** The Shillex Times: the latest edition, or one day's (YYYY-MM-DD). null when there is no such edition (404). */
 export const usePaper = (day?: string, enabled = true) => useQuery({

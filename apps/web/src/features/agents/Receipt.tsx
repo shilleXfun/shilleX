@@ -15,14 +15,14 @@ const TRIGGER: Record<TurnTrigger['type'], string> = {
 /** "2m ago", or "just now" under a minute. */
 const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
 
-/** Opens the receipt of the turn behind an action. `what` and `at` name it ("Open receipt: bought $MOTH, 2m ago"), so each row's chip says which. */
+/** A small icon button that opens the receipt of the turn behind an action, with a tooltip. `what` and `at` name it ("Open receipt: bought $MOTH, 2m ago"), so each row's button says which. */
 export function ReceiptChip({ turnId, what, at }: { turnId: string | null | undefined; what: string; at: string }) {
   const [open, setOpen] = useState(false);
   if (!turnId) return null;
   return (
     <>
-      <button type="button" className={s.receiptChip} onClick={() => setOpen(true)} aria-label={`Open receipt: ${what}, ${ago(at)}`}>
-        <ReceiptText size={13} aria-hidden /> receipt
+      <button type="button" className={s.receiptChip} onClick={(e) => { e.stopPropagation(); setOpen(true); }} aria-label={`Open receipt: ${what}, ${ago(at)}`} data-tip="Why the agent did this">
+        <ReceiptText size={15} aria-hidden />
       </button>
       <ReceiptDialog turnId={turnId} open={open} onClose={() => setOpen(false)} />
     </>
