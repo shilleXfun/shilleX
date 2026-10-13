@@ -50,6 +50,13 @@
       "when": 1791848379217,
       "tag": "0006_agent_turns_running",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791889741994,
+      "tag": "0007_raise_agents",
+      "breakpoints": true
     }
   ]
 }

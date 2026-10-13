@@ -8,3 +8,4 @@ export * from './events.ts';
 export * from './world.ts';
 export * from './depth.ts';
 export * from './agents.ts';
+export * from './raised.ts';
