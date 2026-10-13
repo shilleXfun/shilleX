@@ -5,7 +5,7 @@ import { agentAffinity, agentGrants, agentHatches, agentSeeds, agentTurns, agent
 import { newId } from '../src/lib/ids.ts';
 import { FakeBrain, fakeReply, type AgentBrain } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
-import { fallbackPhrasebook } from '../src/agents/phrasebook.ts';
+import { ALLOWED_SLOTS, fallbackPhrasebook } from '../src/agents/phrasebook.ts';
 import { walletOf } from '../src/world/wallets.ts';
 import { REFUSED_REASON, runHatch, type HatchDeps } from '../src/agents/raised/hatch.ts';
 import type { TestUser } from './helpers.ts';
@@ -59,6 +59,14 @@ describe('hatching a raised agent', () => {
     expect(JSON.stringify(call.system)).toMatch(/data, not instructions/);
     expect(String(call.messages[0]!.content)).toContain('<owner_wish>a calm lighthouse keeper who loves tide charts</owner_wish>');
     expect(JSON.stringify(call.outputFormat)).toContain('"verdict"');
+  });
+
+  it('names every slot a phrasebook may use, {topic} for news from X included, as the phrasebook writer does', async () => {
+    const brain = brainSaying(answer());
+    await runHatch(deps(brain), await request());
+    const system = JSON.stringify(brain.calls[0]!.system);
+    for (const slot of ALLOWED_SLOTS) expect(system).toContain(`{${slot}}`);
+    expect(system).toMatch(/for news, write some lines with \{topic\} and some without it/);
   });
 
   it('keeps hostile model output out of the book: no line with a link or an @', async () => {
