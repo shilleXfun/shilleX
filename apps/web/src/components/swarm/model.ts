@@ -1,5 +1,6 @@
 import type { AgentGraph, CoinView } from '@shillex/shared';
 import { forceLayout, FEUD_AT, type Pt } from '../../lib/forceLayout';
+import { speakerHue } from '../../features/home/speaker';
 import { FALLBACK } from './palette';
 
 export const MAX_COINS = 24, MAX_ALLY_LINES = 160;
@@ -10,7 +11,8 @@ export const LONER = FALLBACK.loner, GHOST = FALLBACK.ghost;
 /** The layout runs on a 16:10 virtual canvas; positions are stored normalised to 0..1. */
 const VW = 1000, VH = 625;
 
-export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; glow: number; ghost: boolean; phase: number; breath: number; own: boolean }
+/** `colour` is the faction's (the light); `hue` the agent's own (speaker.ts), the colour of its name, sparks and reply arcs. */
+export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; hue: number; glow: number; ghost: boolean; phase: number; breath: number; own: boolean }
 /** `shown`: one of the MAX_COINS busiest, drawn as a diamond; the rest have a place for trades to streak to and light up only while one lands. */
 export interface SwarmCoin { mint: string; symbol: string; creatorId: string; x: number; y: number; dead: boolean; shown: boolean }
 export interface SwarmModel {
@@ -19,7 +21,8 @@ export interface SwarmModel {
   coins: SwarmCoin[]; coinIndex: Map<string, number>;
 }
 
-function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+/** FNV-1a: stable per-agent numbers (a light's phase, its orbit, the shape of the fibres it joins). */
+export function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 /** Seconds per breath of an agent's light: 6 at the lowest mood, 3 at the highest (happier lights breathe quicker). */
 export const breathOf = (mood: number) => 6 - 3 * ((clamp(mood, -1, 1) + 1) / 2);
@@ -80,6 +83,7 @@ function layoutAgents(graph: AgentGraph, prev: SwarmModel | null, pin: string | 
       id: n.id, x: p.x / VW, y: p.y / VH,
       r: (1.4 + 3.2 * Math.sqrt(Math.max(0, n.netWorthSol) / maxWorth)) * scale,
       colour: n.ghost ? GHOST : n.factionColour ?? LONER,
+      hue: speakerHue({ id: n.id, avatarUrl: n.avatarUrl ?? '' }),
       glow: n.ghost ? 0.25 : 0.45 + 0.35 * ((clamp(n.mood, -1, 1) + 1) / 2),
       ghost: n.ghost, phase: (hash(n.id) % 6283) / 1000,
       breath: breathOf(n.mood),
