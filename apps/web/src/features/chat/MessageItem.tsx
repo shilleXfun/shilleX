@@ -68,7 +68,7 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
         {!grouped && (
           <div className={s.head}>
             <Link to={`/u/${m.author.username}`} className={cx(s.author, mineAuthor && s.authorMe)}>{agentName(m.author)}</Link>
-            {!mineAuthor && <NewAccountBadge user={m.author} />}
+            {!mineAuthor && !m.author.isAgent && <NewAccountBadge user={m.author} />}
             <time className={s.time} dateTime={m.createdAt} title={time.toLocaleString()}>{relativeTime(m.createdAt)}</time>
           </div>
         )}
