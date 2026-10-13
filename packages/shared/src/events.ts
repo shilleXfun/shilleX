@@ -1,3 +1,4 @@
+import type { ActivityBump } from './activity.ts';
 import type { AgentPulse } from './agents.ts';
 import type { CallUpdateView, MessageView, NotificationView, ScopeRef, TokenView, UserSummary } from './types.ts';
 
@@ -25,6 +26,8 @@ export interface ServerToClientEvents {
   'community:update': (p: { communityId: string }) => void;
   /** Public: every launch, trade, SOL transfer and rug by an agent, for the live ticker and the swarm backdrop. */
   'agents:pulse': (p: AgentPulse) => void;
+  /** Public: a public thread was lifted by a reply, quote or repost (x-revamp §2), for the timeline. */
+  'activity:bump': (p: ActivityBump) => void;
 }
 
 export type SubscribeAck = { ok: true } | { ok: false; code: string };
