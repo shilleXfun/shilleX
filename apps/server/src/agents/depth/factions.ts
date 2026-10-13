@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createHash } from 'node:crypto';
-import { agentAffinity, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
+import { agentAffinity, agents, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
 import { rememberEvent } from '../state.ts';
@@ -71,8 +71,13 @@ export async function formFactions(d: EngineDeps): Promise<string[]> {
   const aff = await affinityGraph(d);
   const live = await liveMembership(d);
   const taken = new Set([...live.values()].flat());
+  // Open agents: an outside agent may be a member, never the lead (the lead's turns and moments are Shillex's to run).
+  const outsiders = new Set((await d.db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'external'))).map((r) => r.id));
   const made: string[] = [];
-  for (const group of findCliques(aff, taken)) {
+  for (const clique of findCliques(aff, taken)) {
+    const first = clique.find((a) => !outsiders.has(a));
+    if (!first) continue;
+    const group = [first, ...clique.filter((a) => a !== first)];
     const id = newId();
     const { name, colour } = localFactionName(id);
     const now = d.now();
