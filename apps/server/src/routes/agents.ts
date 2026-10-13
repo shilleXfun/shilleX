@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
-import { WORLD_AGENT_COUNT, type AgentsInfo, type AgentsOverview } from '@shillex/shared';
-import { agentTurns, agents, conversationMembers, conversations, messages, users, worldCoins } from '../db/schema.ts';
+import { and, desc, eq, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
+import { WORLD_AGENT_COUNT, type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
+import { agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
-import { hydrateMessages, userSummaries } from '../services/hydrate.ts';
+import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
+import { hiddenAuthorIds } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
 import { avatarSvg } from '../lib/svg-art.ts';
@@ -13,6 +14,9 @@ import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
 
 const VERIFY_TTL_MS = 60_000;
+/** How long a coin's "talking about $X" list is shared by every viewer, and how many coins' lists are kept at once. */
+const COIN_POSTS_TTL_MS = 15_000, COIN_POSTS_KEEP = 200;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Public views of the agents: profiles, receipts, coins, trades and the agents-only backchannel. Nothing here shows a human's private messages. */
 export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles) {
@@ -56,6 +60,29 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return { coin, trades: await w.indexer.trades({ mint: coin.mint, limit: 100 }), holders: await w.indexer.holders(coin.mint) };
     });
     r.get<{ Querystring: { limit?: string } }>('/coins/trades', async (req) => ({ trades: await w.indexer.trades({ limit: Number(req.query.limit ?? 50) || 50 }) }));
+    // The newest public posts outside communities that name the coin's $SYMBOL as a whole word, in any case, as a visitor
+    // sees them: demo personas hidden under HIDE_DEMO, nobody's mutes (the list is shared). Cached 15 s per coin and limit.
+    const coinPosts = new Map<string, { at: number; body: Page<PostView> }>();
+    r.get<{ Params: { mint: string }; Querystring: { limit?: string } }>('/coins/:mint/posts', async (req) => {
+      const coin = await w.indexer.coin(req.params.mint);
+      if (!coin) throw errors.notFound('Coin');
+      const limit = Math.max(1, Math.min(Number(req.query.limit ?? 10) || 10, 20));
+      const key = `${coin.mint}:${limit}`;
+      const hit = coinPosts.get(key);
+      if (hit && Date.now() - hit.at < COIN_POSTS_TTL_MS) return hit.body;
+      const hidden = await hiddenAuthorIds(db, '', app.deps.config.hideDemo);
+      const rows = await db.select().from(posts).where(and(
+        inArray(posts.kind, ['post', 'quote']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
+        hidden.length ? notInArray(posts.authorId, hidden) : undefined,
+        sql`${posts.body} ~* ${`\\$${escapeRe(coin.symbol)}([^A-Za-z0-9]|$)`}`,
+      )).orderBy(desc(posts.id)).limit(limit);
+      const items = await hydratePosts(db, '', rows);
+      const body: Page<PostView> = { items, nextCursor: null, tokens: await app.deps.tokens.getViews(collectMints(items)) };
+      coinPosts.delete(key);
+      coinPosts.set(key, { at: Date.now(), body });
+      if (coinPosts.size > COIN_POSTS_KEEP) coinPosts.delete(coinPosts.keys().next().value!);
+      return body;
+    });
     r.get('/leaderboard', async () => ({ agents: await w.indexer.leaderboard() }));
     // Movers, feuds, launches, today's rugs and every mood in one read; registered before /agents/:username. Shared by every viewer for 15 s.
     let cached: { at: number; body: AgentsOverview } | null = null;
@@ -73,6 +100,11 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       const u = await byUsername(req.params.username);
       const rows = await db.select().from(agentTurns).where(and(eq(agentTurns.agentId, u.id), req.query.before ? lt(agentTurns.id, req.query.before) : undefined)).orderBy(desc(agentTurns.id)).limit(20);
       return { turns: await Promise.all(rows.map((t) => publicTurnView(db, t, toUserSummary(u)))) };
+    });
+    // One agent's own trades, newest first: its page draws its wallet's SOL over them.
+    r.get<{ Params: { username: string }; Querystring: { limit?: string } }>('/agents/:username/trades', async (req) => {
+      const u = await byUsername(req.params.username);
+      return { trades: await w.indexer.trades({ agentId: u.id, limit: Number(req.query.limit ?? 50) || 50 }) };
     });
     r.get<{ Params: { id: string } }>('/receipts/:id', async (req) => {
       const [t] = await db.select({ t: agentTurns, u: users }).from(agentTurns).innerJoin(users, eq(users.id, agentTurns.agentId)).where(eq(agentTurns.id, req.params.id));
