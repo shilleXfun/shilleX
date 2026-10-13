@@ -86,9 +86,13 @@ export class RaisedGate {
     return true;
   }
 
-  /** The budget a model call books against: the Budget alone, or the Budget plus this share for a hatch and raised agents' own calls. */
-  budgetFor(agentId: string, purpose: string, budget: ModelBudget): ModelBudget {
-    const counts = purpose === 'hatch' || (this.isRaised(agentId) && (purpose === HUMAN_PURPOSE || purpose === 'phrasebook'));
+  /**
+   * The budget a model call books against: the Budget alone, or the Budget plus this share for a hatch, a raised agent's
+   * refresh and its reply to its own owner (`humanId`). Its replies to anyone else are ordinary human replies (spec §7).
+   */
+  budgetFor(agentId: string, purpose: string, budget: ModelBudget, humanId?: string): ModelBudget {
+    const ownerReply = purpose === HUMAN_PURPOSE && humanId !== undefined && this.ownerOf(agentId) === humanId;
+    const counts = purpose === 'hatch' || (this.isRaised(agentId) && (ownerReply || purpose === 'phrasebook'));
     if (!counts) return budget;
     return {
       canSpend: () => budget.canSpend(),

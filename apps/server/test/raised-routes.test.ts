@@ -133,4 +133,16 @@ describe('POST /api/raised/top-up', () => {
     expect(again.body.code).toBe('TOP_UP_TODAY');
     expect((await c.t.as(await c.t.createUser('nobody')).post('/api/raised/top-up')).status).toBe(404);
   });
+
+  it('the owner’s view survives a chain outage', async () => {
+    c = await routesCtx();
+    const owner = await c.t.createUser('keeper');
+    await raise(owner);
+    await c.settle();
+    c.chain.balances = (async () => { throw new Error('rpc down'); }) as typeof c.chain.balances;
+    c.t.clock.advance(31_000);
+    const mine = await c.t.as(owner).get('/api/raised/mine');
+    expect(mine.status).toBe(200);
+    expect(mine.body.agent).toMatchObject({ user: { username: 'tidewatch' }, topUp: { availableToday: false } });
+  });
 });

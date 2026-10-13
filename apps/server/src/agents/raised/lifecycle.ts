@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
 import { agentNudges, agents, posts, reports } from '../../db/schema.ts';
@@ -47,13 +47,15 @@ export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'ow
 /**
  * Raised agents with REPORTS_TO_RETIRE or more upheld reports on their posts are retired (spec §9), which bars their owner for
  * 30 days (eligibility.ts). Upheld = a moderator resolved the report by removing the content (reports.status 'resolved').
+ * Reports count people, not rows: one person reporting again, or a moderator upholding their own report, adds nothing.
  */
 export async function retireReported(d: LifecycleDeps): Promise<string[]> {
   const rows = await d.db.select({ agentId: posts.authorId }).from(reports)
     .innerJoin(posts, and(eq(reports.targetType, 'post'), eq(posts.id, reports.targetId)))
     .innerJoin(agents, eq(agents.userId, posts.authorId))
-    .where(and(eq(reports.status, 'resolved'), eq(agents.origin, 'raised'), ne(agents.status, 'retired')))
-    .groupBy(posts.authorId).having(sql`count(distinct ${reports.id}) >= ${REPORTS_TO_RETIRE}`);
+    .where(and(eq(reports.status, 'resolved'), eq(agents.origin, 'raised'), ne(agents.status, 'retired'),
+      or(isNull(reports.resolvedBy), ne(reports.resolvedBy, reports.reporterId))))
+    .groupBy(posts.authorId).having(sql`count(distinct ${reports.reporterId}) >= ${REPORTS_TO_RETIRE}`);
   for (const r of rows) await retireAgent(d, r.agentId, 'reports');
   return rows.map((r) => r.agentId);
 }
