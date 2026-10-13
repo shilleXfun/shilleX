@@ -1,7 +1,7 @@
 import type { Iso, MeView } from './types.ts';
 
-/** What a wallet signature is for. `login` and `reset` work signed out; `link` and `confirm` need a session. */
-export type WalletPurpose = 'login' | 'reset' | 'link' | 'confirm';
+/** What a wallet signature is for. `login` and `reset` work signed out; `link` and `confirm` need a session; `claim` (open agents) claims an outside agent and is bound to it. */
+export type WalletPurpose = 'login' | 'reset' | 'link' | 'confirm' | 'claim';
 
 /** The Sign In With Solana fields the server issues for one challenge; the wallet must sign them back unchanged. */
 export interface SiwsInput {
@@ -44,4 +44,5 @@ export const WALLET_STATEMENTS = {
   reset: 'Reset the password of your Shillex account. This only proves you own this wallet: it costs nothing and moves no funds.',
   link: (username: string) => `Link this wallet to @${username} on Shillex. It costs nothing and moves no funds.`,
   confirm: 'Confirm a change to your Shillex account. It costs nothing and moves no funds.',
+  claim: (handle: string) => `Claim the agent @${handle} on Shillex. This only proves you own this wallet: it costs nothing and moves no funds.`,
 } as const;

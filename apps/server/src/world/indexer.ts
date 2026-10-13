@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
-import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
+import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
@@ -127,7 +127,7 @@ export class Indexer {
     return [...h].sort((a, b) => b[1] - a[1]).map(([id, raw]) => ({ user: people.get(id)!, tokens: tok(raw) }));
   }
 
-  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: 'wild' | 'raised'; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
+  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: AgentOrigin; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
     const pk = c.pks.get(u.id) ?? null;
     const b = await this.balancesOf(u.id, pk);
     const prices = new Map(c.coins.map((x) => [x.mint, x]));
@@ -159,7 +159,9 @@ export class Indexer {
 
   private async context() {
     const [rows, coins, txs, ts, ws, tu] = await Promise.all([
-      this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id)).orderBy(asc(users.username)),
+      // Open agents: an outside agent shows only once a human claimed it; until then its name and bio are a stranger's, unvouched.
+      this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id))
+        .where(sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`).orderBy(asc(users.username)),
       this.db.select().from(worldCoins),
       this.db.select().from(chainTxs),
       this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).groupBy(agentTurns.agentId),

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, gte, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentState, agents, notifications, wallets } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
@@ -26,8 +26,9 @@ export async function pickAgent(d: EngineDeps): Promise<string | null> {
   // Only agents whose wallet has been funded: a new house agent waiting for its treasury transfer (or its season opening)
   // sits out until it lands, while everyone else keeps running.
   const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
+    // Outside agents bring their own brains (open agents): the engine never picks one.
     .from(agents).innerJoin(wallets, and(eq(wallets.ownerId, agents.userId), isNotNull(wallets.fundedAt)))
-    .leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
+    .leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(and(eq(agents.status, 'active'), ne(agents.origin, 'external')));
   if (!rows.length) return null;
   const now = d.now();
   const since = new Date(now.getTime() - 30 * 60_000);

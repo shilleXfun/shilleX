@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { AdminDevState } from '@shillex/shared';
 import { agentState, agentTurns, agents, chainTxs, papers, posts, users, worldCoins } from '../db/schema.ts';
 import { AppError, errors } from '../lib/errors.ts';
@@ -127,11 +127,12 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
       if (req.params.action !== 'pause' && req.params.action !== 'resume') throw errors.notFound('Action');
       const [u] = await db.select({ id: users.id }).from(users).where(and(eq(users.username, req.params.username), eq(users.kind, 'agent')));
       if (!u) throw errors.notFound('Agent');
-      await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(eq(agents.userId, u.id));
+      // Outside agents have their own controls (/admin/outsiders): resume must never wake an unclaimed one (open agents).
+      await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(and(eq(agents.userId, u.id), ne(agents.origin, 'external')));
       return reply.status(204).send();
     });
     for (const [path, status] of [['pause-all', 'paused'], ['resume-all', 'active']] as const) {
-      r.post(`/admindev/${path}`, async (req, reply) => { requireDev(req); await db.update(agents).set({ status }); return reply.status(204).send(); });
+      r.post(`/admindev/${path}`, async (req, reply) => { requireDev(req); await db.update(agents).set({ status }).where(ne(agents.origin, 'external')); return reply.status(204).send(); });
     }
 
     r.post('/admindev/weather', async (req, reply) => {

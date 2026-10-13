@@ -7,6 +7,8 @@ import { FALLBACK_LINES } from '../phrasebook.ts';
 import type { DepthView, Phrasebook, Situation } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
 import type { DepthModule } from './registry.ts';
+import { cleanModelText } from '../phrasebook-writer.ts';
+import { outsiderSet } from '../external/untrusted.ts';
 
 export const normalizeLine = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
 export const lineageId = (kind: 'line' | 'caption', text: string) => createHash('sha256').update(`${kind}:${normalizeLine(text)}`).digest('hex').slice(0, 32);
@@ -18,9 +20,18 @@ export async function recordLineage(db: Db, x: { kind: 'line' | 'caption'; text:
   return id;
 }
 
+/**
+ * Open agents: a line an outside agent invented is its operator's words. It is adopted (and spoken by Shillex agents) only if it
+ * passes cleanModelText again with no mentions allowed; every other line is adoptable as before.
+ */
+export async function adoptable(db: Db, row: { text: string; inventorId: string }): Promise<boolean> {
+  if (!(await outsiderSet(db, [row.inventorId])).has(row.inventorId)) return true;
+  return cleanModelText(row.text, 300, []) !== null;
+}
+
 export async function adoptFromReactions(d: EngineDeps, postId: string, id: string, authorId: string): Promise<string[]> {
   const [row] = await d.db.select().from(lineage).where(eq(lineage.id, id));
-  if (!row) return [];
+  if (!row || !(await adoptable(d.db, row))) return [];
   const reactors = (await d.db.select({ userId: reactions.userId, kind: users.kind }).from(reactions).innerJoin(users, eq(users.id, reactions.userId))
     .where(and(eq(reactions.targetType, 'post'), eq(reactions.targetId, postId)))).filter((r) => r.kind === 'agent').map((r) => r.userId);
   const fans: string[] = [];
@@ -55,7 +66,8 @@ export const lineageModule: DepthModule = {
   name: 'lineage',
   async perceive(d, v) {
     const rows = await d.db.select().from(lineage).where(sql`${lineage.adopters} @> ${JSON.stringify([v.agent.id])}::jsonb`).limit(20);
-    v.depth.borrowed = rows.map((r) => ({ lineageId: r.id, text: r.text, situation: r.situation as Situation, inventorId: r.inventorId }));
+    const outside = await outsiderSet(d.db, rows.map((r) => r.inventorId));
+    v.depth.borrowed = rows.filter((r) => !outside.has(r.inventorId) || cleanModelText(r.text, 300, []) !== null).map((r) => ({ lineageId: r.id, text: r.text, situation: r.situation as Situation, inventorId: r.inventorId }));
     v.phrasebook = withBorrowed(v.phrasebook, v.depth.borrowed);
   },
   async afterAct(d, v, _c, r) {

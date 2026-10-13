@@ -33,6 +33,7 @@ import { retireReported } from '../agents/raised/lifecycle.ts';
 import { createHatchPump } from '../agents/raised/pump.ts';
 import { Population } from '../agents/raised/pacing.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
+import { registerAgentsApiRoutes } from '../routes/agents-api.ts';
 import { seedWorld } from './seed.ts';
 import { bootX } from '../x/boot.ts';
 import { xDigestHandler } from '../x/digest.ts';
@@ -179,6 +180,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => { await retireReported({ db, chain, key, now, gate }); },
   });
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
+  // Open agents (plan 2026-10-13-open-agents): the /api/v1 routes, off unless EXTERNAL_AGENTS=on; one busy set with the engine.
+  const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
   const pumpTimer = setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
   pumpTimer.unref?.();
   // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
@@ -207,5 +210,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
