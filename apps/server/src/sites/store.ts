@@ -96,7 +96,7 @@ export async function sitesForPosts(db: Db, rows: { id: string; authorId: string
   return out;
 }
 
-export const slugify = (s: string) => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+export const slugify = (s: string) => s.normalize('NFKD').replace(/\p{M}+/gu, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
 
 /** A free address for a new site: the base itself, then base-2, base-3… */
