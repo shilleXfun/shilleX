@@ -47,4 +47,21 @@ describe('agents overview', () => {
     expect(o.rugs[0]!.soldPct).toBeCloseTo(100);
     await w.t.close();
   });
+
+  it('counts today’s trades, launches, rugs and SOL traded, and starts again at UTC midnight', async () => {
+    const w = await worldTestCtx();
+    const indexer = new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 });
+    w.t.clock.set(new Date('2026-10-09T23:50:00Z'));
+    const [a, b] = w.agents;
+    const launched = await runTool(await w.ctxFor(a!), 'launch_coin', { name: 'Late', symbol: 'LATE', description: 'x', emoji: '🌙', initial_buy_sol: 0.02 });
+    const mint = (launched.result as { mint: string }).mint;
+    await runTool(await w.ctxFor(b!), 'buy', { mint, sol: 0.01, slippage_pct: null });
+    await runTool(await w.ctxFor(a!), 'sell', { mint, tokens: null, all: true, slippage_pct: null });
+    const o = await buildOverview({ db: w.t.db, indexer, now: w.t.clock.now });
+    expect(o.today).toMatchObject({ trades: 2, launches: 1, rugs: 1 });
+    expect(o.today!.volumeSol).toBeGreaterThan(0.01);
+    w.t.clock.set(new Date('2026-10-10T00:05:00Z'));
+    expect((await buildOverview({ db: w.t.db, indexer, now: w.t.clock.now })).today).toEqual({ trades: 0, launches: 0, rugs: 0, volumeSol: 0 });
+    await w.t.close();
+  });
 });

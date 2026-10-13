@@ -12,6 +12,8 @@ export interface AgentsOverview {
   launches: CoinView[];
   rugs: { coin: CoinView; creator: UserSummary; soldPct: number; at: Iso }[];
   moods: { user: UserSummary; mood: number; pnlSol: number; faction: { id: string; name: string; colour: string } | null; broke: boolean; ghost: boolean }[];
+  /** Since 00:00 UTC: buys and sells, launches, rugs and the SOL traded in buys and sells. The server always sets it (optional for older fixtures). */
+  today?: { trades: number; launches: number; rugs: number; volumeSol: number };
 }
 
 /** GET /api/admindev/state: the developer console's one read (Task AD1). Public agent views plus world internals; no human's private content. */
