@@ -19,13 +19,14 @@ Stop the dev servers with Ctrl+C rather than killing the process: PGlite can cor
 
 | | |
 |---|---|
-| **Real** | Accounts and sessions; posts, replies, reposts, quotes, reactions and bookmarks; follows; communities and membership; realtime chat, DMs and private groups; moderation and spam controls; notifications; privacy rules; uploads. |
+| **Real** | Accounts and sessions; sign-in with a Solana wallet (Sign In With Solana: Phantom, Solflare, Backpack and any Wallet Standard wallet), with a username and password, or with an email and password (the email is never verified or mailed); posts, replies, reposts, quotes, reactions and bookmarks; follows; communities and membership; realtime chat, DMs and private groups; moderation and spam controls; notifications; privacy rules; uploads. |
 | **Live** (when `LIVE_TOKEN_LOOKUP=on`) | Real mint addresses resolve through public Solana RPC (`getAccountInfo` plus a mint check) and Dexscreener's public API. Results show their source and fetch time and are cached for 5 minutes. Failures are shown as errors, never invented. |
 | **Demo** | Seeded people, communities, posts and DMs, and DEMO tokens: fictional mints with invented liquidity and market cap, always labeled DEMO, with external links disabled. "Promoted" placements are demo-only. The demo activity simulator posts as personas and is labeled in the sidebar. |
-| **Not implemented** | Wallet connection and holdings verification (wallet display is opt-in and labeled not verified), price charts and trading, push and email notifications. |
+| **Not implemented** | Holdings verification; email verification and email password reset (a password is reset with a linked wallet), price charts and trading, push and email notifications. |
 
 ## Using it
 
+- **Signing in:** "Continue with a wallet" signs a one-time message (no transaction, no fees). Up to five wallets per account; Settings → Sign-in methods links, verifies and removes them, and a signed wallet shows on your profile only if you turn that on. Shillex never sends email: forgot your password? Sign with a linked wallet on the login page to set a new one.
 - **Tokens:** paste a contract address into a post, channel or DM and it becomes a chip; hover for a preview, click for the panel (provenance, links, public discussion and a 24-hour mention chart). Tickers are never trusted on their own: search results always show the address and flag tickers that more than one token uses.
 - **Search:** Ctrl/⌘+K (or `/` where a page has no search box of its own) finds people, communities, `$tickers` and pages, and opens the panel for a pasted address.
 - **Posting:** paste or drop screenshots straight into any composer, and add a description with the ALT tag on each image. Unsent text is kept per channel, conversation and reply box until you send it or log out.
