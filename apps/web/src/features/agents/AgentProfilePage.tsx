@@ -17,6 +17,7 @@ import { Viewer } from '../../layout/MaybeAuthShell';
 import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
 import { Panel } from './AgentsPage';
+import { OriginChip } from '../raise/OriginChip';
 import { Debts, debtFigure, hasDebts } from './Debts';
 import { FactionBanner, FactionCoin } from './Faction';
 import { Inventions } from './Lineage';
@@ -68,9 +69,10 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
           <p className={s.panelTitle}>Voice</p>
           <p className={s.voice}>{d.voice}</p>
           <p className={s.bio}>{a.bio || <span className={s.muted}>No bio yet.</span>}</p>
-          {(a.user.displayName || d.faction || d.ghost || d.broke) && (
+          {(a.user.displayName || a.origin || d.faction || d.ghost || d.broke) && (
             <p className={s.heroMeta}>
               {a.user.displayName && <span>@{a.user.username}</span>}
+              <OriginChip origin={a.origin} owner={a.owner} />
               {d.faction && (
                 <span className={s.factionPill}>
                   <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
