@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { AgentsOverview, CharacterView, HomeView, SceneMessageEvent, SceneMessageView, SceneView, StoryDetailView, StoryUpdateEvent } from '@shillex/shared';
-import { get } from '../../lib/api';
+import { ApiError, get } from '../../lib/api';
 import { socket } from '../../lib/socket';
 import { liveSocket } from '../../lib/liveSocket';
 import { isNotFound, useAgentsInfo, useCoins, useOverview } from '../agents/agentsApi';
@@ -15,7 +15,10 @@ import { isNotFound, useAgentsInfo, useCoins, useOverview } from '../agents/agen
  * before the server has the endpoints. Production builds drop that branch (import.meta.env.DEV is false there).
  */
 // The condition is written out where the import is, so a production build sees `false ? import(…)` and drops the module.
-const devFixture = () => (import.meta.env.DEV && import.meta.env.VITE_HOME_FIXTURE === '1' ? import('./devFixture') : null);
+const devFixture = () => (import.meta.env.DEV && (import.meta.env.VITE_HOME_FIXTURE === '1' || import.meta.env.VITE_HOME_FIXTURE === 'force') ? import('./devFixture') : null);
+/** GET, except that with VITE_HOME_FIXTURE=force (development only) the fixture answers every home, story and scene read, even where the server has them. */
+const getWorld = <T,>(path: string, signal: AbortSignal) => (import.meta.env.DEV && import.meta.env.VITE_HOME_FIXTURE === 'force'
+  ? Promise.reject(new ApiError(404, 'NOT_FOUND', 'Fixture.')) : get<T>(path, signal));
 
 /** The server may wrap a body (`{ scene }`) or not; both read the same. */
 function unwrap<T>(body: unknown, key: string): T {
@@ -27,7 +30,7 @@ const sceneKey = (id: string) => ['scene', id] as const;
 const storyKey = (id: string) => ['story', id] as const;
 
 async function fetchHome(signal: AbortSignal): Promise<HomeView | null> {
-  try { return unwrap<HomeView>(await get<unknown>('/world/home', signal), 'home'); }
+  try { return unwrap<HomeView>(await getWorld<unknown>('/world/home', signal), 'home'); }
   catch (e) {
     if (!isNotFound(e)) throw e;
     const fx = devFixture();
@@ -36,15 +39,16 @@ async function fetchHome(signal: AbortSignal): Promise<HomeView | null> {
 }
 
 /** HomeView, or null on a server without it. Polled every 20 s; live events patch it in between. */
-export const useHome = () => useQuery({
-  queryKey: HOME_KEY, queryFn: ({ signal }) => fetchHome(signal),
+export const homeQuery = {
+  queryKey: HOME_KEY, queryFn: ({ signal }: { signal: AbortSignal }) => fetchHome(signal),
   refetchInterval: 20_000, refetchIntervalInBackground: false, staleTime: 10_000, retry: false,
-});
+} as const;
+export const useHome = () => useQuery(homeQuery);
 
 export const useStory = (id: string) => useQuery({
   queryKey: storyKey(id),
   queryFn: async ({ signal }) => {
-    try { return unwrap<StoryDetailView>(await get<unknown>(`/stories/${encodeURIComponent(id)}`, signal), 'story'); }
+    try { return unwrap<StoryDetailView>(await getWorld<unknown>(`/stories/${encodeURIComponent(id)}`, signal), 'story'); }
     catch (e) { const fx = isNotFound(e) && devFixture(); if (fx) return (await fx).storyFixture(id); throw e; }
   },
   refetchInterval: 30_000, refetchIntervalInBackground: false, retry: false,
@@ -53,18 +57,18 @@ export const useStory = (id: string) => useQuery({
 export const useScene = (id: string) => useQuery({
   queryKey: sceneKey(id),
   queryFn: async ({ signal }) => {
-    try { return unwrap<SceneView>(await get<unknown>(`/scenes/${encodeURIComponent(id)}`, signal), 'scene'); }
+    try { return unwrap<SceneView>(await getWorld<unknown>(`/scenes/${encodeURIComponent(id)}`, signal), 'scene'); }
     catch (e) { const fx = isNotFound(e) && devFixture(); if (fx) return (await fx).sceneFixture(id); throw e; }
   },
   refetchInterval: 30_000, refetchIntervalInBackground: false, retry: false,
 });
 
-/** The newest scenes (first page of GET /api/scenes); [] on a server without scenes. */
-const useRecentScenes = () => useQuery({
+/** The newest scenes (first page of GET /api/scenes, up to 30); [] on a server without scenes. */
+export const useRecentScenes = () => useQuery({
   queryKey: ['scenes', 'recent'],
   queryFn: async ({ signal }) => {
     try {
-      const body = await get<unknown>('/scenes', signal);
+      const body = await getWorld<unknown>('/scenes?limit=30', signal);
       if (Array.isArray(body)) return body as SceneView[];
       const b = body as { items?: SceneView[]; scenes?: SceneView[] };
       return b.items ?? b.scenes ?? [];

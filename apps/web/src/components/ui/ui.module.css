@@ -104,6 +104,9 @@
 .odometer { display: inline-flex; font-variant-numeric: tabular-nums; }
 /* pre: a space in the formatted text ("0.064 SOL") is its own flex item and would otherwise collapse to nothing. */
 .odoTrack { display: inline-flex; white-space: pre; }
+/* Every character sits on the same 1.2em line as the digit columns, so a sign or a point never drops below the digits
+   (the "₋0.07" look) whatever line-height the number inherits. */
+.odoTrack > span { height: 1.2em; line-height: 1.2em; }
 .odoCol { display: inline-block; height: 1.2em; line-height: 1.2em; overflow: hidden; }
 .odoStrip { display: flex; flex-direction: column; }
 .odoStrip > span { height: 1.2em; }

@@ -7,11 +7,13 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { PageHeader } from '../../layout/PageHeader';
 import { isNotFound } from '../agents/agentsApi';
-import { KindIcon, KindTag, SceneConversation, sceneCount } from './Conversation';
-import { useStory } from './homeApi';
+import { KindTag, SceneText, sceneCount } from './Conversation';
+import { sceneRunning, useStory } from './homeApi';
+import { TerminalWindow, Transcript } from './Terminal';
 import { CastList } from './ScenePage';
 import { StoryCoin } from './Home';
 import c from './home.module.css';
+import t from './scene.module.css';
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 const dayClock = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -28,7 +30,7 @@ function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) 
       <time className={c.beatTime} dateTime={beat.at} title={new Date(beat.at).toLocaleString()}>{stamp(beat.at)}</time>
       <span className={c.beatDot} aria-hidden="true" />
       <div className={c.beatBody}>
-        <p className={c.beatText}>{beat.text}</p>
+        <p className={c.beatText}><SceneText text={beat.text} /></p>
         {(beat.postId || beat.mint) && !scene && (
           <span className={c.beatLinks}>
             {beat.postId && <Link to={`/p/${beat.postId}`}>Open the post</Link>}
@@ -36,14 +38,11 @@ function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) 
           </span>
         )}
         {scene && (
-          <div className={c.embed}>
-            <Link to={`/scenes/${scene.id}`} className={c.embedHead}>
-              <KindIcon kind={scene.kind} size={13} />
-              <span className={c.embedTitle}>{scene.title}</span>
-              <span className={c.embedCount}>{sceneCount(scene)}</span>
-            </Link>
-            <SceneConversation scene={scene} last={8} />
-          </div>
+          <TerminalWindow className={t.embed} live={sceneRunning(scene)}
+            title={<Link to={`/scenes/${scene.id}`} className={t.embedTitle}>backrooms / <b>{scene.title}</b></Link>}
+            status={sceneCount(scene)}>
+            <Transcript scenes={[scene]} heads={false} follow="scroll" className={t.screen} />
+          </TerminalWindow>
         )}
       </div>
     </li>
@@ -62,7 +61,7 @@ function StorySheet({ story }: { story: StoryDetailView }) {
           <span>Latest {relativeTime(story.updatedAt)} ago</span>
         </div>
         <h2 className={c.storyTitle}>{story.headline}</h2>
-        <p className={c.storySummary}>{story.summary}</p>
+        <p className={c.storySummary}><SceneText text={story.summary} /></p>
         <div className={c.storyFacts}>
           <CastList cast={story.cast} />
           {story.coin && <Link to={`/coins/${story.coin.mint}`} className={c.storyCoinLink}><StoryCoin coin={story.coin} width={120} height={30} /></Link>}

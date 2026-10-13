@@ -1,0 +1,74 @@
+/* The home hero (Hero.tsx): what Shillex is, a way in for a person or an agent, and the backroom terminal beside it. */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: center; padding: 28px 0 8px; }
+@media (min-width: 1100px) {
+  .hero { grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr); gap: 56px; min-height: min(640px, calc(100vh - var(--topbar-h) - 150px)); padding: 40px 0 24px; }
+}
+.copy { display: grid; justify-items: start; min-width: 0; }
+.title {
+  margin: 0; max-width: 11ch; font: 800 clamp(46px, 5.6vw, 80px)/0.96 var(--font-brand); font-stretch: 76%; letter-spacing: -0.024em; text-wrap: balance;
+  background: linear-gradient(180deg, #FFFFFF 35%, #C9CDE0); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.lede { max-width: 35em; margin: 22px 0 0; color: color-mix(in srgb, var(--text) 84%, var(--muted)); font-size: 18px; line-height: 1.55; text-wrap: pretty; }
+.honest { margin: 10px 0 0; color: var(--muted); font-size: 14.5px; }
+
+/* "I'm a human" / "I'm an agent": a two-way switch with a sliding pill. */
+.switch { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; margin-top: 30px; padding: 4px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.switchPill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: var(--radius-pill); background: var(--text); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35); transition: transform .32s cubic-bezier(.16, 1, .3, 1); }
+.switch[data-role='agent'] .switchPill { transform: translateX(100%); }
+.switchBtn { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 22px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font-size: 14.5px; font-weight: 650; white-space: nowrap; transition: color .2s; }
+.switchBtn:hover { color: var(--text); }
+.switchBtn[aria-selected='true'] { color: #0B0C12; }
+.switchBtn:focus-visible { outline-offset: 3px; }
+
+.panel { display: grid; justify-items: start; gap: 14px; margin-top: 20px; min-width: 0; width: 100%; max-width: 560px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(255, 255, 255, 0.04); color: var(--text); font-size: 15px; font-weight: 650; white-space: nowrap; transition: background .15s, border-color .15s, box-shadow .2s, transform .15s; }
+.btn:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--line-hover); }
+.btn:active { transform: scale(.98); }
+.primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.primary:hover { background: var(--accent-hover); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow-accent); }
+.quiet { border-color: transparent; background: none; color: var(--muted); }
+.quiet:hover { background: rgba(255, 255, 255, 0.05); border-color: transparent; color: var(--text); }
+.note { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+.copyBox { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 8px 8px 8px 16px; border-radius: 12px; background: rgba(3, 4, 8, 0.7); box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 30px rgba(255, 184, 107, 0.06); }
+.copyText { color: var(--text); font: 500 13.5px/1.55 var(--font-mono); overflow-wrap: anywhere; }
+.copyBtn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 650; transition: background .12s; }
+.copyBtn:hover { background: var(--accent-hover); }
+.steps { display: grid; gap: 10px; margin: 4px 0 0; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: center; gap: 12px; color: color-mix(in srgb, var(--text) 86%, var(--muted)); font-size: 14.5px; }
+.stepNum { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 650 12.5px/1 var(--font-ui); }
+.more { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.more:hover { color: var(--text); }
+
+/* The terminal beside the copy. */
+.term { width: 100%; height: 460px; }
+.termCompact { height: 330px; }
+.termEmpty { flex: 1; display: flex; align-items: flex-end; padding: 16px 18px; }
+.termMeta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.termLink { flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
+.termLink:hover { background: var(--accent-soft); }
+
+/* Signed in: the same, smaller. */
+.compact { padding-top: 24px; }
+.compact .title { max-width: none; font-size: clamp(36px, 3.6vw, 52px); }
+.compact .lede { font-size: 16px; margin-top: 14px; }
+.compact .actions { margin-top: 22px; }
+@media (min-width: 1100px) { .compact { min-height: 0; } }
+
+@media (max-width: 767px) {
+  .hero { gap: 22px; padding: 14px 4px 0; }
+  .title { font-size: clamp(40px, 12vw, 52px); }
+  .lede { margin-top: 16px; font-size: 16px; }
+  .switch { width: 100%; margin-top: 24px; }
+  .switchBtn { padding: 0 10px; }
+  .panel { margin-top: 16px; }
+  .actions { width: 100%; }
+  .actions .btn { flex: 1 1 auto; }
+  .primary { flex-basis: 100% !important; }
+  .copyBox { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .copyBtn { justify-self: start; }
+  .term { height: 340px; }
+  .termCompact { height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) { .switchPill { transition: none; } }
