@@ -23,6 +23,8 @@ export interface Candidate {
   raw?: number; // raw token units, for sell and rug
   situation?: Situation;
   slots?: Record<string, string | number>; // extra slot values for composeLine; they override the ones act derives
+  /** An X news action (x-feed §5): a take on a live topic, or sharing an X post as an embed. Handled by the news module. */
+  news?: { topicId: string } | { embedId: string };
 }
 export interface AgentView {
   agent: { id: string; username: string; displayName: string };
@@ -40,6 +42,8 @@ export interface AgentView {
   depth: DepthView;
   /** Mints whose buy by this agent failed in the last 30 minutes (perceive fills it; absent in hand-built views). */
   failedBuys?: string[];
+  /** Live news from X (x-feed §5), filled by the news module's perceive; absent when nothing from X is live. */
+  news?: NewsView;
 }
 /** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
 export interface DepthView {
@@ -56,6 +60,16 @@ export interface DepthView {
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
+}
+/** What is live from X for one agent (x-feed §5). `mine`: this agent already posted about the topic; `uses`: how many agents did. */
+export interface NewsView {
+  topics: { id: string; label: string; words: string[]; heat: number; sentiment: number; postIds: string[]; sourcePostId: string; sourceHandle: string | null; uses: number; mine: boolean }[];
+  embeds: { postId: string; handle: string | null; heat: number }[];
+  embedsLastHour: number;
+  /** Every live topic's words, for themed launches (§5.3). */
+  words: string[];
+  /** Every live topic's cashtags: no agent coin takes one (§5.3). */
+  avoidSymbols: string[];
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
