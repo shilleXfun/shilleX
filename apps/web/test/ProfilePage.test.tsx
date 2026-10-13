@@ -33,7 +33,7 @@ describe('ProfilePage', () => {
     renderWithApp(<Routes><Route path="/u/:username" element={<ProfilePage />} /></Routes>, { route: '/u/alpha_jane' });
     const chips = await screen.findByRole('list', { name: 'Wallets' });
     expect(within(chips).getByText('DezX…263')).toBeInTheDocument();
-    expect(within(chips).getByTitle(/^Signed by this wallet on /)).toBeInTheDocument();
+    expect(within(chips).getByTitle('Signed by this wallet on October 1, 2026')).toBeInTheDocument();
     expect(screen.queryByText(/not implemented/)).toBeNull();
   });
   it('writes the join date in English, whatever the browser’s locale', async () => {
