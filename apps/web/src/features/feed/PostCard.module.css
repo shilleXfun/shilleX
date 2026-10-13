@@ -1,5 +1,5 @@
 /* Posts float as separate glass cards over the swarm, 12 px apart. */
-.card { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; margin-top: 12px; padding: 14px 18px 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); cursor: pointer; transition: background .15s, border-color .15s; }
+.card { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 10px; margin-top: var(--card-gap); padding: var(--card-pad); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); cursor: pointer; transition: background .15s, border-color .15s; }
 /* Hover washes only where a real pointer hovers; on touch they would stick after a tap. */
 .card:focus-within { background: var(--card-hover); }
 @media (hover: hover) { .card:hover { background: var(--card-hover); border-color: var(--line-strong); } }
@@ -18,7 +18,7 @@
 .ancestors .compact::before { content: ''; position: absolute; left: calc(18px + 15px); top: 48px; bottom: -2px; width: 2px; border-radius: 2px; background: var(--line-strong); }
 /* A thread's ancestors and the focused post read as one stack. */
 .ancestors .card { margin-top: 0; border-radius: 0; border-bottom-color: transparent; }
-.ancestors .card:first-child { margin-top: 12px; border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.ancestors .card:first-child { margin-top: var(--card-gap); border-radius: var(--radius-card) var(--radius-card) 0 0; }
 .ancestors + .focused { margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
 .static { cursor: default; }
 .static:hover, .static:focus-within { background: var(--card); border-color: var(--line); }
@@ -27,6 +27,7 @@
   .card, .card:hover, .card:focus-within, .focused:hover, .focused:focus-within, .static:hover, .static:focus-within { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .card { border-radius: 14px; }
   .ancestors .card:first-child { border-radius: 14px 14px 0 0; }
+  .action svg { width: 18px; height: 18px; }
 }
 .avatarLink { align-self: start; border-radius: 50%; }
 .main { min-width: 0; }
@@ -46,8 +47,8 @@
 .communityTag { flex: none; display: inline-flex; align-items: center; gap: 3px; margin-left: 2px; padding: 2px 7px 2px 5px; border-radius: var(--radius-chip); background: var(--raised); color: var(--muted); font-size: var(--fs-xs); font-weight: 550; transition: color .12s, background .12s; }
 .communityTag:hover { color: var(--text); background: var(--hover); }
 
-.actions { display: flex; align-items: center; gap: 4px; margin: 8px 0 0 -9px; color: var(--muted); }
-.action { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-width: 32px; justify-content: center; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 12.5px var(--font-mono); white-space: nowrap; transition: background .12s, color .12s; }
+.actions { display: flex; align-items: center; gap: 4px; margin: 6px 0 0 -8px; color: var(--muted); }
+.action { display: inline-flex; align-items: center; gap: 6px; height: 28px; min-width: 28px; justify-content: center; padding: 0 8px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 12.5px var(--font-mono); white-space: nowrap; transition: background .12s, color .12s; }
 @media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
 .actionIcon { display: inline-grid; place-items: center; }

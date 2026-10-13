@@ -21,7 +21,7 @@ export function DiscoverPage() {
   const { openToken } = useTokenPanel();
   const newCoins = useUnmutedCoins(q.data?.newCoins ?? []);
   return (
-    <section aria-labelledby="disc-title">
+    <section aria-labelledby="disc-title" data-fit>
       <PageHeader title="Discover" titleId="disc-title" />
       {q.isPending ? (
         <div className={s.section} aria-busy="true" aria-label="Loading Discover"><Skeleton w={200} h={20} /><div style={{ height: 12 }} /><Skeleton h={160} r={14} /></div>

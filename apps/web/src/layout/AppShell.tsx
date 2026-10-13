@@ -19,6 +19,8 @@ import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, openPalette } from './CommandPalette';
+import { LiveTape } from './LiveTape';
+import { useAgentsInfo } from '../features/agents/agentsApi';
 import s from './layout.module.css';
 import sh from './shell.module.css';
 
@@ -70,16 +72,22 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   const inDm = useMatch('/messages/:id');
   // The World now panel only exists from 1200px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
+  // The Live tape (left column) from 1440 px, on pages with the World now panel, once the server confirms an agent world:
+  // a demo deployment (404) or a world check still pending keeps the two-column stage.
+  const tapeRoom = useMediaQuery('(min-width: 1440px)');
+  const world = useAgentsInfo().isSuccess;
+  const tape = tapeRoom && world && !wide;
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide}>
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-tape={tape}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <TopBar me={me} />
       <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
       <div className={sh.stage}>
+        {tape && <aside className={sh.tapeCol} aria-label="Live moves"><LiveTape signedIn={Boolean(me)} /></aside>}
         <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
           {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
           <AnimatePresence mode="wait" initial={false}>
