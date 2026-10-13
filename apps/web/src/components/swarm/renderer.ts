@@ -45,7 +45,7 @@ const LOOKS: Record<SwarmStage['stage'], Look> = {
   // Calm is what everyone sees most (the X layout over it), so the network stays visibly alive in the gutters: lights near
   // full, fibres and signals up, the reading band light (the columns are glass of their own).
   calm: { zoom: 1, light: 0.9, size: 1.05, band: 0.35, stars: 1.1, nebula: 0.95, arc: 1.4, arcAlpha: 0.9, orbit: 1, fibre: 1.35, pulse: 1.1, rate: 3.4 },
-  hero: { zoom: 1.12, light: 0.94, size: 1.2, band: 0, stars: 1.25, nebula: 1, arc: 2, arcAlpha: 1, orbit: 1.15, fibre: 1.15, pulse: 1, rate: 3.6 },
+  hero: { zoom: 1.12, light: 1, size: 1.4, band: 0, stars: 1.35, nebula: 1.2, arc: 2.2, arcAlpha: 1, orbit: 1.2, fibre: 1.6, pulse: 1.4, rate: 5.2 },
 };
 const STAGE_S = 1.4;
 const LOOK_KEYS = Object.keys(LOOKS.calm) as (keyof Look)[];
@@ -151,14 +151,16 @@ function nebulaeOf(m: SwarmModel): Nebula[] {
  * Each light's own small orbit (x-revamp, "like neurons"): an ellipse of a few px on its own period (8 to 20 s) and tilt,
  * from its id, so the field is always alive and no two lights move together.
  */
-interface Orbits { rx: Float32Array; ry: Float32Array; w: Float32Array; cos: Float32Array; sin: Float32Array }
+interface Orbits { rx: Float32Array; ry: Float32Array; w: Float32Array; cos: Float32Array; sin: Float32Array; depth: Float32Array }
 function orbitsOf(nodes: SwarmNode[]): Orbits {
-  const n = nodes.length, o: Orbits = { rx: new Float32Array(n), ry: new Float32Array(n), w: new Float32Array(n), cos: new Float32Array(n), sin: new Float32Array(n) };
+  const n = nodes.length, o: Orbits = { rx: new Float32Array(n), ry: new Float32Array(n), w: new Float32Array(n), cos: new Float32Array(n), sin: new Float32Array(n), depth: new Float32Array(n) };
   nodes.forEach((node, i) => {
     const h = hash(`${node.id}~orbit`);
     o.rx[i] = 4 + ((h % 1000) / 1000) * 5; o.ry[i] = 2.5 + (((h >>> 10) % 1000) / 1000) * 4;
     o.w[i] = (2 * Math.PI) / (8 + (((h >>> 20) % 1000) / 1000) * 12);
     o.cos[i] = Math.cos(node.phase); o.sin[i] = Math.sin(node.phase);
+    // How near the light sits, for the pointer parallax: near ones move most, far ones barely.
+    o.depth[i] = 0.3 + (((h >>> 5) % 997) / 997) * 0.7;
   });
   return o;
 }
@@ -278,6 +280,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   /** Coins launched since the model's coins were fetched, by mint: their creator, so trades on one streak to where it will sit. */
   const launched = new Map<string, string>();
   let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
+  // The pointer, as -0.5..0.5 of the screen, and the eased parallax that follows it (desktop, full motion only).
+  let parTX = 0, parTY = 0, parX = 0, parY = 0;
+  const onPointer = (e: PointerEvent) => { if (e.pointerType === 'mouse' && W && H) { parTX = e.clientX / W - 0.5; parTY = e.clientY / H - 0.5; } };
+  if (!opts.reduced && !lite && typeof window !== 'undefined') window.addEventListener('pointermove', onPointer, { passive: true });
   let model: SwarmModel | null = null;
   let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0);
   /** When each agent last acted (seconds on this renderer's clock), for its afterglow and size; -Infinity for never. */
@@ -380,8 +386,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!, th = t * o.w[i]! * spin + n.phase, ox = Math.cos(th) * o.rx[i]! * r, oy = Math.sin(th) * o.ry[i]! * r;
       const dx = ox * o.cos[i]! - oy * o.sin[i]! + (j ? (Math.random() - 0.5) * j : 0), dy = ox * o.sin[i]! + oy * o.cos[i]! + (j ? (Math.random() - 0.5) * j : 0);
-      px[i] = cx + (x0 + (0.5 + (n.x - 0.5) * spread) * w - cx + dx) * zoom;
-      py[i] = cy + (y0 + n.y * h - cy + dy) * zoom;
+      // Near lights drift against the pointer more than far ones: the network has depth.
+      const pd = o.depth[i]!;
+      px[i] = cx + (x0 + (0.5 + (n.x - 0.5) * spread) * w - cx + dx) * zoom - parX * 34 * pd;
+      py[i] = cy + (y0 + n.y * h - cy + dy) * zoom - parY * 22 * pd;
     }
   }
 
@@ -535,6 +543,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     const begin = performance.now();
     if (!W || !H) return;
     const fk = fadeK(t);
+    if (!still) { const k = Math.min(1, dt * 2.5); parX += (parTX - parX) * k; parY += (parTY - parY) * k; }
     speedNow = from.speed + (to.speed - from.speed) * fk; jitterNow = from.jitter + (to.jitter - from.jitter) * fk; driftNow = from.drift + (to.drift - from.drift) * fk;
     lookAt(look, still ? stageTo : stageMix(t));
     focusMix = still ? (focusId ? 1 : 0) : step(focusMix, focusId ? 1 : 0, dt / FOCUS_S);
@@ -789,7 +798,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     // A still frame's glow timer stops once frames run again: it would draw one frame at the still frame's time.
     start() { if (running || opts.reduced) return; running = true; last = 0; clearTimeout(glowTimer); raf = requestAnimationFrame(loop); },
     stop() { running = false; cancelAnimationFrame(raf); },
-    destroy() { running = false; cancelAnimationFrame(raf); clearTimeout(glowTimer); model = null; },
+    destroy() { running = false; cancelAnimationFrame(raf); clearTimeout(glowTimer); model = null; window.removeEventListener('pointermove', onPointer); },
     stats: () => ({ drawMs: Math.round(drawAvg * 100) / 100 }),
   };
 }

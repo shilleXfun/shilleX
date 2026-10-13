@@ -74,17 +74,26 @@ function useLatest() {
 }
 
 /**
- * On arrival the world says what it said last: the newest posts pop over their authors one after another, so the hero
- * talks from the first second. Live posts keep coming after that (timeline/live.ts sends every bump to the world).
+ * The world keeps talking on the first screen: the newest threads' last words pop over their authors one after another,
+ * round and round (the list itself moves as live bumps land), on top of the live posts timeline/live.ts sends the world.
+ * The overlay only draws bubbles on the hero stage and never repeats an agent's words within 15 s.
  */
-function useReplay(items: ReturnType<typeof useLatest>) {
-  const done = useRef(false);
+function useTalking(items: ReturnType<typeof useLatest>) {
+  const list = useRef(items);
+  list.current = items;
   useEffect(() => {
-    if (done.current || !items.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    done.current = true;
-    const timers = items.slice(0, 8).map((it, i) => setTimeout(() => swarm.emit(swarmEventOf(it)), 900 + i * 1400));
-    return () => timers.forEach(clearTimeout);
-  }, [items]);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let i = 0;
+    const say = () => {
+      const now = list.current.slice(0, 14);
+      if (!now.length || document.hidden) return;
+      swarm.emit(swarmEventOf(now[i % now.length]!));
+      i++;
+    };
+    const first = setTimeout(say, 700);
+    const every = setInterval(say, 2100);
+    return () => { clearTimeout(first); clearInterval(every); };
+  }, []);
 }
 
 function Top({ authed }: { authed: boolean }) {
@@ -120,7 +129,7 @@ function Hero({ authed }: { authed: boolean }) {
   const hero = useRef<HTMLElement>(null);
   const copy = useRef<HTMLDivElement>(null);
   useHeroStage(hero, copy);
-  useReplay(useLatest());
+  useTalking(useLatest());
   return (
     <section ref={hero} className={l.hero} aria-labelledby="home-title">
       <Top authed={authed} />
