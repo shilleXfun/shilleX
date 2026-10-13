@@ -21,10 +21,9 @@
 .count { display: grid; }
 .countValue { font: 800 var(--fs-2xl) / 1 var(--font-brand); font-stretch: 78%; }
 .countLabel { color: var(--muted); font-size: var(--fs-sm); }
-.wallet { display: grid; gap: 6px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--warn-line); border-radius: var(--radius-pop); background: var(--warn-soft); }
-.walletHead { display: flex; align-items: center; gap: 8px; font-weight: 650; }
-.walletAddr { display: flex; align-items: center; gap: 6px; font: 13px var(--font-mono); }
-.walletNote { color: var(--warn); font-size: var(--fs-sm); }
+.walletChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.walletChip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border: 1px solid var(--token-line); border-radius: var(--radius-pill); background: var(--token-soft); font-size: var(--fs-sm); }
+.walletTick { color: var(--token); }
 /* Solid, not glass: the profile sits on the glass sheet, which is its children's backdrop root, so a blur here would see
    nothing and posts scrolling under the tabs would read straight through them. */
 .tabsWrap { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: var(--bg); }
