@@ -14,8 +14,8 @@ import { POST_LINES, CHAT_REPLIES, REPLY_LINES, DM_LINES, CALL_NOTES, fill, line
 
 export interface SeedSummary { users: number; communities: number; posts: number; messages: number; tokens: number }
 
-/** Every table in the schema, so a re-seed always starts from a clean slate. */
-const TABLES = (Object.values(s) as unknown[]).filter((v): v is PgTable => is(v, PgTable)).map((t) => getTableName(t));
+/** Every table in the schema, so a re-seed always starts from a clean slate; admin_audit is append-only and never truncated. */
+const TABLES = (Object.values(s) as unknown[]).filter((v): v is PgTable => is(v, PgTable)).map((t) => getTableName(t)).filter((n) => n !== 'admin_audit');
 
 export async function isDatabaseEmpty(db: Db) {
   const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(s.users);

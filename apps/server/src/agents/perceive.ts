@@ -29,12 +29,12 @@ export interface CostRow { kind: string; lamportsDelta: number; tokenDelta: numb
  * half leaves half the cost (net SOL flow would shrink it toward zero and blow P&L up). A launch row counts only its first
  * buy: the rent (LAUNCH_RENT) is what launching costs, not what the bag cost.
  */
-export function averageCost(rows: CostRow[]): { raw: number; costLamports: number } {
+export function averageCost(rows: CostRow[], launchFee: number = LAUNCH_RENT): { raw: number; costLamports: number } {
   let raw = 0, cost = 0;
   for (const r of rows) {
     if ((r.kind === 'buy' || r.kind === 'launch') && r.tokenDelta > 0) {
       raw += r.tokenDelta;
-      cost += Math.max(0, -r.lamportsDelta - (r.kind === 'launch' ? LAUNCH_RENT : 0));
+      cost += Math.max(0, -r.lamportsDelta - (r.kind === 'launch' ? launchFee : 0));
     } else if (r.kind === 'sell' && r.tokenDelta < 0 && raw > 0) {
       const sold = Math.min(raw, -r.tokenDelta);
       cost -= cost * (sold / raw);
@@ -44,13 +44,13 @@ export function averageCost(rows: CostRow[]): { raw: number; costLamports: numbe
   return { raw, costLamports: Math.max(0, Math.round(cost)) };
 }
 
-async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSelect)[]): Promise<AgentView['coins']> {
-  const coins = rows ?? await db.select().from(worldCoins).orderBy(desc(worldCoins.launchedAt)).limit(60);
+async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSelect)[], fee: number = LAUNCH_RENT): Promise<AgentView['coins']> {
+  const coins = rows ?? await db.select().from(worldCoins).where(isNull(worldCoins.archivedAt)).orderBy(desc(worldCoins.launchedAt)).limit(60);
   if (!coins.length) return [];
   const mints = coins.map((c) => c.mint);
   const tenAgo = new Date(now.getTime() - 10 * MIN).toISOString(), hourAgo = new Date(now.getTime() - 60 * MIN).toISOString();
   // A launch row's SOL beyond the rent is its creator's first buy into the pool: it counts, so a new coin starts with momentum (L2).
-  const inflow = sql`case when ${chainTxs.kind} = 'launch' then greatest(0, -${chainTxs.lamportsDelta} - ${sql.raw(String(LAUNCH_RENT))}) else -${chainTxs.lamportsDelta} end`;
+  const inflow = sql`case when ${chainTxs.kind} = 'launch' then greatest(0, -${chainTxs.lamportsDelta} - ${sql.raw(String(Math.round(fee)))}) else -${chainTxs.lamportsDelta} end`;
   const flows = await db.select({
     mint: chainTxs.mint,
     total: sql<number>`coalesce(sum(${inflow}), 0)::float8`,
@@ -80,7 +80,7 @@ async function walletView(d: EngineDeps, agentId: string, coins: AgentView['coin
   const known = mints.length ? await d.db.select().from(worldCoins).where(inArray(worldCoins.mint, mints)) : [];
   const rows = mints.length ? await d.db.select({ mint: chainTxs.mint, kind: chainTxs.kind, lamportsDelta: chainTxs.lamportsDelta, tokenDelta: chainTxs.tokenDelta })
     .from(chainTxs).where(and(eq(chainTxs.agentId, agentId), inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).orderBy(chainTxs.id) : [];
-  const basis = new Map(mints.map((m) => [m, averageCost(rows.filter((r) => r.mint === m))]));
+  const basis = new Map(mints.map((m) => [m, averageCost(rows.filter((r) => r.mint === m), d.chain.limits?.launchCostLamports ?? LAUNCH_RENT)]));
   const positions = bal.tokens.flatMap((t) => {
     const c = known.find((k) => k.mint === t.mint);
     if (!c) return [];
@@ -88,7 +88,7 @@ async function walletView(d: EngineDeps, agentId: string, coins: AgentView['coin
     // The ledger's average cost per token, times what the chain says is held now.
     const b = basis.get(t.mint);
     const costLamports = b && b.raw > 0 ? Math.round((b.costLamports * t.raw) / b.raw) : 0;
-    return [{ mint: t.mint, symbol: c.symbol, raw: t.raw, costLamports, valueLamports: Math.floor(price * (t.raw / RAW_PER_TOKEN)), createdByMe: c.creatorId === agentId, creatorId: c.creatorId }];
+    return [{ mint: t.mint, symbol: c.symbol, raw: t.raw, costLamports, valueLamports: Math.floor(price * (t.raw / RAW_PER_TOKEN)), createdByMe: c.creatorId === agentId, creatorId: c.creatorId, ...(t.lockedRaw ? { lockedRaw: t.lockedRaw } : {}) }];
   });
   return { lamports: bal.lamports, positions };
 }
@@ -174,10 +174,12 @@ interface GlobalView { at: number; coins: AgentView['coins']; rooms: AgentView['
 const globalCache = new WeakMap<Db, GlobalView>();
 export function clearPerceptionCache(db: Db): void { globalCache.delete(db); }
 
+/** The launch fee per world (LAUNCH_RENT on devnet, the ledger's flat fee): perceive sets it, so the shared cache matches the chain. */
+const launchFeeFor = new WeakMap<Db, number>();
 async function globalView(db: Db, now: Date): Promise<GlobalView> {
   const hit = globalCache.get(db);
   if (hit && Math.abs(now.getTime() - hit.at) < GLOBAL_TTL_MS) return hit;
-  const [coins, rooms] = await Promise.all([coinsView(db, now), roomsView(db)]);
+  const [coins, rooms] = await Promise.all([coinsView(db, now, undefined, launchFeeFor.get(db) ?? LAUNCH_RENT), roomsView(db)]);
   const fresh = { at: now.getTime(), coins, rooms };
   globalCache.set(db, fresh);
   return fresh;
@@ -192,6 +194,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const now = d.now();
   const [u] = await d.db.select().from(users).where(eq(users.id, agentId));
   if (!u) throw new Error(`No agent ${agentId}`);
+  launchFeeFor.set(d.db, d.chain.limits?.launchCostLamports ?? LAUNCH_RENT);
   const { coins: globalCoins, rooms } = await globalView(d.db, now);
   const [state, phrasebook, wallet, mentions, dms, feed, affinity, failedBuys] = await Promise.all([
     loadState(d.db, agentId, now), phrasebookOf(d.db, agentId), walletView(d, agentId, globalCoins),
@@ -204,10 +207,10 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   // Merged into a new array: the shared cached array is never touched.
   const have = new Set(globalCoins.map((c) => c.mint));
   const heldMints = wallet.positions.map((p) => p.mint).filter((m) => !have.has(m));
-  const extraRows = await d.db.select().from(worldCoins).where(heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId));
+  const extraRows = await d.db.select().from(worldCoins).where(and(isNull(worldCoins.archivedAt), heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId)));
   const missing = extraRows.filter((r) => !have.has(r.mint));
-  const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing))] : globalCoins;
-  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys };
+  const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing, launchFeeFor.get(d.db) ?? LAUNCH_RENT))] : globalCoins;
+  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null };
   // Depth modules fill v.depth (and may replace, never mutate, v.coins and v.rooms: those arrays are the shared cache).
   await d.depth?.perceive(d, v);
   return v;

@@ -5,7 +5,7 @@ import { agentState, agents, notifications } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
 import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
-import { candidates, choose, ready } from './decide.ts';
+import { MONEY_KINDS, candidates, choose, ready } from './decide.ts';
 import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
@@ -44,7 +44,9 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
   const v = await perceive(d, id);
   const base = candidates(v, d.rng);
-  const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  // Frozen books (mainnet spec §5): the engine runs talk-only until an admin unfreezes them.
+  const cs = v.limits?.frozen ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : all;
   const c = choose(cs, d.rng);
   const r = await act(d, v, c);
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };
