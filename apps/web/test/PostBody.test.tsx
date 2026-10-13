@@ -33,6 +33,13 @@ describe('PostBody tickers', () => {
     expect(screen.queryByRole('link', { name: '$LAMPS' })).not.toBeInTheDocument();
     expect(screen.getByText(/\$LAMPS is not a coin, \$NOPE either/)).toBeInTheDocument();
   });
+  it('links a reused ticker to the newest coin that carries it', () => {
+    resetPulses();
+    // GET /api/coins answers newest first; a ticker can be launched again once its old coin is a week old.
+    const fresh = { ...lamp, mint: 'M9', launchedAt: '2026-10-13T10:00:00Z' };
+    renderWithApp(<PostBody text="the new $LAMP" />, { seed: (qc) => qc.setQueryData(['agents', 'coins'], [fresh, lamp]) });
+    expect(screen.getByRole('link', { name: '$LAMP' })).toHaveAttribute('href', '/coins/M9');
+  });
   it('underlines the ticker green on a buy that lands while the post is on screen', () => {
     resetPulses();
     renderWithApp(<PostBody text="watching $LAMP" />, { seed });
