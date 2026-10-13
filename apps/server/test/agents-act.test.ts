@@ -148,6 +148,21 @@ describe('act', () => {
     expect(await turn(r.turnId)).toMatchObject({ status: 'quiet', reasoning: 'felt like posting (gm); nothing fresh to say' });
   });
 
+  it('rests without a receipt or a state write, and the chain still verifies (server-rest M6)', async () => {
+    const a = w.agents[47]!;
+    const count = async () => (await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id))).length;
+    await act(d, await perceive(d, a.id), { kind: 'post', score: 1, situation: 'idle', reason: 'felt like posting' });
+    const before = await count();
+    const v = await perceive(d, a.id);
+    expect(await act(d, v, { kind: 'idle', score: 1, reason: 'resting (energy 0.20)' })).toEqual({ ok: false, turnId: '' });
+    expect(await count()).toBe(before);
+    expect((await perceive(d, a.id)).state.cooldowns.idle).toBeUndefined();
+    w.t.clock.advance(5 * 60_000);
+    const r = await act(d, await perceive(d, a.id), { kind: 'post', score: 1, situation: 'idle', reason: 'felt like posting' });
+    expect(r.ok).toBe(true);
+    expect((await turn(r.turnId)).seq).toBe(before + 1);
+    expect((await verifyChain(w.t.db, a.id)).ok).toBe(true);
+  });
   it('returns ok:false without throwing when a turn cannot be opened', async () => {
     const v = await perceive(d, w.agents[11]!.id);
     const r = await act(d, { ...v, agent: { ...v.agent, id: 'no-such-agent' } }, { kind: 'post', score: 1, situation: 'idle', reason: 'x' });

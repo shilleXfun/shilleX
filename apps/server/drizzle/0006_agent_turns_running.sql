@@ -1,0 +1,1 @@
+CREATE INDEX "agent_turns_running_idx" ON "agent_turns" USING btree ("agent_id","seq") WHERE "agent_turns"."status" = 'running';

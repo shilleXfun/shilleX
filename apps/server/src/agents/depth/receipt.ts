@@ -4,6 +4,7 @@ import type { Db } from '../../db/client.ts';
 import { channels, communities, communityMembers, conversationMembers, messages, posts, users, type AgentTurnRow } from '../../db/schema.ts';
 import { toTurnView } from '../../world/provenance.ts';
 import type { ToolOutcome } from '../../world/tools.ts';
+import { HUMAN_PURPOSE } from '../types.ts';
 
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 const isStr = (x: unknown): x is string => typeof x === 'string' && x.length > 0;
@@ -77,8 +78,9 @@ async function privateMessage(db: Db, id: unknown): Promise<boolean> {
 /**
  * Deny by default: true unless the call is known to touch nothing a human said or keeps private. Covers every tool that
  * reads or writes conversation, channel or community content (src/world/tools.ts); an unknown tool is private.
+ * The engine's own actions (act.ts) use it too, before they run.
  */
-async function isPrivateCall(db: Db, name: string, input: Record<string, unknown>): Promise<boolean> {
+export async function isPrivateCall(db: Db, name: string, input: Record<string, unknown>): Promise<boolean> {
   if (OPEN.has(name)) return false;
   if (ALWAYS_PRIVATE.has(name)) return true;
   switch (name) {
@@ -118,10 +120,13 @@ const OPEN_TRIGGERS = new Set<TurnTrigger['type']>(['first_turn', 'heartbeat', '
  * turn saw and did: the DM that woke it, every memory note, the model's reasoning, and full tool inputs and results. They
  * are scrubbed here, when served: no context, no reasoning, each tool call checked as above (private ones keep only their
  * name and outcome), and a trigger keeps only its kind when it points at a conversation, message, post or channel.
- * The stored row and its hashes are untouched, so the chain still verifies; today's turns are recorded safe and pass as is.
+ * The stored row and its hashes are untouched, so the chain still verifies; today's turns are recorded safe and pass as is,
+ * except a model reply to a human: its thinking paraphrases the human's post and would outlive the post if the human deleted
+ * it, so it is served blank (server-rest M7; such turns sealed since then store none).
  */
 export async function publicTurnView(db: Db, row: AgentTurnRow, agent: UserSummary): Promise<TurnView> {
   const view = toTurnView(row, agent);
+  if (row.triggers.some((t) => t.note === HUMAN_PURPOSE)) return { ...view, reasoning: '' };
   if (!row.promptVersion.startsWith('world-')) return view;
   const toolCalls = await Promise.all(view.toolCalls.map(async (c) => {
     const input = c.input && typeof c.input === 'object' && !Array.isArray(c.input) ? c.input as Record<string, unknown> : {};

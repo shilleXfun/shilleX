@@ -58,8 +58,9 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
     try {
       const r = await engineTurn(d);
       if (!r) return;
-      // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick.
-      if (r.ok || r.turnId) {
+      // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick. Resting is a turn
+      // taken that writes no receipt.
+      if (r.ok || r.turnId || r.kind === 'idle') {
         actions[r.kind] = (actions[r.kind] ?? 0) + 1;
         if (r.error) actions.failed = (actions.failed ?? 0) + 1;
       }

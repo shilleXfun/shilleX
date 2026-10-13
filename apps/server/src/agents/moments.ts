@@ -2,17 +2,17 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
 import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
-import { priceOf, type AgentBrain } from '../world/brain.ts';
+import { priceOf, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { isReservedUsername } from '../lib/reserved.ts';
 import { TOOLS, runTool, type ToolContext } from '../world/tools.ts';
 import { actorFor, busyFor } from './act.ts';
 import type { EngineDeps } from './engine.ts';
-import { HAIKU, type ModelBudget } from './haiku.ts';
+import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
-import type { Moment, MomentKind, Moments } from './types.ts';
+import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
 export const PRIORITY: MomentKind[] = ['human_reply', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
@@ -22,7 +22,6 @@ export const HUMAN_REPLIES_PER_HOUR = 3;
 const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
-const HUMAN_PURPOSE = 'reply to a human';
 /** Trips a human reply may use; the daily share reserves all of them up front. */
 const HUMAN_TRIPS = 2;
 /** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
@@ -158,17 +157,18 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
-    let status: 'acted' | 'quiet' | 'refused' | 'failed' = 'quiet', reasoning = '', text = '', thrown: unknown = null, costUsd = 0;
+    const spent = { usd: 0 };
+    let status: 'acted' | 'quiet' | 'refused' | 'failed' = 'quiet', reasoning = '', text = '', thrown: unknown = null;
     try {
       for (let trip = 0; trip < Math.min(o.maxTrips ?? 2, MAX_TRIPS); trip++) {
         // Checked before every call, not once per moment: a second trip must fit under the cap too.
         if (trip > 0 && !affordable(MOMENT_WORST)) break;
-        const res = await d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS });
+        // The cost is on the receipt before any tool runs, and a call that throws counts its worst case.
+        const before = spent.usd;
+        let res: BrainResponse;
+        try { res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+        finally { if (o.purpose === HUMAN_PURPOSE) addHumanSpend(spent.usd - before); }
         for (const k of Object.keys(usage) as (keyof typeof usage)[]) usage[k] += res.usage[k];
-        const cost = priceOf(HAIKU, res.usage);
-        costUsd += cost;
-        d.budget.add(cost);
-        if (o.purpose === HUMAN_PURPOSE) addHumanSpend(cost);
         for (const b of res.content) {
           if (b.type === 'thinking' && (b as { thinking?: string }).thinking) reasoning += `${reasoning ? '\n\n' : ''}${(b as { thinking: string }).thinking}`;
           if (b.type === 'text') text += (b as Anthropic.TextBlock).text;
@@ -204,12 +204,13 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     } catch (e) { status = 'failed'; thrown = e; reasoning += `${reasoning ? '\n\n' : ''}[moment] ${(e as Error).message ?? String(e)}`; }
     const priv = o.privateConversation === true;
     const record = {
-      status, usage, costUsd, finishedAt: d.now(),
+      status, usage, costUsd: spent.usd, finishedAt: d.now(),
       context: priv ? [{ kind: 'private', text: 'A private conversation took place' }] : [{ kind: 'moment', text: o.purpose }],
-      reasoning: priv ? 'private conversation' : reasoning,
+      // The model's thinking about a human's post paraphrases it, and would outlive the post if the human deleted it (server-rest M7).
+      reasoning: priv ? 'private conversation' : o.purpose === HUMAN_PURPOSE ? '' : reasoning,
       toolCalls: priv ? toolCalls.map((t) => ({ name: t.name, input: { private: true }, ok: t.ok, result: { private: true } })) : toolCalls,
     };
-    // The cost lives on the receipt so the cap survives a restart; an unsealed turn would also block this agent's chain.
+    // Sealed with the same cost billedCall already booked on it; an unsealed turn would block this agent's chain.
     try { await finishTurn(d.db, turnId, record); }
     catch (e) {
       console.error('[agents] sealing a moment turn failed, retrying', turnId, e);

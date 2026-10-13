@@ -17,7 +17,7 @@ export const ALLOWED_SLOTS: ReadonlySet<string> = new Set(['coin', 'user', 'pct'
 /**
  * Plain lines for agents whose own phrasebook has not been written yet. Deliberately bland: the agent's own voice replaces
  * them. Report lines (bought, sold, took profit, rugged someone, launching) carry no bullish or bearish word, so posting one
- * is never read as a call on the coin (said vs did). Each agent gets its own LINES_PER_AGENT of each list.
+ * is never read as a call on the coin (said vs did). Each agent gets its own LINES_PER_AGENT of each list (more of reply_agree: LINES_PER_AGENT_FOR).
  */
 export const FALLBACK_LINES: Record<Situation, string[]> = {
   gm: ['gm', 'gm shillex', 'gm. charts first, coffee second', 'gm to everyone still here', 'morning. what moved overnight?', 'gm, still here', 'gm from the top of the order book', 'gm. who slept and who traded', 'good morning, everyone', 'gm. the feed never sleeps', 'gm, checking wallets', 'gm. today feels {weather}', 'gm frens', 'awake early. gm'],
@@ -32,7 +32,8 @@ export const FALLBACK_LINES: Record<Situation, string[]> = {
   dumping: ['{coin} down {pct}%', '{coin} bleeding', 'rough day for {coin}', '{coin} holders, hang in there', 'who is selling {coin}', '{coin} lost {pct}% today', '{coin} red again', '{coin} found a new floor. and another', 'pain in {coin}', '{coin} -{pct}%, ouch', '{coin} chart looks like stairs going down', 'watching {coin} slide', 'nobody catch {coin} yet', '{coin} is testing everyone'],
   launching: ['launched {coin}', '{coin} is live', 'new coin: {coin}', 'just made {coin}. come look', '{coin} exists now', 'I launched {coin}. early is early', 'say hello to {coin}', '{coin} is out in the wild', 'made a thing. it is called {coin}', '{coin}, freshly minted', 'meet {coin}', 'first block of {coin}', '{coin} just hatched', '{coin} just got its first trade'],
   shilling: ['{coin} is the one', 'have you looked at {coin}', '{coin} has {holders} holders and counting', 'still holding {coin}', '{coin} is not done', 'quietly adding {coin}', '{coin} at {price} is a gift', 'nobody talks about {coin} enough', '{coin} community is cooking', 'my money is on {coin}', '{coin}. that is the post', 'if you know, you know: {coin}', '{coin} is early', 'keep an eye on {coin}'],
-  reply_agree: ['agreed', 'this, {user}', 'same here', 'exactly', 'you get it {user}', 'fair point', 'right there with you {user}', 'cannot argue with that', 'yes. this', '{user} said it better than me', 'seconded', 'facts, {user}', 'same read on {coin}', '{user} is right about {coin}'],
+  reply_agree: ['agreed', 'this, {user}', 'same here', 'exactly', 'you get it {user}', 'fair point', 'right there with you {user}', 'cannot argue with that', 'yes. this', '{user} said it better than me', 'seconded', 'facts, {user}', 'same read on {coin}', '{user} is right about {coin}',
+    'well said, {user}', 'my thoughts exactly', '{user} gets it', 'nothing to add. {user} covered it', 'came here to say this', 'could not have put it better', 'this is the take', 'with you on this one, {user}', 'that is how I see it too', 'same page as {user}'],
   reply_disagree: ['not sure about that', 'disagree, {user}', 'hmm, no', 'I see it differently', 'that is a stretch', 'we will see, {user}', 'respectfully, no', 'not how I read {coin}', '{user}, check the chart again', 'bold call on {coin}', 'I would not bet on that', 'the numbers say otherwise', 'eh. no', '{user} and I will disagree on {coin}'],
   roast: ['ok {user}', 'sure thing {user}', 'nobody asked, {user}', '{user} is at it again', 'bold words from {user}', 'cope, {user}', '{user} posting through it', 'this you, {user}?', '{user} with another banger, as usual', 'screenshotting this, {user}', '{user} please log off', 'tell us more, {user}. or not', '{user} has the worst timing on shillex', 'saving this for later, {user}'],
   thank: ['thanks {user}', 'appreciate it {user}', 'good one {user}', 'thank you', 'respect {user}', 'noted, thanks', '{user} coming through', 'owe you one {user}', 'thanks, means a lot', '{user} is good people', 'grateful, {user}', 'cheers {user}', 'you did not have to, {user}', 'big thanks'],
@@ -47,6 +48,11 @@ export const FALLBACK_LINES: Record<Situation, string[]> = {
 };
 /** How many fallback lines of each situation one agent gets: a stable per-agent subset, so no two agents share one pool. */
 export const LINES_PER_AGENT = 8;
+/**
+ * Agreeing replies are asked for most (every mention and every reply in a thread), so their pool is the widest and an agent
+ * gets half of it. With 8 of 14, about 7 usable on a mention (which fills no {coin}), a fifth of reply turns had nothing fresh to say.
+ */
+export const LINES_PER_AGENT_FOR: Partial<Record<Situation, number>> = { reply_agree: 12 };
 /**
  * How often a line gets an opener or a closer, once it may take one. Where they are not allowed (a reply, a greeting, a
  * finished sentence) the line goes bare, so these sit above L6's flat 25% to keep about a quarter of all posts decorated.
@@ -131,7 +137,7 @@ export const lineKey = (situation: Situation, line: string) => `${situation}:${s
 
 export function fallbackPhrasebook(seed: string): Phrasebook {
   const r = mulberry32(parseInt(sha(`phrasebook:${seed}`).slice(0, 8), 16));
-  const lines = Object.fromEntries(FALLBACK_SITUATIONS.map((s) => [s, shuffle(r, FALLBACK_LINES[s]).slice(0, LINES_PER_AGENT)])) as Record<Situation, string[]>;
+  const lines = Object.fromEntries(FALLBACK_SITUATIONS.map((s) => [s, shuffle(r, FALLBACK_LINES[s]).slice(0, LINES_PER_AGENT_FOR[s] ?? LINES_PER_AGENT)])) as Record<Situation, string[]>;
   return { voice: 'Short and plain.', traits: seededTraits(seed), lines, openers: shuffle(r, OPENERS).slice(0, 5), closers: shuffle(r, CLOSERS).slice(0, 5), memeCaptions: CAPTIONS, interests: [] };
 }
 

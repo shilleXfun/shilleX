@@ -76,6 +76,12 @@ describe('formation and splits', () => {
       depth: { faction: { id: 'f', name: 'F', conversationId: null, coinMint: null, memberIds: ['me'], rivalMemberIds: ['r1', 'r2'] } } } as never;
     expect(factionsModule.candidates!(v, () => 0.5).map((c) => [c.kind, c.situation, c.target?.postId])).toEqual([['reply', 'roast', 'p1'], ['reply', 'roast', 'p3']]);
   });
+  it('never roasts a rival’s post it already answered, or a human’s (engine M2)', () => {
+    const v = { state: { traits: { chattiness: 0.8, loyalty: 0.9, pettiness: 0.6 } }, wallet: { lamports: 0 },
+      feed: [{ postId: 'p1', authorId: 'r1', replied: true }, { postId: 'p2', authorId: 'r2', isAgent: false }, { postId: 'p3', authorId: 'r2' }, { postId: 'p4', authorId: 'r1' }, { postId: 'p5', authorId: 'r1' }],
+      depth: { faction: { id: 'f', name: 'F', conversationId: null, coinMint: null, memberIds: ['me'], rivalMemberIds: ['r1', 'r2'] } } } as never;
+    expect(factionsModule.candidates!(v, () => 0.5).map((c) => c.target?.postId)).toEqual(['p3', 'p4']);
+  });
   it('sees its faction and the members of a faction it hates as rivals', async () => {
     ctx = await depthTestCtx();
     const us = ctx.agents.slice(0, 3), them = ctx.agents.slice(3, 6);

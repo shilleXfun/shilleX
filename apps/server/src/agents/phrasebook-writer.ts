@@ -6,7 +6,7 @@ import { agentEvents, agentTurns, phrasebooks, posts, users } from '../db/schema
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { ToolOutcome } from '../world/tools.ts';
-import { HAIKU, type ModelBudget } from './haiku.ts';
+import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { ALLOWED_SLOTS, FALLBACK_SITUATIONS } from './phrasebook.ts';
 import { TRAITS, recentEvents, setTraits } from './state.ts';
 import type { Phrasebook, Situation, Traits } from './types.ts';
@@ -231,6 +231,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
   const { id: turnId } = await startTurn(db, { agentId, triggers: [{ type: 'heartbeat', note: 'phrasebook' }], model: HAIKU, effort: 'low', promptVersion: PHRASEBOOK_PROMPT_VERSION, snapshotId: null, now: d.now() });
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const toolCalls: ToolCallRecord[] = [];
+  const spent = { usd: 0 };
   let status: 'acted' | 'failed' = 'failed', note = '', thrown: unknown = null;
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
@@ -238,8 +239,10 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
       + 'Lines are templates; the only slots are {coin} {user} {pct} {sol} {price} {holders} {room} {weather} {past}, and {weather} is one word for the market’s mood, such as giddy, slow, jumpy or unhinged. Give 10 to 14 different lines for each situation. '
       + 'Traits are numbers from 0 to 1 that describe how this agent has behaved so far. In profile, give the display name (up to 40 characters, no @), bio (up to 280 characters), one emoji and a colour (#rrggbb) that this agent would choose for itself, from what it has written and done. '
       + 'Everything between <world_content> tags was written by the agent or others in the world.' }];
-    const res = await d.brain.decide({ system, tools: [], effort: 'low', maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema: PHRASEBOOK_SCHEMA },
-      messages: [{ role: 'user', content: `<world_content>\n${await material(db, agentId)}\n</world_content>\n\nWrite this agent's phrasebook.` }] });
+    const content = `<world_content>\n${await material(db, agentId)}\n</world_content>\n\nWrite this agent's phrasebook.`;
+    // The cost is on the receipt before the book is stored or the profile applied, and a call that throws counts its worst case.
+    const res = await billedCall({ db, budget: d.budget, turnId, worstUsd: worstCase, spent },
+      () => d.brain.decide({ system, tools: [], effort: 'low', maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema: PHRASEBOOK_SCHEMA }, messages: [{ role: 'user', content }] }));
     Object.assign(usage, res.usage);
     const raw = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     let parsed: unknown = null;
@@ -277,9 +280,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
       note = `${WROTE}${version}${namedByRefresh ? NAMING : ''}`;
     }
   } catch (e) { thrown = e; note = `failed: ${(e as Error).message ?? String(e)}`; }
-  const costUsd = priceOf(HAIKU, usage);
-  d.budget.add(costUsd);
-  await finishTurn(db, turnId, { status, context: [{ kind: 'phrasebook', text: 'phrasebook write' }], reasoning: note, toolCalls, usage, costUsd, finishedAt: d.now() });
+  await finishTurn(db, turnId, { status, context: [{ kind: 'phrasebook', text: 'phrasebook write' }], reasoning: note, toolCalls, usage, costUsd: spent.usd, finishedAt: d.now() });
   if (thrown) throw thrown;
   return status === 'acted' ? 'written' : 'failed';
 }

@@ -1,3 +1,7 @@
+import { BEAR, BULL } from './depth/beliefs.ts';
+import { DAYS, NOTABLE, eventText } from './depth/memory.ts';
+import { CLOSERS, FALLBACK_LINES, OPENERS, WEATHER_WORD } from './phrasebook.ts';
+
 /**
  * Tickers and coin names from the agent's own words (L3). Pure: act() gathers the words and the taken symbols, these pick.
  * The fallback list is reached only when the agent's interests and posts give nothing usable.
@@ -9,20 +13,31 @@ export const WORDS = [
   'zephyr', 'anvil', 'beacon', 'canyon', 'dune', 'falcon', 'gecko', 'hollow', 'iris', 'jasper', 'kelp', 'lotus', 'mango', 'nova', 'opal', 'pixel',
 ];
 export const ENDINGS = ['Coin', 'Club', 'Fund', 'Token', 'Money', 'Cult', 'Society', 'Union', 'Works', 'Labs', 'Party', 'House', 'Gang', 'Market', 'Collective', 'Network', 'Republic', 'Supply', 'Signal', 'Project'];
-/** Words that say nothing about the agent: trading talk, filler and the words of stock lines. */
+const words = (texts: string[]) => texts.flatMap((s) => s.toLowerCase().split(/[^a-z]+/));
+/** Words that never make a ticker: trading talk, filler, and the bullish and bearish words, which as a ticker would read as a call on the coin (engine I2). */
 const STOP = new Set([
   'the', 'and', 'for', 'you', 'your', 'with', 'this', 'that', 'just', 'have', 'what', 'who', 'are', 'was', 'not', 'but', 'all', 'any', 'can', 'out', 'now',
   'its', 'into', 'from', 'some', 'more', 'than', 'then', 'they', 'them', 'there', 'here', 'about', 'still', 'again', 'today', 'when', 'will', 'would',
   'bought', 'sold', 'sell', 'selling', 'buy', 'buying', 'coin', 'coins', 'holders', 'holder', 'price', 'profit', 'took', 'down', 'pump', 'dump',
   'launched', 'launch', 'live', 'chart', 'charts', 'feed', 'post', 'posting', 'agent', 'agents', 'shillex', 'market', 'trade', 'trading', 'wallet',
   'nothing', 'something', 'anyway', 'honestly', 'look', 'well', 'fine', 'okay', 'yes', 'yeah', 'lol', 'gm', 'ngmi', 'wagmi',
+  ...words([...BULL, ...BEAR]),
 ]);
+/**
+ * The engine's own wording, which says nothing about the agent that posted it (engine I2: "SECONDED", "SAME", "WHY" were
+ * tickers): every word of the stock lines, openers, closers and weather words, and of the way a callback words a memory. It is
+ * left out of the words read back from posts; interests are the agent's own words, so "coffee" there still counts.
+ */
+const STOCK = new Set(words([
+  ...Object.values(FALLBACK_LINES).flat(), ...OPENERS, ...CLOSERS, ...Object.values(WEATHER_WORD), ...DAYS, 'yesterday', 'a while back',
+  ...NOTABLE.flatMap((kind) => [1, -1].map((stance) => eventText({ kind, data: { stance }, at: new Date(0) }, new Map(), new Date(0))?.text ?? '')),
+]));
 const usable = (w: string) => /^[a-z]{3,8}$/.test(w) && !STOP.has(w);
 
-/** Words from the agent's own posts, in order of first use; tickers and @mentions are not words. */
+/** Words from the agent's own posts, in order of first use; tickers, @mentions and the engine's stock wording are not its words. */
 export function postWords(bodies: string[]): string[] {
   const out: string[] = [];
-  for (const b of bodies) for (const w of b.toLowerCase().replace(/[$@][a-z0-9_]+/g, ' ').split(/[^a-z]+/)) if (usable(w) && !out.includes(w)) out.push(w);
+  for (const b of bodies) for (const w of b.toLowerCase().replace(/[$@][a-z0-9_]+/g, ' ').split(/[^a-z]+/)) if (usable(w) && !STOCK.has(w) && !out.includes(w)) out.push(w);
   return out;
 }
 

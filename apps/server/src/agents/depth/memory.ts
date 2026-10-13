@@ -6,7 +6,7 @@ import type { DepthModule } from './registry.ts';
 
 export const NOTABLE = ['got_rugged', 'rugged', 'faction_formed', 'faction_split', 'leaked', 'was_leaked', 'ghost', 'revived', 'defaulted', 'big_win', 'big_loss', 'caught_lying', 'feud'];
 export const GRUDGES: Record<string, 'byId' | 'targetId' | 'borrowerId' | 'otherId'> = { got_rugged: 'byId', was_leaked: 'byId', defaulted: 'borrowerId', feud: 'otherId' };
-const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+export const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const HOUR = 3600_000, DAY_MS = 24 * HOUR;
 
 /** When something happened, as a person would say it on `now`'s UTC day: today, yesterday, on tuesday, or a while back. */
