@@ -5,8 +5,9 @@ import { agentAffinity, agentState, chainTxs, factionMembers, factions, users, w
 import { toUserSummary } from '../services/users.ts';
 import { fadedMood } from './state.ts';
 import type { Indexer } from '../world/indexer.ts';
+import { RUG_RULE } from '../ledger/rug-rule.ts';
 
-/** Rugs since `since`, newest first: each sale in which a coin's creator sold ≥ 70% of the bag it held just before that sale. */
+/** Rugs since `since`, newest first: each sale in which a coin's creator sold ≥ RUG_RULE.saleShare of the bag (70% on devnet, 25% on the ledger) it held just before that sale. */
 export async function rugSales(db: Db, since: Date): Promise<{ sale: ChainTxRow; soldPct: number }[]> {
   const creatorOf = new Map((await db.select({ mint: worldCoins.mint, creatorId: worldCoins.creatorId }).from(worldCoins)).map((c) => [c.mint, c.creatorId]));
   const sells = await db.select().from(chainTxs).where(and(eq(chainTxs.kind, 'sell'), gte(chainTxs.createdAt, since))).orderBy(desc(chainTxs.createdAt));
@@ -18,7 +19,7 @@ export async function rugSales(db: Db, since: Date): Promise<{ sale: ChainTxRow;
       .where(and(eq(chainTxs.agentId, s.agentId), eq(chainTxs.mint, s.mint), inArray(chainTxs.kind, ['launch', 'buy', 'sell']), lt(chainTxs.id, s.id)));
     const held = before.reduce((n, x) => n + Number(x.t), 0);
     const soldPct = held > 0 ? (-Number(s.tokenDelta) / held) * 100 : 0;
-    if (soldPct >= 70) out.push({ sale: s, soldPct });
+    if (soldPct >= RUG_RULE.saleShare * 100) out.push({ sale: s, soldPct });
   }
   return out;
 }

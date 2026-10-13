@@ -28,7 +28,18 @@ export interface Config {
    * production (local dev and e2e); anywhere else an unset password is null and the console is off.
    */
   adminDevPassword: string | null;
-  worldChain: 'devnet' | 'memory';
+  worldChain: 'devnet' | 'memory' | 'ledger';
+  /** MAINNET=off|rehearsal|on (mainnet spec §9). Anything but off needs WORLD_CHAIN=ledger; on also needs the launch gate. */
+  mainnet: 'off' | 'rehearsal' | 'on';
+  /** MAINNET_KEY: 32 bytes base64 encrypting the hot vault. Never the same as WORLD_KEY. */
+  mainnetKey: string | undefined;
+  /** MAINNET_RPC_URL: custody's paid RPC (mainnet-beta when on, devnet in rehearsal). */
+  mainnetRpcUrl: string | undefined;
+  /** MAINNET_COLD_ADDRESS: the owner's cold wallet; Shillex only reads its balance and sends the house's excess to it. */
+  coldAddress: string | undefined;
+  /** MAINNET_CUSTODY_LOCAL=on: rehearsal custody against a local validator (tests and e2e). Always false in production. */
+  custodyLocal: boolean;
+  mainnetLimits: { hotMaxSol: number; outflowDailyMaxSol: number; agentCapSol: number; agentDailyCapSol: number; userMonthlyCapSol: number; worldCapSol: number; houseFeeBps: number; maxTradeSol: number };
   /** RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. */
   devnetRpcUrl: string;
   openaiApiKey: string | undefined;
@@ -70,7 +81,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const agentsOn = on(env.AGENTS, false);
   const tick = (env.ENGINE_TICK_MS ?? '2000,6000').split(',').map((s) => Number(s.trim()));
-  const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : 'devnet';
+  const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : env.WORLD_CHAIN === 'ledger' ? 'ledger' : 'devnet';
+  if (env.MAINNET && !['off', 'rehearsal', 'on'].includes(env.MAINNET)) throw new Error('MAINNET must be off, rehearsal or on');
+  const mainnet = (env.MAINNET || 'off') as Config['mainnet'];
+  if (mainnet !== 'off' && worldChain !== 'ledger') throw new Error('MAINNET=rehearsal or on needs WORLD_CHAIN=ledger (mainnet spec §2)');
+  const n = (v: string | undefined, def: number) => (v === undefined || v === '' ? def : Number(v));
   return {
     nodeEnv,
     port,
@@ -93,6 +108,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
     adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv !== 'production' && worldChain === 'memory' ? '12345' : null),
     worldChain,
+    mainnet,
+    mainnetKey: env.MAINNET_KEY || undefined,
+    mainnetRpcUrl: env.MAINNET_RPC_URL || undefined,
+    coldAddress: env.MAINNET_COLD_ADDRESS || undefined,
+    custodyLocal: nodeEnv !== 'production' && on(env.MAINNET_CUSTODY_LOCAL, false),
+    mainnetLimits: {
+      hotMaxSol: n(env.HOT_MAX_SOL, 3), outflowDailyMaxSol: n(env.OUTFLOW_DAILY_MAX_SOL, 5),
+      agentCapSol: n(env.MAINNET_AGENT_CAP_SOL, 0.5), agentDailyCapSol: n(env.MAINNET_AGENT_DAILY_CAP_SOL, 0.1),
+      userMonthlyCapSol: n(env.MAINNET_USER_MONTHLY_CAP_SOL, 1), worldCapSol: n(env.MAINNET_WORLD_CAP_SOL, 25),
+      houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
+    },
     devnetRpcUrl: env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
