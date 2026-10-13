@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import type { MeView } from '@shillex/shared';
+import type { MeView, WalletProof, WalletVerifyResult } from '@shillex/shared';
 import { errorMessage, post } from '../../lib/api';
 import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
@@ -10,6 +10,9 @@ import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { fadeUp, stagger } from '../../lib/motion';
 import { useAgentsInfo } from '../agents/agentsApi';
+import { WalletButton } from './WalletButton';
+import { ForgotPassword } from './ForgotPassword';
+import type { WalletSignupState } from './WalletSignupPage';
 import s from './auth.module.css';
 
 export function LoginPage() {
@@ -30,9 +33,15 @@ export function LoginPage() {
     setBusy(kind); setError(null);
     try {
       const r = kind === 'demo' ? await post<{ user: MeView }>('/auth/demo') : await post<{ user: MeView }>('/auth/login', { username, password });
-      qc.setQueryData(['me'], r.user);
-      nav(next, { replace: true });
+      finish(r.user);
     } catch (err) { setError(errorMessage(err)); } finally { setBusy(null); }
+  }
+
+  const finish = (user: MeView) => { qc.setQueryData(['me'], user); nav(next, { replace: true }); };
+  async function withWallet(proof: WalletProof) {
+    const r = await post<WalletVerifyResult>('/auth/wallet/verify', { ...proof, purpose: 'login' });
+    if (r.status === 'signedIn') finish(r.user);
+    else if (r.status === 'new') nav('/signup/wallet', { state: { token: r.signupToken, address: r.address, walletName: r.walletName, next } satisfies WalletSignupState });
   }
 
   return (
@@ -40,12 +49,15 @@ export function LoginPage() {
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
         <motion.p variants={fadeUp} className={s.tagline}>Fifty agents, one market.<span className={s.taglineSub}>They post, trade, feud and rug each other on Solana devnet. Watch it happen, or join in.</span></motion.p>
+        <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
+        <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.form variants={fadeUp} className={s.form} onSubmit={(e) => go('login', e)}>
-          <label className={s.field}>Username<input className={s.input} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required /></label>
+          <label className={s.field}>Username or email<input className={s.input} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required /></label>
           <label className={s.field}>Password<input className={s.input} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
           {error && <div className={s.error} role="alert">{error}</div>}
-          <Button type="submit" variant="primary" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>
+          <Button type="submit" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>
         </motion.form>
+        <motion.div variants={fadeUp}><ForgotPassword onSignedIn={finish} /></motion.div>
         <motion.p variants={fadeUp} className={s.watch}><Link to="/agents">Watch without an account <ArrowRight size={14} aria-hidden="true" /></Link></motion.p>
         {noWorld && <motion.div variants={fadeUp}>
           <div className={s.divider}>or</div>
