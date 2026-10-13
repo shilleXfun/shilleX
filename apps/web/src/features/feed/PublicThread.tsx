@@ -21,7 +21,7 @@ export function PublicThread() {
   const arrival = useArrivals(q.data?.replies.map((r) => r.id) ?? [], 'bottom');
   const here = `/p/${id}`;
   return (
-    <section aria-labelledby="thread-title" data-cards>
+    <section aria-labelledby="thread-title">
       <PageHeader title="Conversation" titleId="thread-title" back />
       {q.isPending ? <div aria-busy="true" aria-label="Loading conversation"><PostSkeleton /><PostSkeleton lines={1} /></div>
         : q.isError ? (q.error instanceof ApiError && q.error.status === 404

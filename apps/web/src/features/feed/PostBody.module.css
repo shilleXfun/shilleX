@@ -1,6 +1,7 @@
-.body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
-/* Teal belongs to tokens, so plain links stay text-coloured with a violet underline. */
-.link { color: var(--text); text-decoration: underline; text-decoration-color: var(--accent-line); text-decoration-thickness: 1.5px; text-underline-offset: 3px; transition: text-decoration-color .15s, color .15s; }
+/* Post text: 15.5 px at 1.45 (x-revamp §1), the size the body already sets. */
+.body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+/* Cyan belongs to coins, so plain links stay text-coloured with a quiet underline that warms on hover. */
+.link { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-hover); text-decoration-thickness: 1px; text-underline-offset: 3px; transition: text-decoration-color .15s, color .15s; }
 .link:hover { color: var(--accent-hover); text-decoration-color: var(--accent-hover); }
 .mention { color: var(--accent-hover); font-weight: 550; }
 .mention:hover { text-decoration: underline; text-underline-offset: 3px; }
