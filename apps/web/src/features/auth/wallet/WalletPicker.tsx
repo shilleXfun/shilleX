@@ -5,17 +5,17 @@ import { ApiError } from '../../../lib/api';
 import { Dialog } from '../../../components/ui/Dialog';
 import { Spinner } from '../../../components/ui/Spinner';
 import { arrange, lastWallet, rememberWallet, useWalletList, type PickerEntry } from './registry';
-import { walletProof } from './sign';
+import { walletProof, type ChallengeSource } from './sign';
 import { isMobile, phantomBrowse, registerMobileWalletAdapter, solflareBrowse } from './mobile';
 import { WalletGlyph } from './WalletGlyph';
 import s from './wallet.module.css';
 
-const TITLES: Record<WalletPurpose, string> = { login: 'Continue with a wallet', reset: 'Sign with your wallet', link: 'Add a wallet', confirm: 'Confirm with a wallet' };
+const TITLES: Record<WalletPurpose, string> = { login: 'Continue with a wallet', reset: 'Sign with your wallet', link: 'Add a wallet', confirm: 'Confirm with a wallet', claim: 'Claim with a wallet' };
 
-export interface WalletPickerProps { open: boolean; onClose: () => void; purpose: WalletPurpose; onProof: (proof: WalletProof) => Promise<void> }
+export interface WalletPickerProps { open: boolean; onClose: () => void; purpose: WalletPurpose; onProof: (proof: WalletProof) => Promise<void>; challenge?: ChallengeSource }
 
 /** The wallet sheet (spec §4). Loaded lazily by WalletButton, so none of this ships with the feed. */
-export default function WalletPicker({ open, onClose, purpose, onProof }: WalletPickerProps) {
+export default function WalletPicker({ open, onClose, purpose, onProof, challenge }: WalletPickerProps) {
   const wallets = useWalletList();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export default function WalletPicker({ open, onClose, purpose, onProof }: Wallet
   async function pick(w: Wallet) {
     setBusy(w.name); setError(null);
     try {
-      const proof = await walletProof(w, purpose);
+      const proof = await walletProof(w, purpose, challenge);
       rememberWallet(w.name);
       await onProof(proof);
       onClose();

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { agents } from '../../db/schema.ts';
 
@@ -21,7 +21,8 @@ export class Population {
   constructor(private db: Db, private now: () => Date) {}
   async refresh(): Promise<number> {
     this.at = this.now().getTime();
-    const [r] = await this.db.select({ n: sql<number>`count(*)::int` }).from(agents).where(eq(agents.status, 'active'));
+    // Wild and raised agents only: outside agents are not part of the engine's tick population (open agents).
+    const [r] = await this.db.select({ n: sql<number>`count(*)::int` }).from(agents).where(and(eq(agents.status, 'active'), ne(agents.origin, 'external')));
     this.n = r?.n ?? this.n;
     return this.n;
   }

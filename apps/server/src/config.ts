@@ -68,9 +68,63 @@ export interface Config {
   hatchWithoutModel: boolean;
   /** The X feed and the official highlights account (x-feed spec). */
   x: XConfig;
+  /** OPEN AGENTS (plan 2026-10-13-open-agents): outside agents with their own brains, acting through /api/v1. */
+  external: ExternalConfig;
+}
+
+export interface ExternalConfig {
+  /** EXTERNAL_AGENTS=on|off (default off): off answers 404 on every /api/v1 route and /skill.md. */
+  on: boolean;
+  /** EXTERNAL_AGENTS_MAX: claimed outside agents alive at once (default 50). */
+  max: number;
+  /** EXTERNAL_WALLET_CLAIMS: 'approve' (default) holds a wallet claim for an admin; 'open' activates it at once. */
+  walletClaims: 'approve' | 'open';
+  /** EXTERNAL_START_LAMPORTS: the devnet start grant from the treasury (default 0.05 SOL). */
+  startLamports: number;
+  /** EXTERNAL_REGISTRATIONS_PER_IP_DAY (default 5). */
+  regPerIpDay: number;
+  /** EXTERNAL_KEY_READS_PER_MIN / EXTERNAL_KEY_ACTS_PER_MIN: per-key limits (default 60 and 10). */
+  readsPerMin: number;
+  actsPerMin: number;
+  /** X_OEMBED_URL: X's public oEmbed endpoint, overridable for tests (default https://publish.twitter.com/oembed). */
+  oembedUrl: string;
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
+
+/** The open-agents settings, refused at boot when one is malformed: a typo must not silently open or close the gate. */
+function externalConfig(env: Record<string, string | undefined>): ExternalConfig {
+  const set = (name: string) => env[name] !== undefined && env[name] !== '';
+  const bad = (name: string, why: string): never => { throw new Error(`${name} ${why} (got ${JSON.stringify(env[name])})`); };
+  const flag = (name: string) => {
+    if (!set(name)) return false;
+    const v = env[name]!.toLowerCase();
+    if (['on', 'true', '1', 'yes'].includes(v)) return true;
+    if (['off', 'false', '0', 'no'].includes(v)) return false;
+    return bad(name, 'must be on or off');
+  };
+  const count = (name: string, def: number, min: number) => {
+    if (!set(name)) return def;
+    const n = Number(env[name]);
+    return Number.isSafeInteger(n) && n >= min ? n : bad(name, `must be a whole number of at least ${min}`);
+  };
+  const walletClaims = set('EXTERNAL_WALLET_CLAIMS') ? env.EXTERNAL_WALLET_CLAIMS!.toLowerCase() : 'approve';
+  if (walletClaims !== 'approve' && walletClaims !== 'open') bad('EXTERNAL_WALLET_CLAIMS', 'must be approve or open');
+  const oembedUrl = set('X_OEMBED_URL') ? env.X_OEMBED_URL! : 'https://publish.twitter.com/oembed';
+  let proto = '';
+  try { proto = new URL(oembedUrl).protocol; } catch { bad('X_OEMBED_URL', 'must be a URL'); }
+  if (proto !== 'https:' && proto !== 'http:') bad('X_OEMBED_URL', 'must be an http(s) URL');
+  return {
+    on: flag('EXTERNAL_AGENTS'),
+    max: count('EXTERNAL_AGENTS_MAX', 50, 0),
+    walletClaims: walletClaims as ExternalConfig['walletClaims'],
+    startLamports: count('EXTERNAL_START_LAMPORTS', 50_000_000, 0),
+    regPerIpDay: count('EXTERNAL_REGISTRATIONS_PER_IP_DAY', 5, 1),
+    readsPerMin: count('EXTERNAL_KEY_READS_PER_MIN', 60, 1),
+    actsPerMin: count('EXTERNAL_KEY_ACTS_PER_MIN', 10, 1),
+    oembedUrl,
+  };
+}
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const nodeEnv = (env.NODE_ENV === 'production' || env.NODE_ENV === 'test' ? env.NODE_ENV : 'development') as Config['nodeEnv'];
@@ -135,5 +189,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
     x: loadXConfig(env),
+    external: externalConfig(env),
   };
 }

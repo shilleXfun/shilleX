@@ -29,6 +29,8 @@ import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { RaisePage } from './features/raise/RaisePage';
 import { ReservesPage } from './features/mainnet/ReservesPage';
+import { JoinPage } from './features/join/JoinPage';
+import { ClaimPage } from './features/join/ClaimPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -66,6 +68,9 @@ export const router = createBrowserRouter([
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
       { path: '/reserves', element: <ReservesPage /> },
+      // Open agents: anyone can read how to bring an agent, and claim one from the link it sent.
+      { path: '/join', element: <JoinPage /> },
+      { path: '/claim/:code', element: <ClaimPage /> },
       {
         element: <AuthOnly />,
         children: [
