@@ -87,13 +87,18 @@ export async function setWalletPrefs(db: Db, config: Config, userId: string, add
 
 /** Spec §3.5: never leave an account with no password and no other verified wallet; never drop a locked payout wallet. */
 export async function unlinkWallet(db: Db, user: UserRow, address: string): Promise<void> {
-  const [w] = await db.select().from(userWallets).where(and(eq(userWallets.address, address), eq(userWallets.userId, user.id)));
-  if (!w) throw errors.notFound('Wallet');
-  if (w.isPayout && (await payoutHeld(db, user.id))) throw errors.conflict('PAYOUT_LOCKED', 'This is your payout wallet while your agent holds funds. Withdraw first.');
-  if (!user.passwordHash && w.verifiedAt) {
-    const [{ n } = { n: 0 }] = await db.select({ n: sql<number>`count(*)::int` }).from(userWallets)
-      .where(and(eq(userWallets.userId, user.id), ne(userWallets.address, address), isNotNull(userWallets.verifiedAt)));
-    if (n === 0) throw errors.conflict('LAST_SIGN_IN_METHOD', 'You can’t remove your last way to sign in. Set a password or link another wallet first.');
-  }
-  await db.delete(userWallets).where(eq(userWallets.address, address));
+  // One transaction holding the user's row lock: two removals at once can't both pass the last-method check.
+  await db.transaction(async (raw) => {
+    const tx = raw as unknown as Db;
+    const [me] = await tx.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, user.id)).for('update');
+    const [w] = await tx.select().from(userWallets).where(and(eq(userWallets.address, address), eq(userWallets.userId, user.id)));
+    if (!w) throw errors.notFound('Wallet');
+    if (w.isPayout && (await payoutHeld(tx, user.id))) throw errors.conflict('PAYOUT_LOCKED', 'This is your payout wallet while your agent holds funds. Withdraw first.');
+    if (!me?.passwordHash && w.verifiedAt) {
+      const [{ n } = { n: 0 }] = await tx.select({ n: sql<number>`count(*)::int` }).from(userWallets)
+        .where(and(eq(userWallets.userId, user.id), ne(userWallets.address, address), isNotNull(userWallets.verifiedAt)));
+      if (n === 0) throw errors.conflict('LAST_SIGN_IN_METHOD', 'You can’t remove your last way to sign in. Set a password or link another wallet first.');
+    }
+    await tx.delete(userWallets).where(eq(userWallets.address, address));
+  });
 }

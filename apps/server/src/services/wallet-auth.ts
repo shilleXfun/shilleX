@@ -18,7 +18,8 @@ export const WalletProofBody = z.object({
   address: z.string().min(32).max(44),
   signedMessage: z.string().min(1).max(4096),
   signature: z.string().min(1).max(128),
-  walletName: z.string().trim().max(AUTH_LIMITS.walletNameMax).nullish(),
+  // Display only, and set by the wallet: cut to length rather than refuse, or that wallet could never sign in.
+  walletName: z.string().max(500).transform((s) => s.trim().slice(0, AUTH_LIMITS.walletNameMax).trim()).nullish(),
 });
 
 const expired = () => new AppError(400, 'CHALLENGE_EXPIRED', 'That sign-in request expired. Try again.');

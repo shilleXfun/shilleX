@@ -49,6 +49,13 @@ describe('linking wallets', () => {
     expect(row!.showOnProfile).toBe(true);
   });
 
+  it('admin stays a password login: an admin account can’t link a wallet (spec §8)', async () => {
+    const admin = await ctx.createUser('admin');
+    const r = await ctx.as(admin).post('/api/auth/wallet/challenge', { purpose: 'link' });
+    expect([r.status, r.body.code]).toEqual([403, 'ADMIN_PASSWORD_ONLY']);
+    expect(await ctx.db.select().from(userWallets).where(eq(userWallets.userId, admin.id))).toHaveLength(0);
+  });
+
   it('stops at 5 wallets', async () => {
     const me = await walletAccount(ctx, testWallet(), 'collector');
     for (let i = 0; i < 4; i++) expect((await link(me, testWallet())).body.status).toBe('linked');
@@ -79,6 +86,15 @@ describe('editing and unlinking', () => {
     expect((await ctx.as(me).del(`/api/me/wallets/${typed.address}`)).status).toBe(200);
     await ctx.db.update(users).set({ passwordHash: await hash('long-enough-1') }).where(eq(users.id, me.id));
     expect((await ctx.as(me).del(`/api/me/wallets/${w2.address}`)).status).toBe(200);
+  });
+
+  it('two removals at once still leave one verified wallet on a wallet-only account', async () => {
+    const w1 = testWallet(), w2 = testWallet();
+    const me = await walletAccount(ctx, w1, 'double_remover');
+    await link(me, w2);
+    const rs = await Promise.all([ctx.as(me).del(`/api/me/wallets/${w1.address}`), ctx.as(me).del(`/api/me/wallets/${w2.address}`)]);
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await ctx.db.select().from(userWallets).where(eq(userWallets.userId, me.id))).toHaveLength(1);
   });
 
   it('payoutWallet reads the verified payout wallet (MAINNET contract)', async () => {
