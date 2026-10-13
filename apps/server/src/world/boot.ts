@@ -29,6 +29,7 @@ import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
 import { RaisedGate } from '../agents/raised/gate.ts';
 import { hatchMomentHandler, retryStartGrants, runHatch, type HatchDeps } from '../agents/raised/hatch.ts';
+import { retireReported } from '../agents/raised/lifecycle.ts';
 import { createHatchPump } from '../agents/raised/pump.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
 import { seedWorld } from './seed.ts';
@@ -159,7 +160,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
   const pump = createHatchPump({
     db, now, config, moments: () => handles.moments,
-    hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => {},
+    hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => { await retireReported({ db, chain, key, now, gate }); },
   });
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
   const pumpTimer = setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);

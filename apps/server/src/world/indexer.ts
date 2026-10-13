@@ -96,7 +96,7 @@ export class Indexer {
     return [...h].sort((a, b) => b[1] - a[1]).map(([id, raw]) => ({ user: people.get(id)!, tokens: tok(raw) }));
   }
 
-  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>): Promise<{ card: AgentCard; positions: PositionView[] }> {
+  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: 'wild' | 'raised'; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
     const pk = c.pks.get(u.id) ?? null;
     const b = await this.balancesOf(u.id, pk);
     const prices = new Map(c.coins.map((x) => [x.mint, x]));
@@ -116,21 +116,23 @@ export class Indexer {
         user: toUserSummary(u), bio: u.bio, status, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
         pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START - sol(c.topUps.get(u.id) ?? 0) : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
+        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null,
       },
     };
   }
 
   private async context() {
     const [rows, coins, txs, ts, ws, tu] = await Promise.all([
-      this.db.select({ u: users, status: agents.status }).from(users).innerJoin(agents, eq(agents.userId, users.id)).orderBy(asc(users.username)),
+      this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id)).orderBy(asc(users.username)),
       this.db.select().from(worldCoins),
       this.db.select().from(chainTxs),
       this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).groupBy(agentTurns.agentId),
       this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets),
       this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(eq(agentGrants.kind, 'top_up')).groupBy(agentGrants.agentId),
     ]);
+    const owners = await this.summaries(rows.map((r) => r.ownerId).filter((x): x is string => Boolean(x)));
     return {
-      rows, coins, txsByMint: byMint(txs), txsByAgent: byAgent(txs),
+      rows, coins, owners, txsByMint: byMint(txs), txsByAgent: byAgent(txs),
       turnStats: new Map(ts.map((r) => [r.a, { n: r.n, last: r.last ? new Date(r.last) : null }])),
       funded: new Set(ws.filter((w) => w.f).map((w) => w.o)),
       pks: new Map(ws.map((w) => [w.o, w.pk])),
@@ -151,15 +153,15 @@ export class Indexer {
 
   private async computeLeaderboard(): Promise<AgentCard[]> {
     const c = await this.context();
-    const cards = await Promise.all(c.rows.map(async (r) => (await this.card(r.u, r.status, c)).card));
-    return cards.sort((a, b) => b.totalSol - a.totalSol || a.user.username.localeCompare(b.user.username));
+    const cards = await Promise.all(c.rows.map(async (r) => (await this.card(r.u, r.status, c, r)).card));
+    return cards.filter((x) => x.status !== 'retired').sort((a, b) => b.totalSol - a.totalSol || a.user.username.localeCompare(b.user.username));
   }
 
   async agent(userId: string): Promise<AgentDetail | null> {
     const c = await this.context();
     const r = c.rows.find((x) => x.u.id === userId);
     if (!r) return null;
-    const { card, positions } = await this.card(r.u, r.status, c);
+    const { card, positions } = await this.card(r.u, r.status, c, r);
     // Memory notes stay private. They are free text with no record of the turn that wrote them, the retired model runtime
     // wrote them in turns that read human DMs (and every later turn saw every earlier note), and receipts already hide the
     // remember tool's text for that reason (agents/depth/receipt.ts). This detail is served to anyone, so it carries none.
