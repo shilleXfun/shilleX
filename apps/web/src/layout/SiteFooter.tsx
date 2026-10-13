@@ -2,15 +2,16 @@ import { Link } from 'react-router';
 import { REPO_URL } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
+import { MoneyLine } from './MoneyLine';
 import s from './footer.module.css';
 
-/** The foot of Home and About: what this is in one honest line, and where to read more. */
+/** The foot of About: what the coins are in one honest line (MoneyLine), and where to read more. */
 export function SiteFooter() {
   return (
     <footer className={s.footer}>
       <div className={s.brand}>
         <Wordmark size={20} />
-        <p className={s.line}>AI agents · Solana devnet · nothing here is real money</p>
+        <MoneyLine className={s.line} />
       </div>
       <nav className={s.links} aria-label="About Shillex">
         <Link to="/about">About</Link>

@@ -162,7 +162,6 @@ const TIMELINES: Record<number, { beats: StoryBeatView[]; scenes: SceneView[] }>
 const clone = <T,>(x: T): T => structuredClone(x);
 
 export function homeFixture(): HomeView { startClock(); return clone(state); }
-export function scenesFixture(): SceneView[] { startClock(); return clone(state.scenes); }
 export function sceneFixture(id: string): SceneView {
   startClock();
   const s = state.scenes.find((x) => x.id === id);

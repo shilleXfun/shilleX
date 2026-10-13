@@ -20,9 +20,9 @@ import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, openPalette } from './CommandPalette';
-import { Happening } from './Happening';
-import { useHome, useWorldLive } from '../features/home/homeApi';
-import { useAgentsInfo } from '../features/agents/agentsApi';
+import { useWorldLive } from '../features/home/homeApi';
+import { HomeHero } from '../features/home/Hero';
+import { useActivityLive } from '../features/timeline/live';
 import s from './layout.module.css';
 import sh from './shell.module.css';
 
@@ -56,52 +56,46 @@ const route = {
 };
 
 /**
- * The Swarm layout both shells share: the glass top bar, the icon rail, the page column with its route transition, the
- * World now panel from 1200 px and the phone tab bar. `me` null is a visitor (public sections only); `children` are the
- * shell's own overlays (banners, dialogs, toasts, panels).
+ * The X layout both shells share (x-revamp §1, §5): the slim glass rail, the reading column with its route transition,
+ * the side column ("World now") from 1100 px, the world filling the gutters; on phones the top bar and the tab bar
+ * instead. A visitor's Home opens on the hero over the world, above all of it. `me` null is a visitor (public sections
+ * only); `children` are the shell's own overlays (banners, dialogs, toasts, panels, the world's overlay).
  */
 export function ShellFrame({ me, children }: { me: MeView | null; children?: ReactNode }) {
   const { pathname } = useLocation();
   useWorldLive();
+  useActivityLive();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
-  // Chat pages (a community, the inbox) and the Graph take the full width and no World now panel.
-  const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph';
-  // Home lays out its own columns across the whole stage: no World now panel and no Happening column beside it.
-  const home = pathname === '/' || pathname === '/about';
+  // Chat pages (a community, the inbox), the Graph and About lay out their own width: no side column.
+  const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph' || parts[1] === 'about';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
   // Conversation screens are immersive on mobile: no tab bar or top bar (they render their own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const inDm = useMatch('/messages/:id');
-  // The World now panel only exists from 1200px (shell.module.css); below that it isn't mounted, so it fetches nothing.
-  const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
-  // Happening (left column) from 1440 px, on pages with the World now panel, once the server has stories to tell: a demo
-  // deployment or an older server (404 on /world/home), or a check still pending, keeps the two-column stage.
-  const tapeRoom = useMediaQuery('(min-width: 1440px)');
-  const world = useAgentsInfo().isSuccess;
-  const stories = Boolean(useHome().data);
-  const tape = tapeRoom && world && stories && !wide && !home;
+  // The side column only exists from 1100 px (shell.module.css); below that it isn't mounted, so it fetches nothing.
+  const sideRoom = useMediaQuery('(min-width: 1100px)');
+  const hero = !me && pathname === '/';
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-home={home} data-tape={tape}>
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-hero={hero}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <TopBar me={me} />
-      <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
-      <div className={sh.stage}>
-        {tape && <aside className={sh.tapeCol} aria-label="Happening"><Happening /></aside>}
-        <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
+      {hero && <HomeHero />}
+      <div className={sh.frame}>
+        <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
+        <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
           {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
           </AnimatePresence>
         </main>
-        {/* A visitor never gets the classic rail (no agent world): it is built from signed-in data. */}
-        {wideEnoughForRail && !wide && !home && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} /></aside>}
+        {sideRoom && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} /></aside>}
       </div>
       {children}
       <MobileTabBar me={me} />

@@ -1,19 +1,33 @@
 import { Link, useParams } from 'react-router';
 import { BookOpen } from 'lucide-react';
-import { plural, relativeTime, type StoryBeatView, type StoryDetailView } from '@shillex/shared';
+import { plural, relativeTime, type StoryBeatView, type StoryDetailView, type StoryView } from '@shillex/shared';
 import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { Sparkline } from '../../components/ui/Sparkline';
 import { PageHeader } from '../../layout/PageHeader';
+import { cx } from '../../lib/cx';
 import { isNotFound } from '../agents/agentsApi';
+import { fmtPct } from '../agents/numbers';
 import { KindTag, SceneText, sceneCount } from './Conversation';
 import { sceneRunning, useStory } from './homeApi';
 import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { CastList } from './ScenePage';
-import { StoryCoin } from './Home';
 import c from './home.module.css';
 import t from './scene.module.css';
+
+/** A story's coin: its ticker, its last day as a line and the hour's change. */
+function StoryCoin({ coin, width = 64, height = 20 }: { coin: NonNullable<StoryView['coin']>; width?: number; height?: number }) {
+  const pct = coin.change1hPct;
+  return (
+    <span className={c.storyCoin}>
+      <span className={c.coinSym}>${coin.symbol}</span>
+      <Sparkline points={coin.spark} width={width} height={height} label={`${coin.symbol} over the last day`} />
+      {pct !== null && <span className={cx(c.pct, pct >= 0 ? c.up : c.down)}>{fmtPct(pct)}</span>}
+    </span>
+  );
+}
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 const dayClock = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
