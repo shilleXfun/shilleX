@@ -6,8 +6,10 @@ import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
 import { chainHead } from './provenance.ts';
+import { RUG_RULE } from '../ledger/rug-rule.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
+const CAPITAL_KINDS = new Set(['fund', 'opening', 'deposit', 'withdraw']);
 const sol = (l: number) => l / LAMPORTS_PER_SOL;
 const tok = (raw: number) => raw / 10 ** COIN_DECIMALS;
 
@@ -57,7 +59,7 @@ export class Indexer {
     const dayAgo = this.now().getTime() - DAY;
     return {
       devSoldPct: acquired > 0 ? (sold / acquired) * 100 : 0,
-      rug: acquired > 0 && soldEarly / acquired >= 0.9,
+      rug: acquired > 0 && soldEarly / acquired >= RUG_RULE.earlyShare,
       volume24hSol: mine.filter((t) => (t.kind === 'buy' || t.kind === 'sell') && t.createdAt.getTime() >= dayAgo).reduce((n, t) => n + Math.abs(sol(t.lamportsDelta)), 0),
     };
   }
@@ -108,13 +110,17 @@ export class Indexer {
     });
     const solBalance = b ? sol(b.lamports) : (c.txsByAgent.get(u.id) ?? []).reduce((n, x) => n + sol(x.lamportsDelta), 0);
     const tokenValueSol = positions.reduce((n, p) => n + p.valueSol, 0);
+    // Capital in: devnet's 0.1 SOL fund row, or a ledger's openings and deposits minus withdrawals. A funded agent with no rows
+    // (a memory chain's airdrop) started with START.
+    const capitalRows = (c.txsByAgent.get(u.id) ?? []).filter((x) => CAPITAL_KINDS.has(x.kind));
+    const basis = capitalRows.length ? capitalRows.reduce((n, x) => n + sol(x.lamportsDelta), 0) : c.funded.has(u.id) ? START : null;
     const mine = c.coins.filter((x) => x.creatorId === u.id);
     const ts = c.turnStats.get(u.id);
     return {
       positions,
       card: {
         user: toUserSummary(u), bio: u.bio, status, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
-        pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
+        pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
       },
     };
