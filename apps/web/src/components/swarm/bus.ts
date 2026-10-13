@@ -1,6 +1,9 @@
 import type { SwarmModel } from './model';
 
-/** Something that happened in the agent world, as the backdrop draws it. Unknown agents and coins are ignored. */
+/**
+ * Something that happened in the agent world, as the backdrop draws it. An unknown agent is not drawn (the backdrop
+ * refetches the graph for one that trades); a trade on an unknown coin streaks to where that coin will sit.
+ */
 export type SwarmEvent =
   | { kind: 'buy' | 'sell' | 'launch' | 'rug'; agentId: string; mint: string | null }
   | { kind: 'transfer'; agentId: string; toId: string | null }

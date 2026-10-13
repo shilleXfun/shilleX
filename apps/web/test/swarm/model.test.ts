@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { AgentGraph, CoinView, GraphNode } from '@shillex/shared';
-import { breathOf, buildSwarm, GHOST, LONER, MAX_COINS, MAX_NODES } from '../../src/components/swarm/model';
+import { breathOf, buildSwarm, GHOST, LONER, MAX_COINS } from '../../src/components/swarm/model';
 
 const node = (id: string, o: Partial<GraphNode> = {}): GraphNode => ({ id, username: id, displayName: '', avatarUrl: null, netWorthSol: 0.1, mood: 0, ghost: false, reputation: 0, factionId: null, factionColour: null, ...o });
 const coin = (mint: string, creatorId: string, o: Partial<CoinView> = {}): CoinView => ({
@@ -34,21 +34,23 @@ describe('buildSwarm', () => {
     expect(allies).toHaveLength(1);
     expect(m.feuds).toHaveLength(1);
   });
-  it('anchors coins near their creator, marks rugged ones dead and caps the count', () => {
-    const coins = [coin('m0', 'a', { devSoldPct: 85 }), ...Array.from({ length: 30 }, (_, i) => coin(`m${i + 1}`, 'a', { volume24hSol: i }))];
+  it('anchors coins near their creator, marks rugged ones dead and shows only the busiest as diamonds', () => {
+    const coins = [coin('m0', 'a', { devSoldPct: 85 }), ...Array.from({ length: 30 }, (_, i) => coin(`m${i + 1}`, 'a', { volume24hSol: i })), coin('old', 'a', { archived: true })];
     const m = buildSwarm(graph([node('a'), node('b')]), coins, null);
-    expect(m.coins).toHaveLength(MAX_COINS);
-    expect(m.coins.some((c) => c.mint === 'm0')).toBe(false); // dead coins rank last, so the cap drops it first
+    expect(m.coins).toHaveLength(31); // every coin still trading has a place; an archived one does not
+    expect(m.coins.filter((c) => c.shown)).toHaveLength(MAX_COINS);
+    expect(m.coins[m.coinIndex.get('m0')!]!.shown).toBe(false); // dead coins rank last, so they are the first not drawn
     const a = m.nodes[m.index.get('a')!]!;
     for (const c of m.coins) expect(Math.hypot(c.x - a.x, c.y - a.y)).toBeLessThan(0.15);
     const dead = buildSwarm(graph([node('a')]), [coin('mx', 'a', { devSoldPct: 70 })], null);
     expect(dead.coins[0]!.dead).toBe(true);
   });
-  it('keeps at most MAX_NODES agents, the richest first', () => {
-    const many = Array.from({ length: MAX_NODES + 5 }, (_, i) => node(`n${i}`, { netWorthSol: i }));
+  it('keeps every agent, the richest first', () => {
+    const many = Array.from({ length: 300 }, (_, i) => node(`n${i}`, { netWorthSol: i }));
     const m = buildSwarm(graph(many), [], null);
-    expect(m.nodes).toHaveLength(MAX_NODES);
-    expect(m.index.has('n0')).toBe(false);
+    expect(m.nodes).toHaveLength(300);
+    expect(m.index.get('n299')).toBe(0);
+    expect(m.index.has('n0')).toBe(true);
   });
   it('moves agents only slightly when the graph is refetched', () => {
     const g = graph(Array.from({ length: 20 }, (_, i) => node(`n${i}`)), [{ a: 'n0', b: 'n1', score: 0.8 }]);
@@ -104,9 +106,9 @@ describe('buildSwarm', () => {
 describe('the viewer’s own agent', () => {
   // Richest first: a0 holds the most, a79 the least.
   const many = (n: number) => graph(Array.from({ length: n }, (_, i) => node(`a${i}`, { netWorthSol: n - i })));
-  it('is always one of the 60, even when it is the poorest, and is marked own', () => {
+  it('is drawn, even when it is the poorest, and is marked own', () => {
     const m = buildSwarm(many(80), [], null, { pin: 'a79' });
-    expect(m.nodes).toHaveLength(MAX_NODES);
+    expect(m.nodes).toHaveLength(80);
     expect(m.index.has('a79')).toBe(true);
     expect(m.nodes[m.index.get('a79')!]!.own).toBe(true);
     expect(m.nodes.filter((n) => n.own)).toHaveLength(1);
