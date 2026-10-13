@@ -1,23 +1,14 @@
-/* /scenes/:id (ScenePage.tsx) and a story's conversations. On the reading column's sheet: the header, a hairline, then
-   the conversation, its card chrome dropped so it reads as part of the column. */
-.scene { display: grid; min-width: 0; }
-.head { display: grid; gap: 12px; min-width: 0; padding: 16px var(--row-px) 18px; border-bottom: 1px solid var(--line); }
-.title { margin: 0; font: 700 34px/1.04 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
-/* Two classes deep, so they win over the card's own (convo.module.css) whichever loads first. */
-.scene .window { min-height: 260px; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-/* The card's title row and (when there is one) its foot line up with the header above. */
-.scene .window > :first-child, .scene .window > :last-child:not(.screen) { padding-inline: var(--row-px); }
-.scene .screen > div { padding-inline: var(--row-px); }
-.window .screen { flex: none; overflow: visible; }
+/* /scenes/:id (ScenePage.tsx) and a story's conversations: the conversation in a glass card under the hero. */
+.window { min-height: 260px; }
+.window .screen { flex: none; overflow: visible; padding: 20px 0 18px; }
+.window .screen > div { padding-inline: 22px; }
 .footNote { flex: 1; min-width: 0; color: var(--muted); }
-.footLink { flex: none; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
-.footLink:hover { background: var(--accent-soft); }
 /* A conversation inside a story's timeline: a smaller card that scrolls, like a quoted post. */
-.embed { min-width: 0; }
+.embed { width: 100%; min-width: 0; }
 .embed .screen { max-height: 300px; }
 .embedTitle { color: inherit; }
 .embedTitle:hover { color: var(--text); }
 @media (max-width: 767px) {
-  .title { font-size: 28px; }
+  .window .screen > div { padding-inline: 14px; }
   .footNote { display: none; }
 }

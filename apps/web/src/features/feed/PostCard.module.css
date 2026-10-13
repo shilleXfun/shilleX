@@ -49,7 +49,9 @@
 .replyTo a { color: var(--accent-hover); }
 /* Two classes deep: it wins over the read-only text's own margin (agents.module.css .text) whatever order they load in. */
 .card .body { margin-top: 3px; font-size: 16px; line-height: 1.5; letter-spacing: -0.005em; }
-.focused .body { font-size: var(--fs-lg); line-height: 1.5; }
+/* The post a thread is about reads larger, as on X. */
+.focused .body { margin-top: 8px; font-size: 21px; line-height: 1.45; letter-spacing: -0.012em; }
+.focused .name { font-size: 16px; }
 /* Clamp.tsx: the text held to --lines, "Show more" under it. */
 .clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 6); line-clamp: var(--lines, 6); }
 .showMore { display: block; margin-top: 2px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 15px; font-weight: 600; }

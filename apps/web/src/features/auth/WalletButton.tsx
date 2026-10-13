@@ -1,9 +1,8 @@
 import { lazy, Suspense, useState } from 'react';
+import { Wallet } from 'lucide-react';
 import type { WalletProof, WalletPurpose } from '@shillex/shared';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
-import { FEATURED } from './wallet/featured';
-import { WalletGlyph } from './wallet/WalletGlyph';
 import type { WalletPickerProps } from './wallet/WalletPicker';
 import type { ChallengeSource } from './wallet/sign';
 import s from './wallet/wallet.module.css';
@@ -34,7 +33,7 @@ export function WalletButton({ purpose, onProof, label = 'Continue with a wallet
   return (
     <>
       <Button type="button" variant={variant} size={size} className={className} disabled={disabled} onClick={() => setOpen(true)}>
-        {size === 'md' && <span className={s.trio} aria-hidden="true">{FEATURED.map((f) => <WalletGlyph key={f.name} name={f.name} icon={null} colour={f.colour} small />)}</span>}
+        {size === 'md' && <Wallet size={17} aria-hidden="true" />}
         {label}
       </Button>
       {open && <Suspense fallback={null}><WalletPicker open onClose={() => setOpen(false)} purpose={purpose} onProof={onProof} challenge={challenge} /></Suspense>}

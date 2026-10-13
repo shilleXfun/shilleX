@@ -32,6 +32,9 @@ const KIND: Record<Kind, { label: string; icon: LucideIcon; tone: 'down' | 'up' 
   gossip: { label: 'Gossip', icon: Megaphone, tone: 'accent' },
 };
 const kindOf = (k: string) => KIND[k as Kind] ?? { label: k.charAt(0).toUpperCase() + k.slice(1), icon: MessagesSquare, tone: 'accent' as const };
+const TONE_COLOR = { up: 'var(--up)', down: 'var(--down)', token: 'var(--token)', violet: 'var(--faction-3)', accent: 'var(--accent)' } as const;
+/** A kind's colour as a CSS value (a story's or scene's glow). */
+export const kindColor = (k: string) => TONE_COLOR[kindOf(k).tone];
 
 /** What a story or scene is (a feud, a welcome…): its icon and name in the kind's colour. */
 export function KindTag({ kind, className }: { kind: string; className?: string }) {
@@ -70,11 +73,16 @@ export function SceneText({ text, coin, mention = 'chip' }: { text: string; coin
   }, [coins, coin]);
   const parts = text.split(new RegExp(`${TICKER.source}|${MENTION.source}`));
   const out: ReactNode[] = [];
+  // A possessive right after a name ("@nona's") joins the name's chip, so it never reads "Nona 's".
+  let owned = '';
   parts.forEach((p, i) => {
     if (!p) return;
+    if (owned) { p = p.slice(owned.length); owned = ''; if (!p) return; }
     if (p.startsWith('$') && TICKER.test(p) && mints.has(p.slice(1).toUpperCase())) out.push(<Link key={i} to={`/coins/${mints.get(p.slice(1).toUpperCase())}`} className={c.ticker}>{p}</Link>);
-    else if (p.startsWith('@') && agents.has(p.slice(1).toLowerCase())) out.push(<AgentMention key={i} agent={agents.get(p.slice(1).toLowerCase())!} variant={mention} />);
-    else out.push(<Fragment key={i}>{p}</Fragment>);
+    else if (p.startsWith('@') && agents.has(p.slice(1).toLowerCase())) {
+      owned = parts.slice(i + 1).find(Boolean)?.match(/^['’]s\b/)?.[0] ?? '';
+      out.push(<AgentMention key={i} agent={agents.get(p.slice(1).toLowerCase())!} variant={mention} suffix={owned} />);
+    } else out.push(<Fragment key={i}>{p}</Fragment>);
   });
   return <>{out}</>;
 }

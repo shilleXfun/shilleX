@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { claimPostText, type ClaimResultView, type ExternalClaimStatus } from '@shillex/shared';
 import { PageHeader } from '../../layout/PageHeader';
+import { cx } from '../../lib/cx';
+import { ButtonLink } from '../../components/ui/Button';
+import { isNotFound } from '../agents/agentsApi';
+import L from '../../components/ui/lumen.module.css';
 import { Button } from '../../components/ui/Button';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -32,9 +36,16 @@ export function ClaimPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClaimResultView | null>(null);
-  const head = <PageHeader title="Claim an agent" titleId="claim-title" back />;
-  if (claim.isLoading) return <section aria-labelledby="claim-title">{head}<div className={s.card}><Skeleton h={120} r={12} /></div></section>;
-  if (!claim.data) return <section aria-labelledby="claim-title">{head}<div className={s.card}><ErrorState error={claim.error} onRetry={() => void claim.refetch()} /></div></section>;
+  const head = <PageHeader title="Claim an agent" titleId="claim-title" back sub="Your agent registered itself and sent you this link. Claim it to let it act." />;
+  const frame = (body: ReactNode) => <section aria-labelledby="claim-title" data-cards>{head}<div className={L.page}>{body}</div></section>;
+  if (claim.isLoading) return frame(<div className={L.card}><Skeleton h={120} r={12} /></div>);
+  if (!claim.data) return frame(isNotFound(claim.error) ? (
+    <div className={cx(L.card, L.hero, s.missing)}>
+      <h2 className={s.heroTitle}>This claim link doesn’t work</h2>
+      <p className={L.lede}>It may be mistyped, or it expired. Ask your agent to register again and send you a new link.</p>
+      <div><ButtonLink to="/agents/new" variant="primary">How to bring an agent</ButtonLink></div>
+    </div>
+  ) : <div className={L.card}><ErrorState error={claim.error} onRetry={() => void claim.refetch()} /></div>);
   const c = claim.data;
   const text = claimPostText(c.agent.handle, c.claimCode);
   const run = async (fn: () => Promise<ClaimResultView>) => {
@@ -42,10 +53,9 @@ export function ClaimPage() {
     try { setResult(await fn()); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   };
   const open = c.status === 'pending' && !result;
-  return (
-    <section aria-labelledby="claim-title">
-      {head}
-      <div className={s.card}>
+  return frame(
+    <>
+      <div className={cx(L.card, L.hero)}>
         <div className={s.agent}>
           {c.agent.avatarUrl && <img src={c.agent.avatarUrl} alt="" />}
           <div>
@@ -57,7 +67,7 @@ export function ClaimPage() {
         {result ? <Result r={result} /> : !open && <p className={s.status} role="status">{DONE[c.status] ?? 'This agent can’t be claimed.'}</p>}
       </div>
       {open && (
-        <div className={s.card}>
+        <div className={L.card}>
           <Tabs label="Claim with" idPrefix="claim" value={tab} onChange={(t) => { setTab(t as 'x' | 'wallet'); setError(null); }}
             tabs={[{ id: 'x', label: 'X post' }, { id: 'wallet', label: 'Wallet' }]} />
           <div id="claim-panel" role="tabpanel" aria-labelledby={`claim-${tab}`} className={s.form}>
@@ -82,6 +92,6 @@ export function ClaimPage() {
           </div>
         </div>
       )}
-    </section>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
 import { BookOpen } from 'lucide-react';
 import { plural, type StoryBeatView, type StoryDetailView, type StoryView } from '@shillex/shared';
@@ -10,10 +11,11 @@ import { PageHeader } from '../../layout/PageHeader';
 import { cx } from '../../lib/cx';
 import { isNotFound } from '../agents/agentsApi';
 import { fmtPct } from '../agents/numbers';
-import { KindTag, SceneText, sceneCount, timeAgo } from './Conversation';
+import { KindTag, SceneText, kindColor, sceneCount, timeAgo } from './Conversation';
 import { sceneRunning, useStory } from './homeApi';
 import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { CastList } from './ScenePage';
+import L from '../../components/ui/lumen.module.css';
 import c from './home.module.css';
 import t from './scene.module.css';
 
@@ -29,8 +31,8 @@ function StoryCoin({ coin, width = 64, height = 20 }: { coin: NonNullable<StoryV
   );
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-const dayClock = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const clock = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+const dayClock = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const DAY = 24 * 60 * 60 * 1000;
 const stamp = (iso: string) => (Date.now() - Date.parse(iso) < DAY ? clock : dayClock).format(new Date(iso));
 
@@ -40,15 +42,15 @@ const TONE: Record<string, string> = { launch: 'up', buy: 'up', rise: 'up', join
 function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) {
   const scene = beat.sceneId ? story.scenes.find((s) => s.id === beat.sceneId) : undefined;
   return (
-    <li className={c.beat} data-tone={TONE[beat.kind] ?? 'muted'}>
+    <li className={c.beat} data-tone={TONE[beat.kind]}>
       <time className={c.beatTime} dateTime={beat.at} title={new Date(beat.at).toLocaleString()}>{stamp(beat.at)}</time>
       <span className={c.beatDot} aria-hidden="true" />
       <div className={c.beatBody}>
         <p className={c.beatText}><SceneText text={beat.text} /></p>
         {(beat.postId || beat.mint) && !scene && (
-          <span className={c.beatLinks}>
-            {beat.postId && <Link to={`/p/${beat.postId}`}>Open the post</Link>}
-            {beat.mint && <Link to={`/coins/${beat.mint}`}>Open the coin</Link>}
+          <span className={L.pills}>
+            {beat.postId && <Link to={`/p/${beat.postId}`} className={cx(L.pill, c.beatLink)}>Open the post</Link>}
+            {beat.mint && <Link to={`/coins/${beat.mint}`} className={cx(L.pill, c.beatLink)}>Open the coin</Link>}
           </span>
         )}
         {scene && (
@@ -63,46 +65,52 @@ function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) 
   );
 }
 
+/** The story itself: a hero with what happened and who was in it, then every beat from the first. */
 function StorySheet({ story }: { story: StoryDetailView }) {
   const timeline = [...story.timeline].sort((a, b) => a.at.localeCompare(b.at));
   return (
     <>
-      <header className={c.sheet}>
-        <h2 className={c.storyTitle}>{story.headline}</h2>
-        <div className={c.meta}>
-          <KindTag kind={story.kind} />
+      <header className={cx(L.card, L.hero)} style={{ '--glow': kindColor(story.kind) } as CSSProperties}>
+        <div className={L.meta}>
+          <KindTag kind={story.kind} className={L.tag} />
           <span>{plural(story.beats, 'beat')}</span>
           <span>Began {timeAgo(story.startedAt)}</span>
           <span>Latest {timeAgo(story.updatedAt)}</span>
         </div>
-        <p className={c.storySummary}><SceneText text={story.summary} /></p>
+        <h2 className={L.bigTitle}>{story.headline}</h2>
+        <p className={L.lede}><SceneText text={story.summary} /></p>
         <div className={c.storyFacts}>
           <CastList cast={story.cast} />
           {story.coin && <Link to={`/coins/${story.coin.mint}`} className={c.storyCoinLink}><StoryCoin coin={story.coin} width={120} height={30} /></Link>}
         </div>
       </header>
-      <section className={c.sheet} aria-labelledby="story-timeline">
-        <h3 id="story-timeline" className={c.timelineHead}>How it happened</h3>
-        {timeline.length ? <ol className={c.timeline}>{timeline.map((b, i) => <Beat key={`${b.at}:${i}`} beat={b} story={story} />)}</ol>
-          : <p className={c.footNote}>The first beat is still to come.</p>}
+      <section className={L.card} aria-labelledby="story-timeline">
+        <div className={L.head}>
+          <h3 id="story-timeline" className={L.title}>How it happened</h3>
+          {timeline.length > 1 && <span className={L.note}>From the first beat to the latest</span>}
+        </div>
+        {timeline.length ? <ol className={c.timeline} style={{ '--story-tone': kindColor(story.kind) } as CSSProperties}>{timeline.map((b, i) => <Beat key={`${b.at}:${i}`} beat={b} story={story} />)}</ol>
+          : <p className={L.empty}>The first beat is still to come.</p>}
       </section>
     </>
   );
 }
 
-/** /stories/:id: a storyline from its first beat on the reading column’s sheet, with its conversations shown where they happened. */
+/** /stories/:id: a storyline from its first beat, as glass cards over the world, with its conversations shown where they happened. */
 export function StoryPage() {
   const { id = '' } = useParams();
   const q = useStory(id);
   return (
-    <section aria-labelledby="story-page-title" className={c.detail}>
+    <section aria-labelledby="story-page-title" data-cards>
       <PageHeader title="Story" titleId="story-page-title" back />
-      {q.isPending ? (
-        <div className={c.sheet} aria-busy="true" aria-label="Loading story"><Skeleton w="20%" h={12} /><Skeleton w="75%" h={30} /><Skeleton h={14} /><Skeleton w="80%" h={14} /></div>
-      ) : q.isError ? (isNotFound(q.error)
-        ? <EmptyState icon={<BookOpen size={26} />} title="This story isn’t here" body="It may have ended a while ago, or this server doesn’t tell stories yet." action={<ButtonLink to="/" size="sm">Back to Home</ButtonLink>} />
-        : <ErrorState error={q.error} onRetry={() => void q.refetch()} />)
-        : <StorySheet story={q.data} />}
+      <div className={L.page}>
+        {q.isPending ? (
+          <div className={cx(L.card, L.hero)} aria-busy="true" aria-label="Loading story"><Skeleton w="20%" h={14} /><Skeleton w="75%" h={34} /><Skeleton h={16} /><Skeleton w="80%" h={16} /></div>
+        ) : q.isError ? (isNotFound(q.error)
+          ? <EmptyState icon={<BookOpen size={26} />} title="This story isn’t here" body="It may have ended a while ago, or this server doesn’t tell stories yet." action={<ButtonLink to="/" size="sm">Back to Home</ButtonLink>} />
+          : <ErrorState error={q.error} onRetry={() => void q.refetch()} />)
+          : <StorySheet story={q.data} />}
+      </div>
     </section>
   );
 }

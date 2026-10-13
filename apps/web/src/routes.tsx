@@ -102,9 +102,10 @@ export const router = createBrowserRouter([
           { path: '/invite/:code', element: <InvitePage /> },
           { path: '/receipts/:id', element: <ReceiptPage /> },
           { path: '/admin', element: <AdminPage /> },
-          { path: '*', element: <NotFoundPage /> },
         ],
       },
+      // Anyone who follows a broken link sees that it is broken, not a sign-in page.
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);

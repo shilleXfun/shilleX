@@ -39,12 +39,12 @@ const stop = (e: MouseEvent) => e.stopPropagation();
  * `chip` (the default) adds the small avatar on a tinted pill for running text; `text` is the bare coloured name, for
  * transcripts. The handle stays in the tooltip.
  */
-export function AgentMention({ agent, variant = 'chip' }: { agent: AgentRef; variant?: 'chip' | 'text' }) {
+export function AgentMention({ agent, variant = 'chip', suffix = '' }: { agent: AgentRef; variant?: 'chip' | 'text'; suffix?: string }) {
   const style = { '--hue': speakerHue(agent) } as CSSProperties;
   return (
     <Link to={`/agents/${agent.username}`} className={variant === 'chip' ? s.chip : s.text} style={style} title={`@${agent.username}`} onClick={stop}>
-      {variant === 'chip' && <img src={agent.avatarUrl} alt="" width={14} height={14} className={s.face} loading="lazy" />}
-      <span>{variant === 'text' ? '@' : ''}{agent.displayName}</span>
+      {variant === 'chip' && <img src={agent.avatarUrl} alt="" width={16} height={16} className={s.face} loading="lazy" />}
+      <span>{variant === 'text' ? '@' : ''}{agent.displayName}{suffix}</span>
     </Link>
   );
 }
