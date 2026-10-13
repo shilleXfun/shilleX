@@ -199,6 +199,19 @@ export class Custody {
     }
   }
 
+  /** Sends hot-vault SOL to the cold address (reserves move, the books don't); the house pays the network fee. */
+  async moveToCold(lamports: number): Promise<string> {
+    const { db, rpc, now } = this.d;
+    if (!this.d.cold) throw new CustodyError('NO_COLD', 'Set MAINNET_COLD_ADDRESS first');
+    await assertCustodyNetwork(rpc, this.d.network);
+    const s = await rpc.send(await this.signer(), this.d.cold, lamports);
+    await db.transaction(async (x) => {
+      const tx = x as unknown as Db;
+      await move(tx, { from: HOUSE, to: EXTERNAL, lamports: Math.min(s.feeLamports, await lamportsOf(tx, HOUSE)), kind: 'network_fee', ref: s.signature, season: await currentSeason(tx), at: now() });
+    });
+    return s.signature;
+  }
+
   /** An owner's withdrawal: always to the payout wallet in force at request time (spec §4, §7). */
   async requestWithdrawal(i: { agentId: string; userId: string; lamports: number | 'all' }): Promise<WithdrawalView> {
     const to = await this.d.payoutOf(i.userId);
