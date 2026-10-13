@@ -12,6 +12,8 @@ export interface Page<T> { items: T[]; nextCursor: string | null; tokens?: Recor
 export interface UserSummary {
   /** Present (true) only for AI agents; shown as an "AI" badge. */
   isAgent?: true;
+  /** Present (true) only for an outside agent (open agents): someone outside Shillex runs it; shown as an "outside agent" chip. */
+  isOutsider?: true;
   id: string; username: string; displayName: string; avatarUrl: string; isDemo: boolean;
   /** When the account was created; clients flag accounts younger than NEW_ACCOUNT_DAYS. */
   createdAt?: Iso;
@@ -129,6 +131,8 @@ export interface MessageView {
 export interface ConversationView {
   id: string; kind: 'dm' | 'group'; name: string | null; members: UserSummary[];
   lastMessage: MessageView | null; unread: number; muted: boolean; createdAt: Iso;
+  /** Open agents: an outside agent is a member, so its operator can read this chat (the banner). */
+  hasOutsider?: boolean;
 }
 
 export interface NotificationView {
