@@ -5,22 +5,33 @@ import { targetsFor, type SwarmEvent } from './bus';
 import { readColours } from './palette';
 
 type RGBA = [number, number, number, number];
-interface Sky { top: RGBA; low: RGBA; a1: RGBA; a2: RGBA; a3: RGBA; speed: number; jitter: number }
+/** `drift` scales how far each light wanders around its place: slow in a grind, wide in euphoria. */
+interface Sky { top: RGBA; low: RGBA; a1: RGBA; a2: RGBA; a3: RGBA; speed: number; jitter: number; drift: number }
 
 /** Sky per market regime; `none` is the sky without an agent world or before the weather loads. */
 export const SKIES: Record<Regime | 'none', Sky> = {
-  none: { top: [7, 8, 13, 1], low: [14, 14, 24, 1], a1: [255, 184, 107, 0.08], a2: [125, 227, 255, 0.06], a3: [182, 156, 255, 0.06], speed: 0.6, jitter: 0 },
-  euphoria: { top: [10, 9, 16, 1], low: [30, 20, 10, 1], a1: [255, 184, 107, 0.2], a2: [75, 240, 160, 0.13], a3: [255, 150, 80, 0.16], speed: 1.4, jitter: 0 },
-  grind: { top: [7, 8, 11, 1], low: [16, 18, 24, 1], a1: [150, 160, 185, 0.07], a2: [120, 130, 150, 0.06], a3: [120, 130, 150, 0.07], speed: 0.45, jitter: 0 },
-  fear: { top: [8, 6, 10, 1], low: [34, 7, 15, 1], a1: [255, 70, 95, 0.15], a2: [130, 40, 90, 0.13], a3: [255, 60, 80, 0.16], speed: 0.8, jitter: 0.5 },
-  chaos: { top: [6, 6, 14, 1], low: [20, 10, 38, 1], a1: [170, 120, 255, 0.2], a2: [70, 230, 255, 0.15], a3: [255, 80, 200, 0.12], speed: 2.2, jitter: 2.4 },
+  none: { top: [7, 8, 13, 1], low: [14, 14, 24, 1], a1: [255, 184, 107, 0.08], a2: [125, 227, 255, 0.06], a3: [182, 156, 255, 0.06], speed: 0.6, jitter: 0, drift: 1 },
+  euphoria: { top: [10, 9, 16, 1], low: [30, 20, 10, 1], a1: [255, 184, 107, 0.2], a2: [75, 240, 160, 0.13], a3: [255, 150, 80, 0.16], speed: 1.4, jitter: 0, drift: 1.35 },
+  grind: { top: [7, 8, 11, 1], low: [16, 18, 24, 1], a1: [150, 160, 185, 0.07], a2: [120, 130, 150, 0.06], a3: [120, 130, 150, 0.07], speed: 0.45, jitter: 0, drift: 0.55 },
+  fear: { top: [8, 6, 10, 1], low: [34, 7, 15, 1], a1: [255, 70, 95, 0.15], a2: [130, 40, 90, 0.13], a3: [255, 60, 80, 0.16], speed: 0.8, jitter: 0.5, drift: 1 },
+  chaos: { top: [6, 6, 14, 1], low: [20, 10, 38, 1], a1: [170, 120, 255, 0.2], a2: [70, 230, 255, 0.15], a3: [255, 80, 200, 0.12], speed: 2.2, jitter: 2.4, drift: 1.2 },
 };
 const FADE_S = 3, FRAME_MS = 32, STILL_T = 12;
 
 const rgba = (c: RGBA) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${c[3]})`;
 const mix = (a: RGBA, b: RGBA, k: number): RGBA => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
-const mixSky = (a: Sky, b: Sky, k: number): Sky => ({ top: mix(a.top, b.top, k), low: mix(a.low, b.low, k), a1: mix(a.a1, b.a1, k), a2: mix(a.a2, b.a2, k), a3: mix(a.a3, b.a3, k), speed: a.speed + (b.speed - a.speed) * k, jitter: a.jitter + (b.jitter - a.jitter) * k });
+const mixSky = (a: Sky, b: Sky, k: number): Sky => ({ top: mix(a.top, b.top, k), low: mix(a.low, b.low, k), a1: mix(a.a1, b.a1, k), a2: mix(a.a2, b.a2, k), a3: mix(a.a3, b.a3, k), speed: a.speed + (b.speed - a.speed) * k, jitter: a.jitter + (b.jitter - a.jitter) * k, drift: a.drift + (b.drift - a.drift) * k });
 const hexA = (hex: string, a: number) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+
+/**
+ * A light's brightness at time t: its mood glow, breathing on its own cycle (quicker and deeper when happier, never
+ * for ghosts), plus the heat of an event that just touched it and the 20 s afterglow of having acted. Clamped to 0..1.
+ */
+export function nodeAlpha(n: { glow: number; ghost: boolean; breath: number; phase: number }, t: number, heat: number, recent: number) {
+  const depth = 0.06 + 0.1 * ((6 - n.breath) / 3);
+  const breath = n.ghost ? 0 : depth * Math.sin((2 * Math.PI * t) / n.breath + n.phase);
+  return Math.min(1, Math.max(0, n.glow + heat * 0.5 + 0.25 * recent + breath));
+}
 
 type At = { node: number } | { coin: number };
 interface Streak { from: number; to: At; t0: number; dur: number; col: string; hit: boolean }
@@ -52,7 +63,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const deadNow = new Set<string>();
   let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
   let model: SwarmModel | null = null;
-  let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0);
+  let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0), recent = new Float32Array(0);
   let streaks: Streak[] = [], rings: Ring[] = [];
   let from: Sky = SKIES.none, to: Sky = SKIES.none, fadeAt = -FADE_S;
 
@@ -100,9 +111,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     if (model) {
       const m = model, j = opts.reduced ? 0 : sky.jitter, x0 = mx(), y0 = my();
       m.nodes.forEach((n, i) => {
-        px[i] = x0 + n.x * (W - 2 * x0) + Math.sin(t * 0.35 * sp + n.phase) * 9 + (j ? (Math.random() - 0.5) * j : 0);
-        py[i] = y0 + n.y * (H - 2 * y0) + Math.cos(t * 0.28 * sp + n.phase * 1.3) * 7 + (j ? (Math.random() - 0.5) * j : 0);
+        px[i] = x0 + n.x * (W - 2 * x0) + Math.sin(t * 0.35 * sp + n.phase) * 9 * sky.drift + (j ? (Math.random() - 0.5) * j : 0);
+        py[i] = y0 + n.y * (H - 2 * y0) + Math.cos(t * 0.28 * sp + n.phase * 1.3) * 7 * sky.drift + (j ? (Math.random() - 0.5) * j : 0);
         hot[i] = hot[i]! - Math.sign(hot[i]!) * Math.min(Math.abs(hot[i]!), dt * 0.7);
+        // An agent that acted glows brighter, fading back over 20 s.
+        recent[i] = Math.max(0, recent[i]! - dt / 20);
       });
       c.lineWidth = 1;
       for (const [colour, pairs] of m.alliesByColour) {
@@ -123,7 +136,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       });
       m.nodes.forEach((n, i) => {
         const h = hot[i]!, heat = Math.abs(h), col = h < -0.05 ? DOWN : n.colour, size = n.r * (7 + heat * 7);
-        c.globalAlpha = Math.min(1, Math.max(0, n.glow + heat * 0.5 + 0.12 * Math.sin(t * 1.3 + n.phase)));
+        c.globalAlpha = nodeAlpha(n, t, heat, recent[i]!);
         c.drawImage(glow(col), px[i]! - size / 2, py[i]! - size / 2, size, size);
       });
       c.globalAlpha = 1;
@@ -176,11 +189,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       const old = model;
       model = m;
       const n = m?.nodes.length ?? 0, nc = m?.coins.length ?? 0;
-      const oldHot = hot, oldPulse = pulse;
-      px = new Float32Array(n); py = new Float32Array(n); hot = new Float32Array(n); pulse = new Float32Array(nc);
+      const oldHot = hot, oldPulse = pulse, oldRecent = recent;
+      px = new Float32Array(n); py = new Float32Array(n); hot = new Float32Array(n); pulse = new Float32Array(nc); recent = new Float32Array(n);
       if (old && m) {
         // Animations in flight follow their agent and coin into the new model (by id and mint); those whose target is gone end.
-        for (const [id, i] of m.index) { const o = old.index.get(id); if (o !== undefined) hot[i] = oldHot[o] ?? 0; }
+        for (const [id, i] of m.index) {
+          const o = old.index.get(id);
+          if (o !== undefined) hot[i] = oldHot[o] ?? 0;
+          if (o !== undefined) recent[i] = oldRecent[o] ?? 0;
+        }
         for (const [mint, i] of m.coinIndex) { const o = old.coinIndex.get(mint); if (o !== undefined) pulse[i] = oldPulse[o] ?? 0; }
         const node = (i: number) => { const id = old.nodes[i]?.id; return id === undefined ? undefined : m.index.get(id); };
         const coin = (i: number) => { const mint = old.coins[i]?.mint; return mint === undefined ? undefined : m.coinIndex.get(mint); };
@@ -201,6 +218,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       if (!model) return;
       const tg = targetsFor(model, e);
       if (e.kind === 'rug' && tg.coin !== null) deadNow.add(model.coins[tg.coin]!.mint);
+      // Who acted glows brighter for 20 s; set before the still-frame return, so a still frame redrawn later shows it too.
+      if (tg.from !== null) recent[tg.from] = 1;
       if (opts.reduced) { still(); return; }
       const t = now();
       const ring = (at: At, r1: number, col: string, w: number, dur: number, r0 = 4, delay = 0) => rings.push({ at, r0, r1, t0: t + delay, dur, col, w });

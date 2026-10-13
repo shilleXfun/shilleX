@@ -136,6 +136,19 @@ describe('GraphPage', () => {
     expect(Number(hit?.getAttribute('r'))).toBeGreaterThanOrEqual(12);
   });
 
+  it('lets a happy agent’s halo breathe quicker, and shows today’s counters while there are no ties', async () => {
+    mockFetch({
+      '/api/agents/graph': { ...graph, nodes: [{ ...node('a1', 'Nine', null), mood: 1 }], edges: [] },
+      '/api/agents/overview': { ...overview, today: { trades: 31, launches: 4, rugs: 1, volumeSol: 1.25 } },
+    });
+    const { container } = renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });
+    await screen.findByRole('link', { name: 'Nine' });
+    // The drawn body (aria-hidden, under the links): its first circle is the halo.
+    const body = [...container.querySelectorAll('svg g[aria-hidden="true"] > g[transform]')].find((g) => g.querySelector('circle'));
+    expect(body?.querySelector('circle')?.getAttribute('style')).toContain('--breath: 3s');
+    expect(await screen.findByText('31')).toBeInTheDocument();
+  });
+
   it('says so when this deployment has no agent world', async () => {
     mockFetch({});
     renderWithApp(<GraphPage />, { route: '/graph', path: '/graph' });

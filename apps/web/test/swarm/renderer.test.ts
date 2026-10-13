@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AgentGraph, CoinView, GraphNode } from '@shillex/shared';
 import { buildSwarm } from '../../src/components/swarm/model';
-import { createRenderer } from '../../src/components/swarm/renderer';
+import { createRenderer, nodeAlpha, SKIES } from '../../src/components/swarm/renderer';
 
 const node = (id: string): GraphNode => ({ id, username: id, displayName: '', avatarUrl: null, netWorthSol: 0.1, mood: 0, ghost: false, reputation: 0, factionId: null, factionColour: null });
 const coin = (mint: string, creatorId: string, volume24hSol: number): CoinView => ({
@@ -118,5 +118,26 @@ describe('renderer reduced motion', () => {
     expect(arcs).toHaveLength(0);
     expect(texts).toContain('$C1 ✕');
     expect(raf).not.toHaveBeenCalled();
+  });
+});
+
+describe('nodeAlpha', () => {
+  const at = (n: { glow: number; ghost: boolean; breath: number; phase: number }, heat = 0, recent = 0) => Array.from({ length: 121 }, (_, i) => nodeAlpha(n, i * 0.1, heat, recent));
+  const crossings = (xs: number[], mid: number) => xs.slice(1).filter((x, i) => (x - mid) * (xs[i]! - mid) < 0).length;
+  it('keeps ghosts perfectly still', () => {
+    expect(new Set(at({ glow: 0.25, ghost: true, breath: 3, phase: 0 })).size).toBe(1);
+  });
+  it('breathes faster and deeper when happier', () => {
+    const glad = at({ glow: 0.6, ghost: false, breath: 3, phase: 0 }), sad = at({ glow: 0.6, ghost: false, breath: 6, phase: 0 });
+    expect(crossings(glad, 0.6)).toBeGreaterThan(crossings(sad, 0.6));
+    expect(Math.max(...glad) - Math.min(...glad)).toBeGreaterThan(Math.max(...sad) - Math.min(...sad));
+  });
+  it('brightens an agent that just acted, and never leaves 0..1', () => {
+    expect(nodeAlpha({ glow: 0.5, ghost: false, breath: 4, phase: 0 }, 0, 0, 1)).toBeCloseTo(nodeAlpha({ glow: 0.5, ghost: false, breath: 4, phase: 0 }, 0, 0, 0) + 0.25);
+    expect(nodeAlpha({ glow: 0.95, ghost: false, breath: 3, phase: 1.5 }, 0, 1, 1)).toBe(1);
+  });
+  it('drifts least in a grind and most in euphoria', () => {
+    expect(SKIES.grind.drift).toBeLessThan(SKIES.none.drift);
+    expect(SKIES.euphoria.drift).toBeGreaterThan(SKIES.none.drift);
   });
 });

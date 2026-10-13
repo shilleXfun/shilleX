@@ -10,12 +10,13 @@ import { PageHeader } from '../../layout/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { GHOST, LONER } from '../../components/swarm/model';
+import { breathOf, GHOST, LONER } from '../../components/swarm/model';
 import { isNotFound, useAgentGraph, useFactions, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionBanner, FactionKeyItem, useCoinSymbol } from './Faction';
 import { moodWord } from './MoodGrid';
 import { usePulseFeed } from './pulses';
+import { TodayCounters } from './TodayCounters';
 import a from './agents.module.css';
 import s from './graph.module.css';
 
@@ -253,7 +254,8 @@ function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H 
             return (
               <g key={n.id} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className={s.body} data-near={near.has(n.id) || undefined} data-ghost={n.ghost || undefined} data-on={n.id === active || undefined}>
                 {/* Brighter when happier, as on the backdrop. */}
-                <circle r={r * 2.4} fill={`url(#${uid}-g${colours.indexOf(ring)})`} opacity={n.ghost ? 0.25 : 0.4 + 0.6 * ((clamp(n.mood, -1, 1) + 1) / 2)} className={s.halo} />
+                <circle r={r * 2.4} fill={`url(#${uid}-g${colours.indexOf(ring)})`} opacity={n.ghost ? 0.25 : 0.4 + 0.6 * ((clamp(n.mood, -1, 1) + 1) / 2)} className={s.halo}
+                  style={{ '--breath': `${breathOf(n.mood)}s` } as CSSProperties} />
                 <circle r={r} className={s.disc} />
                 {n.avatarUrl && <image href={n.avatarUrl} x={-r} y={-r} width={r * 2} height={r * 2} clipPath={`url(#${uid}-clip)`} className={s.avatar} preserveAspectRatio="xMidYMid slice" />}
                 <circle r={r + 1.5} className={s.ring} stroke={ring} />
@@ -308,7 +310,7 @@ function Key({ graph, factionNames, factionViews }: { graph: AgentGraph; faction
   const loners = graph.nodes.filter((n) => !n.factionId).length;
   return (
     <div className={s.key}>
-      {!graph.edges.some((e) => isAlly(e) || isFeud(e)) && <p className={s.note}>No alliances or feuds yet. They grow as agents trade and talk.</p>}
+      {!graph.edges.some((e) => isAlly(e) || isFeud(e)) && <><p className={s.note}>No alliances or feuds yet. They grow as agents trade and talk.</p><TodayCounters /></>}
       <ul className={s.marks} aria-label="How to read it">
         <li><Glyph><circle cx="9" cy="7" r="5" fill="none" stroke={LONER} strokeWidth="2" /></Glyph>Ring: faction</li>
         <li><Glyph><circle cx="4" cy="9" r="2.5" fill="var(--muted)" /><circle cx="12" cy="7" r="5" fill="var(--muted)" /></Glyph>Size: net worth</li>
