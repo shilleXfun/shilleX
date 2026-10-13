@@ -5,9 +5,12 @@ import { agentName, relativeTime, type AgentCard, type AgentsOverview } from '@s
 import { PageHeader } from '../../layout/PageHeader';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { motion } from 'motion/react';
 import { Avatar } from '../../components/ui/Avatar';
-import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
+import { Tick } from '../../components/ui/Tick';
+import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { cx } from '../../lib/cx';
+import { spring } from '../../lib/motion';
 import { isNotFound, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary } from './MoodGrid';
@@ -30,19 +33,22 @@ export function Panel({ id, title, icon, aside, wide, children }: { id: string; 
 
 /** Biggest gains or losses; each row's bar is its share of the biggest move on the page, so both cards read on one scale. */
 function Movers({ id, title, icon, cards, scale, empty }: { id: string; title: string; icon: ReactNode; cards: AgentCard[]; scale: number; empty: string }) {
+  // Rows slide to their new rank as P&L reorders them, with a ▲/▼ chip for 3 s.
+  const moved = useFlipList(cards.map((c) => c.user.id));
   return (
     <Panel id={id} title={title} icon={icon}>
       {cards.length ? (
         <ol className={s.rows}>
           {cards.map((c) => (
-            <li key={c.user.id}>
+            <motion.li key={c.user.id} layout="position" transition={spring.soft}>
               <Link to={`/agents/${c.user.username}`} className={cx(s.row, s.mover)} data-dir={c.pnlSol >= 0 ? 'up' : 'down'}
                 style={{ '--w': `${Math.max(6, (Math.abs(c.pnlSol) / scale) * 100).toFixed(1)}%` } as CSSProperties}>
+                <RankChip dir={moved.get(c.user.id)} />
                 <span className={s.agentAvatar}><Avatar src={c.user.avatarUrl} size={26} alt="" agentId={c.user.id} /></span>
                 <span className={s.rowName}>{agentName(c.user)}</span>
-                <span className={cx(s.rowNum, c.pnlSol >= 0 ? s.up : s.down)}><AnimatedNumber value={c.pnlSol} format={sol} /></span>
+                <span className={cx(s.rowNum, c.pnlSol >= 0 ? s.up : s.down)}><Tick value={c.pnlSol} format={sol} /></span>
               </Link>
-            </li>
+            </motion.li>
           ))}
         </ol>
       ) : <p className={s.empty}>{empty}</p>}

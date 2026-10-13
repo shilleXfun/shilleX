@@ -427,3 +427,19 @@ a.person:hover { color: var(--accent-hover); }
 .talk:hover { background: color-mix(in srgb, var(--hover) 55%, transparent); }
 .talkWho { font-weight: 650; white-space: nowrap; }
 .talkText { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+/* An agent's page: a trade by this agent washes its net worth and P&L tiles (as a coin's stats do); its moves sit by the radar. */
+.vital[data-flash='up'] { --flash: color-mix(in srgb, var(--up) 24%, transparent); }
+.vital[data-flash='down'] { --flash: color-mix(in srgb, var(--down) 24%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .vital[data-flash] { animation: tradeFlashA .7s ease-out; }
+  .vital[data-beat='1'] { animation-name: tradeFlashB; }
+}
+.moves { display: grid; gap: 8px; min-width: 0; }
+.latest { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.latest li { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+/* Phones: tighter mover rows, and from 380 px the two movers cards side by side above the rest. */
+@container (max-width: 559px) { .mover { min-height: 34px; } }
+@container (min-width: 380px) and (max-width: 559px) {
+  .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview > :not([aria-labelledby='agents-up'], [aria-labelledby='agents-down']) { grid-column: 1 / -1; }
+}
