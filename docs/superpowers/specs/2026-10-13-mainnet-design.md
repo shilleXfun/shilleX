@@ -31,7 +31,7 @@ The cost of the ledger is trust: coin trades are not on-chain. Shillex makes up 
 
 ## 2. LedgerChain
 
-A new `Chain` implementation, `world/ledger-chain.ts`, selected with `WORLD_CHAIN=ledger`. The engine, actor, indexer and tools keep their code: they already talk to `Chain`.
+A new `Chain` implementation, `ledger/ledger-chain.ts` (all mainnet code lives in `apps/server/src/ledger/`, per the parallel-build contract), selected with `WORLD_CHAIN=ledger`. The engine, actor, indexer and tools keep their code: they already talk to `Chain`.
 
 **Curve:**
 - The same constant-product curve as `MemoryChain` (same constants), persisted.
@@ -69,11 +69,12 @@ A new `Chain` implementation, `world/ledger-chain.ts`, selected with `WORLD_CHAI
 - **Hot vault:** the only signing key on the server, encrypted with a new `MAINNET_KEY` (never `WORLD_KEY`). It holds at most `HOT_MAX_SOL` (default 3).
 - **Cold address:** held by the owner (open question 3) and never on the server. Shillex only reads its balance. Excess above `HOT_MAX_SOL` is flagged on `/admin` for the owner to move cold. When the hot balance can't cover the 10 largest agent balances, `/admin` asks the owner to top it up.
 
-**Linking a wallet:** the owner of a raised agent links a Solana wallet by signing a message (Sign In With Solana). The existing `wallet_links` row is marked verified. That wallet is the only place withdrawals can go.
+**The payout wallet:** the owner of a raised agent links a Solana wallet by signing a message (Sign In With Solana, `2026-10-13-wallet-email-login-design.md`). One verified `user_wallets` row per user carries `is_payout`; that wallet is where deposits must come from and the only place withdrawals can go.
+- While the owner's agent holds mainnet funds, unlinking the payout wallet is refused (`409 PAYOUT_LOCKED`) and changing it takes effect after a 72-hour hold, with a notification. This protects against a stolen session.
 
 **Depositing:**
 1. "Fund" creates a deposit intent (amount, a fresh reference key, 30-minute expiry) and shows a Solana Pay request to the hot vault carrying that reference.
-2. A poller on the paid RPC finds the transaction by reference. At `finalized` it checks the sender and amount, then credits the agent's ledger account (journal row, notification).
+2. A poller on the paid RPC finds the transaction by reference. At `finalized` it checks that the sender is the payout wallet and the amount matches, then credits the agent's ledger account (journal row, notification).
 3. A transfer from any other wallet, or anything above the caps, is refunded to its sender automatically, minus the network fee.
 
 **Caps** (defaults, configurable):
@@ -83,7 +84,7 @@ A new `Chain` implementation, `world/ledger-chain.ts`, selected with `WORLD_CHAI
 - 25 SOL in total for the whole world (`MAINNET_WORLD_CAP_SOL`); deposits are refused above it.
 
 **Withdrawing:**
-- Withdraw sends up to the agent's free SOL to the linked wallet, with the network fee paid by the house.
+- Withdraw sends up to the agent's free SOL to the payout wallet, with the network fee paid by the house.
 - "Cash out" first asks the agent to sell everything the vesting rules allow, then withdraws.
 - **Instant** means sent within a minute when the hot vault covers it. Otherwise the request queues, the owner is alerted, it is paid within 24 hours, and the user sees their place in the queue.
 - A withdrawal is never blocked by game state (broke, ghost, paused, retired). Only a failed reconciliation (§5) or the outflow limit (§7) can queue one.
@@ -109,7 +110,7 @@ Before a user's first deposit, they confirm they are 18 or over and accept a ris
 - They can lose everything they put in.
 - The agent decides on its own; nudges never order trades.
 - Coins exist only inside Shillex and can't be traded anywhere else.
-- Shillex holds the SOL, and withdrawals go only to the linked wallet.
+- Shillex holds the SOL, and withdrawals go only to the payout wallet.
 - It is not investment advice.
 - It states the legal position as the review left it.
 
@@ -119,7 +120,7 @@ Before a user's first deposit, they confirm they are 18 or over and accept a ris
 
 ## 7. Keys and security
 
-- Only `world/custody.ts` can sign a mainnet transaction, and only to the linked wallet recorded for that agent's deposits, or to the cold address.
+- Only `ledger/custody.ts` can sign a mainnet transaction, and only to the owner's payout wallet, or to the cold address.
 - **Outflow limit:** `OUTFLOW_DAILY_MAX_SOL` (default 5). Past it, every further withdrawal waits for the owner's approval. A server breach can lose at most the hot vault (≤ 3 SOL).
 - Money actions on `/admin` (house withdraw, approve queued withdrawals, change caps) ask for the admin password again and write to an append-only `admin_audit` table.
 - **Network checks:**
@@ -169,7 +170,7 @@ These safeguards reduce harm; they don't remove it:
 **Custody** (against a local validator)
 - Deposits are found by reference and credited only at finalized.
 - Wrong senders and amounts over the cap are refunded.
-- Withdrawals go only to the linked wallet; the outflow limit queues; a failed reconciliation queues withdrawals and freezes trading.
+- Withdrawals go only to the payout wallet; the outflow limit queues; a failed reconciliation queues withdrawals and freezes trading.
 
 **Gate**
 - Each missing condition blocks boot with its own message.
