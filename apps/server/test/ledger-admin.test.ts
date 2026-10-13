@@ -1,12 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { hash } from '@node-rs/argon2';
+import { Keypair } from '@solana/web3.js';
 import { custodyCtx } from './ledger-helpers.ts';
 import { createSession, SESSION_COOKIE } from '../src/lib/auth.ts';
-import { adminAudit, users } from '../src/db/schema.ts';
+import { adminAudit, ledgerChainSeen, users } from '../src/db/schema.ts';
 import { registerMainnetAdminRoutes } from '../src/ledger/admin.ts';
 import { registerMainnetRoutes } from '../src/ledger/routes.ts';
-import { verifyAudit } from '../src/ledger/audit.ts';
+import { audit, verifyAudit } from '../src/ledger/audit.ts';
 import { LEGAL_CONFIRMATION, LEGAL_KEY, legalReviewValid } from '../src/ledger/gate.ts';
 import { HOUSE, lamportsOf } from '../src/ledger/accounts.ts';
 import { setSetting } from '../src/world/launchpad.ts';
@@ -49,6 +50,41 @@ describe('admin money actions', () => {
     expect((await as.post('/api/admin/mainnet/stake', { password: 'pw', signature: sig })).status).toBe(204);
     expect(await lamportsOf(c.t.db, HOUSE)).toBe(2 * SOL);
     expect((await as.post('/api/admin/mainnet/stake', { password: 'pw', signature: sig })).status).toBe(409);
+  });
+
+  it('never lists or stakes a cold transfer another custody network saw (C1)', async () => {
+    const { as } = await adminCtx();
+    // A rehearsal on devnet saw this one; now custody runs on another network.
+    await c.t.db.insert(ledgerChainSeen).values({ signature: 'other-net-cold-1', outcome: 'from_cold', network: 'mainnet', depositId: null, fromAddress: c.cold, lamports: 1 * SOL, refundSignature: null, reason: null, createdAt: c.t.clock.now() });
+    expect((await as.get('/api/admin/mainnet/status')).body.fromCold).toEqual([]);
+    expect((await as.post('/api/admin/mainnet/stake', { password: 'pw', signature: 'other-net-cold-1' })).status).toBe(409);
+    expect(await lamportsOf(c.t.db, HOUSE)).toBe(0);
+  });
+
+  it('keeps every cap lowered earlier when another one is lowered (I6)', async () => {
+    const { as } = await adminCtx();
+    expect((await as.post('/api/admin/mainnet/caps', { password: 'pw', caps: { worldCapSol: 10 } })).status).toBe(204);
+    expect((await as.post('/api/admin/mainnet/caps', { password: 'pw', caps: { agentCapSol: 0.4 } })).status).toBe(204);
+    expect((await as.get('/api/admin/mainnet/status')).body.caps).toMatchObject({ worldCapSol: 10, agentCapSol: 0.4 });
+  });
+
+  it('keeps the audit chain whole when admin actions overlap (I5)', async () => {
+    await adminCtx();
+    await Promise.all(Array.from({ length: 5 }, (_, i) => audit(c.t.db, 'admin', `act${i}`, { i }, c.t.clock.now())));
+    expect((await c.t.db.select().from(adminAudit)).length).toBe(5);
+    expect(await verifyAudit(c.t.db)).toBe(true);
+  });
+
+  it('refunds a payment held for review through the password-checked form (I3)', async () => {
+    const { as } = await adminCtx();
+    const payer = Keypair.generate().publicKey.toBase58();
+    const sig = c.rpc.pay(payer, await c.custody.hot(), 0.02 * SOL, undefined, { unclear: true });
+    await c.custody.pollDeposits();
+    expect((await as.get('/api/admin/mainnet/status')).body.refundFailures).toEqual([expect.objectContaining({ signature: sig, outcome: 'review', sol: 0.02 })]);
+    expect((await as.post(`/api/admin/mainnet/payments/${sig}/resolve`, { password: 'nope', action: 'refund', to: payer })).body.code).toBe('BAD_PASSWORD');
+    expect((await as.post(`/api/admin/mainnet/payments/${sig}/resolve`, { password: 'pw', action: 'refund', to: payer })).status).toBe(204);
+    expect(c.rpc.sent).toEqual([expect.objectContaining({ to: payer, lamports: 0.02 * SOL - 5000 })]);
+    expect((await c.t.db.select().from(adminAudit)).map((a) => a.action)).toEqual(['resolve_payment']);
   });
 
   it('sends the house’s SOL only to the cold address, approved', async () => {

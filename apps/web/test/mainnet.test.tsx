@@ -53,6 +53,30 @@ describe('admin money panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Approve 0.3 SOL' }));
     expect(posted).toEqual([{ password: 'pw' }]);
   });
+  it('disables the money buttons while an action is on its way, so one press is one action (I4)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/admin/mainnet/status')) return new Response(JSON.stringify(admin), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Promise<Response>(() => {}); // the approval never answers
+    });
+    renderWithApp(<AdminMainnetPanel />);
+    const approve = await screen.findByRole('button', { name: 'Approve 0.3 SOL' });
+    await userEvent.type(screen.getByLabelText('Admin password for money actions'), 'pw');
+    await userEvent.click(approve);
+    expect(screen.getByRole('button', { name: 'Approve 0.3 SOL' })).toBeDisabled();
+  });
+  it('refunds a payment held for review to the address the admin types (I3)', async () => {
+    const posted: unknown[] = [];
+    mockFetch({
+      '/api/admin/mainnet/status': { ...admin, refundFailures: [{ signature: 'sig1', sol: 0.02, from: 'Payer1', reason: 'SOL arrived, but not as one plain transfer', outcome: 'review', refundSignature: null }] },
+      '/api/admin/mainnet/payments/sig1/resolve': (init?: RequestInit) => { posted.push(JSON.parse(String(init?.body))); return new Response(null, { status: 204 }); },
+    });
+    renderWithApp(<AdminMainnetPanel />);
+    await userEvent.type(await screen.findByLabelText('Refund sig1 to'), 'Refund1');
+    await userEvent.type(screen.getByLabelText('Admin password for money actions'), 'pw');
+    await userEvent.click(screen.getByRole('button', { name: 'Refund 0.02 SOL' }));
+    expect(posted).toEqual([{ password: 'pw', action: 'refund', to: 'Refund1' }]);
+  });
   it('lists what still blocks MAINNET=on', async () => {
     mockFetch({ '/api/admin/mainnet/status': { ...admin, mode: 'rehearsal', gate: ['no legal review is recorded on /admin'] } });
     renderWithApp(<AdminMainnetPanel />);

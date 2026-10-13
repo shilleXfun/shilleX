@@ -23,6 +23,7 @@ describe('mainnet schema', () => {
     const why = (p: Promise<unknown>) => p.then(() => 'ok', (e: { message: string; cause?: { message?: string } }) => `${e.message} ${e.cause?.message ?? ''}`);
     expect(await why(h.db.execute(sql`update admin_audit set action = 'y'`))).toMatch(/append-only/);
     expect(await why(h.db.execute(sql`delete from admin_audit`))).toMatch(/append-only/);
+    expect(await why(h.db.execute(sql`truncate admin_audit`))).toMatch(/append-only/);
     expect((await h.db.select().from(adminAudit))[0]!.action).toBe('x');
   });
 });

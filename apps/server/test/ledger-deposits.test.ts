@@ -98,6 +98,102 @@ describe('deposits', () => {
     await expect(c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.1 * SOL })).rejects.toMatchObject({ code: 'EXCLUDED' });
   });
 
+  it('never marks a payment the RPC cannot return yet as handled (C2)', async () => {
+    c = await custodyCtx();
+    const d = await c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.1 * SOL });
+    const sig = c.rpc.pay(c.payer, d.hot, 0.1 * SOL, d.reference);
+    c.rpc.notFound.add(sig);
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 0, refunded: 0 });
+    expect(await c.t.db.select().from(ledgerChainSeen)).toEqual([]);
+    c.rpc.notFound.delete(sig);
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 1 });
+    expect(await agentBalance()).toBe(0.1 * SOL);
+  });
+
+  it('holds SOL that arrived in an unclear transaction for an admin, with its amount and payer (C2)', async () => {
+    c = await custodyCtx();
+    const stranger = Keypair.generate().publicKey.toBase58();
+    const sig = c.rpc.pay(stranger, await c.custody.hot(), 0.02 * SOL, undefined, { unclear: true });
+    await c.custody.pollDeposits();
+    expect(c.rpc.sent).toEqual([]);
+    expect((await c.t.db.select().from(ledgerChainSeen))[0]).toMatchObject({ signature: sig, outcome: 'review', lamports: 0.02 * SOL, fromAddress: stranger, network: 'devnet' });
+    expect((await c.custody.payments()).map((p) => p.signature)).toEqual([sig]);
+  });
+
+  it('finds a deposit by its reference after the vault’s history scrolled past it (C2)', async () => {
+    c = await custodyCtx();
+    const d = await c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.1 * SOL });
+    c.rpc.pay(c.payer, d.hot, 0.1 * SOL, d.reference);
+    for (let i = 0; i < 5; i++) c.rpc.pay(Keypair.generate().publicKey.toBase58(), d.hot, 1000); // dust, newer than the deposit
+    c.rpc.window = 3;
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 1 });
+    expect(await agentBalance()).toBe(0.1 * SOL);
+  });
+
+  it('credits an on-time payment even when the poll runs after the request expired (I2)', async () => {
+    c = await custodyCtx();
+    const d = await c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.1 * SOL });
+    c.t.clock.advance(5 * 60_000);
+    c.rpc.pay(c.payer, d.hot, 0.1 * SOL, d.reference);
+    c.t.clock.advance(40 * 60_000);
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 1, refunded: 0 });
+    expect(await agentBalance()).toBe(0.1 * SOL);
+  });
+
+  it('keeps polling past a payment it cannot read, and comes back to it (I2)', async () => {
+    c = await custodyCtx();
+    const a = await c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    const b = await c.custody.createDeposit({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    const sigA = c.rpc.pay(c.payer, a.hot, 0.05 * SOL, a.reference);
+    c.rpc.pay(c.payer, b.hot, 0.05 * SOL, b.reference);
+    c.rpc.failInbound.add(sigA);
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 1 });
+    c.rpc.failInbound.delete(sigA);
+    expect(await c.custody.pollDeposits()).toMatchObject({ credited: 1 });
+    expect(await agentBalance()).toBe(0.1 * SOL);
+  });
+
+  it('lets an admin finish a refund that failed, checking the chain first (I3)', async () => {
+    c = await custodyCtx();
+    const stranger = Keypair.generate().publicKey.toBase58();
+    c.rpc.failSend = new Error('rpc down');
+    const sig = c.rpc.pay(stranger, await c.custody.hot(), 0.02 * SOL);
+    await c.custody.pollDeposits();
+    c.rpc.failSend = null;
+    const [row] = await c.t.db.select().from(ledgerChainSeen);
+    expect(row).toMatchObject({ outcome: 'refund_failed', refundSignature: expect.any(String) });
+    expect((await c.custody.payments()).map((p) => p.signature)).toEqual([sig]);
+    await c.custody.resolvePayment(sig, { action: 'refund' }); // its stored signature never landed: send it again
+    expect(c.rpc.sent).toEqual([expect.objectContaining({ to: stranger, lamports: 0.02 * SOL - 5000 })]);
+    expect((await c.t.db.select().from(ledgerChainSeen))[0]!.outcome).toBe('refunded');
+    await expect(c.custody.resolvePayment(sig, { action: 'refund' })).rejects.toMatchObject({ code: 'NOT_OPEN' });
+    expect(await c.custody.payments()).toEqual([]);
+  });
+
+  it('never refunds twice when the first refund did land (I3)', async () => {
+    c = await custodyCtx();
+    const stranger = Keypair.generate().publicKey.toBase58();
+    const sig = c.rpc.pay(stranger, await c.custody.hot(), 0.02 * SOL);
+    await c.custody.pollDeposits();
+    const [row] = await c.t.db.select().from(ledgerChainSeen);
+    // The refund landed, but the database lost its last write: the row still says refund_failed.
+    await c.t.db.update(ledgerChainSeen).set({ outcome: 'refund_failed' }).where(eq(ledgerChainSeen.signature, sig));
+    await expect(c.custody.resolvePayment(sig, { action: 'refund' })).rejects.toMatchObject({ code: 'LANDED' });
+    await c.custody.resolvePayment(sig, { action: 'refunded' });
+    expect((await c.t.db.select().from(ledgerChainSeen))[0]).toMatchObject({ outcome: 'refunded', refundSignature: row!.refundSignature });
+    expect(c.rpc.sent.length).toBe(1);
+  });
+
+  it('refunds an unclear payment to the address an admin gives (I3)', async () => {
+    c = await custodyCtx();
+    const payer = Keypair.generate().publicKey.toBase58();
+    const sig = c.rpc.pay(payer, await c.custody.hot(), 0.02 * SOL, undefined, { unclear: true });
+    await c.custody.pollDeposits();
+    await expect(c.custody.resolvePayment(sig, { action: 'refund' })).rejects.toMatchObject({ code: 'BAD_ADDRESS' });
+    await c.custody.resolvePayment(sig, { action: 'refund', to: payer });
+    expect(c.rpc.sent).toEqual([expect.objectContaining({ to: payer, lamports: 0.02 * SOL - 5000 })]);
+  });
+
   it('refuses to sign a refund on the wrong network', async () => {
     c = await custodyCtx();
     c.rpc.genesis = 'SomethingElse111111111111111111111111111111';

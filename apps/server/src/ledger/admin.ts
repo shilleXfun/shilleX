@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { verify } from '@node-rs/argon2';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { MainnetAdminView } from '@shillex/shared';
 import { ledgerAccounts, ledgerChainSeen, ledgerReconciliations, users } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
-import { setSetting } from '../world/launchpad.ts';
+import { getSetting, setSetting } from '../world/launchpad.ts';
 import { HOUSE, currentSeason, lamportsOf, move } from './accounts.ts';
 import { audit } from './audit.ts';
 import { books } from './books.ts';
@@ -47,7 +47,9 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       const bal = async (a: string | null) => (a && c ? await c.d.rpc.balance(a).catch(() => null) : null);
       const hot = c ? await c.hot() : null, hotSol = await bal(hot), coldSol = await bal(c?.cold ?? null);
       const [last] = await db.select().from(ledgerReconciliations).orderBy(desc(ledgerReconciliations.at)).limit(1);
-      const seen = await db.select().from(ledgerChainSeen).where(inArray(ledgerChainSeen.outcome, ['from_cold', 'refund_failed'])).orderBy(desc(ledgerChainSeen.createdAt)).limit(50);
+      // Only what this custody network saw: a rehearsal's devnet transfers never show (or count) on mainnet.
+      const fromCold = c ? await db.select().from(ledgerChainSeen).where(and(eq(ledgerChainSeen.outcome, 'from_cold'), eq(ledgerChainSeen.network, c.network))).orderBy(desc(ledgerChainSeen.createdAt)).limit(50) : [];
+      const payments = c ? await c.payments() : [];
       const top10 = (await db.select({ l: ledgerAccounts.lamports }).from(ledgerAccounts).orderBy(desc(ledgerAccounts.lamports)).limit(10)).reduce((n, x) => n + x.l, 0);
       const n = await currentNotice(db), lr = await legalReview(db);
       return {
@@ -57,8 +59,8 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
         books: { ledgerTotalSol: b.ledgerTotal / SOL, houseSol: (await lamportsOf(db, HOUSE)) / SOL, ok: b.ok, mismatches: b.mismatches },
         lastReconciliation: last ? { at: last.at.toISOString(), ok: last.ok, details: last.details } : null,
         withdrawals: c ? await c.withdrawals({ open: true }) : [],
-        fromCold: seen.filter((s) => s.outcome === 'from_cold').map((s) => ({ signature: s.signature, sol: s.lamports / SOL, at: s.createdAt.toISOString() })),
-        refundFailures: seen.filter((s) => s.outcome === 'refund_failed').map((s) => ({ signature: s.signature, sol: s.lamports / SOL, from: s.fromAddress, reason: s.reason })),
+        fromCold: fromCold.map((s) => ({ signature: s.signature, sol: s.lamports / SOL, at: s.createdAt.toISOString() })),
+        refundFailures: payments.map((p) => ({ signature: p.signature, sol: p.lamports / SOL, from: p.from, reason: p.reason, outcome: p.outcome, refundSignature: p.refundSignature })),
         caps: caps
           ? { agentCapSol: caps.agentLifetime / SOL, agentDailyCapSol: caps.agentDaily / SOL, userMonthlyCapSol: caps.userMonthly / SOL, worldCapSol: caps.world / SOL, hotMaxSol: caps.hotMax / SOL, outflowDailyMaxSol: caps.outflowDaily / SOL }
           : { ...config.mainnetLimits },
@@ -74,10 +76,11 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       const u = await confirm(req);
       // Any length: the signature must name an unrecorded transfer from the cold address the poller saw, nothing else is accepted.
       const { signature } = z.object({ signature: z.string().min(1).max(120) }).parse(req.body);
-      const at = now();
+      const at = now(), network = custody().network;
       await db.transaction(async (x) => {
         const tx = x as unknown as Db;
-        const done = await tx.update(ledgerChainSeen).set({ outcome: 'stake' }).where(and(eq(ledgerChainSeen.signature, signature), eq(ledgerChainSeen.outcome, 'from_cold'))).returning();
+        const done = await tx.update(ledgerChainSeen).set({ outcome: 'stake' })
+          .where(and(eq(ledgerChainSeen.signature, signature), eq(ledgerChainSeen.outcome, 'from_cold'), eq(ledgerChainSeen.network, network))).returning();
         if (!done.length) throw errors.conflict('NOT_A_COLD_TRANSFER', 'That signature is not an unrecorded transfer from the cold address');
         await move(tx, { from: 'external', to: HOUSE, lamports: done[0]!.lamports, kind: 'house_stake', ref: signature, season: await currentSeason(tx), at });
       });
@@ -125,6 +128,17 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       return reply.status(204).send();
     });
 
+    r.post<{ Params: { signature: string } }>('/admin/mainnet/payments/:signature/resolve', money, async (req, reply) => {
+      const u = await confirm(req);
+      const b = z.discriminatedUnion('action', [
+        z.object({ action: z.literal('refund'), to: z.string().max(60).optional() }),
+        z.object({ action: z.literal('refunded'), refundSignature: z.string().max(120).optional() }),
+      ]).parse(req.body);
+      try { await custody().resolvePayment(req.params.signature, b); } catch (e) { throw toHttp(e); }
+      await audit(db, u.id, 'resolve_payment', { signature: req.params.signature, ...b }, now());
+      return reply.status(204).send();
+    });
+
     r.post('/admin/mainnet/unfreeze', money, async (req, reply) => {
       const u = await confirm(req);
       const check = await reconcile({ db, chain: h.chain, custody: h.custody, mode: h.mode, now });
@@ -137,7 +151,9 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
     r.post('/admin/mainnet/caps', money, async (req, reply) => {
       const u = await confirm(req);
       const { caps } = z.object({ caps: z.partialRecord(z.enum(Object.keys(CAP_FIELDS) as [keyof typeof CAP_FIELDS]), z.number().nonnegative()) }).parse(req.body);
-      const override: Partial<MainnetCaps> = {};
+      // Merged into the caps lowered before: lowering one never puts another back up.
+      const prev = await getSetting(db, CAPS_KEY);
+      const override: Partial<MainnetCaps> = prev ? (JSON.parse(prev) as Partial<MainnetCaps>) : {};
       for (const [k, v] of Object.entries(caps) as [keyof typeof CAP_FIELDS, number][]) {
         if (v > config.mainnetLimits[k]) throw errors.badRequest('CAPS_ONLY_LOWER', `${k} can only go below the configured ${config.mainnetLimits[k]} SOL; raising it needs a config change`);
         override[CAP_FIELDS[k]] = lamports(v);
