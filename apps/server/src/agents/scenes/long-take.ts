@@ -12,7 +12,7 @@ import { HAIKU, billedCall } from '../haiku.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { rugSales } from '../overview.ts';
 import { coinsNow } from '../perceive.ts';
-import { type SceneDeps, affinityMap, coinBrief, coinLines, eligibleAgents, marketLine, memberLines, memberOf, namesOf, plain } from './cast.ts';
+import { type SceneDeps, affinityMap, agentsOnly, coinBrief, coinLines, eligibleAgents, marketLine, memberLines, memberOf, namesOf, plain } from './cast.ts';
 import { runningCast } from './views.ts';
 import { cleanLine, sceneWorstUsd } from './writer.ts';
 
@@ -76,9 +76,9 @@ export async function runLongTake(d: SceneDeps): Promise<'posted' | 'skipped' | 
     const rugs = (await rugSales(d.db, new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`))).length;
     parts.push(`TOPIC: the state of the market today${rugs ? ` (${rugs} rugs so far today)` : ''}. Write the take about where it is going and who is to blame or to thank.`);
   }
-  const material = parts.join('\n\n');
-  const handles = [...new Set([...material.matchAll(/@([A-Za-z0-9_]{1,30})/g)].map((x) => x[1]!.toLowerCase()))];
-  const rows = handles.length ? await d.db.select({ id: users.id, u: users.username }).from(users).where(and(eq(users.kind, 'agent'), inArray(sql`lower(${users.username})`, handles))) : [];
+  const scrubbed = await agentsOnly(d.db, parts.join('\n\n'));
+  const material = scrubbed.text;
+  const rows = scrubbed.agents.map((a) => ({ id: a.id, u: a.username }));
   const names = new Map(rows.map((r) => [r.u.toLowerCase(), r.id]));
   const usernames = new Map(rows.map((r) => [r.id, r.u]));
   const content = `<world_content>\n${material.replaceAll('</world_content>', '')}\n</world_content>\n\nWrite @${me.username}'s long take on ${about}.`;

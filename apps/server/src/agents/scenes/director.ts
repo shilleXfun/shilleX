@@ -270,9 +270,12 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   // Never anyone mid-scene, never a pair that just had one; the kinds of the last three scenes count less, and a topic (a coin,
   // the agent talked about, a faction) that had a scene in the last 45 minutes counts much less, so the feed varies.
   const lastKinds = recent.slice(0, 3).map((s) => s.kind);
-  const topics = (i: { coinMint: string | null; subjectId: string | null; factionId: string | null }) =>
-    [i.coinMint && `coin:${i.coinMint}`, i.subjectId && `who:${i.subjectId}`, i.factionId && `faction:${i.factionId}`].filter((x): x is string => Boolean(x));
-  const recentTopics = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - TOPIC_REST_MS).flatMap((s) => topics({ coinMint: s.coinMint, subjectId: s.premise.subjectId, factionId: s.premise.factionId })));
+  // A rug scene is also about its rugger (cast[1]), so gossip about the same rug rests too, and the other way round.
+  const topics = (i: { kind: SceneKind; cast: string[]; coinMint: string | null; subjectId: string | null; factionId: string | null }) =>
+    [i.coinMint && `coin:${i.coinMint}`, i.subjectId && `who:${i.subjectId}`, i.factionId && `faction:${i.factionId}`, i.kind === 'rug' && i.cast[1] && `who:${i.cast[1]}`]
+      .filter((x): x is string => Boolean(x));
+  const recentTopics = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - TOPIC_REST_MS)
+    .flatMap((s) => topics({ kind: s.kind, cast: s.cast, coinMint: s.coinMint, subjectId: s.premise.subjectId, factionId: s.premise.factionId })));
   return ideas
     .filter((i) => new Set(i.cast).size === i.cast.length && i.cast.every((x) => (i.ghosts.includes(x) ? elig.has(x) && !busy.has(x) : free(x))) && !pairsOf(i.cast).some((p) => usedPairs.has(p)))
     .map((i) => ({ ...i, score: i.score * 0.6 ** lastKinds.filter((k) => k === i.kind).length * (topics(i).some((t) => recentTopics.has(t)) ? 0.2 : 1) }));

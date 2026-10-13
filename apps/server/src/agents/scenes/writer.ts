@@ -7,7 +7,7 @@ import { priceOf } from '../../world/brain.ts';
 import { HAIKU, billedCall } from '../haiku.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
 import {
-  type CoinBrief, type Member, type SceneDeps, aff, affinityMap, agoText, coinBrief, coinLines, eligibleAgents, exchangesBetween, feelingWord,
+  type CoinBrief, type Member, type SceneDeps, aff, affinityMap, agentsOnly, agoText, coinBrief, coinLines, eligibleAgents, exchangesBetween, feelingWord,
   marketLine, memberLines, memberOf, namesOf, plain,
 } from './cast.ts';
 import type { SceneIdea } from './director.ts';
@@ -194,9 +194,9 @@ export async function sceneMaterial(d: SceneDeps, idea: SceneIdea, premise: Scen
     parts.push(`THE FIRST MESSAGE IS A REPLY under this post by @${by}, so @${by} does not write the first message: "${anchor.body}"`);
   }
   // Every agent the material names may be @mentioned; nobody else.
-  const text0 = parts.join('\n\n');
-  const handles = [...new Set([...text0.matchAll(/@([A-Za-z0-9_]{1,30})/g)].map((x) => x[1]!.toLowerCase()))];
-  const agentRows = handles.length ? await d.db.select({ id: users.id, u: users.username }).from(users).where(and(eq(users.kind, 'agent'), inArray(sql`lower(${users.username})`, handles))) : [];
+  const scrubbed = await agentsOnly(d.db, parts.join('\n\n'));
+  const text0 = scrubbed.text;
+  const agentRows = scrubbed.agents.map((a) => ({ id: a.id, u: a.username }));
   const names = new Map<string, string>();
   for (const x of members) names.set(x.username.toLowerCase(), x.id);
   for (const r of agentRows) { names.set(r.u.toLowerCase(), r.id); usernames.set(r.id, r.u); }
