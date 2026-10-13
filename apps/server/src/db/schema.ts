@@ -783,7 +783,7 @@ export const worldModelCalls = pgTable('world_model_calls', {
 }, (t) => [index('world_model_calls_started_idx').on(t.startedAt)]);
 
 // ── MAINNET ── (docs/superpowers/specs/2026-10-13-mainnet-design.md; off until the launch gate opens)
-export type JournalKind = 'launch_fee' | 'buy' | 'sell' | 'trade_fee' | 'send' | 'deposit' | 'opening' | 'house_stake' | 'withdraw' | 'withdraw_sent' | 'withdraw_return' | 'network_fee';
+export type JournalKind = 'launch_fee' | 'buy' | 'sell' | 'trade_fee' | 'send' | 'deposit' | 'opening' | 'house_stake' | 'withdraw' | 'withdraw_sent' | 'withdraw_return' | 'network_fee' | 'grant' | 'retire';
 
 /** SOL per ledger account: agent wallets (by public key), 'house' and 'withdrawals' (paid-out SOL not sent yet). Pools keep theirs in ledger_pools. */
 export const ledgerAccounts = pgTable('ledger_accounts', {
@@ -930,4 +930,12 @@ export const ledgerSeasons = pgTable('ledger_seasons', {
   startedAt: ts('started_at').notNull(),
   endedAt: ts('ended_at'),
   summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+});
+
+/** A payout-wallet change waiting out its 72-hour hold (spec §4): asked while the owner's agent held ledger funds. */
+export const ledgerPayoutChanges = pgTable('ledger_payout_changes', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  requestedAt: ts('requested_at').notNull(),
+  effectiveAt: ts('effective_at').notNull(),
 });

@@ -3,6 +3,9 @@ import { Connection } from '@solana/web3.js';
 import { eq } from 'drizzle-orm';
 import { users } from '../db/schema.ts';
 import { notify } from '../services/notify.ts';
+import { payoutWallet } from '../services/wallets.ts';
+import { applyDuePayoutChanges, setLiveCustody } from './owner.ts';
+import { registerMainnetOwnerRoutes } from './owner-routes.ts';
 import type { Chain } from '../world/chain.ts';
 import { PRACTICE_SEASONS, currentSeason } from './accounts.ts';
 import { registerMainnetAdminRoutes } from './admin.ts';
@@ -49,8 +52,8 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
     await assertCustodyNetwork(rpc, network);
     custody = new Custody({
       db, rpc, key, network, cold: config.coldAddress ?? null, caps: capsFromConfig(config), now, chain, worldKey: o.worldKey,
-      // LOGIN's payout wallet arrives in Task 17; until then no deposit can be requested.
-      payoutOf: async () => null,
+      // LOGIN's verified payout wallet: deposits must come from it and withdrawals go only to it (spec §4).
+      payoutOf: (userId) => payoutWallet(db, userId),
       notify: async (userId, agentId, summary) => {
         const [a] = await db.select({ u: users.username }).from(users).where(eq(users.id, agentId));
         await notify(app.deps, { userId, type: 'agent_moment', actorId: agentId, targetType: 'user', targetId: agentId, data: { summary, href: `/agents/${a?.u ?? ''}` } });
@@ -79,9 +82,13 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
       every(30 * S, 'withdrawals', () => c.processWithdrawals());
     }
     every(10 * 60 * S, 'reconciliation', () => reconcile({ db, chain, custody, mode: config.mainnet, now }));
+    // Payout-wallet changes asked while funds were held take effect after their 72-hour hold (spec §4).
+    every(60 * S, 'payout changes', () => applyDuePayoutChanges(db, now(), (u, s) => notify(app.deps, { userId: u, type: 'agent_moment', actorId: null, targetType: 'user', targetId: u, data: { summary: s, href: '/settings' } })));
   }
-  const handles: MainnetHandles = { mode: config.mainnet, chain, custody, stop: async () => { timers.forEach(clearInterval); } };
+  setLiveCustody(custody);
+  const handles: MainnetHandles = { mode: config.mainnet, chain, custody, stop: async () => { timers.forEach(clearInterval); setLiveCustody(null); } };
   await registerMainnetRoutes(app, handles);
   await registerMainnetAdminRoutes(app, handles);
+  await registerMainnetOwnerRoutes(app, handles);
   return handles;
 }
