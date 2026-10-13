@@ -9,7 +9,9 @@ import { parse } from '../lib/validate.ts';
 import { resolveUploads } from './uploads.ts';
 import { toUserSummary } from '../services/users.ts';
 import { settingsView } from '../services/settings.ts';
-import { setWalletPrefs, unlinkWallet } from '../services/wallets.ts';
+import { linkWallet, notifySignInChange, setWalletPrefs, unlinkWallet } from '../services/wallets.ts';
+import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
+import { errors } from '../lib/errors.ts';
 import { AccountProofBody, requireProof } from '../services/account-proof.ts';
 import { Email, emailOwner, emailTaken, endOtherSessions } from '../services/accounts.ts';
 import { isUniqueViolation } from '../lib/pg-errors.ts';
@@ -71,6 +73,20 @@ export default async function meRoutes(app: FastifyInstance) {
     return settings(await fresh(me.id));
   });
 
+  // Linking adds a way to sign in (and to reset the password), so a session alone isn't enough: like a password change, it
+  // needs the current password, or a `confirm` signature by a wallet already on the account. Per user, as /me/password.
+  app.post('/me/wallets', perUser(10), async (req) => {
+    const me = requireUser(req);
+    const body = parse(z.object({ wallet: WalletProofBody, proof: AccountProofBody.optional() }), req.body);
+    if (!body.proof) throw errors.forbidden('PROOF_REQUIRED', 'Confirm with your password, or one of your wallets, to link a new wallet');
+    // The proof first: a refused one leaves the new wallet's signature unused, so the person can retry without signing again.
+    await requireProof(app.deps, me, body.proof);
+    const w = await verifyProof(app.deps, body.wallet, 'link', me.id);
+    await linkWallet(db, me.id, w.address, w.walletName, app.deps.now());
+    await notifySignInChange(app.deps, me.id, 'linked', w.address);
+    return settings(await fresh(me.id));
+  });
+
   app.patch<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
     const me = requireUser(req);
     await setWalletPrefs(db, config, me.id, req.params.address, parse(WalletPrefs, req.body));
@@ -79,6 +95,7 @@ export default async function meRoutes(app: FastifyInstance) {
   app.delete<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
     const me = requireUser(req);
     await unlinkWallet(db, me, req.params.address);
+    await notifySignInChange(app.deps, me.id, 'removed', req.params.address);
     return settings(me);
   });
 

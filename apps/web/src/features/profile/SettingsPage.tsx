@@ -17,6 +17,8 @@ const PREF_LABELS: Record<NotificationType, string> = {
   dm: 'New conversations', call_update: 'Call updates on posts you follow', token_discussion: 'New public discussion of tokens you follow',
   invite: 'Community invites', join_request: 'Join requests (communities you moderate)', report_resolved: 'Updates on your reports',
   agent_moment: 'Big moments from agents you follow',
+  // Never offered as a toggle: the server leaves security notices out of the preferences.
+  sign_in_change: 'Sign-in changes (always on)',
 };
 
 export function SettingsPage() {

@@ -14,8 +14,7 @@ import { decodeAddress } from '../lib/siws.ts';
 import { parse } from '../lib/validate.ts';
 import { Username, endOtherSessions, meView, startSession, usernameTaken } from '../services/accounts.ts';
 import { WalletProofBody, claimSignupToken, issueChallenge, issueSignupToken, verifyProof } from '../services/wallet-auth.ts';
-import { WALLET_IN_USE, linkWallet, touchLogin, verifiedWalletOwner } from '../services/wallets.ts';
-import { settingsView } from '../services/settings.ts';
+import { WALLET_IN_USE, touchLogin, verifiedWalletOwner } from '../services/wallets.ts';
 
 const Challenge = z.object({ purpose: z.enum(['login', 'reset', 'link', 'confirm']), address: z.string().min(32).max(44).optional() });
 const WalletSignup = z.object({ signupToken: z.string().min(20).max(100), username: Username, displayName: z.string().trim().min(1).max(40).optional() });
@@ -36,13 +35,8 @@ export default async function walletAuthRoutes(app: FastifyInstance) {
   });
 
   app.post('/auth/wallet/verify', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply): Promise<WalletVerifyResult> => {
-    const body = parse(WalletProofBody.extend({ purpose: z.enum(['login', 'link']) }), req.body);
-    if (body.purpose === 'link') {
-      const me = requireUser(req);
-      const w = await verifyProof(deps, body, 'link', me.id);
-      await linkWallet(db, me.id, w.address, w.walletName, now());
-      return { status: 'linked', settings: await settingsView(deps, me) };
-    }
+    // Sign-in only. Linking a wallet is POST /api/me/wallets, which also needs proof of the account holder.
+    const body = parse(WalletProofBody.extend({ purpose: z.enum(['login']) }), req.body);
     const w = await verifyProof(deps, body, 'login', null);
     const owner = await verifiedWalletOwner(db, w.address);
     if (owner) {

@@ -25,6 +25,11 @@ test('wallet signup, logout, wallet login, a second wallet in settings, and the 
   await page.goto('/settings');
   const list = page.getByRole('list', { name: 'Linked wallets' });
   await expect(list.getByText(short(one.address))).toBeVisible();
+  // A session alone can't add a wallet: this wallet-only account first confirms with the wallet it already has.
+  await expect(page.getByRole('button', { name: 'Add a wallet' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Confirm with a linked wallet' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Shillex Test Wallet/ }).click();
+  await expect(page.getByRole('button', { name: 'Add a wallet' })).toBeEnabled();
   await page.getByRole('button', { name: 'Add a wallet' }).click();
   await page.getByRole('dialog').getByRole('button', { name: /Second Test Wallet/ }).click();
   await expect(list.getByText(short(two.address))).toBeVisible();
@@ -34,4 +39,8 @@ test('wallet signup, logout, wallet login, a second wallet in settings, and the 
   await page.getByRole('button', { name: `Remove wallet ${short(one.address)}` }).click();
   await expect(page.getByText(/last way to sign in/)).toBeVisible();
   await expect(list.getByText(short(one.address))).toBeVisible();
+
+  // The owner heard about both changes.
+  const notes = (await (await page.request.get('/api/notifications')).json()).items as { type: string; text: string }[];
+  expect(notes.filter((n) => n.type === 'sign_in_change').map((n) => n.text.includes('linked') ? 'linked' : 'removed')).toEqual(['removed', 'linked']);
 });
