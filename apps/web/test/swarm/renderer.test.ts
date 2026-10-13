@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AgentGraph, CoinView, GraphNode } from '@shillex/shared';
 import { buildSwarm } from '../../src/components/swarm/model';
-import { createRenderer, nodeAlpha, SKIES } from '../../src/components/swarm/renderer';
+import { afterglow, createRenderer, nodeAlpha, SKIES } from '../../src/components/swarm/renderer';
 
 const node = (id: string): GraphNode => ({ id, username: id, displayName: '', avatarUrl: null, netWorthSol: 0.1, mood: 0, ghost: false, reputation: 0, factionId: null, factionColour: null });
 const coin = (mint: string, creatorId: string, volume24hSol: number): CoinView => ({
@@ -11,18 +11,19 @@ const coin = (mint: string, creatorId: string, volume24hSol: number): CoinView =
 });
 const graph: AgentGraph = { nodes: [node('a'), node('b')], edges: [], generatedAt: '2026-10-12T10:00:00Z' };
 
-/** A 2D context that does nothing except remember where rings (the only arcs) were drawn, what text was written and how many background fills there were (one per frame drawn, plus the stars). */
+/** A 2D context that does nothing except remember where rings (the only arcs) were drawn, what text was written, how many background fills there were (one per frame drawn, plus the stars) and the alpha of every image drawn (agents' lights, among others). */
 function fakeContext() {
   const arcs: number[][] = [];
   const texts: string[] = [];
   const fills = { n: 0 };
+  const images: number[] = [];
   const grad = { addColorStop: () => undefined };
-  const target: Record<string, unknown> = { arc: (...a: number[]) => { arcs.push(a); }, fillText: (t: string) => { texts.push(t); }, fillRect: () => { fills.n++; }, createLinearGradient: () => grad, createRadialGradient: () => grad };
-  return { arcs, texts, fills, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: () => true }) };
+  const target: Record<string, unknown> = { globalAlpha: 1, arc: (...a: number[]) => { arcs.push(a); }, fillText: (t: string) => { texts.push(t); }, fillRect: () => { fills.n++; }, drawImage: () => { images.push(target.globalAlpha as number); }, createLinearGradient: () => grad, createRadialGradient: () => grad };
+  return { arcs, texts, fills, images, ctx: new Proxy(target, { get: (t, k) => (k in t ? t[k as string] : () => undefined), set: (t, k, v) => { if (k === 'globalAlpha') t[k] = v; return true; } }) };
 }
 
 function setup({ reduced = false } = {}) {
-  const { arcs, texts, fills, ctx } = fakeContext();
+  const { arcs, texts, fills, images, ctx } = fakeContext();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
   let clock = 0, frame: FrameRequestCallback = () => undefined;
   const raf = vi.fn((cb: FrameRequestCallback) => { frame = cb; return 1; });
@@ -35,7 +36,7 @@ function setup({ reduced = false } = {}) {
   const first = buildSwarm(graph, [coin('c1', 'a', 1)], null);
   r.setModel(first);
   r.start();
-  return { r, canvas, arcs, texts, fills, raf, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
+  return { r, canvas, arcs, texts, fills, images, raf, first, at: (ms: number) => { clock = ms; }, draw: (ms: number) => { clock = ms; frame(ms); } };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -118,6 +119,36 @@ describe('renderer reduced motion', () => {
     expect(arcs).toHaveLength(0);
     expect(texts).toContain('$C1 ✕');
     expect(raf).not.toHaveBeenCalled();
+  });
+  it('shows who acted for 20 s on the still frame, then redraws it without the glow', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { r, images, first, at } = setup({ reduced: true });
+      // The still frame draws one light per agent, last; the model's order says which is whose.
+      const lightOf = (id: string) => images.at(-first.nodes.length + first.index.get(id)!)!;
+      const before = lightOf('a');
+      at(1000);
+      r.event({ kind: 'post', agentId: 'a' });
+      expect(lightOf('a')).toBeCloseTo(before + 0.25);
+      at(21_100);
+      vi.advanceTimersByTime(20_100);
+      expect(lightOf('a')).toBeCloseTo(before);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('afterglow', () => {
+  it('fades over 20 s by the clock, so a tab that comes back late does not replay it', () => {
+    expect(afterglow(0, false)).toBe(1);
+    expect(afterglow(10, false)).toBeCloseTo(0.5);
+    expect(afterglow(20, false)).toBe(0);
+    expect(afterglow(60, false)).toBe(0);
+    expect(afterglow(Infinity, false)).toBe(0);
+  });
+  it('is on or off under reduced motion: no fade', () => {
+    expect(afterglow(5, true)).toBe(1);
+    expect(afterglow(19.9, true)).toBe(1);
+    expect(afterglow(20, true)).toBe(0);
   });
 });
 

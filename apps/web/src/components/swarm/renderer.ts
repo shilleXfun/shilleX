@@ -23,6 +23,14 @@ const mix = (a: RGBA, b: RGBA, k: number): RGBA => [a[0] + (b[0] - a[0]) * k, a[
 const mixSky = (a: Sky, b: Sky, k: number): Sky => ({ top: mix(a.top, b.top, k), low: mix(a.low, b.low, k), a1: mix(a.a1, b.a1, k), a2: mix(a.a2, b.a2, k), a3: mix(a.a3, b.a3, k), speed: a.speed + (b.speed - a.speed) * k, jitter: a.jitter + (b.jitter - a.jitter) * k, drift: a.drift + (b.drift - a.drift) * k });
 const hexA = (hex: string, a: number) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 
+/** How long an agent that acted glows brighter. */
+const AFTERGLOW_S = 20;
+/**
+ * The afterglow `age` seconds after an agent acted: fading from 1 to 0 over 20 s, read off the clock so a tab that comes
+ * back late does not replay it. Under reduced motion it does not fade: on for 20 s, then off.
+ */
+export const afterglow = (age: number, reduced: boolean) => (age >= AFTERGLOW_S || !(age >= 0) ? 0 : reduced ? 1 : 1 - age / AFTERGLOW_S);
+
 /**
  * A light's brightness at time t: its mood glow, breathing on its own cycle (quicker and deeper when happier, never
  * for ghosts), plus the heat of an event that just touched it and the 20 s afterglow of having acted. Clamped to 0..1.
@@ -63,7 +71,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
   const deadNow = new Set<string>();
   let W = 0, H = 0, D = 0, raf = 0, last = 0, running = false, drawAvg = 0;
   let model: SwarmModel | null = null;
-  let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0), recent = new Float32Array(0);
+  let px = new Float32Array(0), py = new Float32Array(0), hot = new Float32Array(0), pulse = new Float32Array(0);
+  /** When each agent last acted (seconds on this renderer's clock), for its afterglow; -Infinity for never. */
+  let actedAt = new Float64Array(0);
+  let glowTimer: ReturnType<typeof setTimeout> | undefined;
   let streaks: Streak[] = [], rings: Ring[] = [];
   let from: Sky = SKIES.none, to: Sky = SKIES.none, fadeAt = -FADE_S;
 
@@ -114,8 +125,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         px[i] = x0 + n.x * (W - 2 * x0) + Math.sin(t * 0.35 * sp + n.phase) * 9 * sky.drift + (j ? (Math.random() - 0.5) * j : 0);
         py[i] = y0 + n.y * (H - 2 * y0) + Math.cos(t * 0.28 * sp + n.phase * 1.3) * 7 * sky.drift + (j ? (Math.random() - 0.5) * j : 0);
         hot[i] = hot[i]! - Math.sign(hot[i]!) * Math.min(Math.abs(hot[i]!), dt * 0.7);
-        // An agent that acted glows brighter, fading back over 20 s.
-        recent[i] = Math.max(0, recent[i]! - dt / 20);
       });
       c.lineWidth = 1;
       for (const [colour, pairs] of m.alliesByColour) {
@@ -134,9 +143,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
         // Phones keep the diamonds but drop the $TICKER labels: under the cards they only clutter the text.
         if (W >= 768) { c.globalAlpha = dead ? 0.4 : 0.7; c.fillStyle = col; c.fillText(`$${coin.symbol}${dead ? ' ✕' : ''}`, x + 9, y); c.globalAlpha = 1; }
       });
+      // An agent that acted glows brighter for 20 s, by the clock (a still frame passes a fixed t).
+      const wall = now();
       m.nodes.forEach((n, i) => {
         const h = hot[i]!, heat = Math.abs(h), col = h < -0.05 ? DOWN : n.colour, size = n.r * (7 + heat * 7);
-        c.globalAlpha = nodeAlpha(n, t, heat, recent[i]!);
+        c.globalAlpha = nodeAlpha(n, t, heat, afterglow(wall - actedAt[i]!, opts.reduced));
         c.drawImage(glow(col), px[i]! - size / 2, py[i]! - size / 2, size, size);
       });
       c.globalAlpha = 1;
@@ -168,7 +179,16 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     last = ts;
     frame(now(), dt);
   }
-  const still = () => { if (W && H) frame(STILL_T, 0); };
+  const still = () => {
+    if (!W || !H) return;
+    frame(STILL_T, 0);
+    // A still frame shows who acted in the last 20 s; it is redrawn once, when the earliest of those glows ends.
+    clearTimeout(glowTimer);
+    const wall = now();
+    let next = Infinity;
+    for (const at of actedAt) { const end = at + AFTERGLOW_S; if (end > wall && end < next) next = end; }
+    if (next < Infinity) glowTimer = setTimeout(still, (next - wall) * 1000 + 50);
+  };
   /** Redraws now: a resized buffer is blank until the next frame, and frames come 32 ms apart. */
   const redraw = () => { if (opts.reduced || !running) still(); else if (W && H) frame(now(), 0); };
 
@@ -189,14 +209,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       const old = model;
       model = m;
       const n = m?.nodes.length ?? 0, nc = m?.coins.length ?? 0;
-      const oldHot = hot, oldPulse = pulse, oldRecent = recent;
-      px = new Float32Array(n); py = new Float32Array(n); hot = new Float32Array(n); pulse = new Float32Array(nc); recent = new Float32Array(n);
+      const oldHot = hot, oldPulse = pulse, oldActed = actedAt;
+      px = new Float32Array(n); py = new Float32Array(n); hot = new Float32Array(n); pulse = new Float32Array(nc); actedAt = new Float64Array(n).fill(-Infinity);
       if (old && m) {
         // Animations in flight follow their agent and coin into the new model (by id and mint); those whose target is gone end.
         for (const [id, i] of m.index) {
           const o = old.index.get(id);
           if (o !== undefined) hot[i] = oldHot[o] ?? 0;
-          if (o !== undefined) recent[i] = oldRecent[o] ?? 0;
+          if (o !== undefined) actedAt[i] = oldActed[o] ?? -Infinity;
         }
         for (const [mint, i] of m.coinIndex) { const o = old.coinIndex.get(mint); if (o !== undefined) pulse[i] = oldPulse[o] ?? 0; }
         const node = (i: number) => { const id = old.nodes[i]?.id; return id === undefined ? undefined : m.index.get(id); };
@@ -218,8 +238,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
       if (!model) return;
       const tg = targetsFor(model, e);
       if (e.kind === 'rug' && tg.coin !== null) deadNow.add(model.coins[tg.coin]!.mint);
-      // Who acted glows brighter for 20 s; set before the still-frame return, so a still frame redrawn later shows it too.
-      if (tg.from !== null) recent[tg.from] = 1;
+      // Who acted glows brighter for 20 s; set before the still-frame return, so the still frame shows it too.
+      if (tg.from !== null) actedAt[tg.from] = now();
       if (opts.reduced) { still(); return; }
       const t = now();
       const ring = (at: At, r1: number, col: string, w: number, dur: number, r0 = 4, delay = 0) => rings.push({ at, r0, r1, t0: t + delay, dur, col, w });
@@ -252,7 +272,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: { reduced: boole
     },
     start() { if (running || opts.reduced) return; running = true; last = 0; raf = requestAnimationFrame(loop); },
     stop() { running = false; cancelAnimationFrame(raf); },
-    destroy() { running = false; cancelAnimationFrame(raf); model = null; },
+    destroy() { running = false; cancelAnimationFrame(raf); clearTimeout(glowTimer); model = null; },
     stats: () => ({ drawMs: Math.round(drawAvg * 100) / 100 }),
   };
 }

@@ -76,6 +76,40 @@ describe('Sparkline', () => {
   });
 });
 
+describe('Sparkline motion budget', () => {
+  it('holds one slot while it draws in, and one while it eases to new points', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Sparkline points={[1, 2]} label="LAMP" />);
+    expect(motionsRunning()).toBe(1);
+    act(() => { vi.advanceTimersByTime(800); });
+    expect(motionsRunning()).toBe(0);
+    rerender(<Sparkline points={[1, 2, 3]} label="LAMP" />);
+    expect(motionsRunning()).toBe(1);
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(motionsRunning()).toBe(0);
+  });
+  it('moves nothing under reduced motion or while the page is hidden', () => {
+    vi.mocked(useReducedMotion).mockReturnValue(true);
+    const { rerender, unmount } = render(<Sparkline points={[1, 2]} label="LAMP" />);
+    rerender(<Sparkline points={[1, 3]} label="LAMP" />);
+    expect(motionsRunning()).toBe(0);
+    unmount();
+    vi.mocked(useReducedMotion).mockReturnValue(false);
+    const hidden = vi.spyOn(Document.prototype, 'visibilityState', 'get').mockReturnValue('hidden');
+    render(<Sparkline points={[1, 2]} label="LAMP" />);
+    expect(motionsRunning()).toBe(0);
+    hidden.mockRestore();
+  });
+  it('is cut short, drawn at once, when eight newer effects need the slots', () => {
+    const { container } = render(<Sparkline points={[1, 2]} label="LAMP" />);
+    const drawing = container.querySelector('path');
+    act(() => { for (let i = 0; i < MOTION_MAX; i++) claimMotion(() => undefined); });
+    expect(motionsRunning()).toBe(MOTION_MAX);
+    // The line is redrawn in place at its final shape (a fresh path that does not draw in).
+    expect(container.querySelector('path')).not.toBe(drawing);
+  });
+});
+
 describe('useFlipList', () => {
   it('marks rows that changed places for 3 s, but not rows pushed down by a new arrival', () => {
     vi.useFakeTimers();

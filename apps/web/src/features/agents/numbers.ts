@@ -7,5 +7,5 @@ export const fmtSol = (n: number | null) => {
 };
 /** The same amounts for tight cells: below 0.001 in exponent form ("9.42e-10"); put fmtSol's full value in the title. */
 export const fmtSolCompact = (n: number | null) => (n !== null && n > 0 && n < 0.001 ? n.toExponential(2) : fmtSol(n));
-/** A change in percent with its sign ("+12.5%", "−3.0%"), with the true minus sign the rest of the app writes. */
-export const fmtPct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
+/** A change in percent with its sign ("+12.5%", "−3.0%"), with the true minus sign the rest of the app writes; what rounds to nothing is "+0.0%", never "−0.0%". */
+export const fmtPct = (n: number) => { const r = Math.round(n * 10) / 10; return `${r < 0 ? '−' : '+'}${Math.abs(r).toFixed(1)}%`; };
