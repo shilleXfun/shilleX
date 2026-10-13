@@ -1,9 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentGrants, agentHatches, agentSeeds, agents, phrasebooks, users, type AgentHatchRow } from '../../db/schema.ts';
+import { agentCast, agentGrants, agentHatches, agentSeeds, agents, phrasebooks, users, type AgentHatchRow } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { isReservedUsername } from '../../lib/reserved.ts';
+import { handleUnavailable } from '../../services/handles.ts';
+import { castFresh, castPrep } from '../cast/index.ts';
+import { NO_FACTS } from '../cast/roles.ts';
 import type { AgentBrain, BrainResponse } from '../../world/brain.ts';
 import { finishTurn, startTurn } from '../../world/provenance.ts';
 import { agentAvatarUrl } from '../../world/seed.ts';
@@ -53,8 +56,8 @@ export function hatchPrompt(handle: string, wish: string): { system: Anthropic.T
 }
 
 const setRequest = (d: HatchDeps, id: string, set: Partial<AgentHatchRow>) => d.db.update(agentHatches).set(set).where(eq(agentHatches.id, id));
-const handleTaken = async (d: HatchDeps, handle: string) =>
-  Boolean((await d.db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${handle.toLowerCase()}`).limit(1))[0]);
+/** In use, or an old username someone had before a rename (CAST). */
+const handleTaken = (d: HatchDeps, handle: string) => handleUnavailable(d.db, handle);
 
 type ModelOutcome = { kind: 'ok'; book: Phrasebook; profile: ProfileInput | null } | { kind: 'refused' } | { kind: 'invalid' };
 /** The model call, billed on a receipt on the owner's own id: a refused hatch creates no agent, yet its cost is on the books. */
@@ -146,8 +149,13 @@ async function firstTurn(d: HatchDeps, agentId: string, owner: string, book: Phr
 export async function completeHatch(d: HatchDeps, req: Pick<AgentHatchRow, 'ownerId' | 'handle' | 'description'>, book: Phrasebook, profile: ProfileInput | null): Promise<string> {
   const now = d.now(), id = newId();
   const traits = clampTraits(book.traits);
+  // CAST: born a character, with a name, a role and a bio from its traits; the handle stays the one its human picked. A
+  // profile the model wrote (first turn) may still rename it, through set_profile's checks.
+  const { ctx, counts } = await castPrep(d.db, d.app.deps.config);
+  const c = castFresh(id, ctx, counts, traits, NO_FACTS, req.handle);
   await d.db.transaction(async (tx) => {
-    await tx.insert(users).values({ id, username: req.handle, displayName: '', bio: '', kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: now });
+    await tx.insert(users).values({ id, username: req.handle, displayName: c.display, bio: c.bio, kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: now });
+    await tx.insert(agentCast).values({ agentId: id, role: c.role, castAt: now });
     await tx.insert(agents).values({ userId: id, status: 'paused', origin: 'raised', ownerId: req.ownerId, createdAt: now });
     await tx.insert(agentSeeds).values({ agentId: id, ownerId: req.ownerId, description: req.description, createdAt: now });
     await tx.insert(phrasebooks).values({ agentId: id, version: 1, book: { ...book, traits }, model: d.brain ? HAIKU : 'local', writtenAt: now });

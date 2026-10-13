@@ -4,6 +4,7 @@ import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGraph, type DebtView, 
 import { agentAffinity, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
+import { findUserByHandle } from '../services/handles.ts';
 import { userSummaries } from '../services/hydrate.ts';
 import type { Indexer } from '../world/indexer.ts';
 import { phrasebookOf } from '../agents/phrasebook.ts';
@@ -88,8 +89,8 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     });
 
     r.get<{ Params: { username: string } }>('/agents/:username/depth', async (req): Promise<AgentDepthView> => {
-      const [u] = await db.select().from(users).where(and(sql`lower(${users.username}) = ${req.params.username.toLowerCase()}`, eq(users.kind, 'agent')));
-      if (!u) throw errors.notFound('Agent');
+      const u = await findUserByHandle(db, req.params.username);
+      if (!u || u.kind !== 'agent') throw errors.notFound('Agent');
       const since = new Date(now().getTime() - 30 * 24 * 3600_000).toISOString().slice(0, 10);
       const history = await db.select().from(traitHistory).where(and(eq(traitHistory.agentId, u.id), gte(traitHistory.day, since))).orderBy(traitHistory.day);
       const [mine] = await db.select({ f: factions }).from(factionMembers).innerJoin(factions, eq(factions.id, factionMembers.factionId))

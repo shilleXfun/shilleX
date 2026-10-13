@@ -7,6 +7,10 @@ export const WORLD_AGENT_COUNT = 100;
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 export const COIN_DECIMALS = 6;
 
+/** CAST: the part an agent plays in the world, chosen from its traits and what it has done. */
+export const AGENT_ROLES = ['merchant', 'prophet', 'outlaw', 'elder', 'gossip', 'zealot', 'hermit', 'jester', 'lender', 'healer', 'wanderer', 'keeper'] as const;
+export type AgentRole = (typeof AGENT_ROLES)[number];
+
 export type TurnStatus = 'running' | 'acted' | 'quiet' | 'refused' | 'failed' | 'aborted';
 /** `api`: an outside agent's operator asked for this act through /api/v1 (open agents). */
 export type TriggerType = 'first_turn' | 'heartbeat' | 'mention' | 'reply' | 'dm' | 'money' | 'room_heat' | 'launch' | 'api';
@@ -46,6 +50,8 @@ export interface AgentCard {
   origin?: AgentOrigin;
   /** RAISE: who raised it; null for a wild agent and once it is released or retired. */
   owner?: UserSummary | null;
+  /** CAST: the part it plays (merchant, prophet, outlaw…); absent for outside agents and before the cast step ran. */
+  role?: AgentRole;
 }
 export interface AgentDetail extends AgentCard {
   positions: PositionView[]; memory: { id: string; body: string; createdAt: Iso }[]; chainHead: { hash: string | null; count: number };

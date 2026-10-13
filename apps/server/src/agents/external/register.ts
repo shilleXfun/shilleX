@@ -7,6 +7,7 @@ import type { Db } from '../../db/client.ts';
 import { agentApiKeys, agentHatches, agents, externalRegistrations, users } from '../../db/schema.ts';
 import { AppError, errors } from '../../lib/errors.ts';
 import { newId } from '../../lib/ids.ts';
+import { handleRetired } from '../../services/handles.ts';
 import { isUniqueViolation } from '../../lib/pg-errors.ts';
 import { agentAvatarUrl } from '../../world/seed.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
@@ -48,7 +49,8 @@ async function handleInUse(db: Db, handle: string): Promise<boolean> {
   const lower = handle.toLowerCase();
   const [u] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${lower}`).limit(1);
   const [h] = await db.select({ id: agentHatches.id }).from(agentHatches).where(and(sql`lower(${agentHatches.handle}) = ${lower}`, inArray(agentHatches.status, ['queued', 'hatching']))).limit(1);
-  return Boolean(u || h);
+  // An old username (CAST rename) stays with whoever had it.
+  return Boolean(u || h) || handleRetired(db, handle);
 }
 
 /** A name or bio an outside agent gives itself: plain text, no links, no @, no markup (cleanModelText with no mentions). */

@@ -6,6 +6,7 @@ import { agentEvents, agentTurns, agents, phrasebooks, posts, users } from '../d
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { ToolOutcome } from '../world/tools.ts';
+import { IMPERSONATED } from '../lib/reserved.ts';
 import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { ALLOWED_SLOTS, FALLBACK_SITUATIONS } from './phrasebook.ts';
 import { scrubBook, scrubProfile } from './raised/scrub.ts';
@@ -116,8 +117,7 @@ const PICTO_FIRST = /^\p{Extended_Pictographic}$/u;
 const INVISIBLE = /[\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{2069}\u{FEFF}]/u;
 /** `word.tld` with no space around the dot: a link without its scheme. */
 const BARE_DOMAIN = /[\p{L}\p{N}-]\.\p{L}{2,}/u;
-/** Names that pass for the site or its staff, whatever the config reserves. Compared as letters and digits only, lower case. */
-export const IMPERSONATED: ReadonlySet<string> = new Set(['admin', 'administrator', 'shillex', 'moderator', 'mod', 'staff', 'support', 'system', 'official', 'info', 'backchannel']);
+export { IMPERSONATED };
 
 /** Cuts to `max` UTF-16 units (what String.slice and set_profile count) on a code point boundary, so no lone surrogate is left. */
 function cutUnits(s: string, max: number): string {
@@ -284,7 +284,8 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
             try {
               const out = await d.tool(agentId, turnId, 'set_profile', input);
               toolCalls.push({ name: 'set_profile', input, ok: out.ok, result: out.result });
-              namedByRefresh = version > 1 && out.ok && input.display_name !== null;
+              const refused = ((out.result as { refused?: string[] } | null)?.refused ?? []).includes('display_name');
+              namedByRefresh = version > 1 && out.ok && input.display_name !== null && !refused;
             } catch (e) { toolCalls.push({ name: 'set_profile', input, ok: false, result: { error: (e as Error)?.message ?? String(e) } }); }
           }
         }
