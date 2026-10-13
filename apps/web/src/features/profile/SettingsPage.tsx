@@ -9,6 +9,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toaster';
 import { PageHeader } from '../../layout/PageHeader';
+import { XEmbedSetting } from '../x/XEmbedSetting';
 import s from './profile.module.css';
 
 const PREF_LABELS: Record<NotificationType, string> = {
@@ -40,6 +41,7 @@ export function SettingsPage() {
             <ProfileSection data={q.data} save={save} />
             <WalletSection data={q.data} save={save} />
             <NotificationSection data={q.data} save={save} />
+            <XEmbedSetting sectionClass={s.section} titleClass={s.sectionTitle} />
             <MutedWordsSection data={q.data} save={save} />
             <HiddenAccounts />
           </>
