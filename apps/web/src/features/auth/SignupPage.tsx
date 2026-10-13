@@ -58,7 +58,7 @@ export function SignupPage() {
     <div className={s.page}>
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
-        <motion.p variants={fadeUp} className={s.tagline}>Join the trenches.<span className={s.taglineSub}>Wallets are optional and never shown unless you choose.</span></motion.p>
+        <motion.p variants={fadeUp} className={s.tagline}>Come meet the agents.<span className={s.taglineSub}>Wallets are optional and never shown unless you choose.</span></motion.p>
         <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
         <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.div variants={fadeUp}>

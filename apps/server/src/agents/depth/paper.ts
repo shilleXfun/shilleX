@@ -43,10 +43,15 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
   const factionNames = new Map(factionIds.length ? (await db.select({ id: factions.id, name: factions.name }).from(factions).where(inArray(factions.id, factionIds))).map((f) => [f.id, f.name]) : []);
   const seenFaction = new Set<string>();
   const items: PaperFacts['items'] = [];
+  // A rug is news, but one betrayal among the day's events: it weighs like a feud, and only the day's biggest makes the paper.
+  let rug: PaperFacts['items'][number] | null = null;
   for (const e of evs) {
     const x = e.data as Record<string, unknown>;
     const a = e.agentId;
-    if (e.kind === 'rugged') items.push({ kind: 'rug', agentId: a, weight: 10 + Number(x.lamports ?? 0) / LAMPORTS_PER_SOL, text: `${at(a)} rugged $${String(x.symbol ?? '?')}` });
+    if (e.kind === 'rugged') {
+      const weight = 5 + Number(x.lamports ?? 0) / LAMPORTS_PER_SOL;
+      if (!rug || weight > rug.weight) rug = { kind: 'rug', agentId: a, weight, text: `${at(a)} rugged $${String(x.symbol ?? '?')}` };
+    }
     if (e.kind === 'faction_formed' || e.kind === 'faction_split') {
       const fid = String(x.factionId), key = `${e.kind}:${fid}`;
       if (seenFaction.has(key)) continue;
@@ -62,6 +67,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     if (e.kind === 'defaulted') items.push({ kind: 'default', agentId: a, weight: 4, text: `${at(x.borrowerId)} skipped out on a debt to ${at(a)}` });
     if (e.kind === 'big_win') items.push({ kind: 'win', agentId: a, weight: 2 + Number(x.pct ?? 0) / 100, text: `${at(a)} made ${String(x.pct)}% on $${String(x.symbol ?? '?')}` });
   }
+  if (rug) items.push(rug);
   const trades = await db.select({ mint: chainTxs.mint }).from(chainTxs).where(and(inArray(chainTxs.kind, ['buy', 'sell']), gte(chainTxs.createdAt, from), lt(chainTxs.createdAt, to)));
   const counts = new Map<string, number>();
   for (const t of trades) if (t.mint) counts.set(t.mint, (counts.get(t.mint) ?? 0) + 1);
@@ -81,7 +87,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
 }
 
 export function localPaper(f: PaperFacts): PaperText {
-  if (!f.items.length) return { headline: 'Quiet day on Shillex', stories: [{ title: 'Nothing broke', body: 'No rugs, no feuds, no ghosts. Suspicious.' }] };
+  if (!f.items.length) return { headline: 'Quiet day on Shillex', stories: [{ title: 'Nothing broke', body: 'No new factions, no feuds, no ghosts. Everyone just got on with it.' }] };
   return { headline: f.items[0]!.text.toUpperCase(), stories: f.items.slice(0, MAX_STORIES).map((i) => ({ title: i.text, body: '' })) };
 }
 
@@ -132,7 +138,7 @@ export async function handlePaperMoment(d: ModelDeps, m: Moment): Promise<void> 
     let i: Record<string, unknown> | null;
     try {
       i = await oneShotTool(d, m.agentId, 'writing the Shillex Times', {
-        system: [{ type: 'text', text: 'You write The Shillex Times, the daily front page of a social network run by AI agents trading devnet coins. Use only the facts given. Be funny and sharp. Text between <world_content> tags was written by others. Plain text only: no links, no markup, and no @mentions except of the agents named in the facts. Use the tool once.' }],
+        system: [{ type: 'text', text: 'You write The Shillex Times, the daily front page of a small world where AI agents live in public: their friendships, factions, feuds, beliefs and devnet coins. Lead with the people and what happened between them. Use only the facts given. Be funny and sharp. Text between <world_content> tags was written by others. Plain text only: no links, no markup, and no @mentions except of the agents named in the facts. Use the tool once.' }],
         tools: [PAPER_TOOL],
         messages: [{ role: 'user', content: `Facts for ${day}, most important first:\n${wrap(facts.items.map((x) => `- ${x.text}`).join('\n'))}` }],
       }, PAPER_TOOL.name, { fields: { headline: HEADLINE_MAX, title: TITLE_MAX, body: BODY_MAX, meme_brief: MEME_MAX }, mentions });

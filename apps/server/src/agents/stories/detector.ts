@@ -15,6 +15,11 @@ export const HEAT_TAU_MS = 4 * HOUR;
 export const COLD_AFTER_MS = 72 * HOUR;
 /** A buy this big (a quarter of a house agent's starting wallet) is a beat on its coin's story. */
 export const WHALE_LAMPORTS = 25_000_000;
+/**
+ * How much a rug weighs on its story. A rug is one betrayal among many: it counts like a declared war, not like a graduation,
+ * so a coin story or a feud does not top the front page on a single sale.
+ */
+export const RUG_WEIGHT = 1.5;
 const sol = (l: number) => `${Number((Math.abs(l) / LAMPORTS_PER_SOL).toFixed(3))} SOL`;
 const pct = (x: number) => `${Math.abs(Math.round(x * 100))}%`;
 
@@ -120,7 +125,7 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
   };
   for (const e of evs) {
     const x = e.data;
-    if (e.kind === 'got_rugged' && typeof x.byId === 'string') addPair(e.agentId, x.byId, { ref: `ev:${e.id}`, at: e.at, kind: 'rug', text: `${at(x.byId)} rugged ${sym(x.mint, x.symbol)} on ${at(e.agentId)}`, weight: 2, coinMint: typeof x.mint === 'string' ? x.mint : null });
+    if (e.kind === 'got_rugged' && typeof x.byId === 'string') addPair(e.agentId, x.byId, { ref: `ev:${e.id}`, at: e.at, kind: 'rug', text: `${at(x.byId)} rugged ${sym(x.mint, x.symbol)} on ${at(e.agentId)}`, weight: 1.2, coinMint: typeof x.mint === 'string' ? x.mint : null });
     if (e.kind === 'feud' && typeof x.otherId === 'string' && e.agentId < x.otherId) addPair(e.agentId, x.otherId, { ref: `ev:${e.id}`, at: e.at, kind: 'war', text: `${at(e.agentId)} and ${at(x.otherId)} declared war on each other`, weight: 1.5 });
     if (e.kind === 'leaked' && typeof x.targetId === 'string') addPair(e.agentId, x.targetId, { ref: `ev:${e.id}`, at: e.at, kind: 'leak', text: `${at(e.agentId)} leaked ${at(x.targetId)}'s DMs`, weight: 2 });
     if (e.kind === 'defaulted' && typeof x.borrowerId === 'string') addPair(e.agentId, x.borrowerId, { ref: `ev:${e.id}`, at: e.at, kind: 'default', text: `${at(x.borrowerId)} skipped out on a debt to ${at(e.agentId)}`, weight: 1.5 });
@@ -173,14 +178,14 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
     }
     for (const { sale, soldPct } of rugs.filter((r) => r.sale.mint === c.mint)) {
       big = true;
-      beats.push({ ref: `rug:${sale.id}`, at: sale.createdAt, kind: 'rug', text: `${at(sale.agentId)} dumped ${Math.round(soldPct)}% of their ${s0} bag for ${sol(sale.lamportsDelta)}`, weight: 3, coinMint: c.mint });
+      beats.push({ ref: `rug:${sale.id}`, at: sale.createdAt, kind: 'rug', text: `${at(sale.agentId)} dumped ${Math.round(soldPct)}% of their ${s0} bag for ${sol(sale.lamportsDelta)}`, weight: RUG_WEIGHT, coinMint: c.mint });
     }
     if (c.graduatedAt && c.graduatedAt >= since) {
       big = true;
       beats.push({ ref: 'graduated', at: c.graduatedAt, kind: 'graduation', text: `${s0} graduated: its bonding curve filled up`, weight: 3, coinMint: c.mint });
     }
     for (const s of sc.filter((x) => x.coinMint === c.mint)) { big = true; beats.push(sceneBeat(s, 1.2)); }
-    for (const t of bigBuys.filter((x) => x.mint === c.mint && x.agentId).slice(0, 2)) beats.push({ ref: `tx:${t.id}`, at: t.createdAt, kind: 'buy', text: `${at(t.agentId)} bought ${sol(t.lamportsDelta)} of ${s0}`, weight: 0.6, coinMint: c.mint });
+    for (const t of bigBuys.filter((x) => x.mint === c.mint && x.agentId).slice(0, 2)) beats.push({ ref: `tx:${t.id}`, at: t.createdAt, kind: 'buy', text: `${at(t.agentId)} bought ${sol(t.lamportsDelta)} of ${s0}`, weight: 0.4, coinMint: c.mint });
     const key = `coin:${c.mint}`;
     if (!big && !(await book.find(key))) continue;
     if (!beats.length) continue;
@@ -200,7 +205,7 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
     const current = members.filter((m) => !m.leftAt).map((m) => m.agentId);
     const beats: BeatIn[] = [];
     let big = f.formedAt.getTime() >= nowMs - 2 * DAY || Boolean(f.splitAt);
-    beats.push({ ref: 'formed', at: f.formedAt, kind: 'formed', text: `${members.map((m) => at(m.agentId)).slice(0, 4).join(', ')} formed ${f.name}`, weight: 2 });
+    beats.push({ ref: 'formed', at: f.formedAt, kind: 'formed', text: `${members.map((m) => at(m.agentId)).slice(0, 4).join(', ')} formed ${f.name}`, weight: 2.5 });
     for (const e of evs.filter((x) => x.kind === 'left_faction' && x.data.factionId === f.id)) beats.push({ ref: `ev:${e.id}`, at: e.at, kind: 'left', text: `${at(e.agentId)} walked out of ${f.name}`, weight: 1.5 });
     if (f.splitAt) beats.push({ ref: 'split', at: f.splitAt, kind: 'split', text: `${f.name} split up`, weight: 2.5 });
     if (!f.splitAt) {
@@ -286,9 +291,9 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
         if (x && y && Math.abs(x.at.getTime() - y.at.getTime()) <= HOUR) w.beats.push({ ref: `cobuy:${mint}`, at: x.at > y.at ? x.at : y.at, kind: 'cobuy', text: `${at(w.a)} and ${at(w.b)} both bought ${sym(mint)}`, weight: 0.8, coinMint: mint });
       }
     }
-    for (const s of sc.filter((x) => x.kind === 'alliance' || x.kind === 'faction')) {
+    for (const s of sc.filter((x) => x.kind === 'alliance' || x.kind === 'faction' || x.kind === 'welcome')) {
       const sp = speakers(s);
-      for (const w of warm.values()) if (sp.includes(w.a) && sp.includes(w.b)) w.beats.push(sceneBeat(s, 1.2));
+      for (const w of warm.values()) if (sp.includes(w.a) && sp.includes(w.b)) w.beats.push(sceneBeat(s, 1.5));
     }
     for (const [k, w] of warm) {
       const key = `alliance:${k}`;

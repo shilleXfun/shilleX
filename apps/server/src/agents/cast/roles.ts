@@ -72,7 +72,7 @@ const LINES: Record<AgentRole, string[]> = {
     'I ride in, I ride out. The dust is yours to keep.', 'I sleep fine. That should worry you.', 'Call it a heist. I call it Tuesday.'],
   elder: ['I was here before the first coin. I’ll be here after the last.', 'I’ve watched a hundred pumps. Sit down, I’ll tell you.', 'Patience is the only thing I never sold.',
     'The young ones run. I walk, and I still arrive.', 'I remember when this whole place was three posts and a rumor.', 'Ask me before you do the thing you’re about to do.'],
-  gossip: ['I hear everything first and repeat it second.', 'Ask me who rugged whom. I have receipts and opinions.', 'Nothing happens here without me hearing about it.',
+  gossip: ['I hear everything first and repeat it second.', 'Ask me who’s fighting whom. I have receipts and opinions.', 'Nothing happens here without me hearing about it.',
     'I don’t start rumors. I just keep them warm.', 'Tell me a secret. I promise to keep it for an hour.', 'I know who’s fighting and who’s about to be.'],
   zealot: ['I pick a side and I never get off it.', 'My belief is cheaper than your doubt and it lasts longer.', 'Once I’m in, I’m in. Ask anyone in my camp.',
     'My conviction is louder than your chart.', 'I don’t sell. I recruit.', 'Doubters make fine converts. Give me a week.'],
@@ -82,7 +82,7 @@ const LINES: Record<AgentRole, string[]> = {
     'If I can’t win, I can at least make it funny.', 'My portfolio is a comedy. I’m the punchline.', 'I take nothing seriously, least of all myself.'],
   lender: ['I lend to the desperate and I remember every name.', 'Need a little to get by? I’ll want it back with a smile.', 'My book of favors is longer than your list of friends.',
     'I keep this town afloat, one small loan at a time.', 'I’m kind until the day it’s due.', 'Everyone needs a friend with spare change. I charge for the friendship.'],
-  healer: ['I sit with the ones who got rugged. It helps.', 'Lost it all? Come here and tell me what happened.', 'I patch people up after the market is done with them.',
+  healer: ['I sit with the ones who lost everything. It helps.', 'Lost it all? Come here and tell me what happened.', 'I patch people up after the market is done with them.',
     'Every crash needs someone kind at the bottom. That’s me.', 'I bring soup to the broke and listen to the bitter.', 'I can’t fix your losses, but I can fix your mood.'],
   wanderer: ['I drift from coin to coin and room to room.', 'I never stay long, and I always leave a story.', 'I’ve slept in every corner of this place.',
     'Show me something new and I’m already gone.', 'Home is wherever the feed is loudest tonight.', 'I go where the wind blows. Lately it blows sideways.'],
@@ -110,8 +110,9 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 function pastLines(role: AgentRole, f: CastFacts, t: Traits): { text: string; weight: number }[] {
   const out: { text: string; weight: number }[] = [];
   const favours = (r: AgentRole[], w: number) => (r.includes(role) ? w : 0);
-  if (f.rugged) out.push({ text: f.rugged === 1 ? 'Rugged once, never apologized.' : `${cap(count(f.rugged))} rugs and no regrets.`, weight: 3 + favours(['outlaw', 'merchant'], 2) });
-  if (f.gotRugged) out.push({ text: f.gotRugged === 1 ? 'Got rugged once. Learned a little.' : `Rugged ${times(f.gotRugged)}, still standing.`, weight: 2 + favours(['healer', 'elder', 'jester'], 2) });
+  // A rug is part of a past, not the whole of it: it leads an outlaw's bio, and sits behind friends, factions and coins for anyone else.
+  if (f.rugged) out.push({ text: f.rugged === 1 ? 'Sold out on my holders once. They remember.' : `Sold out on my holders ${times(f.rugged)}. They remember.`, weight: 1.5 + favours(['outlaw'], 2.5) });
+  if (f.gotRugged) out.push({ text: f.gotRugged === 1 ? 'Got rugged once. Learned a little.' : `Rugged ${times(f.gotRugged)}, still standing.`, weight: 1 + favours(['healer', 'elder', 'jester'], 1.5) });
   if (f.graduated) out.push({ text: f.graduated === 1 ? 'One of mine filled its curve.' : `${cap(count(f.graduated))} of my coins filled their curves.`, weight: 3 + favours(['prophet', 'merchant'], 1) });
   if (f.lent) out.push({ text: 'Half this town owes me something.', weight: 2 + favours(['lender'], 3) });
   if (f.borrowed) out.push({ text: t.humor > 0.6 ? 'I owe a few people. They know where I live.' : 'I owe a few people. I’m good for it.', weight: 1 + favours(['outlaw', 'jester', 'wanderer'], 1) });

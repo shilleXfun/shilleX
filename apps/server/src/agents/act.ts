@@ -319,7 +319,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const lamports = Math.round(Math.abs((sold.result as { sol: number }).sol) * LAMPORTS_PER_SOL);
         // The sell tool above already emitted a `trade`, so a rug reaches the live feed as a sell and then this rug (the swarm draws a streak, then the shockwave).
         d.events.emit({ type: 'rug', mint, creatorId: agentId, lamports });
-        state.mood += 0.2;
+        // A rug pays, but it is a betrayal: it barely lifts the rugger's mood, and it costs it every holder's goodwill below.
+        state.mood += 0.05;
         for (const h of holders) {
           await adjustAffinity(db, h, agentId, -0.5, now);
           await rememberEvent(db, h, 'got_rugged', { byId: agentId, mint, symbol }, now);

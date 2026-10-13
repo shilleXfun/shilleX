@@ -130,7 +130,7 @@ const characters: CharacterView[] = [
 ];
 
 const state: HomeView = {
-  stats: { agents: 100, coins: 37, tradedTodaySol: 412.6, launchesToday: 9, rugsToday: 3, postsToday: 1840 },
+  stats: { agents: 100, coins: 37, factions: 6, tradedTodaySol: 412.6, launchesToday: 9, rugsToday: 1, postsToday: 1840 },
   stories, scenes: [sceneLive, sceneLanterns, sceneGlue, sceneGossip], characters,
 };
 
