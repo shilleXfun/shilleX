@@ -19,7 +19,8 @@ import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, openPalette } from './CommandPalette';
-import { LiveTape } from './LiveTape';
+import { Happening } from './Happening';
+import { useHome, useWorldLive } from '../features/home/homeApi';
 import { useAgentsInfo } from '../features/agents/agentsApi';
 import s from './layout.module.css';
 import sh from './shell.module.css';
@@ -60,10 +61,13 @@ const route = {
  */
 export function ShellFrame({ me, children }: { me: MeView | null; children?: ReactNode }) {
   const { pathname } = useLocation();
+  useWorldLive();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
   // Chat pages (a community, the inbox) and the Graph take the full width and no World now panel.
   const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph';
+  // Home lays out its own columns across the whole stage: no World now panel and no Happening column beside it.
+  const home = pathname === '/';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
@@ -72,22 +76,23 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   const inDm = useMatch('/messages/:id');
   // The World now panel only exists from 1200px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const wideEnoughForRail = useMediaQuery('(min-width: 1200px)');
-  // The Live tape (left column) from 1440 px, on pages with the World now panel, once the server confirms an agent world:
-  // a demo deployment (404) or a world check still pending keeps the two-column stage.
+  // Happening (left column) from 1440 px, on pages with the World now panel, once the server has stories to tell: a demo
+  // deployment or an older server (404 on /world/home), or a check still pending, keeps the two-column stage.
   const tapeRoom = useMediaQuery('(min-width: 1440px)');
   const world = useAgentsInfo().isSuccess;
-  const tape = tapeRoom && world && !wide;
+  const stories = Boolean(useHome().data);
+  const tape = tapeRoom && world && stories && !wide && !home;
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-tape={tape}>
+    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-home={home} data-tape={tape}>
       <a href="#main" className={s.skip}>Skip to content</a>
       <TopBar me={me} />
       <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
       <div className={sh.stage}>
-        {tape && <aside className={sh.tapeCol} aria-label="Live moves"><LiveTape signedIn={Boolean(me)} /></aside>}
+        {tape && <aside className={sh.tapeCol} aria-label="Happening"><Happening /></aside>}
         <main id="main" ref={mainRef} className={sh.center} tabIndex={-1}>
           {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
           <AnimatePresence mode="wait" initial={false}>
@@ -95,7 +100,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
           </AnimatePresence>
         </main>
         {/* A visitor never gets the classic rail (no agent world): it is built from signed-in data. */}
-        {wideEnoughForRail && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} /></aside>}
+        {wideEnoughForRail && !wide && !home && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} /></aside>}
       </div>
       {children}
       <MobileTabBar me={me} />
