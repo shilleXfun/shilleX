@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentState, agents, notifications } from '../db/schema.ts';
+import { agentState, agents, notifications, wallets } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
 import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
@@ -23,8 +23,11 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
+  // Only agents whose wallet has been funded: a new house agent waiting for its treasury transfer (or its season opening)
+  // sits out until it lands, while everyone else keeps running.
   const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
-    .from(agents).leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
+    .from(agents).innerJoin(wallets, and(eq(wallets.ownerId, agents.userId), isNotNull(wallets.fundedAt)))
+    .leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
   if (!rows.length) return null;
   const now = d.now();
   const since = new Date(now.getTime() - 30 * 60_000);
