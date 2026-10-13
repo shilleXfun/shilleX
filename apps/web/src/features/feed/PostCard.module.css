@@ -1,54 +1,64 @@
-/* Posts float as separate glass cards over the swarm, 12 px apart. */
-.card { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 10px; margin-top: var(--card-gap); padding: var(--card-pad); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); cursor: pointer; transition: background .15s, border-color .15s; }
-/* Hover washes only where a real pointer hovers; on touch they would stick after a tap. */
-.card:focus-within { background: var(--card-hover); }
-@media (hover: hover) { .card:hover { background: var(--card-hover); border-color: var(--line-strong); } }
-/* Cards respond to a real pointer: a 1 px lift. Not on touch, not under reduced motion, not for cards that do nothing on
-   click (the thread's own post, unavailable or hidden posts) or inside a thread's joined stack. */
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .card { transition: background .15s, border-color .15s, transform .15s ease-out; }
-  .card:not(.focused, .static):hover { transform: translateY(-1px); }
-  .ancestors .card:hover { transform: none; }
+/* Posts in X's anatomy (x-revamp §2): rows on one sheet, split by hairlines. A row on a sheet is clear; alone over the
+   world (a page of floating cards) it carries the sheet itself (--row-bg / --row-blur, tokens.css). Every rule here is
+   one class deep (plus state), so a page or the timeline can adjust a row with one more class without a fight. */
+.card {
+  position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap);
+  /* --row-pt / --row-pb let a context tighten a row (the timeline's root under its "replied" line) without a fight. */
+  padding: var(--row-pt, 12px) var(--row-px) var(--row-pb, 12px); border-bottom: 1px solid var(--line);
+  background-color: var(--row-bg); -webkit-backdrop-filter: var(--row-blur); backdrop-filter: var(--row-blur);
+  cursor: pointer; transition: background-image .15s;
 }
-.focused { cursor: default; padding-top: 16px; border-color: var(--accent-line); }
-.focused:hover, .focused:focus-within { background: var(--card); border-color: var(--accent-line); }
-.focused .body { font-size: var(--fs-lg); line-height: 1.55; }
-.compact { padding: 10px 18px 8px; grid-template-columns: 32px minmax(0, 1fr); }
-/* Ancestors in a thread: a spine connects their avatars to the focused post. */
-.ancestors .compact::before { content: ''; position: absolute; left: calc(18px + 15px); top: 48px; bottom: -2px; width: 2px; border-radius: 2px; background: var(--line-strong); }
-/* A thread's ancestors and the focused post read as one stack. */
-.ancestors .card { margin-top: 0; border-radius: 0; border-bottom-color: transparent; }
-.ancestors .card:first-child { margin-top: var(--card-gap); border-radius: var(--radius-card) var(--radius-card) 0 0; }
-.ancestors + .focused { margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
-.static { cursor: default; }
-.static:hover, .static:focus-within { background: var(--card); border-color: var(--line); }
-/* Phones: solid cards, no blur (cost), and no hover or focus wash (hover sticks after a tap). Last, so it wins over the washes above. */
-@media (max-width: 767px) {
-  .card, .card:hover, .card:focus-within, .focused:hover, .focused:focus-within, .static:hover, .static:focus-within { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .card { border-radius: 14px; }
-  .ancestors .card:first-child { border-radius: 14px 14px 0 0; }
-  .action svg { width: 18px; height: 18px; }
-}
+/* A flat wash over whatever the row stands on; only where a real pointer hovers (on touch it would stick after a tap). */
+@media (hover: hover) { .card:hover { background-image: linear-gradient(var(--row-hover), var(--row-hover)); } }
+.card:focus-within { background-image: linear-gradient(var(--row-hover), var(--row-hover)); }
+/* The post selected with j/k: an amber ring drawn inside the row (an outside ring is clipped by Arrival's overflow: clip). */
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: none; border-radius: 0; }
+/* In a timeline thread the hairline belongs to the thread, not to each post in it. */
+.threaded { border-bottom: 0; }
+.static, .focused { cursor: default; }
+.static:hover, .focused:hover { background-image: none; }
+.focused { --row-pt: 14px; }
+/* Smaller avatar, same 40 px column: the text of a compact row lines up with the rows around it. */
+.compact { --row-pt: 10px; --row-pb: 8px; }
+.compact .avatarLink { justify-self: center; }
+
+/* A thread's ancestors and its focused post read as one column joined by a spine through the avatars. */
+.ancestors .card { border-bottom: 0; }
+.ancestors .card::before { content: ''; position: absolute; left: calc(var(--row-px) + 19px); top: 46px; bottom: -10px; width: 2px; border-radius: 2px; background: var(--line-strong); }
+
 .avatarLink { align-self: start; border-radius: 50%; }
 .main { min-width: 0; }
-.meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
-.name { min-width: 0; font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
+.meta { display: flex; align-items: baseline; gap: 4px; min-width: 0; min-height: 20px; white-space: nowrap; }
+.name { min-width: 0; overflow: hidden; color: var(--text); font-size: 15px; font-weight: 650; line-height: 20px; text-overflow: ellipsis; }
 .name:hover { text-decoration: underline; text-underline-offset: 3px; }
-.handle { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.handle, .time { color: var(--muted); font-size: var(--fs-sm); }
-.time { flex: none; font-family: var(--font-mono); font-size: 11.5px; }
-.time:hover { color: var(--text); }
-.context { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin: -4px 0 -6px 28px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
-.context svg { color: var(--accent-hover); }
-.context a:hover { color: var(--text); text-decoration: underline; }
-.replyTo { color: var(--muted); font-size: var(--fs-sm); margin-top: 1px; }
+/* Colour belongs to the agents: an agent's name takes the hue of its avatar (and of its light in the world). */
+.hued { color: hsl(var(--hue, 220) 72% 74%); }
+.handle, .dot, .time { flex: none; color: var(--muted); font-size: 14px; line-height: 20px; }
+.handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.time { font-variant-numeric: tabular-nums; }
+.time:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.more { flex: none; margin: -7px -8px -7px auto; align-self: center; }
+.moreBtn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); transition: background .12s, color .12s; }
+.moreBtn:hover, .moreBtn[aria-expanded='true'] { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+.context { grid-column: 1 / -1; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap); align-items: center; margin: -2px 0 6px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.context svg { justify-self: end; }
+.context a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.replyTo { margin-top: 1px; color: var(--muted); font-size: 14px; }
 .replyTo a { color: var(--accent-hover); }
-.body { margin-top: 3px; }
-.communityTag { flex: none; display: inline-flex; align-items: center; gap: 3px; margin-left: 2px; padding: 2px 7px 2px 5px; border-radius: var(--radius-chip); background: var(--raised); color: var(--muted); font-size: var(--fs-xs); font-weight: 550; transition: color .12s, background .12s; }
+/* Two classes deep: it wins over the read-only text's own margin (agents.module.css .text) whatever order they load in. */
+.card .body { margin-top: 2px; line-height: 1.45; }
+.focused .body { font-size: var(--fs-lg); line-height: 1.5; }
+/* Clamp.tsx: the text held to --lines, "Show more" under it. */
+.clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 6); line-clamp: var(--lines, 6); }
+.showMore { display: block; margin-top: 2px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 15px; font-weight: 600; }
+.showMore:hover { text-decoration: underline; text-underline-offset: 3px; }
+.communityTag { flex: none; display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; padding: 2px 7px 2px 5px; border-radius: var(--radius-chip); background: var(--raised); color: var(--muted); font-size: var(--fs-xs); font-weight: 550; line-height: 16px; transition: color .12s, background .12s; }
 .communityTag:hover { color: var(--text); background: var(--hover); }
 
-.actions { display: flex; align-items: center; gap: 4px; margin: 6px 0 0 -8px; color: var(--muted); }
-.action { display: inline-flex; align-items: center; gap: 6px; height: 28px; min-width: 28px; justify-content: center; padding: 0 8px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 12.5px var(--font-mono); white-space: nowrap; transition: background .12s, color .12s; }
+/* The action row: spread like X's, icons first, counts beside them. */
+.actions { display: flex; align-items: center; justify-content: space-between; max-width: 460px; margin: 6px 0 -6px -9px; color: var(--muted); }
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; transition: background .12s, color .12s; }
 @media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
 .actionIcon { display: inline-grid; place-items: center; }
@@ -56,26 +66,29 @@
 .bookmark[aria-pressed='true'] svg { fill: var(--accent); stroke: var(--accent-hover); }
 .repost[aria-pressed='true'] { color: var(--up); }
 .repost[aria-pressed='true']:hover { background: var(--up-soft); color: var(--up); }
-.callAction { font-family: var(--font-ui); font-size: var(--fs-sm); font-weight: 550; color: var(--token); }
+.callAction { color: var(--token); font-size: 13px; font-weight: 550; }
 .callAction:hover { background: var(--token-soft); color: var(--token); }
 .replyContext { margin: -8px 0 12px; }
-.more { margin-left: auto; }
+.replyAction { margin-right: 0; }
 
 .tombstone { margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-sm); }
 .unavailable { grid-column: 1 / -1; margin-top: 0; }
-.quote { display: block; margin-top: 10px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: color-mix(in srgb, var(--panel) 70%, transparent); transition: border-color .15s, background .15s; }
-a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
-.quote .meta { gap: 6px; align-items: center; }
-.quote .body { margin-top: 5px; }
+.quote { display: block; margin-top: 12px; padding: 11px 13px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.015); transition: border-color .15s, background .15s; }
+a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255, 0.035); }
+.quote .meta { align-items: center; gap: 6px; }
+.quote .name { font-size: 14px; }
+.quote .body { margin-top: 4px; font-size: 15px; }
 .quote .tombstone { margin-top: 0; }
 
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--panel); font: 500 12.5px var(--font-mono); color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
+.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; font: 500 13px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
 .reaction:hover { border-color: var(--accent-line); color: var(--text); }
-.reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+.reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); }
 .reactionEmoji { display: inline-block; font-size: 15px; line-height: 1; }
 .burst { position: absolute; left: 8px; top: 50%; width: 16px; height: 16px; margin-top: -8px; pointer-events: none; }
 .particle { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; line-height: 1; }
+/* A reaction count a visitor can read but not toggle. */
+.reactionStatic:hover { border-color: var(--line-strong); color: var(--muted); }
 
 /* Call updates: a timeline whose connector draws in. */
 .calls { position: relative; margin: 12px 0 0; padding: 2px 0 2px 18px; }
@@ -96,10 +109,10 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .status_watching { color: var(--token); }
 .status_watching .callStatus { background: var(--token-soft); }
 .callNoteText { color: var(--text); }
-.selfReported { color: var(--warn); font: 500 11px var(--font-mono); opacity: .85; }
-.call .time { font-size: 11px; }
+.selfReported { color: var(--warn); font-size: 12px; font-weight: 550; opacity: .85; }
+.call .time { font-size: 12px; }
 
-.media { display: grid; gap: 3px; margin-top: 10px; border-radius: var(--radius-pop); overflow: hidden; border: 1px solid var(--line); }
+.media { display: grid; gap: 2px; margin-top: 12px; border-radius: var(--radius-card); overflow: hidden; border: 1px solid var(--line); }
 .media img { width: 100%; height: 100%; object-fit: cover; background: var(--raised); transition: transform .4s cubic-bezier(.16, 1, .3, 1); }
 .media button { display: block; min-height: 0; padding: 0; border: 0; background: none; overflow: hidden; }
 .media button:hover img { transform: scale(1.03); }
@@ -133,31 +146,27 @@ a.quote:hover { border-color: var(--accent-line); background: var(--panel); }
 .reasons label:has(input:checked) { background: var(--accent-soft); }
 .reasons input { accent-color: var(--accent); margin: 0; }
 
-.newPill { position: sticky; top: calc(var(--sticky-top, 0px) + 58px); z-index: 5; display: grid; place-items: center; height: 0; overflow: visible; }
-.newPillBtn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 16px 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-weight: 650; box-shadow: var(--shadow-pop), var(--glow-accent); }
+/* "N new posts" over the older feeds (NewPostsPill.tsx): the timeline's pill, without its faces. */
+.newPill { position: sticky; top: calc(var(--sticky-top, 0px) + 60px); z-index: 5; display: grid; place-items: center; height: 0; overflow: visible; }
+.newPillBtn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 650; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
 .endNote { margin: 0; padding: 28px 20px; text-align: center; color: var(--muted); font-size: var(--fs-sm); }
 .loadMore { display: grid; place-items: center; padding: 18px; }
 
-@media (max-width: 480px) {
-  .card { padding: 12px 14px 8px; gap: 10px; grid-template-columns: 38px minmax(0, 1fr); }
-  .action { padding: 0 7px; }
-  .actions { gap: 0; }
-  .callLabel { display: none; }
-}
-.stamp { margin: 10px 0 2px; color: var(--muted); font-size: var(--fs-sm); }
-/* The post selected with j/k: an accent ring drawn inside the card (an outside ring is clipped by Arrival's overflow: clip). */
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: var(--card-shadow), inset 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent); }
+.stamp { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
 /* A post collapsed by a muted word: one quiet line with a way to see it anyway. */
 .mutedCard { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
 .mutedNote { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .mutedShow { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-weight: 600; cursor: pointer; }
 .mutedShow:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Visitors: the composer's place holds a way in, on the same floating card as the collapsed composer. */
-.joinPrompt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 12px; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
-.joinIcon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); color: var(--accent-hover); }
-.joinPrompt p { margin: 0; min-width: 0; color: var(--muted); font-size: var(--fs-lg); }
+/* Visitors: the composer's place holds a way in, as a row of its own. */
+.joinPrompt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px var(--row-px); border-bottom: 1px solid var(--line); background-color: var(--row-bg); -webkit-backdrop-filter: var(--row-blur); backdrop-filter: var(--row-blur); }
+.joinIcon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); }
+.joinPrompt p { flex: 1; margin: 0; min-width: 0; color: var(--muted); font-size: var(--fs-md); }
 .joinPrompt a { flex: none; }
-@media (max-width: 767px) { .joinPrompt { padding: 12px 14px; border-radius: 14px; background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
-/* A reaction count a visitor can read but not toggle. */
-.reactionStatic:hover { border-color: var(--line-strong); color: var(--muted); }
+
+@media (max-width: 480px) {
+  .actions { max-width: none; }
+  .action { padding: 0 7px; }
+  .callLabel { display: none; }
+}

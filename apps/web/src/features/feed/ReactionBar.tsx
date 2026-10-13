@@ -72,6 +72,6 @@ export function ReactionPicker({ onPick, scope, reactions }: { onPick: (e: React
   const mineSet = new Set(reactions.filter((r) => r.mine).map((r) => r.emoji));
   return (
     <Menu label="Add reaction" layout="tray" items={REACTIONS.map((e) => ({ label: e, onSelect: () => { if (!mineSet.has(e)) fireBurst(scope, e); onPick(e); } }))}
-      trigger={(p) => <motion.button {...p} {...press} type="button" className={s.action} onClick={(e) => { e.stopPropagation(); p.onClick(); }}><SmilePlus size={16} aria-hidden="true" /></motion.button>} />
+      trigger={(p) => <motion.button {...p} {...press} type="button" className={s.action} onClick={(e) => { e.stopPropagation(); p.onClick(); }}><SmilePlus size={18} aria-hidden="true" /></motion.button>} />
   );
 }

@@ -1,37 +1,49 @@
-/* Shared page chrome. The shell grid itself (top bar, rail, stage, World now) lives in shell.module.css. */
-/* Pages sit on one glass sheet unless they lay out their own floating cards (data-cards on the page root). The sheet fills
-   the reading column's height (the column is a flex column), so a short page still reaches the foot of the screen. */
-.page { flex: 1 0 auto; background: var(--sheet); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-.page:has([data-cards]) { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Shared page chrome. The shell grid itself (rail, reading column, side column, phone top bar) lives in shell.module.css. */
+/* Pages sit on one sheet (x-revamp §1) unless they lay out their own floating cards (data-cards on the page root). The
+   sheet fills the reading column's height (the column is a flex column), so a short page still reaches the foot of the
+   screen. Its colour is the page's own (the world overlay reads it to know the page covers the world there); its blur
+   is a ::before, because a backdrop-filter on the page itself would make it the backdrop for everything inside, and the
+   sticky bars inside could no longer frost what scrolls under them. */
+.page { position: relative; z-index: 0; flex: 1 0 auto; min-width: 0; background-color: var(--sheet); }
+.page::before { content: ''; position: absolute; inset: 0; z-index: -1; border-inline: 1px solid var(--line); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); pointer-events: none; }
+.page:has(> [data-cards]) { background-color: transparent; }
+.page:has(> [data-cards])::before { display: none; }
+/* On the sheet a post row is clear: the sheet is already under it. */
+.page:not(:has(> [data-cards])) { --row-bg: transparent; --row-blur: none; }
 /* A page marked data-fit fills its screen with content (density spec §1): its sheet ends where the content ends. */
-.page:has([data-fit]) { flex: 0 0 auto; }
-/* Phones draw no backdrop blur (cost): the sheet is the near-solid card colour instead, as the cards are. */
-@media (max-width: 767px) { .page { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.page:has(> [data-fit]) { flex: 0 0 auto; }
+/* Under a visitor's hero, the reading column rises over the world with a rounded top edge (shell data-hero). */
+@media (min-width: 768px) {
+  [data-hero='true'] .page, [data-hero='true'] .page::before { border-top-left-radius: 18px; border-top-right-radius: 18px; }
+  [data-hero='true'] .page::before { border-top: 1px solid var(--line); }
+}
+/* Phones draw no backdrop blur (cost): the sheet is near-solid and runs edge to edge. */
+@media (max-width: 767px) {
+  .page:not(:has(> [data-cards])) { background-color: var(--card-solid); }
+  .page::before { border-inline: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
 .skip:focus { top: 8px; }
 
-.navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 600 11px/1 var(--font-mono); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
+.navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 700 11px/1 var(--font-ui); font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg); }
 
 /* Near-solid, so the page never reads through it; the page column pads its foot by the bar's height (shell.module.css). */
-.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 6px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgba(6, 7, 12, 0.96); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.35); }
-.tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 14px; color: var(--muted); font-size: 10.5px; font-weight: 550; }
+.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 5px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgba(4, 6, 13, 0.96); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--line); }
+.tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 14px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a > :not(.tabPill) { position: relative; }
 .tabbar a[aria-current='page'] { color: var(--text); }
-.tabbar a[aria-current='page'] svg { color: var(--accent-hover); }
-.tabPill { position: absolute; inset: 0 4px; border-radius: inherit; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.tabPill { position: absolute; inset: 0 6px; border-radius: inherit; background: rgba(255, 255, 255, 0.07); }
 .tabBadge { position: absolute !important; top: 2px; left: calc(50% + 4px); margin: 0; }
 @media (max-width: 767px) { .tabbar { display: grid; } [data-immersive='true'] .tabbar { display: none; } }
 
 .bannerHost { position: fixed; z-index: 95; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; }
 .banner { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); color: var(--warn); font-size: var(--fs-sm); font-weight: 550; white-space: nowrap; }
 
-/* Sticky page header shared by top-level pages. */
-.pageHeader { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: var(--glass); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-bottom: 1px solid var(--line); }
-/* On the glass sheet the page is its children's backdrop root (it has its own backdrop-filter), so the header's blur sees
-   nothing and text scrolling under it reads straight through the title. There the header is solid ground instead. */
-.page:not(:has([data-cards])) .pageHeader { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.pageHeaderRow { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 14px; }
-.pageTitle { margin: 0; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; }
+/* Sticky page header shared by top-level pages: frosted, so what scrolls under it blurs instead of reading through. */
+.pageHeader { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 72%, transparent); backdrop-filter: var(--sheet-blur); -webkit-backdrop-filter: var(--sheet-blur); border-bottom: 1px solid var(--line); }
+@media (max-width: 767px) { .pageHeader { background: rgba(4, 6, 13, 0.96); backdrop-filter: none; -webkit-backdrop-filter: none; } }
+.pageHeaderRow { display: flex; align-items: center; gap: 10px; min-height: 53px; padding: 6px var(--row-px); }
+.pageTitle { margin: 0; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 75%; letter-spacing: -0.02em; }
 .pageHeaderRow .pageTitle { font-size: 24px; }
 
 /* Keyboard shortcuts dialog: keycaps with a pressed-in bottom edge. */
@@ -42,7 +54,7 @@
 .shortcutRow:last-child { border-bottom: 0; }
 .shortcutRow dt { color: var(--text); }
 .shortcutRow dd { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
-.key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border: 1px solid var(--line-strong); border-bottom-width: 3px; border-radius: 7px; background: var(--raised); color: var(--text); font: 600 12px/1 var(--font-mono); }
+.key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border: 1px solid var(--line-strong); border-bottom-width: 3px; border-radius: 7px; background: var(--raised); color: var(--text); font: 600 12px/1 var(--font-ui); }
 .keyJoin { color: var(--muted); font-size: var(--fs-xs); }
 /* 404: a short candle row with one missing, the gap breathing. */
 .notFound { display: grid; justify-items: center; gap: 12px; padding: 72px 24px; text-align: center; }

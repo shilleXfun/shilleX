@@ -1,16 +1,19 @@
-/* Visual direction "The Swarm" (docs/superpowers/specs/2026-10-12-swarm-revamp-design.md). Token names are stable. */
+/* The revamp (docs/superpowers/specs/2026-10-13-x-revamp-design.md §1) over The Swarm. Token names are stable. */
 :root {
   color-scheme: dark;
-  --bg: #06070C;
+  /* Void: the page base, deep enough that the agents' lights read. */
+  --bg: #04060D;
   --panel: #0E1019;
   --raised: #151826;
   --hover: #1B1F30;
-  --bg-hover: #0B0D15;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --line-hover: rgba(255, 255, 255, 0.26);
+  --bg-hover: #0A0C14;
+  /* Hairlines: row dividers and column edges. */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --line-hover: rgba(255, 255, 255, 0.24);
   --text: #EEF0F7;
   --muted: #9AA0B6;
+  /* Amber: what a person can do (Make an agent, Post, Follow) and focus rings. Nothing else. */
   --accent: #FFB86B;
   --accent-hover: #FFC98A;
   --accent-ink: #1A1206;
@@ -18,6 +21,7 @@
   --accent-line: rgba(255, 184, 107, 0.4);
   --accent-wash: rgba(255, 184, 107, 0.06);
   --accent-select: rgba(255, 184, 107, 0.3);
+  /* Cyan: coins and tickers. Up and down for money moves only. */
   --token: #7DE3FF;
   --token-soft: rgba(125, 227, 255, 0.1);
   --token-line: rgba(125, 227, 255, 0.4);
@@ -38,16 +42,21 @@
   --scrim: rgba(3, 4, 8, 0.7);
   --scrim-strong: rgba(3, 4, 12, 0.9);
   --scrim-soft: rgba(4, 5, 14, 0.55);
-  --glass: rgba(8, 10, 17, 0.72);
+  --glass: rgba(7, 9, 16, 0.72);
   --glass-blur: blur(18px) saturate(140%);
-  /* Floating cards: the swarm shows between and faintly through them. Phones drop the blur (cost). */
-  --card: rgba(10, 12, 20, 0.62);
-  --card-hover: rgba(16, 19, 30, 0.72);
-  --card-solid: rgba(10, 12, 20, 0.93);
+  /* Floating cards (pages that lay out their own): the world shows between and faintly through them. Phones drop the blur. */
+  --card: rgba(9, 11, 19, 0.66);
+  --card-hover: rgba(15, 18, 29, 0.74);
+  --card-solid: rgba(8, 10, 17, 0.95);
   --card-blur: blur(14px) saturate(140%);
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.25);
-  /* Pages without their own cards sit on one glass sheet. */
-  --sheet: rgba(8, 10, 17, 0.7);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.25);
+  /* The sheet: the timeline column and the side column are one continuous surface each, rows split by hairlines. */
+  --sheet: rgba(7, 9, 16, 0.86);
+  --sheet-blur: blur(16px) saturate(140%);
+  /* A post row carries the sheet when it sits alone over the world (pages of floating cards); on a sheet it is clear. */
+  --row-bg: var(--sheet);
+  --row-blur: var(--sheet-blur);
+  --row-hover: rgba(255, 255, 255, 0.028);
   /* Fallback faction colours (real ones come from the data). */
   --faction-1: #FF7A59;
   --faction-2: #3DDBD9;
@@ -63,9 +72,10 @@
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
   --font-brand: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, var(--font-emoji), sans-serif;
 
-  /* 11 / 12.5 / 14 (body) / 16 / 20 / 28 / 40 */
-  --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px; --fs-3xl: 40px;
-  --lh: 1.5; --lh-display: 1.1;
+  /* 12 / 13.5 / 15.5 (posts and body) / 18 / 24 / 34, then display: page-level names at 44 and the home hero's headline. */
+  --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15.5px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-3xl: 44px;
+  --fs-display: clamp(56px, 8.4vw, 132px);
+  --lh: 1.45; --lh-display: 1.1;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
   /* Radius by role: chips 6, inputs/buttons 12, popovers/dialogs 14, cards 16, pills/avatars 999. */
   --radius-chip: 6px; --radius-sm: 12px; --radius: 12px; --radius-pop: 14px; --radius-card: 16px; --radius-pill: 999px;
@@ -77,10 +87,16 @@
   /* A faint wash that lifts a tile off a card (stat tiles, launch rows). */
   --tile: rgba(255, 255, 255, 0.025);
 
-  /* Desktop columns (density spec §1): the centre is 760 fluid, 800 from 1440 px; the tape 260 from 1440 and 320 from 1760 (shell.module.css). */
-  --right-w: 320px; --center-max: 760px; --tape-w: 260px; --panel-w: 420px; --tabbar-h: 58px;
-  /* Post cards: tighter padding and gaps, so more of the conversation fits a screen. */
-  --card-pad: 12px 14px; --card-gap: 8px;
+  /* Desktop columns (x-revamp §1): the rail 76, the reading column 560–680 fluid, the side column 350 from 1100 px
+     (layout/shell.module.css). --center-max and --right-w are the older names for the last two. */
+  --rail-w: 76px; --main-max: 680px; --side-w: 350px; --col-gap: 20px;
+  --right-w: var(--side-w); --center-max: var(--main-max); --panel-w: 420px; --tabbar-h: 58px;
+  /* Rows (posts, the composer, the timeline's parts): the side padding and the gap between the 40 px avatar column and
+     the text. The avatar's centre, where thread lines run, is at --row-px + 20 px. */
+  --row-px: 16px; --card-gap: 12px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
+/* Phones draw no backdrop blur (cost): a post row alone over the world goes near-solid instead. */
+@media (max-width: 767px) { :root { --row-bg: var(--card-solid); --row-blur: none; } }
+@media (max-width: 480px) { :root { --row-px: 14px; } }
