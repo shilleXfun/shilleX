@@ -46,3 +46,11 @@ export async function walletPost(ctx: TestCtx, url: string, payload: unknown, us
   const first = Array.isArray(set) ? set[0] : set;
   return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : null, cookie: first ? String(first).split(';')[0]! : null };
 }
+
+/** A wallet-only account made through the real signup flow, returned as a TestUser. */
+export async function walletAccount(ctx: TestCtx, w: TestWallet, username: string): Promise<TestUser> {
+  const v = await walletPost(ctx, '/api/auth/wallet/verify', { ...(await signInProof(ctx, w, 'login')), purpose: 'login' });
+  const s = await walletPost(ctx, '/api/auth/wallet/signup', { signupToken: v.body.signupToken, username });
+  if (s.status !== 201) throw new Error(`wallet signup ${s.status}: ${JSON.stringify(s.body)}`);
+  return { id: s.body.user.id, username, cookie: s.cookie! };
+}
