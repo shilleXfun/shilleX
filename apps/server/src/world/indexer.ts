@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
-import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
+import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentGrants, agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
@@ -124,7 +124,7 @@ export class Indexer {
     return [...h].sort((a, b) => b[1] - a[1]).map(([id, raw]) => ({ user: people.get(id)!, tokens: tok(raw) }));
   }
 
-  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: 'wild' | 'raised'; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
+  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: AgentOrigin; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
     const pk = c.pks.get(u.id) ?? null;
     const b = await this.balancesOf(u.id, pk);
     const prices = new Map(c.coins.map((x) => [x.mint, x]));
