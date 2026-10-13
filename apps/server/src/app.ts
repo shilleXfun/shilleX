@@ -10,6 +10,7 @@ import fastifyStatic from '@fastify/static';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import authRoutes from './routes/auth.ts';
+import walletAuthRoutes from './routes/wallet-auth.ts';
 import uploadsRoutes from './routes/uploads.ts';
 import blobsRoutes from './routes/blobs.ts';
 import mediaRoutes from './routes/media.ts';
@@ -64,6 +65,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(healthRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api' });
+  await app.register(walletAuthRoutes, { prefix: '/api' });
   await app.register(uploadsRoutes, { prefix: '/api' });
   await app.register(blobsRoutes, { prefix: '/api' });
   await app.register(mediaRoutes);
