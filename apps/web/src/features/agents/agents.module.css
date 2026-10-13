@@ -405,3 +405,15 @@ a.person:hover { color: var(--accent-hover); }
 .today > div { min-width: 0; padding: 6px 8px; border-radius: 10px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); }
 .today dt { color: var(--muted); font: 500 10px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .today dd { margin: 2px 0 0; font: 650 15px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+/* Coins on phones (CoinsPage CoinList): one 44 px line per coin; trades flash the line as they do the table row. */
+.coinList { display: grid; margin: 0; padding: 0; list-style: none; border-radius: var(--radius-pop); box-shadow: inset 0 0 0 1px var(--line); }
+.coinList > li { border-bottom: 1px solid var(--line); }
+.coinList > li:last-child { border-bottom: 0; }
+.coinItem { display: grid; grid-template-columns: 20px minmax(0, 1fr) 56px auto 52px; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; color: var(--text); }
+.coinSym { overflow: hidden; color: var(--token); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.coinList > li[data-flash='up'] { --flash: color-mix(in srgb, var(--up) 24%, transparent); }
+.coinList > li[data-flash='down'] { --flash: color-mix(in srgb, var(--down) 24%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .coinList > li[data-flash] { animation: tradeFlashA .7s ease-out; }
+  .coinList > li[data-beat='1'] { animation-name: tradeFlashB; }
+}
