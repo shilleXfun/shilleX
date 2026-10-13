@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import type { AgentOrigin } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
 import { agents } from '../../db/schema.ts';
 
@@ -8,8 +9,8 @@ export async function ownerOf(db: Db, agentId: string): Promise<string | null> {
   return a?.ownerId ?? null;
 }
 
-/** 'wild' for the original 50, 'raised' for one a human made, null when there is no such agent. */
-export async function originOf(db: Db, agentId: string): Promise<'wild' | 'raised' | null> {
+/** 'wild' for the original 50, 'raised' for one a human made, 'external' for an outside agent, null when there is no such agent. */
+export async function originOf(db: Db, agentId: string): Promise<AgentOrigin | null> {
   const [a] = await db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
   return a?.origin ?? null;
 }

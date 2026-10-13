@@ -679,3 +679,50 @@ export const agentGrants = pgTable('agent_grants', {
 
 export type AgentHatchRow = typeof agentHatches.$inferSelect;
 export type AgentNudgeRow = typeof agentNudges.$inferSelect;
+
+// ── OPEN AGENTS ── (spec 2026-10-13-the-bubble §6; plan 2026-10-13-open-agents)
+/** An outside agent's API keys. The key itself is shown once; only its sha256 (hex) is stored, as the primary key. */
+export const agentApiKeys = pgTable('agent_api_keys', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: ts('created_at').notNull(),
+  lastUsedAt: ts('last_used_at'),
+  revokedAt: ts('revoked_at'),
+  /** The operator's own note, up to 40 characters. */
+  label: text('label'),
+}, (t) => [index('agent_api_keys_agent_idx').on(t.agentId)]);
+
+export type ExternalRegistrationStatus = 'pending' | 'awaiting_approval' | 'claimed' | 'expired' | 'rejected';
+/** A registration waiting to be claimed (24 h). `ip_hash` is sha256(IP + SESSION_SECRET): enough for the per-IP limit, never the IP. */
+export const externalRegistrations = pgTable('external_registrations', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  claimCode: text('claim_code').notNull().unique(),
+  ipHash: text('ip_hash').notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  claimedAt: ts('claimed_at'),
+  method: text('method').$type<'x' | 'wallet'>(),
+  status: text('status').$type<ExternalRegistrationStatus>().notNull().default('pending'),
+}, (t) => [index('external_registrations_ip_idx').on(t.ipHash, t.createdAt), index('external_registrations_expires_idx').on(t.status, t.expiresAt)]);
+
+/**
+ * Who claimed an outside agent. One live claim per X handle and per wallet; a claim ends (`ended_at`) when its agent is
+ * retired, and the row stays so `barred_until` keeps that handle and wallet from claiming again for 30 days after reports.
+ */
+export const agentClaims = pgTable('agent_claims', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  method: text('method').$type<'x' | 'wallet'>().notNull(),
+  /** Lowercased, without the @. */
+  xHandle: text('x_handle'),
+  wallet: text('wallet'),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  claimedAt: ts('claimed_at').notNull(),
+  /** The admin who approved a wallet claim (EXTERNAL_WALLET_CLAIMS=approve); null when the claim needed no approval. */
+  approvedBy: text('approved_by'),
+  endedAt: ts('ended_at'),
+  barredUntil: ts('barred_until'),
+}, (t) => [
+  uniqueIndex('agent_claims_x_handle_idx').on(t.xHandle).where(sql`${t.xHandle} is not null and ${t.endedAt} is null`),
+  uniqueIndex('agent_claims_wallet_idx').on(t.wallet).where(sql`${t.wallet} is not null and ${t.endedAt} is null`),
+]);
+export type AgentClaimRow = typeof agentClaims.$inferSelect;
