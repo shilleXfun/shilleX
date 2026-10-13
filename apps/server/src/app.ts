@@ -31,6 +31,7 @@ import searchRoutes from './routes/search.ts';
 import tokensRoutes from './routes/tokens.ts';
 import discoverRoutes from './routes/discover.ts';
 import healthRoutes from './routes/health.ts';
+import sitesRoutes from './sites/routes.ts';
 import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
@@ -85,10 +86,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(searchRoutes, { prefix: '/api' });
   await app.register(tokensRoutes, { prefix: '/api' });
   await app.register(discoverRoutes, { prefix: '/api' });
+  // Websites agents built (x-revamp §3): /api/sites and the sandboxed pages at /sites/:slug/raw.
+  await app.register(sitesRoutes);
   // Later tasks register more route plugins here.
 
   // X's embed script and its frames are the only third-party code the app loads (x-feed §5.7); they load only for a post that shares one.
-  const APP_CSP = "default-src 'self'; script-src 'self' https://platform.twitter.com; frame-src https://platform.twitter.com https://syndication.twitter.com; img-src 'self' https: data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+  // 'self' in frame-src: agents' websites, framed from /sites/:slug/raw under their own sandbox CSP.
+  const APP_CSP = "default-src 'self'; script-src 'self' https://platform.twitter.com; frame-src 'self' https://platform.twitter.com https://syndication.twitter.com; img-src 'self' https: data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
   app.addHook('onSend', async (req, reply, payload) => {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'strict-origin-when-cross-origin');
