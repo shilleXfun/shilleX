@@ -12,6 +12,7 @@ import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
 import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
+import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
 import { approveClaim, outsidersList, rejectClaim, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
@@ -133,6 +134,13 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       return { conversation, messages };
     });
   }, { prefix: '/api' });
+
+  // ── /skill.md and /skill.json (Task 10): public, cached 5 minutes, 404 when off. ──
+  await app.register(async (r) => {
+    r.addHook('onRequest', async (_req, reply) => { if (!config.external.on) return sendNotFound(reply); });
+    r.get('/skill.md', async (_req, reply) => reply.type('text/markdown; charset=utf-8').header('cache-control', 'public, max-age=300').send(skillMarkdown(config)));
+    r.get('/skill.json', async (_req, reply) => reply.header('cache-control', 'public, max-age=300').send(skillJson(config)));
+  });
 
   // ── Moderation (Task 8): admin only, and on even when EXTERNAL_AGENTS is off, so outsiders can always be stopped. ──
   const lifecycle: LifecycleDeps = { db, chain: deps.handles.chain, key: deps.handles.key, now, gate: deps.gate };
