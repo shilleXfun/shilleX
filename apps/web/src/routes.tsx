@@ -26,6 +26,7 @@ import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
+import { ReservesPage } from './features/mainnet/ReservesPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
       { path: '/graph', element: <GraphPage /> },
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
+      { path: '/reserves', element: <ReservesPage /> },
       {
         element: <AuthOnly />,
         children: [
