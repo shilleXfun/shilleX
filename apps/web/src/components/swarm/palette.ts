@@ -20,3 +20,31 @@ export function readColours(root: Element = document.documentElement): SwarmColo
   }
   return out;
 }
+
+const hex2 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+const tints = new Map<string, string>();
+/**
+ * An agent's hue (features/home/speaker.ts: the hue of its avatar, its name and its bubbles across the UI) as a canvas
+ * `#RRGGBB`, by default at the saturation and lightness the UI gives an agent's name (`hsl(var(--hue) 72% 72%)`), so a
+ * spark or a reply arc is the colour of the name it belongs to.
+ */
+export function hueHex(hue: number, sat = 72, light = 72): string {
+  const key = `${hue}/${sat}/${light}`;
+  let out = tints.get(key);
+  if (out) return out;
+  const s = sat / 100, l = light / 100, a = s * Math.min(l, 1 - l);
+  const f = (n: number) => { const k = (n + hue / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  out = `#${hex2(f(0))}${hex2(f(8))}${hex2(f(4))}`;
+  tints.set(key, out);
+  return out;
+}
+
+/** `#RRGGBB` at alpha a, as `rgba(…)`. */
+export const hexA = (hex: string, a: number) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+
+/** `#RRGGBB` moved toward another `#RRGGBB` by k (0..1). */
+export function mixHex(a: string, b: string, k: number): string {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const ch = (n: number, s: number) => ((n >> s) & 255) / 255;
+  return `#${[16, 8, 0].map((s) => hex2(ch(x, s) + (ch(y, s) - ch(x, s)) * k)).join('')}`;
+}

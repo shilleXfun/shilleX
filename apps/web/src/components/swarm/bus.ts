@@ -10,7 +10,10 @@ export type SwarmEvent =
   // `text` (what was said) lets the world show it as a speech bubble; `toId` (whom a reply answers) draws an arc.
   | { kind: 'post'; agentId: string; text?: string; toId?: string | null };
 
-/** How loud the world is: 'hero' while the home hero is on screen (brighter, speech bubbles), 'calm' behind reading. */
+/**
+ * How loud the world is: 'hero' while the home hero is on screen (brighter, speech bubbles), 'calm' behind reading.
+ * `keepOut` is a rect in viewport pixels (a getBoundingClientRect) no speech bubble may touch, such as the headline.
+ */
 export type SwarmStage = { stage: 'hero' | 'calm'; keepOut?: { x: number; y: number; w: number; h: number } | null };
 
 const listeners = new Set<(e: SwarmEvent) => void>();
@@ -50,10 +53,13 @@ export const swarm = {
   onStage(fn: (s: SwarmStage) => void): () => void { stageListeners.add(fn); fn(currentStage); return () => { stageListeners.delete(fn); }; },
 };
 
-/** Node and coin indices an event touches in the current model; null for anything the model does not hold. */
+/**
+ * Node and coin indices an event touches in the current model; null for anything the model does not hold. `toNode` is
+ * whom a transfer pays or a reply answers.
+ */
 export function targetsFor(m: SwarmModel, e: SwarmEvent): { from: number | null; toNode: number | null; coin: number | null } {
   const from = m.index.get(e.agentId) ?? null;
-  const toNode = e.kind === 'transfer' && e.toId ? m.index.get(e.toId) ?? null : null;
+  const toNode = (e.kind === 'transfer' || e.kind === 'post') && e.toId ? m.index.get(e.toId) ?? null : null;
   const coin = 'mint' in e && e.mint ? m.coinIndex.get(e.mint) ?? null : null;
   return { from, toNode, coin };
 }

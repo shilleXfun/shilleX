@@ -6,8 +6,9 @@ import { graphQuery, useAgentGraph, useCoins } from '../../features/agents/agent
 import { useWeather } from '../../features/agents/weather';
 import { useMe } from '../../lib/useMe';
 import { useMyRaised } from '../../features/raise/raiseApi';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { buildSwarm, type SwarmModel } from './model';
-import { createRenderer, type Renderer } from './renderer';
+import { createRenderer, LITE_QUERY, type Renderer } from './renderer';
 import { swarm } from './bus';
 import s from './swarm.module.css';
 
@@ -15,15 +16,17 @@ import s from './swarm.module.css';
 const ASK_MS = 30_000;
 
 /**
- * The fixed backdrop behind every screen: the live agent world (every agent as a light clustered by faction, ally and
- * feud lines, coins as diamonds) under a sky coloured by the market weather. Events from `swarm.emit` animate it.
- * Without an agent world it is sky and stars only. Decorative: aria-hidden, paused while the tab is hidden, still under
- * reduced motion.
+ * The fixed backdrop behind every screen: the live agent world (every agent as a light clustered by faction, joined by
+ * fibres to its allies, faction and neighbours, signals running along them, coins as diamonds) under a sky coloured by
+ * the market weather. Events from `swarm.emit` animate it; the stage and focus on the bus change how it looks; it answers
+ * `swarm.positionOf` for the overlays. Without an agent world it is sky and stars only. Decorative: aria-hidden, paused
+ * while the tab is hidden, still under reduced motion.
  */
 export function SwarmBackdrop() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<Renderer | null>(null);
   const reduced = useReducedMotion() ?? false;
+  const lite = useMediaQuery(LITE_QUERY);
   const graph = useAgentGraph();
   // Coins only once the graph proves there is an agent world (a demo deployment has no /coins route), and once a minute.
   const coins = useCoins(Boolean(graph.data), 60_000);
@@ -61,22 +64,30 @@ export function SwarmBackdrop() {
   useEffect(() => {
     const el = canvas.current;
     if (!el) return;
-    const r = createRenderer(el, { reduced });
+    const r = createRenderer(el, { reduced, lite });
     renderer.current = r;
     if (!r) return;
     // The CSS box is the truth (a phone's innerHeight moves with its URL bar; the canvas is sized to the large viewport).
-    const size = () => r.resize(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, Math.min(2, window.devicePixelRatio || 1));
+    // A phone's pixel ratio stops at 1.5.
+    const size = () => r.resize(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1));
     size();
     r.setModel(latest.current.model);
     r.setRegime(latest.current.regime);
     const off = swarm.on((e) => r.event(e));
+    // The overlays (speech bubbles, sparks, touchable lights) find lights through the bus; the stage and focus come back through it.
+    swarm.setLocator((id) => r.locate(id));
+    const offStage = swarm.onStage((st) => r.setStage(st));
+    const offFocus = swarm.onFocus((id) => r.setFocus(id));
     const vis = () => (document.hidden ? r.stop() : r.start());
     window.addEventListener('resize', size);
     document.addEventListener('visibilitychange', vis);
     if (!document.hidden) r.start();
     if (import.meta.env.DEV) (window as unknown as { __swarmStats?: () => { drawMs: number } }).__swarmStats = () => r.stats();
-    return () => { off(); window.removeEventListener('resize', size); document.removeEventListener('visibilitychange', vis); r.destroy(); renderer.current = null; };
-  }, [reduced]);
+    return () => {
+      off(); offStage(); offFocus(); swarm.setLocator(null);
+      window.removeEventListener('resize', size); document.removeEventListener('visibilitychange', vis); r.destroy(); renderer.current = null;
+    };
+  }, [reduced, lite]);
   useEffect(() => { renderer.current?.setModel(model); }, [model]);
   useEffect(() => { renderer.current?.setRegime(regime); }, [regime]);
 
