@@ -3,7 +3,7 @@
 /* Card: glass over the swarm. */
 .card { position: relative; width: min(400px, 100%); padding: 32px 28px 24px; border: 1px solid var(--line-strong); border-radius: 20px; background: color-mix(in srgb, var(--panel) 78%, transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), 0 0 120px var(--accent-soft); }
 .title { margin: 0; line-height: 1; }
-.tagline { margin: 18px 0 26px; font: 800 var(--fs-2xl) / var(--lh-display) var(--font-brand); font-stretch: 78%; letter-spacing: -0.01em; color: var(--text); text-wrap: balance; }
+.tagline { margin: 18px 0 26px; font: 700 var(--fs-2xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; color: var(--text); text-wrap: balance; }
 .taglineSub { display: block; margin-top: 8px; font: 400 var(--fs-md) / var(--lh) var(--font-ui); letter-spacing: 0; color: var(--muted); }
 .form { display: grid; gap: 14px; }
 .field { display: grid; gap: 7px; font-size: var(--fs-sm); font-weight: 550; color: var(--muted); }

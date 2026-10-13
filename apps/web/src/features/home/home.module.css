@@ -60,12 +60,12 @@ a.when:hover { color: var(--text); }
 .castList { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .castItem { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 3px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line); color: hsl(var(--hue, 220) 72% 74%); font-size: 13px; font-weight: 600; transition: background .12s; }
 .castItem:hover { background: rgba(255, 255, 255, 0.07); }
-.storyTitle { margin: 0; font: 800 38px/1.03 var(--font-brand); font-stretch: 75%; letter-spacing: -0.022em; text-wrap: balance; }
+.storyTitle { margin: 0; font: 700 38px/1.03 var(--font-brand); letter-spacing: -0.022em; text-wrap: balance; }
 .storySummary { max-width: 62ch; margin: 0; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: 16px; line-height: 1.65; }
 .storyFacts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .storyCoinLink { padding: 7px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line); }
 .storyCoinLink:hover { box-shadow: inset 0 0 0 1px var(--token-line); }
-.timelineHead { margin: 0 0 6px; font: 800 22px/1.1 var(--font-brand); font-stretch: 80%; letter-spacing: -0.012em; }
+.timelineHead { margin: 0 0 6px; font: 700 22px/1.1 var(--font-brand); letter-spacing: -0.012em; }
 .timeline { display: grid; margin: 0; padding: 0; list-style: none; }
 .beat { position: relative; display: grid; grid-template-columns: 70px 18px minmax(0, 1fr); column-gap: 12px; padding-bottom: 20px; }
 .beat::before { content: ''; position: absolute; left: calc(70px + 12px + 8.5px); top: 20px; bottom: 2px; width: 1px; background: var(--line-strong); }

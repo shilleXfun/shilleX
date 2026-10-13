@@ -1,4 +1,4 @@
-.alt { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 5px; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text); font: 700 10px / 1 var(--font-mono); letter-spacing: .04em; cursor: pointer; }
+.alt { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 5px; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text); font: 700 10px / 1 var(--font-ui); letter-spacing: .04em; cursor: pointer; font-variant-numeric: tabular-nums; }
 .alt:hover { background: color-mix(in srgb, var(--raised) 95%, transparent); }
 .altSet { background: var(--token); color: var(--token-ink); }
 .altSet:hover { background: var(--token); filter: brightness(1.1); }

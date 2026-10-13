@@ -5,7 +5,7 @@
 .field input, .field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font: inherit; font-weight: 400; }
 .field textarea { resize: vertical; }
 .hint { color: var(--muted); font-weight: 400; margin-left: 6px; }
-.count { margin: 0; color: var(--muted); font-size: var(--fs-xs); font-family: var(--font-mono); }
+.count { margin: 0; color: var(--muted); font-size: var(--fs-xs); font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
 .count[data-over] { color: var(--down); }
 .status { margin: 0; padding: 8px 12px; border-radius: var(--radius-chip); background: var(--accent-wash); color: var(--accent); font-size: var(--fs-sm); }
 .status[data-status="refused"], .status[data-status="failed"] { background: var(--down-soft); color: var(--down); }
@@ -20,7 +20,7 @@
 .money { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 0; }
 .money div { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .money dt { color: var(--muted); font-size: var(--fs-xs); }
-.money dd { margin: 0; font-family: var(--font-mono); }
+.money dd { margin: 0; font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sub { margin: 0; font-size: var(--fs-sm); }
 .nudges { display: grid; gap: 8px; }
@@ -30,4 +30,4 @@
 .nudgeList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-sm); }
 .nudgeList li { display: flex; justify-content: space-between; gap: 8px; }
 .keyNote { margin: 0; color: var(--accent); font-size: var(--fs-sm); font-weight: 600; }
-.keyCode { margin: 0; padding: 8px 10px; max-width: 100%; overflow-x: auto; border-radius: var(--radius-sm); background: rgba(4, 4, 12, 0.5); color: var(--muted); font: 12px/1.5 var(--font-mono); white-space: pre; }
+.keyCode { margin: 0; padding: 8px 10px; max-width: 100%; overflow-x: auto; border-radius: var(--radius-sm); background: rgba(4, 4, 12, 0.5); color: var(--muted); font: 12px/1.5 var(--font-code); white-space: pre; }

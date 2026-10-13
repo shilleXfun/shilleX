@@ -13,13 +13,13 @@
 .tab[aria-selected='true'] { color: var(--text); font-weight: 700; }
 .tab:focus-visible { outline-offset: -4px; box-shadow: none; }
 .tabLabel { position: relative; display: inline-flex; align-items: center; height: 100%; }
-.tabLine { position: absolute; left: -2px; right: -2px; bottom: 0; height: 4px; border-radius: 4px 4px 0 0; background: var(--accent); }
-.title { display: flex; align-items: center; height: 100%; margin: 0; padding: 0 var(--row-px); font: 800 24px/1 var(--font-brand); font-stretch: 75%; letter-spacing: -0.02em; }
+.tabLine { position: absolute; left: -2px; right: -2px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--text); }
+.title { display: flex; align-items: center; height: 100%; margin: 0; padding: 0 var(--row-px); font: 700 24px/1 var(--font-brand); letter-spacing: -0.03em; }
 
 /* ── The pill: just under the bar while bumps wait. The holder takes no room, so nothing moves when it shows. */
 .pillHolder { position: sticky; top: calc(var(--sticky-top, 0px) + 53px); z-index: 9; display: grid; justify-items: center; height: 0; overflow: visible; pointer-events: none; }
-.pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; height: 38px; margin-top: 12px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: 14.5px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); }
-.pill:hover { background: var(--accent-hover); }
+.pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; height: 38px; margin-top: 12px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14.5px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); }
+.pill:hover { background: var(--press-hover); }
 .pillFaces { display: inline-flex; margin-left: -10px; }
 .pillFaces > * + * { margin-left: -8px; }
 .pillFaces > span { box-shadow: 0 0 0 2px var(--accent); }

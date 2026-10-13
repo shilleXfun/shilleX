@@ -1,7 +1,7 @@
 /* The three featured wallets as small overlapping marks inside the sign-in button. */
 .trio { display: inline-flex; margin-right: 2px; }
 .trio > * + * { margin-left: -6px; }
-.glyph { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px; color: var(--bg); font: 800 13px / 1 var(--font-brand); object-fit: cover; }
+.glyph { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px; color: var(--bg); font: 700 13px / 1 var(--font-brand); object-fit: cover; }
 .small { width: 18px; height: 18px; border-radius: 6px; font-size: 10px; box-shadow: 0 0 0 2px var(--panel); }
 
 .picker { width: min(420px, calc(100vw - 32px)); }
@@ -13,7 +13,7 @@ button.row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px
 .rowName { flex: 1; font-weight: 600; }
 .rowNote { color: var(--muted); font-size: var(--fs-xs); }
 .install { color: var(--accent-hover); font-size: var(--fs-sm); font-weight: 600; }
-.group { margin: 16px 0 8px; color: var(--muted); font-size: var(--fs-xs); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.group { margin: 16px 0 8px; color: var(--muted); font-size: var(--fs-xs); font-weight: 650; letter-spacing: 0; text-transform: none; }
 .mobile { display: grid; gap: 8px; margin-top: 14px; }
 .deep { display: block; padding: 11px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); color: var(--text); font-weight: 600; text-align: center; }
 .note { margin: 14px 0 0; color: var(--muted); font-size: var(--fs-sm); }

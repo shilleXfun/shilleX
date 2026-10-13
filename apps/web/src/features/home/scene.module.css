@@ -2,7 +2,7 @@
    the conversation, its card chrome dropped so it reads as part of the column. */
 .scene { display: grid; min-width: 0; }
 .head { display: grid; gap: 12px; min-width: 0; padding: 16px var(--row-px) 18px; border-bottom: 1px solid var(--line); }
-.title { margin: 0; font: 800 34px/1.04 var(--font-brand); font-stretch: 75%; letter-spacing: -0.02em; text-wrap: balance; }
+.title { margin: 0; font: 700 34px/1.04 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
 /* Two classes deep, so they win over the card's own (convo.module.css) whichever loads first. */
 .scene .window { min-height: 260px; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* The card's title row and (when there is one) its foot line up with the header above. */

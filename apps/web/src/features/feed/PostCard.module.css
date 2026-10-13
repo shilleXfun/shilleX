@@ -4,7 +4,7 @@
 .card {
   position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap);
   /* --row-pt / --row-pb let a context tighten a row (the timeline's root under its "replied" line) without a fight. */
-  padding: var(--row-pt, 12px) var(--row-px) var(--row-pb, 12px); border-bottom: 1px solid var(--line);
+  padding: var(--row-pt, 14px) var(--row-px) var(--row-pb, 14px); border-bottom: 1px solid var(--line);
   background-color: var(--row-bg); -webkit-backdrop-filter: var(--row-blur); backdrop-filter: var(--row-blur);
   cursor: pointer; transition: background-image .15s;
 }
@@ -32,7 +32,8 @@
 .name { min-width: 0; overflow: hidden; color: var(--text); font-size: 15px; font-weight: 650; line-height: 20px; text-overflow: ellipsis; }
 .name:hover { text-decoration: underline; text-underline-offset: 3px; }
 /* Colour belongs to the agents: an agent's name takes the hue of its avatar (and of its light in the world). */
-.hued { color: hsl(var(--hue, 220) 72% 74%); }
+/* Lumen: names are white, as on X; an agent's colour is its lit avatar. */
+.hued { color: var(--text); }
 .handle, .dot, .time { flex: none; color: var(--muted); font-size: 14px; line-height: 20px; }
 .handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .time { font-variant-numeric: tabular-nums; }
@@ -47,7 +48,7 @@
 .replyTo { margin-top: 1px; color: var(--muted); font-size: 14px; }
 .replyTo a { color: var(--accent-hover); }
 /* Two classes deep: it wins over the read-only text's own margin (agents.module.css .text) whatever order they load in. */
-.card .body { margin-top: 2px; line-height: 1.45; }
+.card .body { margin-top: 3px; font-size: 16px; line-height: 1.5; letter-spacing: -0.005em; }
 .focused .body { font-size: var(--fs-lg); line-height: 1.5; }
 /* Clamp.tsx: the text held to --lines, "Show more" under it. */
 .clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 6); line-clamp: var(--lines, 6); }
@@ -148,7 +149,7 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
 
 /* "N new posts" over the older feeds (NewPostsPill.tsx): the timeline's pill, without its faces. */
 .newPill { position: sticky; top: calc(var(--sticky-top, 0px) + 60px); z-index: 5; display: grid; place-items: center; height: 0; overflow: visible; }
-.newPillBtn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 650; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.newPillBtn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
 .endNote { margin: 0; padding: 28px 20px; text-align: center; color: var(--muted); font-size: var(--fs-sm); }
 .loadMore { display: grid; place-items: center; padding: 18px; }
 

@@ -15,7 +15,7 @@
 /* ── The window onto the page: its still, then the page scaled from 1280 px ── */
 .view { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; container-type: inline-size; background: var(--panel); }
 .still { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 6cqw 6cqw 7cqw; }
-.stillTitle { display: -webkit-box; overflow: hidden; color: var(--text); font: 800 clamp(15px, 8cqw, 44px)/0.95 var(--font-brand); font-stretch: 78%; letter-spacing: -0.015em; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.stillTitle { display: -webkit-box; overflow: hidden; color: var(--text); font: 700 clamp(15px, 8cqw, 44px)/0.95 var(--font-brand); letter-spacing: -0.03em; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .stillBlurb { max-width: 52ch; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
 .stage { position: absolute; top: 0; left: 0; width: 1280px; transform: scale(var(--scale)); transform-origin: 0 0; pointer-events: none; }
 /* White like any browser page until the site paints its own; it fades in over the still once loaded. */
