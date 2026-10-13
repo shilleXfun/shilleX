@@ -400,3 +400,8 @@ a.person:hover { color: var(--accent-hover); }
   .voice { font-size: 19px; }
   .heroTop { align-items: flex-start; }
 }
+/* Today's counters (TodayCounters.tsx): four small tiles that tick as the world moves. */
+.today { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.today > div { min-width: 0; padding: 6px 8px; border-radius: 10px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); }
+.today dt { color: var(--muted); font: 500 10px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.today dd { margin: 2px 0 0; font: 650 15px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }

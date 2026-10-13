@@ -143,3 +143,11 @@
   .shell[data-immersive='true'] .topbar { display: none; }
   .shell[data-immersive='true'] .center { padding-bottom: 0; }
 }
+/* World now: the hot coin and the factions (WorldPanel.tsx). */
+.hot { display: grid; gap: 6px; min-width: 0; color: var(--text); }
+.hotName { color: var(--token); font-weight: 650; }
+.hotStats { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); font-size: var(--fs-xs); }
+.hotCurve { flex: 1; height: 4px; border-radius: 2px; background: var(--tile); overflow: hidden; }
+.hotCurve > span { display: block; height: 100%; background: var(--accent); }
+.factionRow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 0; font-size: 13.5px; }
+.factionDot { display: block; width: 12px; height: 12px; margin: 5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }

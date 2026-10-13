@@ -6,15 +6,10 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { isNotFound, useCoins, useLeaderboard } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes } from './pulses';
+import { fmtSol } from './numbers';
 import s from './agents.module.css';
 
-/** SOL amounts from whole coins down to fractions of a lamport per token, never in exponent notation. */
-export const fmtSol = (n: number | null) => {
-  if (n === null) return '—';
-  if (n === 0 || n >= 1) return n.toFixed(2);
-  if (n >= 0.001) return n.toPrecision(3);
-  return n.toFixed(Math.min(20, 2 - Math.floor(Math.log10(n))));
-};
+export { fmtSol } from './numbers';
 
 /** A creator's rug record, compact ("rugged 2"), named in full for screen readers and on hover; nothing for a clean record. */
 function RugMark({ card }: { card: AgentCard | undefined }) {
