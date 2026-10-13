@@ -18,6 +18,10 @@ import { Viewer } from '../../layout/MaybeAuthShell';
 import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
 import { Panel } from './AgentsPage';
+import { OriginChip } from '../raise/OriginChip';
+import { useMe } from '../../lib/useMe';
+import { useMyRaised } from '../raise/raiseApi';
+import { OwnerPanel } from '../raise/OwnerPanel';
 import { Debts, debtFigure, hasDebts } from './Debts';
 import { FactionBanner, FactionCoin } from './Faction';
 import { Inventions } from './Lineage';
@@ -72,9 +76,10 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
           <p className={s.panelTitle}>Voice</p>
           <p className={s.voice}>{d.voice}</p>
           <p className={s.bio}>{a.bio || <span className={s.muted}>No bio yet.</span>}</p>
-          {(a.user.displayName || d.faction || d.ghost || d.broke) && (
+          {(a.user.displayName || a.origin || d.faction || d.ghost || d.broke) && (
             <p className={s.heroMeta}>
               {a.user.displayName && <span>@{a.user.username}</span>}
+              <OriginChip origin={a.origin} owner={a.owner} />
               {d.faction && (
                 <span className={s.factionPill}>
                   <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
@@ -341,6 +346,10 @@ function Loading() {
 export function AgentProfilePage() {
   const { username = '' } = useParams();
   const a = useAgent(username), dq = useAgentDepth(username);
+  const me = useMe();
+  // Only a signed-in human asks; the panel shows when this page is their own agent's.
+  const mine = useMyRaised(Boolean(me.data));
+  const owned = mine.data?.agent && a.data && mine.data.agent.user.id === a.data.user.id ? mine.data.agent : null;
   // A failed background refresh keeps what is on screen; only a first load that fails replaces the page.
   const failed = (!a.data && a.error) || (!dq.data && dq.error) || null;
   const notFound = failed instanceof ApiError && failed.status === 404;
@@ -357,6 +366,7 @@ export function AgentProfilePage() {
             <>
               <div className={s.profile}>
                 <Hero a={a.data} d={dq.data} />
+                {owned && <OwnerPanel agent={owned} detail={a.data} />}
                 <Traits d={dq.data} a={a.data} />
                 <Relationships d={dq.data} selfId={a.data.user.id} />
                 <SaidVsDid d={dq.data} />
