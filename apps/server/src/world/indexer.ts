@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTurns, agents, chainTxs, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
@@ -114,25 +114,27 @@ export class Indexer {
       positions,
       card: {
         user: toUserSummary(u), bio: u.bio, status, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
-        pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
+        pnlSol: c.funded.has(u.id) ? solBalance + tokenValueSol - START - sol(c.topUps.get(u.id) ?? 0) : 0, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
       },
     };
   }
 
   private async context() {
-    const [rows, coins, txs, ts, ws] = await Promise.all([
+    const [rows, coins, txs, ts, ws, tu] = await Promise.all([
       this.db.select({ u: users, status: agents.status }).from(users).innerJoin(agents, eq(agents.userId, users.id)).orderBy(asc(users.username)),
       this.db.select().from(worldCoins),
       this.db.select().from(chainTxs),
       this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).groupBy(agentTurns.agentId),
       this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets),
+      this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(eq(agentGrants.kind, 'top_up')).groupBy(agentGrants.agentId),
     ]);
     return {
       rows, coins, txsByMint: byMint(txs), txsByAgent: byAgent(txs),
       turnStats: new Map(ts.map((r) => [r.a, { n: r.n, last: r.last ? new Date(r.last) : null }])),
       funded: new Set(ws.filter((w) => w.f).map((w) => w.o)),
       pks: new Map(ws.map((w) => [w.o, w.pk])),
+      topUps: new Map(tu.map((r) => [r.a, Number(r.s)])),
     };
   }
 
