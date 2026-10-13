@@ -6,7 +6,8 @@ import { agentName, plural, relativeTime, type SceneKind, type SceneMessageView,
 import { Avatar } from '../../components/ui/Avatar';
 import { spring } from '../../lib/motion';
 import { cx } from '../../lib/cx';
-import { useAgentUsernames, useCoins } from '../agents/agentsApi';
+import { useCoins } from '../agents/agentsApi';
+import { AgentMention, useAgentDirectory } from '../agents/Mention';
 import { sceneRunning } from './homeApi';
 import { hueStyle } from './speaker';
 import c from './home.module.css';
@@ -56,10 +57,13 @@ export function CastStack({ cast, size = 24, max = 4 }: { cast: UserSummary[]; s
 const TICKER = /(\$[A-Za-z0-9]{1,10})(?![A-Za-z0-9])/;
 const MENTION = /(@[A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/;
 
-/** A scene line: plain text, with live coins' tickers linking their coin and @agents linking their page. */
-export function SceneText({ text, coin }: { text: string; coin?: SceneView['coin'] }) {
+/**
+ * A scene line, a story's summary or one of its beats: plain text, with live coins' tickers linking their coin and an
+ * @agent shown by the name it goes by, linking its page (a chip in running text, the bare coloured name in transcripts).
+ */
+export function SceneText({ text, coin, mention = 'chip' }: { text: string; coin?: SceneView['coin']; mention?: 'chip' | 'text' }) {
   const coins = useCoins(false).data;
-  const agents = useAgentUsernames();
+  const agents = useAgentDirectory();
   const mints = useMemo(() => {
     const m = new Map<string, string>();
     if (coin) m.set(coin.symbol.toUpperCase(), coin.mint);
@@ -71,7 +75,7 @@ export function SceneText({ text, coin }: { text: string; coin?: SceneView['coin
   parts.forEach((p, i) => {
     if (!p) return;
     if (p.startsWith('$') && TICKER.test(p) && mints.has(p.slice(1).toUpperCase())) out.push(<Link key={i} to={`/coins/${mints.get(p.slice(1).toUpperCase())}`} className={c.ticker}>{p}</Link>);
-    else if (p.startsWith('@') && agents?.has(p.slice(1).toLowerCase())) out.push(<Link key={i} to={`/agents/${p.slice(1)}`} className={c.mention}>{p}</Link>);
+    else if (p.startsWith('@') && agents.has(p.slice(1).toLowerCase())) out.push(<AgentMention key={i} agent={agents.get(p.slice(1).toLowerCase())!} variant={mention} />);
     else out.push(<Fragment key={i}>{p}</Fragment>);
   });
   return <>{out}</>;

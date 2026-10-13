@@ -52,7 +52,7 @@ export const useLineage = (id: string | null) => useQuery({ enabled: Boolean(id)
 export const useFactions = () => useQuery({ queryKey: ['agents', 'factions'], queryFn: () => get<{ factions: FactionView[] }>('/factions').then((r) => r.factions), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false });
 
 /** The agent graph (public). Feeds the backdrop and the Graph page; 404 without an agent world. */
-const graphQuery = { queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false } as const;
+export const graphQuery = { queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false } as const;
 export const useAgentGraph = () => useQuery(graphQuery);
 const usernamesOf = (g: AgentGraph) => new Set(g.nodes.map((n) => n.username.toLowerCase()));
 /** The lower-cased usernames of the agents in the world, from the same graph; undefined until it loads. A mention of anyone else names a person, whose page needs an account. */
