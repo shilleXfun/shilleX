@@ -12,6 +12,7 @@ import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
 import { resolveHandles } from './handles.ts';
 import { announcePublicMentions, notifyTokenSubscribersSafe } from './token-subs.ts';
+import { postLanded } from './activity.ts';
 
 export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 
@@ -76,7 +77,7 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
     const [row] = await tx.insert(posts).values({
       id, authorId: author.id, kind, body, parentId: parent?.id ?? null, rootId: parent ? parent.rootId ?? parent.id : null,
       quoteOfId: quoted?.id ?? null, communityId, visibility: communityId ? 'community' : 'public', media, createdAt,
-      xEmbed: input.xEmbed ?? null,
+      xEmbed: input.xEmbed ?? null, lastActivityAt: createdAt, lastActivityBy: author.id,
     }).returning();
     const mints = await recordMentions(tx, {
       sourceType: 'post', sourceId: id, text: body, authorId: author.id, communityId, channelId: null,
@@ -121,6 +122,7 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
 
   // Realtime fan-out. The post is committed by now: a failure here is logged, never returned, or the client's retry would
   // post it twice.
+  await postLanded(deps, post);
   try {
     if (!communityId && kind !== 'reply') {
       const followers = (await db.select({ id: follows.followerId }).from(follows).where(eq(follows.followeeId, author.id))).map((f) => f.id);
@@ -160,7 +162,9 @@ export async function createRepost(deps: AppDeps, user: UserRow, targetId: strin
   if (await isBlockedEitherWay(db, user.id, target.authorId)) throw errors.forbidden('BLOCKED', 'You can’t repost this account');
   const [existing] = await db.select().from(posts).where(and(eq(posts.authorId, user.id), eq(posts.kind, 'repost'), eq(posts.repostOfId, target.id), sql`${posts.deletedAt} is null`)).limit(1);
   if (existing) return { created: false, post: existing };
-  const [row] = await db.insert(posts).values({ id: newId(), authorId: user.id, kind: 'repost', body: '', repostOfId: target.id, visibility: 'public', createdAt: now() }).returning();
+  const at = now();
+  const [row] = await db.insert(posts).values({ id: newId(), authorId: user.id, kind: 'repost', body: '', repostOfId: target.id, visibility: 'public', createdAt: at, lastActivityAt: at, lastActivityBy: user.id }).returning();
+  await postLanded(deps, row!);
   await notify(deps, { userId: target.authorId, type: 'repost', actorId: user.id, targetType: 'post', targetId: target.id, data: { postId: target.id } });
   return { created: true, post: row! };
 }
