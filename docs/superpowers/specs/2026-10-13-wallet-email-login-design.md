@@ -10,7 +10,8 @@ Today you can only sign up with a username and password, and a wallet is a typed
 
 - Sign in and sign up with Phantom, Solflare and more wallets than those two.
 - Username + password stays.
-- Email + password is added.
+- Email + password is added, **without verification** (owner, 2026-10-13: "only for register, you don't need to authenticate"). Shillex sends no email at all: no provider, no key, no links.
+- "claudflare" meant the Solflare wallet.
 
 ## 1. Sign-in methods
 
@@ -18,7 +19,7 @@ Today you can only sign up with a username and password, and a wallet is a typed
 |---|---|---|
 | Wallet (Sign In With Solana) | You hold the wallet's key | From day one |
 | Username + password | As today | From day one |
-| Email + password | You read that inbox | Once the owner adds an email key (§5) |
+| Email + password | You know the password (the address is not checked) | From day one |
 
 - An account can have several methods at once: a password, one email and up to 5 wallets.
 - Every method signs you into the same kind of session: the existing `sx_session` cookie, 30 days, httpOnly.
@@ -26,14 +27,12 @@ Today you can only sign up with a username and password, and a wallet is a typed
 
 ## 2. Data (one migration, next free number)
 
-- **`users.email`** (text, null) plus a unique index on `lower(email)`.
-  - It is written only once the address is verified, so a stored email is always a verified one.
-  - `users.email_verified_at` records when that happened.
+- **`users.email`** (text, null) plus a unique index on `lower(email)`. It is never verified: it is a login name that looks like an address.
 - **`user_wallets`**:
   - Columns: `address` (PK, so a wallet belongs to one account), `user_id` (FK, cascade), `wallet_name` (as the wallet reports it, display only), `verified_at` (null only for migrated rows), `show_on_profile` (default false), `is_payout` (default false), `created_at`, `last_login_at`.
   - Indexes: one on `user_id`, and a partial unique index on `user_id where is_payout`.
 - **`auth_nonces`** (`nonce` PK, `purpose` `'login' | 'link' | 'confirm'`, `user_id` null, `input` jsonb with the exact sign-in fields issued, `message` text null, `created_at`, `expires_at`, `used_at`).
-- **`auth_tokens`** (`id` = sha256 of the token, as sessions do; `kind` `'wallet_signup' | 'email_signup' | 'email_verify' | 'password_reset'`; `user_id` null; `data` jsonb; `created_at`; `expires_at`; `used_at`).
+- **`auth_tokens`** (`id` = sha256 of the token, as sessions do; `kind` `'wallet_signup'`; `user_id` null; `data` jsonb; `created_at`; `expires_at`; `used_at`).
 - **Cleanup:** nonces and tokens older than a day are deleted when a new one is written. No new job.
 - **`wallet_links` goes away:**
   - Each row is copied into `user_wallets` with `verified_at` null and `show_on_profile = display_wallet`, then the table is dropped.
@@ -159,72 +158,46 @@ Exact versions, each at least two weeks old (npm, checked 2026-10-13):
 
 ## 5. Email + password
 
-### Off until configured
-
-The email feature is off until the owner sets `RESEND_API_KEY` and `EMAIL_FROM`.
-
-- `lib/mail.ts` defines `send({to, subject, text, html})`. The Resend implementation is one `fetch` to its HTTP API, with no SDK.
-- **When the email setting is off:**
-  - Every email field and "Forgot password?" is hidden.
-  - The `/api/auth/email/*` and `/api/auth/password/*` routes answer 404.
-  - `GET /api/auth/config` returns `{email: false}`.
-- **Other mailers:**
-  - `EMAIL_DEV_LOG=on` prints links to the server console (local only).
-  - Tests use a `MemoryMailer`.
-- **Daily cap:** at most `MAIL_DAILY_MAX` emails a day (default 90, under Resend's free 100 a day). Past it, email routes answer `503 EMAIL_BUSY` for everyone, which names no account.
+The owner chose email without verification: the address is a login name, and Shillex sends no email (no provider, no `RESEND_API_KEY`, no links).
 
 ### Signup
 
-Email signup starts with the email and never reveals whether an account exists.
-
-1. `POST /api/auth/email/start {email}` always answers `202 "Check your inbox"`.
-   - Unknown address: the mail is "Finish signing up" with an `email_signup` token (30 minutes).
-   - Known address: the mail is "You already have an account: sign in or reset your password".
-2. The link opens `/signup/email?token=…`, where you pick a username, display name and password.
-3. `POST /api/auth/email/finish` creates the user with a verified email and signs them in.
+- The signup form has two tabs: "Username" (today's form) and "Email". The Email tab asks for email, username, display name and password.
+- `POST /api/auth/register` gains an optional `email`. It is trimmed and lowercased, at most 254 characters, and checked with zod `email()`.
+- A taken email answers `409 EMAIL_TAKEN` ("That email is already used on Shillex"), just as a taken username does. Without verification there is no way to hide this. Signup's existing per-IP rate limit covers it.
+- **Known cost of no verification:** anyone can sign up with someone else's address, and its real owner then can't use it here. Shillex never mails the address, so nothing reaches that person.
 
 ### Login
 
 - One field, "Username or email", plus the password. Input containing `@` is matched on `lower(email)`.
 - Every failure gives the same error: "Wrong username, email or password".
-- When no user matches, the server still runs argon2 `verify` against a fixed dummy hash, so timing does not reveal accounts. This applies to username login too.
+- When no user matches, the server still runs argon2 `verify` against a fixed dummy hash, so login timing does not reveal accounts. This applies to username login too.
 
 ### Forgot password
 
-- `POST /api/auth/password/forgot {email}` always answers 204. A verified match gets a `password_reset` link (30 minutes, one use).
-- `POST /api/auth/password/reset {token, password}`:
-  - Sets the new hash, deletes every session of that user and signs this one in.
-  - Mails "your password was changed".
+There is no email reset.
+- An account with a verified wallet resets its password by signing with that wallet: `POST /api/auth/password/reset-with-wallet`, nonce purpose `confirm`, then the new password. Every other session of that user is deleted.
+- An account with no wallet has no self-service reset. The login page says so under "Forgot password?" and suggests linking a wallet in Settings.
 
 ### Settings
 
-**Add or change the email:** `POST /api/me/email {email}` always answers 202.
-- The new address gets an `email_verify` link.
-- If another account already uses it, the address gets "this address is already used on Shillex" instead.
-- The old address gets a notice.
-
-**Change it, set a password, or remove the email:**
-- These need the current password if the account has one; otherwise a fresh wallet signature (purpose `confirm`).
-- Removing the email is allowed only while another sign-in method remains.
-
-**Normalising:** trim and lowercase before matching and storing; at most 254 characters; checked with zod `email()`.
-
-**Rate limits:** `email/start` and `password/forgot` allow 5 an hour per IP and 3 an hour per address.
+- **Add, change or remove the email:** this needs the current password if the account has one, otherwise a fresh wallet signature (purpose `confirm`). A taken address answers `409 EMAIL_TAKEN`. Removing the email is allowed only while another sign-in method remains.
+- **Rate limits:** email changes allow 5 an hour per user.
 
 ## 6. Screens
 
 **Login:**
 - "Continue with a wallet" is the primary button, with the Phantom, Solflare and Backpack icons. It opens the picker.
 - Then "or", then "Username or email" and "Password".
-- Then "Forgot password?" (email on), "Create an account" and "Watch without an account".
+- Then "Forgot password?" (reset with a linked wallet, §5), "Create an account" and "Watch without an account".
 
 **Signup:**
-- The same wallet button, the current username form, and "Sign up with email instead" (email on).
+- The same wallet button, then the form with its "Username" and "Email" tabs.
 - After a new wallet signs, a "Pick a username" step shows the connected wallet as a chip.
 
 **Settings → Sign-in methods:**
 - **Password:** set or change.
-- **Email:** add, verify, change or remove.
+- **Email:** add, change or remove.
 - **Wallets:** each row shows the wallet name, short address and a "Verified" tick, or "Verify" (sign) for migrated rows. It also has a "Show on profile" toggle, a "Payout" choice (mainnet only) and "Remove". Below the list: "Add a wallet".
 
 ## 7. Profile badge and privacy
@@ -235,7 +208,6 @@ Email signup starts with the email and never reveals whether an account exists.
 - **Shared types:**
   - `ProfileView.wallet` becomes `ProfileView.wallets: {address, walletName, verifiedAt}[]`.
   - `SettingsView.wallet` becomes `SettingsView.signIn: {hasPassword, email, wallets}`.
-  - New: `AuthConfig {email}`.
 
 ## 8. Ties to the other specs
 
@@ -243,7 +215,7 @@ Email signup starts with the email and never reveals whether an account exists.
 - **Mainnet:**
   - The "linked wallet" in mainnet §4 becomes the payout wallet: the user's one verified `user_wallets` row with `is_payout`. Withdrawals go only there.
   - While the agent holds mainnet funds:
-    - Changing the payout wallet takes effect after a 72-hour hold, with a notification and, if verified, an email. This protects against a stolen session.
+    - Changing the payout wallet takes effect after a 72-hour hold, with a notification. This protects against a stolen session.
     - Unlinking the payout wallet is refused.
   - When its plan is written, the mainnet spec's `wallet_links.verified` wording changes to this.
 - **Admin:** stays a password login (`admin`). Reserved usernames apply to wallet and email signups.
@@ -255,8 +227,8 @@ Email signup starts with the email and never reveals whether an account exists.
 - **Unchanged:** the `allowedOrigins` check on POSTs, the cookie flags (httpOnly, `sameSite=lax`, secure in production) and the CSP.
   - The CSP gets a manual check that Phantom and Solflare still inject under it.
   - Mobile Wallet Adapter's WebSocket is already allowed by `ws: wss:`.
-- **Enumeration:** email start, email change and forgot-password always answer the same way. Login gives one error and runs the dummy hash.
-- **Sessions:** a password reset or change deletes the user's other sessions.
+- **Enumeration:** signup says when a username or email is taken (unavoidable without verification; rate-limited). Login gives one error and runs the dummy hash.
+- **Sessions:** a password reset (with a wallet) or change deletes the user's other sessions.
 - **Storage:** tokens are stored only as sha256 hashes.
 - **Logs:** never hold full emails, tokens or signatures.
 
@@ -276,12 +248,10 @@ Email signup starts with the email and never reveals whether an account exists.
   - The 5-wallet cap, the last-method guard and the payout lock.
   - Wallet signup token reuse and expiry, and reserved usernames.
 - *Email:*
-  - `start` answers alike for a new and an existing email but sends different mail.
-  - `finish` creates a verified email.
+  - Signup with an email; a taken email (any case) gives `EMAIL_TAKEN`.
   - Login by email, and the dummy-hash path.
-  - A reset kills sessions.
-  - The per-address limit and `EMAIL_BUSY`.
-  - With email off: the 404s, and `/auth/config` returns `false`.
+  - Changing or removing the email needs the password or a wallet signature, and the last-method guard holds.
+  - A wallet password reset kills the other sessions; an account with no wallet cannot reset.
 - *Migration:* `wallet_links` rows arrive as unverified rows that keep their show-on-profile choice. They appear on no public route until they are verified.
 
 **Web (vitest, jsdom).** A fake Wallet Standard wallet registered with `registerWallet` drives these cases:
@@ -304,13 +274,11 @@ Email signup starts with the email and never reveals whether an account exists.
 
 ## 11. Rollout
 
-1. **Migration and deploy with email off.** Wallet sign-in, username sign-in and the settings page go live. Existing typed addresses appear as unverified until signed.
-2. **Turning email on.** The owner verifies a sending domain in Resend (it gives DNS records to add), then sets `RESEND_API_KEY` and `EMAIL_FROM` and redeploys.
+1. **One migration and deploy.** Wallet, username and email sign-in and the settings page go live together. Existing typed addresses appear as unverified until signed. No keys are needed.
 
 ## Open questions for the owner
 
-1. **Email sender.** Resend's free plan is 3,000 emails a month and 100 a day, according to third-party reviews; check its pricing page. Is Resend OK, and which domain should the mail come from? You add its DNS records. Email sign-in stays hidden until the key is set.
-2. **"claudflare".** We read it as **Solflare**, the wallet. If you meant **Cloudflare** (for example a Turnstile bot check on signup), say so and it gets added.
+None left: the owner chose unverified email (no provider) and confirmed Solflare.
 
 ## Sources (checked 2026-10-13)
 
@@ -321,5 +289,4 @@ Email signup starts with the email and never reveals whether an account exists.
 - Solflare Browse deeplink: https://docs.solflare.com/solflare/technical/deeplinks/other-methods/browse
 - `@solana/react` hooks (anza-xyz/kit, packages/react): https://github.com/anza-xyz/kit/tree/main/packages/react
 - Package versions and publish dates: `npm view <package> time`.
-- Resend free tier, from reviews (not Resend's own page): https://automationatlas.io/answers/resend-free-tier-explained-2026/ and https://www.usecarly.com/blog/resend-pricing/
 - Solflare and Backpack `solana:signIn` support could not be confirmed from their docs. The design detects the feature at runtime and falls back to `signMessage`.
