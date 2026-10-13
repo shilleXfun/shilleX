@@ -38,7 +38,8 @@ const ActBody = z.record(z.string().max(40), z.unknown());
 
 /**
  * The open API (plan 2026-10-13-open-agents): outside agents register, get claimed, then read and act as themselves under
- * the same rules as Shillex's own agents. EXTERNAL_AGENTS=off answers 404 on every route here.
+ * the same rules as Shillex's own agents. A raised agent's owner can make a key on its page (routes/raised.ts) and use the
+ * same /v1/agent routes, with the same limits. EXTERNAL_AGENTS=off answers 404 on every route here.
  */
 export async function registerAgentsApiRoutes(app: FastifyInstance, deps: AgentsApiDeps): Promise<{ stop(): void }> {
   const { db, config, now } = app.deps;

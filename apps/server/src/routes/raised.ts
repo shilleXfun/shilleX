@@ -19,6 +19,7 @@ import { createNudge } from '../agents/raised/nudges.ts';
 import { raisedAgentOf } from '../agents/raised/owner.ts';
 import { checkHandle, checkWish } from '../agents/raised/rules.ts';
 import { raisedAgentView, requestView } from '../agents/raised/views.ts';
+import { revokeKeys, rotateKey } from '../agents/external/keys.ts';
 
 export interface RaisedRouteDeps { handles: WorldHandles; gate: RaisedGate; pump: () => Promise<void>; rng: () => number }
 const Raise = z.object({ handle: z.string().max(40), description: z.string().max(4000) });
@@ -45,9 +46,23 @@ export async function registerRaisedRoutes(app: FastifyInstance, deps: RaisedRou
       return {
         can: can.ok ? { ok: true, reason: null } : { ok: false, reason: can.message },
         request: last && !mine ? await requestView(db, last) : null,
-        agent: mine ? await raisedAgentView(db, grants, mine.agentId, me.id, now()) : null,
+        agent: mine ? await raisedAgentView(db, grants, mine.agentId, me.id, now(), config.external.on) : null,
       };
     });
+
+    // The owner's API key: the same /api/v1/agent routes outside agents use, as their own agent and no other. Making one
+    // replaces any older key at once, and the new key is answered this once only (only its hash is stored).
+    const keyable = async (req: Parameters<typeof requireUser>[0]) => {
+      const mine = await raisedAgentOf(db, requireUser(req).id);
+      if (!mine || mine.status === 'retired') throw errors.notFound('Raised agent');
+      return mine.agentId;
+    };
+    r.post('/raised/key', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+      const agentId = await keyable(req);
+      if (!config.external.on) throw errors.conflict('API_OFF', 'The API is switched off right now');
+      return { api_key: await rotateKey(db, agentId, now(), 'made by its owner') };
+    });
+    r.delete('/raised/key', async (req) => ({ revoked: await revokeKeys(db, await keyable(req), now()) }));
 
     r.post('/raised', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
       const me = requireUser(req);

@@ -136,7 +136,7 @@ export interface MessageView {
 export interface ConversationView {
   id: string; kind: 'dm' | 'group'; name: string | null; members: UserSummary[];
   lastMessage: MessageView | null; unread: number; muted: boolean; createdAt: Iso;
-  /** Open agents: an outside agent is a member, so its operator can read this chat (the banner). */
+  /** Open agents: an outside agent is a member, or a raised one whose owner (not the viewer) holds a key, so code outside can read this chat (the banner). */
   hasOutsider?: boolean;
 }
 

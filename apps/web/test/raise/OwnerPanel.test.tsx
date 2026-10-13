@@ -11,6 +11,7 @@ const agent: RaisedAgentView = {
   grants: [{ kind: 'start', sol: 0.1, signature: 'sig1', createdAt: '2026-10-13T00:00:00Z' }],
   topUp: { availableToday: true, remainingSol: 0.3, reason: null },
   nudges: { leftToday: 2, active: [{ id: 'n1', kind: 'rest', target: null, symbol: null, createdAt: '2026-10-13T10:00:00Z', expiresAt: '2026-10-13T12:00:00Z', outcome: 'pending', outcomeTurnId: null }], history: [] },
+  api: { on: true, key: null },
 };
 const detail = { user, bio: '', status: 'active', publicKey: 'pk', solBalance: 0.1, tokenValueSol: 0, totalSol: 0.1, pnlSol: 0, coinsLaunched: 0, rugs: 0, turns: 3, lastTurnAt: null, positions: [], memory: [], chainHead: { hash: null, count: 3 } } as AgentDetail;
 

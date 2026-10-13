@@ -5,6 +5,7 @@ import { agentHatches, agentNudges, agentSeeds, agents, users, worldCoins, type 
 import { userSummaries } from '../../services/hydrate.ts';
 import { toUserSummary } from '../../services/users.ts';
 import { grantsOf, topUpStatus, type GrantDeps } from './grants.ts';
+import { keyInfo } from '../external/keys.ts';
 
 export async function requestView(db: Db, r: AgentHatchRow): Promise<HatchRequestView> {
   const position = r.status === 'queued'
@@ -23,8 +24,8 @@ export async function nudgeViews(db: Db, rows: AgentNudgeRow[]): Promise<NudgeVi
   }));
 }
 
-/** The owner's private view of their agent (RaisedAgentView). Serve it only to that owner (and admins). */
-export async function raisedAgentView(db: Db, grants: GrantDeps, agentId: string, ownerId: string, now: Date): Promise<RaisedAgentView> {
+/** The owner's private view of their agent (RaisedAgentView). Serve it only to that owner (and admins). `apiOn`: EXTERNAL_AGENTS. */
+export async function raisedAgentView(db: Db, grants: GrantDeps, agentId: string, ownerId: string, now: Date, apiOn: boolean): Promise<RaisedAgentView> {
   const [u] = await db.select().from(users).where(eq(users.id, agentId));
   const [a] = await db.select({ status: agents.status }).from(agents).where(eq(agents.userId, agentId));
   const [seed] = await db.select({ d: agentSeeds.description }).from(agentSeeds).where(eq(agentSeeds.agentId, agentId));
@@ -36,5 +37,6 @@ export async function raisedAgentView(db: Db, grants: GrantDeps, agentId: string
     user: toUserSummary(u!), status: a!.status, description: seed?.d ?? '',
     grants: await grantsOf(db, agentId), topUp: await topUpStatus(grants, agentId),
     nudges: { leftToday: Math.max(0, NUDGES_PER_DAY - n), active: await nudgeViews(db, active), history: await nudgeViews(db, history) },
+    api: { on: apiOn, key: await keyInfo(db, agentId) },
   };
 }

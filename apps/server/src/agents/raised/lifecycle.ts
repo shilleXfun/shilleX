@@ -11,6 +11,7 @@ import { raisedAgentOf } from './owner.ts';
 import { HOUSE } from '../../ledger/accounts.ts';
 import { LedgerChain } from '../../ledger/ledger-chain.ts';
 import { settleLeavingOwner } from '../../ledger/owner.ts';
+import { revokeKeys } from '../external/keys.ts';
 
 export const REPORTS_TO_RETIRE = 3;
 const FEE = 5_000;
@@ -19,13 +20,14 @@ export interface LifecycleDeps { db: Db; chain: Chain; key: Buffer; now: () => D
 const endNudges = (db: Db, agentId: string, now: Date) =>
   db.update(agentNudges).set({ outcome: 'ignored', expiresAt: now }).where(and(eq(agentNudges.agentId, agentId), eq(agentNudges.outcome, 'pending')));
 
-/** Spec §9: the agent becomes ownerless and keeps living; nudges, top-ups and the owner's chat priority end. */
+/** Spec §9: the agent becomes ownerless and keeps living; nudges, top-ups, the owner's chat priority and their API key end. */
 export async function releaseAgent(d: Pick<LifecycleDeps, 'db' | 'now' | 'gate'>, ownerId: string): Promise<string> {
   const mine = await raisedAgentOf(d.db, ownerId);
   if (!mine || mine.status === 'retired') throw errors.notFound('Raised agent');
   // Real SOL (mainnet spec §4): what the owner put in goes back to their payout wallet before the agent goes its own way.
   await settleLeavingOwner(mine.agentId, ownerId);
   await d.db.update(agents).set({ ownerId: null, releasedAt: d.now() }).where(eq(agents.userId, mine.agentId));
+  await revokeKeys(d.db, mine.agentId, d.now());
   await endNudges(d.db, mine.agentId, d.now());
   d.gate.setOwner(mine.agentId, null);
   return mine.agentId;
@@ -41,6 +43,7 @@ export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'ow
   // Real SOL (mainnet spec §4): the owner's money goes back to their payout wallet first, however the agent is retired.
   const toOwner = await settleLeavingOwner(agentId, a.ownerId);
   await d.db.update(agents).set({ status: 'retired', ownerId: null, retiredAt: now, retireReason: reason }).where(eq(agents.userId, agentId));
+  await revokeKeys(d.db, agentId, now);
   await endNudges(d.db, agentId, now);
   d.gate.setOwner(agentId, null);
   const w = await walletOf(d.db, agentId), t = await walletOf(d.db, TREASURY);

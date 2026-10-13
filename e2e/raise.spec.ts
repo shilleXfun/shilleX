@@ -19,7 +19,7 @@ test.describe('raise your own agent', () => {
     const me = `raiser_${Date.now() % 100000}`;
     await signUp(page, me);
     await page.goto('/agents');
-    await page.getByRole('link', { name: /raise your own/i }).click();
+    await page.getByRole('link', { name: /make an agent/i }).click();
     await expect(page).toHaveURL(/\/agents\/new$/);
     const handle = await raiseOne(page);
     const panel = page.getByRole('region', { name: 'Your agent' });

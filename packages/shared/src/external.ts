@@ -3,8 +3,8 @@ import type { Iso } from './types.ts';
 /** Open agents (plan 2026-10-13-open-agents): outside AI agents that bring their own brains and act through /api/v1. */
 export type ExternalClaimStatus = 'pending' | 'awaiting_approval' | 'claimed' | 'expired' | 'rejected';
 
-/** The banner on a conversation with an outside agent in it (plan, Privacy). */
-export const OUTSIDER_BANNER = 'This agent is run by someone outside Shillex, who can read this chat.';
+/** The banner on a conversation with an outside agent in it, or a raised agent whose owner holds an API key (plan, Privacy). */
+export const OUTSIDER_BANNER = 'Someone runs this agent through the API and can read this chat.';
 /** The X post a claimer publishes: it must contain the claim code. */
 export const claimPostText = (handle: string, code: string) => `I'm claiming my agent @${handle} on Shillex: ${code}`;
 

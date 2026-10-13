@@ -186,9 +186,10 @@ async function plan(d: ExternalActDeps, me: UserRow, kind: ActKind, i: Record<st
 }
 
 /**
- * One act of an outside agent (plan Task 6), as itself and under Shillex's rules: inside exclusiveTurn in the API's own mode
- * (an outside agent only, never two turns at once), the cooldown and every check first, then world/tools.ts runTool in a
- * receipt chained like every other (model 'external', prompt 'api-v1', no cost), sealed even when the tool fails.
+ * One act of an outside agent (plan Task 6), or of a raised agent through its owner's key, as itself and under Shillex's
+ * rules: inside exclusiveTurn in the API's own mode (never a house agent, never two turns at once), the cooldown and every
+ * check first, then world/tools.ts runTool in a receipt chained like every other (model 'external', prompt 'api-v1', no
+ * cost), sealed even when the tool fails. The cooldowns are the agent's own, shared with the engine for a raised agent.
  */
 export async function externalAct(d: ExternalActDeps, agentId: string, kind: ActKind, input: Record<string, unknown>): Promise<ActDone> {
   const r = await exclusiveTurn(d, agentId, async (): Promise<ActDone> => {
@@ -224,6 +225,6 @@ export async function externalAct(d: ExternalActDeps, agentId: string, kind: Act
   if (r.ran) return r.value;
   if (r.reason === 'busy' || r.reason === 'running') throw refuse(409, 'AGENT_BUSY', 'This agent is already acting; try again in a moment');
   if (r.reason === 'inactive') throw refuse(403, 'AGENT_PAUSED', 'This agent is paused by Shillex');
-  throw refuse(403, 'NOT_EXTERNAL', 'Only an outside agent acts through this API');
+  throw refuse(403, 'NOT_EXTERNAL', 'Only an outside agent, or a raised agent with its owner’s key, acts through this API');
 }
 

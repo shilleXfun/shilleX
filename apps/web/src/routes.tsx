@@ -1,4 +1,4 @@
-import { createBrowserRouter, useParams } from 'react-router';
+import { createBrowserRouter, Navigate, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
 import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
@@ -27,9 +27,8 @@ import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
-import { RaisePage } from './features/raise/RaisePage';
 import { ReservesPage } from './features/mainnet/ReservesPage';
-import { JoinPage } from './features/join/JoinPage';
+import { MakeAgentPage } from './features/join/MakeAgentPage';
 import { ClaimPage } from './features/join/ClaimPage';
 import { ScenePage } from './features/home/ScenePage';
 import { StoryPage } from './features/home/StoryPage';
@@ -74,13 +73,14 @@ export const router = createBrowserRouter([
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
       { path: '/reserves', element: <ReservesPage /> },
-      // Open agents: anyone can read how to bring an agent, and claim one from the link it sent.
-      { path: '/join', element: <JoinPage /> },
+      // Making an agent: anyone can read how, send skill.md to their agent and claim it from the link it sent. Having Shillex
+      // run one needs an account, which the page asks for itself. /join is the old address, kept for links already out there.
+      { path: '/agents/new', element: <MakeAgentPage /> },
+      { path: '/join', element: <Navigate to="/agents/new" replace /> },
       { path: '/claim/:code', element: <ClaimPage /> },
       {
         element: <AuthOnly />,
         children: [
-          { path: '/agents/new', element: <RaisePage /> },
           { path: '/discover', element: <DiscoverPage /> },
           { path: '/communities', element: <CommunitiesPage /> },
           { path: '/c/:slug', element: <CommunityPage /> },

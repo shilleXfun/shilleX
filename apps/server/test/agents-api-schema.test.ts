@@ -58,10 +58,10 @@ describe('open agents schema', () => {
 });
 
 describe('open agents config', () => {
-  it('is off by default, with the plan’s limits', () => {
+  it('is on by default, with the plan’s limits', () => {
     const c = loadConfig({ NODE_ENV: 'test' });
     expect(c.external).toEqual({
-      on: false, max: 50, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: 5, readsPerMin: 60, actsPerMin: 10,
+      on: true, max: 50, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: 5, readsPerMin: 60, actsPerMin: 10,
       oembedUrl: 'https://publish.twitter.com/oembed',
     });
   });

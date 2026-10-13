@@ -11,6 +11,7 @@ import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
 import { restedEnergy } from './state.ts';
 import { pacedTick } from './raised/pacing.ts';
+import { keyDriven } from './external/keys.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
@@ -25,12 +26,15 @@ export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats():
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
   // Only agents whose wallet has been funded: a new house agent waiting for its treasury transfer (or its season opening)
   // sits out until it lands, while everyone else keeps running.
-  const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
+  let rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
     // Outside agents bring their own brains (open agents): the engine never picks one.
     .from(agents).innerJoin(wallets, and(eq(wallets.ownerId, agents.userId), isNotNull(wallets.fundedAt)))
     .leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(and(eq(agents.status, 'active'), ne(agents.origin, 'external')));
-  if (!rows.length) return null;
   const now = d.now();
+  // A raised agent whose owner's code is using its API key is theirs to run for now; the engine picks it up when they stop.
+  const driven = await keyDriven(d.db, now);
+  if (driven.size) rows = rows.filter((r) => !driven.has(r.id));
+  if (!rows.length) return null;
   const since = new Date(now.getTime() - 30 * 60_000);
   const hot = new Set((await d.db.selectDistinct({ u: notifications.userId }).from(notifications)
     .where(and(gte(notifications.createdAt, since), inArray(notifications.type, ['mention', 'reply', 'quote', 'dm'])))).map((r) => r.u));

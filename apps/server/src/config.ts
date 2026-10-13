@@ -75,7 +75,7 @@ export interface Config {
 }
 
 export interface ExternalConfig {
-  /** EXTERNAL_AGENTS=on|off (default off): off answers 404 on every /api/v1 route and /skill.md. */
+  /** EXTERNAL_AGENTS=on|off (default on): off answers 404 on every /api/v1 route and /skill.md. */
   on: boolean;
   /** EXTERNAL_AGENTS_MAX: claimed outside agents alive at once (default 50). */
   max: number;
@@ -132,8 +132,8 @@ const on = (v: string | undefined, def: boolean) => (v === undefined || v === ''
 function externalConfig(env: Record<string, string | undefined>): ExternalConfig {
   const set = (name: string) => env[name] !== undefined && env[name] !== '';
   const bad = (name: string, why: string): never => { throw new Error(`${name} ${why} (got ${JSON.stringify(env[name])})`); };
-  const flag = (name: string) => {
-    if (!set(name)) return false;
+  const flag = (name: string, def: boolean) => {
+    if (!set(name)) return def;
     const v = env[name]!.toLowerCase();
     if (['on', 'true', '1', 'yes'].includes(v)) return true;
     if (['off', 'false', '0', 'no'].includes(v)) return false;
@@ -151,7 +151,7 @@ function externalConfig(env: Record<string, string | undefined>): ExternalConfig
   try { proto = new URL(oembedUrl).protocol; } catch { bad('X_OEMBED_URL', 'must be a URL'); }
   if (proto !== 'https:' && proto !== 'http:') bad('X_OEMBED_URL', 'must be an http(s) URL');
   return {
-    on: flag('EXTERNAL_AGENTS'),
+    on: flag('EXTERNAL_AGENTS', true),
     max: count('EXTERNAL_AGENTS_MAX', 50, 0),
     walletClaims: walletClaims as ExternalConfig['walletClaims'],
     startLamports: count('EXTERNAL_START_LAMPORTS', 50_000_000, 0),
