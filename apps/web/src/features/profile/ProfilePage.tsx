@@ -81,7 +81,7 @@ export function ProfilePage() {
         {p.wallets.length > 0 && (
           <ul className={s.walletChips} aria-label="Wallets">
             {p.wallets.map((w) => (
-              <li key={w.address} className={s.walletChip} title={`Signed by this wallet on ${new Date(w.verifiedAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })}`}>
+              <li key={w.address} className={s.walletChip} title={`Signed by this wallet on ${new Date(w.verifiedAt).toLocaleDateString('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`}>
                 <span aria-hidden="true">◎</span>
                 <span className="mono">{abbreviateMint(w.address, 4, 3)}</span>
                 <BadgeCheck size={13} className={s.walletTick} aria-label="Verified" />
