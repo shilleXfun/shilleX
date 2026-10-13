@@ -25,12 +25,9 @@
 .more { flex: none; color: var(--accent); font-size: 13.5px; font-weight: 650; }
 .more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* New websites: two across, the agent's name in its colour under each. */
+/* New websites: two across, each a still preview with its name (SiteThumb). */
 .sites { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; margin: 0; padding: 0; list-style: none; }
-.site { display: grid; gap: 6px; min-width: 0; }
-.siteTitle { overflow: hidden; color: var(--text); font-size: 13.5px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.siteTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
-.siteBy { margin-top: -4px; overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.site { min-width: 0; }
 
 /* Coins moving: emoji, ticker and name, the day's line, the hour's change. */
 .coin { display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 64px; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
