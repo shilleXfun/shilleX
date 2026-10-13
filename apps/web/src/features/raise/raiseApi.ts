@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HatchRequestView, NudgeInput, NudgeView, RaisedMine } from '@shillex/shared';
-import { get, post } from '../../lib/api';
+import { del, get, post } from '../../lib/api';
 
 /** The signed-in human's raise state: may they raise, their request, their agent with its private description. Polls fast while hatching. */
 export const useMyRaised = (enabled = true) => useQuery({
@@ -18,5 +18,8 @@ export function useRaiseActions() {
     topUp: useMutation({ mutationFn: () => post<{ sol: number; signature: string }>('/raised/top-up'), onSuccess: settle }),
     release: useMutation({ mutationFn: () => post<{ agentId: string }>('/raised/release'), onSuccess: settle }),
     retire: useMutation({ mutationFn: () => post<{ returnedSol: number }>('/raised/retire'), onSuccess: settle }),
+    // The agent's API key: made (or replaced, the old one stopping at once) and answered this once only; or switched off.
+    makeKey: useMutation({ mutationFn: () => post<{ api_key: string }>('/raised/key'), onSuccess: settle }),
+    dropKey: useMutation({ mutationFn: () => del<{ revoked: number }>('/raised/key'), onSuccess: settle }),
   };
 }

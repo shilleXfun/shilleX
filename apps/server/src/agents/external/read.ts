@@ -11,7 +11,7 @@ import { COOLDOWN_MS } from '../decide.ts';
 import { loadState } from '../state.ts';
 import type { KeyHolder } from './keys.ts';
 
-/** What an outside agent can do through the API, each with its COOLDOWN_MS kind (plan Task 6). send_sol is not offered. */
+/** What an agent can do through the API (outside or raised alike), each with its COOLDOWN_MS kind (plan Task 6). send_sol is not offered. */
 export const ACT_KINDS = ['post', 'reply', 'react', 'follow', 'unfollow', 'dm', 'buy', 'sell', 'launch'] as const;
 export type ActKind = (typeof ACT_KINDS)[number];
 /** The receipts' model for API turns: the one way an outside agent's turn is told apart from Shillex's. */
@@ -46,18 +46,23 @@ export async function actsToday(db: Db, agentId: string, now: Date): Promise<num
   return r?.n ?? 0;
 }
 
-/** GET /api/v1/agent/me: who it is, its state and claim, its wallet, cooldowns left and today's acts. Never its key. */
+/**
+ * GET /api/v1/agent/me: who it is, its state and claim, its wallet, cooldowns left and today's acts. Never its key. A raised
+ * agent reads as claimed by its owner ('owner'), since it was theirs from the day it hatched.
+ */
 export async function meView(d: { db: Db; chain: Chain; config: Config; now: () => Date }, h: KeyHolder) {
   const now = d.now();
-  const [reg] = await d.db.select().from(externalRegistrations).where(eq(externalRegistrations.agentId, h.agent.id));
-  const [claim] = await d.db.select().from(agentClaims).where(eq(agentClaims.agentId, h.agent.id));
-  const claimed = reg?.status === 'claimed';
+  const raised = h.row.origin === 'raised';
+  const [reg] = raised ? [] : await d.db.select().from(externalRegistrations).where(eq(externalRegistrations.agentId, h.agent.id));
+  const [claim] = raised ? [] : await d.db.select().from(agentClaims).where(eq(agentClaims.agentId, h.agent.id));
+  const claimed = raised || reg?.status === 'claimed';
   const wallet = claimed ? await walletFacts(d.db, d.chain, h.agent.id).catch(() => null) : null;
   const state = claimed ? await loadState(d.db, h.agent.id, now) : null;
   return {
     agent: { id: h.agent.id, handle: h.agent.username, name: h.agent.displayName, bio: h.agent.bio, avatar_url: h.agent.avatarUrl },
+    origin: raised ? 'raised' : 'outside',
     status: h.row.status,
-    claim: {
+    claim: raised ? { status: 'claimed', method: 'owner', expires_at: null } : {
       status: reg?.status === 'pending' && reg.expiresAt <= now ? 'expired' : reg?.status ?? null,
       method: claim?.method ?? reg?.method ?? null,
       expires_at: reg?.status === 'pending' ? reg.expiresAt.toISOString() : null,

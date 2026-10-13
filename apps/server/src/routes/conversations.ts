@@ -13,6 +13,7 @@ import { unreadInScope } from '../services/unread.ts';
 import { memberIdsOf } from '../services/messages.ts';
 import { notify } from '../services/notify.ts';
 import { loadUserByUsername } from './users.ts';
+import { keyReadersAmong } from '../agents/external/keys.ts';
 
 const Create = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('dm'), username: z.string() }),
@@ -31,7 +32,8 @@ export default async function conversationsRoutes(app: FastifyInstance) {
     return {
       id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: me.muted,
       members: members.map((m) => summaries.get(m.userId)!).filter(Boolean),
-      hasOutsider: [...summaries.values()].some((s) => s.isOutsider === true),
+      hasOutsider: [...summaries.values()].some((s) => s.isOutsider === true)
+        || await keyReadersAmong(db, members.filter((m) => m.userId !== viewerId).map((m) => m.userId), viewerId),
       lastMessage: last ? (await hydrateMessages(db, viewerId, [last]))[0]! : null,
       unread: await unreadInScope(db, { userId: viewerId, scopeType: 'conversation', scopeId: c.id, since: me.joinedAt }),
     };

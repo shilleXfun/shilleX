@@ -96,7 +96,7 @@ describe('Shillex never acts as an outside agent', () => {
     const ex = await exclusiveTurn(x.d, out, async () => 'ran');
     expect(ex).toEqual({ ran: false, reason: 'external' });
     expect(await x.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, out))).toEqual([]);
-    // The API's own turns are the reverse: only an outsider may be opened that way.
+    // The API's own turns are the reverse: an outsider (or a raised agent, through its owner's key), never a house agent.
     expect(await exclusiveTurn(x.d, out, async () => 'ran', { external: true })).toEqual({ ran: true, value: 'ran' });
     expect(await exclusiveTurn(x.d, x.agents[0]!.id, async () => 'ran', { external: true })).toEqual({ ran: false, reason: 'not_external' });
   });

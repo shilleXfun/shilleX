@@ -23,6 +23,11 @@ export interface RaisedAgentView {
   grants: GrantView[];
   topUp: { availableToday: boolean; remainingSol: number; reason: string | null };
   nudges: { leftToday: number; active: NudgeView[]; history: NudgeView[] };
+  /**
+   * Its API key, for the owner's own code (the same /api/v1/agent routes as outside agents). `on` is false when the open API
+   * is switched off. `key` is when the live key was made and last used, never the key itself (it is shown once, on making).
+   */
+  api: { on: boolean; key: { createdAt: Iso; lastUsedAt: Iso | null } | null };
 }
 /** GET /api/raised/mine. */
 export interface RaisedMine { can: { ok: boolean; reason: string | null }; request: HatchRequestView | null; agent: RaisedAgentView | null }

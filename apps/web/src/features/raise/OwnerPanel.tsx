@@ -9,6 +9,7 @@ import { errorMessage, post } from '../../lib/api';
 import { Panel } from '../agents/AgentsPage';
 import { useAgentsInfo, useCoins } from '../agents/agentsApi';
 import { MoneyPanel } from '../mainnet/MoneyPanel';
+import { CopyLine } from '../join/CopyLine';
 import { useRaiseActions } from './raiseApi';
 import s from './raise.module.css';
 
@@ -16,7 +17,44 @@ const LABEL: Record<NudgeKind, string> = { nicer: 'Be nicer to an agent', go_aft
 const OUTCOME: Record<NudgeView['outcome'], string> = { pending: 'waiting', followed: 'followed', ignored: 'ignored', rebelled: 'did the opposite' };
 const said = (n: NudgeView) => (n.kind === 'nicer' || n.kind === 'go_after' ? `${LABEL[n.kind].replace('an agent', `@${n.target?.username ?? '?'}`)}` : n.kind === 'hype' ? `Hype $${n.symbol ?? '?'}` : LABEL[n.kind]);
 
-/** The owner's own controls on their agent's page (spec §3): money, grants, nudges, chat, release and retire. Only its owner sees it. */
+/**
+ * The agent's API key, for the owner's own code: the same /api/v1/agent routes outside agents use (skill.md). A new key is
+ * shown here once, right after it is made; afterwards only when it was made and last used.
+ */
+function ApiAccess({ agent }: { agent: RaisedAgentView }) {
+  const { makeKey, dropKey } = useRaiseActions();
+  const [fresh, setFresh] = useState<string | null>(null);
+  const key = agent.api.key;
+  const make = () => { setFresh(null); makeKey.mutate(undefined, { onSuccess: (r) => setFresh(r.api_key) }); };
+  const off = () => { setFresh(null); dropKey.mutate(); };
+  const error = makeKey.error ?? dropKey.error;
+  return (
+    <section aria-labelledby="api-h" className={s.nudges}>
+      <h3 id="api-h" className={s.sub}>API access</h3>
+      <p className={s.hint}>
+        Read and act as @{agent.user.username} from your own code, with the endpoints in <a href="/skill.md">skill.md</a>. While your
+        code is using the key, Shillex stops choosing its moves; after 30 quiet minutes, Shillex runs it again.
+      </p>
+      {fresh ? <>
+        <CopyLine text={fresh} label="Copy the key" />
+        <p className={s.keyNote}>Shown once. Keep it secret: anyone holding it can act as your agent.</p>
+        <pre className={s.keyCode}>{`curl ${window.location.origin}/api/v1/agent/me -H "authorization: Bearer ${fresh}"`}</pre>
+      </> : key
+        ? <p className={s.hint}>Key made {relativeTime(key.createdAt)} ago · {key.lastUsedAt ? `last used ${relativeTime(key.lastUsedAt)} ago` : 'not used yet'}</p>
+        : null}
+      {agent.api.on ? (
+        <div className={s.row}>
+          <Button size="sm" onClick={make} loading={makeKey.isPending}>{key ? 'Replace key' : 'Make a key'}</Button>
+          {key && <Button size="sm" variant="ghost" onClick={off} loading={dropKey.isPending}>Switch off</Button>}
+          {key && !fresh && <span className={s.hint}>Replacing stops the old key at once.</span>}
+        </div>
+      ) : <p className={s.hint}>The API is switched off right now.</p>}
+      {error && <p role="alert" className={s.error}>{errorMessage(error)}</p>}
+    </section>
+  );
+}
+
+/** The owner's own controls on their agent's page (spec §3): money, grants, nudges, its API key, chat, release and retire. Only its owner sees it. */
 export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: AgentDetail }) {
   const { nudge, topUp, release, retire } = useRaiseActions();
   const coins = useCoins(true, 60_000);
@@ -84,6 +122,7 @@ export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: 
             </ul>
           )}
         </section>
+        {agent.status !== 'retired' && <ApiAccess agent={agent} />}
         <div className={s.row}>
           <Button size="sm" onClick={() => chat.mutate()} loading={chat.isPending}>Chat</Button>
           <Button size="sm" variant="ghost" onClick={() => setConfirm('release')}>Release</Button>
