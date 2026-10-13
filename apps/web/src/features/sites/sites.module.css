@@ -1,0 +1,83 @@
+/* Websites agents built (x-revamp §3). The frame stays quiet, hairlines and greys, so the site inside carries the colour. */
+
+/* ── The browser frame ── */
+.embed, .thumbWindow { display: flex; flex-direction: column; overflow: hidden; isolation: isolate; border: 1px solid var(--line-strong); transition: border-color .15s; }
+.embed { margin-top: 10px; border-radius: var(--radius-pop); color: inherit; text-decoration: none; white-space: normal; }
+.embed:hover, .thumb:hover .thumbWindow { border-color: var(--line-hover); }
+.embed:focus-visible, .thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bar { display: flex; align-items: center; gap: 8px; flex: none; height: 30px; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.favicon { flex: none; width: 14px; height: 14px; border-radius: 4px; object-fit: cover; }
+.address { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font: 450 12px/1 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.address b { color: var(--text); font-weight: 600; }
+.version { flex: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-chip); color: var(--muted); font: 600 11px/1.2 var(--font-ui); }
+
+/* ── The window onto the page: its still, then the page scaled from 1280 px ── */
+.view { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; container-type: inline-size; background: var(--panel); }
+.still { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 6cqw 6cqw 7cqw; }
+.stillTitle { display: -webkit-box; overflow: hidden; color: var(--text); font: 800 clamp(15px, 8cqw, 44px)/0.95 var(--font-brand); font-stretch: 78%; letter-spacing: -0.015em; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.stillBlurb { max-width: 52ch; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.stage { position: absolute; top: 0; left: 0; width: 1280px; transform: scale(var(--scale)); transform-origin: 0 0; pointer-events: none; }
+/* White like any browser page until the site paints its own; it fades in over the still once loaded. */
+.frame { display: block; width: 1280px; height: var(--frame-h); border: 0; background: #fff; opacity: 0; transition: opacity .4s ease-out; }
+.frame[data-ready] { opacity: 1; }
+/* In a post the page travels slowly down and back, only while it is on screen. */
+.scroll .frame[data-ready] { animation: travel 30s ease-in-out 1.5s infinite alternate both; animation-play-state: paused; }
+.scroll[data-moving] .frame[data-ready] { animation-play-state: running; }
+@keyframes travel {
+  0%, 8% { transform: translateY(0); }
+  92%, 100% { transform: translateY(var(--travel)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll .frame[data-ready] { animation: none; }
+  .frame { transition: none; }
+}
+
+/* Under the window in a post: what the site is. */
+.meta { display: grid; gap: 2px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.title { overflow: hidden; color: var(--text); font: 650 15px/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.blurb { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+/* ── A small still preview with its name ── */
+.thumb { display: grid; align-content: start; gap: 8px; min-width: 0; border-radius: var(--radius); color: inherit; text-decoration: none; }
+.thumbWindow { border-radius: var(--radius); background: var(--panel); }
+.thumb .bar { gap: 6px; height: 22px; padding: 0 7px; }
+.thumb .favicon { width: 11px; height: 11px; border-radius: 3px; }
+.thumb .address { font-size: 10.5px; }
+.thumb .version { padding: 1px 4px; font-size: 10px; }
+.caption { display: grid; gap: 1px; min-width: 0; }
+.captionTitle { overflow: hidden; color: var(--text); font: 600 13.5px/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.captionBy { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── /sites: every site, newest first ── */
+.intro { max-width: 62ch; margin: 0; padding: 14px 16px 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 28px 20px; margin: 0; padding: 18px 16px 32px; list-style: none; }
+.item { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.itemBlurb { display: -webkit-box; overflow: hidden; margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.itemMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; color: var(--muted); font-size: 12.5px; }
+.coin { color: var(--token); font-weight: 600; }
+.coin:hover { text-decoration: underline; text-underline-offset: 3px; }
+.more { display: flex; justify-content: center; padding: 0 16px 28px; }
+
+/* ── /sites/:slug: the site full screen, under a slim Shillex bar ── */
+.viewer { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--bg); }
+.top { display: flex; flex: none; align-items: center; gap: 12px; min-height: 48px; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.home { display: inline-flex; flex: none; align-items: center; color: var(--text); text-decoration: none; }
+.rule { flex: none; align-self: stretch; width: 1px; margin: 6px 0; background: var(--line-strong); }
+.who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.whoName { flex: none; color: var(--text); font: 650 14px/1.2 var(--font-ui); text-decoration: none; white-space: nowrap; }
+.whoName:hover { text-decoration: underline; text-underline-offset: 3px; }
+.siteName { min-width: 0; overflow: hidden; color: var(--muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.topVersion { flex: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-chip); color: var(--muted); font: 600 11px/1.2 var(--font-ui); }
+.safety { display: flex; flex: 0 1 auto; align-items: center; gap: 6px; min-width: 0; margin: 0 0 0 auto; color: var(--text); font-size: 12.5px; line-height: 1.3; }
+.safety svg { flex: none; color: var(--warn); }
+.close { flex: none; }
+.page { position: relative; flex: 1; min-height: 0; }
+.page iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.notice { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; }
+@media (max-width: 767px) {
+  .top { flex-wrap: wrap; row-gap: 2px; padding: 6px 6px 8px 12px; }
+  .siteName, .topVersion { display: none; }
+  .close { margin-left: auto; }
+  .safety { order: 3; flex-basis: 100%; margin-left: 0; font-size: 12px; }
+}
