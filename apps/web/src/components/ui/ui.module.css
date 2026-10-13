@@ -68,29 +68,30 @@
 .badge_muted { color: var(--muted); background: var(--raised); }
 
 /* Floating surfaces: 14px radius, glassy, elevated. */
-.menu { position: fixed; z-index: 60; min-width: 190px; padding: 5px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); }
-.menuItem { display: flex; width: 100%; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: none; text-align: left; font-weight: 500; transition: background .1s; }
+/* Floating glass (Lumen): menus, popovers, dialogs and toasts share one recipe, a luminous edge over deep blur. */
+.menu { position: fixed; z-index: 60; min-width: 200px; padding: 6px; border: 1px solid transparent; border-radius: 16px; background: linear-gradient(rgba(18, 18, 23, 0.86), rgba(18, 18, 23, 0.86)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
+.menuItem { display: flex; width: 100%; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; font-size: 14.5px; font-weight: 550; transition: background .12s; }
 .menuItem svg { color: var(--muted); }
-.menuItem:hover, .menuItem:focus-visible { background: var(--hover); outline: none; box-shadow: none; }
+.menuItem:hover, .menuItem:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; box-shadow: none; }
 .menuItem:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line); }
 .menuDanger, .menuDanger svg { color: var(--down); }
 .menuDanger:hover, .menuDanger:focus-visible { background: var(--down-soft); }
-.dialog { width: min(500px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: var(--panel); color: var(--text); box-shadow: var(--shadow-pop), 0 0 80px color-mix(in srgb, var(--accent) 12%, transparent); }
-.dialog::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
+.dialog { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(16, 16, 21, 0.94), rgba(16, 16, 21, 0.94)) padding-box, var(--edge) border-box; color: var(--text); box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.dialog::backdrop { background: rgba(2, 2, 4, 0.66); backdrop-filter: blur(8px); }
 @media (prefers-reduced-motion: no-preference) {
   .dialog[open] { animation: dialogIn .4s cubic-bezier(.16, 1, .3, 1); }
   .dialog[open]::backdrop { animation: scrimIn .22s ease-out; }
 }
 @keyframes dialogIn { from { opacity: 0; transform: scale(.96) translateY(6px); } }
 @keyframes scrimIn { from { opacity: 0; } }
-.dialogHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--line); font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); }
-.dialogBody { padding: 18px 20px; }
-.dialogFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
-.popover { position: fixed; z-index: 70; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), var(--glow-token); }
+.dialogHead { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 14px 22px; border-bottom: 1px solid var(--line); font: 650 21px / 1.1 var(--font-brand); letter-spacing: -0.03em; }
+.dialogBody { padding: 20px 22px; }
+.dialogFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line); }
+.popover { position: fixed; z-index: 70; border: 1px solid transparent; border-radius: 18px; background: linear-gradient(rgba(18, 18, 23, 0.9), rgba(18, 18, 23, 0.9)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
 
 .toasts { position: fixed; z-index: 90; left: 50%; bottom: calc(var(--tabbar-total) + 16px); transform: translateX(-50%); display: grid; justify-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
 @media (min-width: 768px) { .toasts { bottom: 24px; } }
-.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px; border-radius: var(--radius-pop); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); font-weight: 500; touch-action: pan-y; cursor: grab; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border: 1px solid transparent; border-radius: var(--radius-pill); background: linear-gradient(rgba(20, 20, 26, 0.9), rgba(20, 20, 26, 0.9)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); font-weight: 550; touch-action: pan-y; cursor: grab; }
 .toastIcon { flex: none; color: var(--accent); }
 /* A browser without color-mix (Safari before 16.2, Chrome before 111) drops those translucent backgrounds and leaves the text over the page: they go solid instead. */
 @supports not (background: color-mix(in srgb, red 50%, blue)) { .menu, .popover, .toast { background: var(--raised); } }
