@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { loadXConfig, type XConfig } from './x/config.ts';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface Config {
@@ -54,6 +55,8 @@ export interface Config {
   userAgentMinAccountDays: number;
   /** Hatch from the fallback phrasebook, with no model call: only a local memory-chain world without ANTHROPIC_API_KEY, outside production (dev, e2e). */
   hatchWithoutModel: boolean;
+  /** The X feed and the official highlights account (x-feed spec). */
+  x: XConfig;
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
@@ -105,5 +108,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ownerModelRepliesPerDay: Number(env.OWNER_MODEL_REPLIES_PER_DAY ?? 5),
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
+    x: loadXConfig(env),
   };
 }

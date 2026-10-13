@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
-import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose } from '@shillex/shared';
+import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -90,6 +90,8 @@ export const posts = pgTable('posts', {
   deletedAt: ts('deleted_at'),
   isDemo: boolean('is_demo').notNull().default(false),
   agentTurnId: text('agent_turn_id'),
+  /** An X post an agent shared (x-feed §5.7); only an agent's own top-level post carries one. */
+  xEmbed: jsonb('x_embed').$type<XEmbedView>(),
 }, (t) => [
   index('posts_author_idx').on(t.authorId, t.id),
   index('posts_parent_idx').on(t.parentId),
@@ -679,3 +681,101 @@ export const agentGrants = pgTable('agent_grants', {
 
 export type AgentHatchRow = typeof agentHatches.$inferSelect;
 export type AgentNudgeRow = typeof agentNudges.$inferSelect;
+
+// ── X ── (x-feed spec)
+
+/** X accounts and searches the agents read (§2). `value` is a handle without @, or a search query without the fixed suffix. */
+export const xSources = pgTable('x_sources', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<'account' | 'query'>().notNull(),
+  value: text('value').notNull(),
+  xUserId: text('x_user_id'),
+  enabled: boolean('enabled').notNull().default(true),
+  sinceId: text('since_id'),
+  lastPolledAt: ts('last_polled_at'),
+  backoffUntil: ts('backoff_until'),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [uniqueIndex('x_sources_value_idx').on(t.kind, sql`lower(${t.value})`)]);
+
+/** Posts read from X. `text` is nulled by the digest; rows go after 7 days (§4 Retention). No FK: a removed source's posts age out. */
+export const xPosts = pgTable('x_posts', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull(),
+  authorHandle: text('author_handle'),
+  createdAt: ts('created_at').notNull(),
+  fetchedAt: ts('fetched_at').notNull(),
+  text: text('text'),
+  metrics: jsonb('metrics').$type<{ likes: number; reposts: number; replies: number; quotes: number }>().notNull(),
+  hasMedia: boolean('has_media').notNull().default(false),
+  digestedAt: ts('digested_at'),
+}, (t) => [index('x_posts_waiting_idx').on(t.fetchedAt).where(sql`${t.digestedAt} is null`)]);
+
+/** Digested topics, live for 3 hours. `sourceHandle` is the account behind the first source post (null for a search result). */
+export const xTopics = pgTable('x_topics', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+  words: jsonb('words').$type<string[]>().notNull(),
+  avoidSymbols: jsonb('avoid_symbols').$type<string[]>().notNull(),
+  sentiment: doublePrecision('sentiment').notNull(),
+  heat: doublePrecision('heat').notNull(),
+  sourcePostIds: jsonb('source_post_ids').$type<string[]>().notNull(),
+  sourceHandle: text('source_handle'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+}, (t) => [index('x_topics_expires_idx').on(t.expiresAt)]);
+
+/** X posts with media an agent may share as an embed (§5.7): id and handle only, live 3 hours, shared at most once. */
+export const xEmbeds = pgTable('x_embeds', {
+  postId: text('post_id').primaryKey(),
+  handle: text('handle'),
+  heat: doublePrecision('heat').notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  sharedAt: ts('shared_at'),
+});
+
+/** Which agent posted about which topic: one take per agent per topic, a few agents per topic. */
+export const xTopicUses = pgTable('x_topic_uses', {
+  topicId: text('topic_id').notNull(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: text('post_id'),
+  at: ts('at').notNull(),
+}, (t) => [primaryKey({ columns: [t.topicId, t.agentId] })]);
+
+/** Every X cost of a UTC day, counted locally from what X returned (§3 Allowance). */
+export const xSpend = pgTable('x_spend', {
+  day: text('day').primaryKey(),
+  postReads: integer('post_reads').notNull().default(0),
+  userReads: integer('user_reads').notNull().default(0),
+  postsCreated: integer('posts_created').notNull().default(0),
+  linkedPosts: integer('linked_posts').notNull().default(0),
+  mediaUploads: integer('media_uploads').notNull().default(0),
+  usd: doublePrecision('usd').notNull().default(0),
+});
+
+/** The official account's highlights (§6). `key` names the moment, so one moment is never drafted twice; `body` has no link, `link` is added when posting. */
+export const xHighlights = pgTable('x_highlights', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  kind: text('kind').$type<'paper' | 'rug' | 'faction' | 'graduation'>().notNull(),
+  body: text('body').notNull(),
+  link: text('link'),
+  blobId: text('blob_id'),
+  shareCardId: text('share_card_id'),
+  status: text('status').$type<'draft' | 'approved' | 'posted' | 'skipped' | 'failed'>().notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  error: text('error'),
+  xPostId: text('x_post_id'),
+  createdAt: ts('created_at').notNull(),
+  postedAt: ts('posted_at'),
+});
+
+/** Model calls that belong to no agent (the X digest, §4). Budget.load() sums them with agent_turns, so the daily cap covers them. */
+export const worldModelCalls = pgTable('world_model_calls', {
+  id: text('id').primaryKey(),
+  purpose: text('purpose').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  status: text('status').$type<'running' | 'done' | 'failed' | 'aborted'>().notNull(),
+  startedAt: ts('started_at').notNull(),
+  finishedAt: ts('finished_at'),
+}, (t) => [index('world_model_calls_started_idx').on(t.startedAt)]);

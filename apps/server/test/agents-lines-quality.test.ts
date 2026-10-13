@@ -68,7 +68,7 @@ function slotsAt(r: () => number): Record<string, string | number> {
   const pick = <T,>(xs: readonly T[]) => xs[Math.floor(r() * xs.length)]!;
   return {
     coin: pick(COINS), user: pick(USERS), pct: 1 + Math.floor(r() * 300), sol: (r() * 0.05).toFixed(3), price: `${(0.3 + r() * 9).toFixed(2)} lamports`,
-    holders: 2 + Math.floor(r() * 30), room: 'trenches', weather: pick(Object.values(WEATHER_WORD)), past: pick(PASTS),
+    holders: 2 + Math.floor(r() * 30), room: 'trenches', weather: pick(Object.values(WEATHER_WORD)), past: pick(PASTS), topic: 'the etf rumour',
   };
 }
 
@@ -101,7 +101,7 @@ describe('lines read like a person wrote them (L6b)', () => {
   it('holds for every fallback line with every opener and every closer forced on', () => {
     // rng 0 takes the first line, rolls an opener and a closer every time, and picks index 0 of each list.
     const base = fallbackPhrasebook('forced');
-    const slots = { coin: '$DRIFT', user: '@lamp', pct: 12, sol: '0.020', price: '0.93 lamports', holders: 5, room: 'trenches', weather: 'unhinged', past: PASTS[0]! };
+    const slots = { coin: '$DRIFT', user: '@lamp', pct: 12, sol: '0.020', price: '0.93 lamports', holders: 5, room: 'trenches', weather: 'unhinged', past: PASTS[0]!, topic: 'the etf rumour' };
     const bad: string[] = [];
     let compositions = 0, opened = 0, closed = 0, both = 0;
     for (const situation of FALLBACK_SITUATIONS) for (const line of FALLBACK_LINES[situation]) {
@@ -153,7 +153,7 @@ describe('grammar (L6b)', () => {
     let used = 0;
     const bad: string[] = [];
     for (const word of Object.values(WEATHER_WORD)) for (const s of FALLBACK_SITUATIONS) for (const l of FALLBACK_LINES[s].filter((x) => x.includes('{weather}'))) {
-      const text = fillLine(l, { weather: word, coin: '$X', user: '@u', pct: 5, past: PASTS[0]! })!;
+      const text = fillLine(l, { weather: word, coin: '$X', user: '@u', pct: 5, past: PASTS[0]!, topic: 'the etf rumour' })!;
       for (const [name, re] of BAD_SHAPES) if (re.test(text)) bad.push(`${name}: "${text}"`);
       used++;
     }

@@ -22,6 +22,7 @@ import { Composer } from './Composer';
 import { usePostActions, useUserActions } from './postActions';
 import { AgentBadge } from '../agents/AgentBadge';
 import { UNAVAILABLE_TEXT, isUnavailable } from './unavailable';
+import { XEmbed } from '../x/XEmbed';
 import s from './PostCard.module.css';
 
 export interface PostCardProps {
@@ -102,6 +103,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
           <>
             {p.body && <PostBody text={p.body} className={s.body} />}
             <MediaGrid media={p.media} />
+            {p.xEmbed && <XEmbed embed={p.xEmbed} />}
             {p.quoted && <QuoteEmbed post={p.quoted} />}
             {/* The focal post of a thread shows its exact time: "when did they say it" matters for a call. */}
             {focused && <p className={s.stamp}><time dateTime={p.createdAt}>{exactTime(p.createdAt)}</time></p>}
