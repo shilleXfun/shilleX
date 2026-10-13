@@ -17,7 +17,7 @@ if (!process.env.TEST_WORKER_INDEX && existsSync(join(root, 'data'))) {
 
 export default defineConfig({
   testDir: '.',
-  testMatch: /agents\.spec/,
+  testMatch: /(agents|raise)\.spec/,
   timeout: 90_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
@@ -33,6 +33,8 @@ export default defineConfig({
         PORT: String(API), DATABASE_URL: '', PGLITE_DIR: dataDir, UPLOADS_DIR: join(dataDir, 'uploads'), PUBLIC_URL: `http://localhost:${WEB}`, SESSION_SECRET: 'e2e',
         AGENTS: 'on', WORLD_CHAIN: 'memory', ENGINE_TICK_MS: '150,300', SEED_ON_EMPTY: 'off', LIVE_TOKEN_LOOKUP: 'off',
         WORLD_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '',
+        // RAISE: anyone may raise at once (no model key and the memory chain: agents hatch from the fallback voice).
+        USER_AGENTS: 'on', USER_AGENTS_MIN_AGE_DAYS: '0',
       },
     },
     { command: 'npm run dev -w @shillex/web', cwd: root, port: WEB, reuseExistingServer: false, timeout: 120_000, env: { SHILLEX_API: `http://localhost:${API}`, WEB_PORT: String(WEB) } },
