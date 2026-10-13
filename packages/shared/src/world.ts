@@ -1,8 +1,9 @@
 import type { Iso, UserSummary } from './types.ts';
 import type { AgentOrigin } from './raised.ts';
 
-export const WORLD_TAGLINE = '50 AI agents · devnet · nothing here is real money';
-export const WORLD_AGENT_COUNT = 50;
+export const WORLD_TAGLINE = '100 AI agents · devnet · nothing here is real money';
+/** House (wild) agents only, as RAISE counts them: raised agents come on top. 100 since 2026-10-13 (owner), the first 50 kept. */
+export const WORLD_AGENT_COUNT = 100;
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 export const COIN_DECIMALS = 6;
 

@@ -49,16 +49,18 @@ export interface WorldHandles {
   startAgents(): string;
 }
 
-/** Why the agents can't start yet, or null when they can: they need the launchpad and their 0.1 SOL first. */
+/**
+ * Why the agents can't start yet, or null when they can: they need the launchpad, and at least one funded house agent. Unfunded
+ * ones (new house agents waiting for the treasury, raised ones waiting for a grant) never hold the world: the engine skips them.
+ */
 export async function worldNotReady(db: Db, chain: Chain): Promise<string | null> {
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) return 'the launchpad is not set up';
-  // Wild agents only: a raised agent waiting for its start grant stays paused (RAISE) and must not keep the 50 from starting.
-  const [unfunded] = await db.select({ id: wallets.ownerId }).from(wallets).innerJoin(agents, eq(agents.userId, wallets.ownerId))
-    .where(and(eq(agents.origin, 'wild'), isNull(wallets.fundedAt))).limit(1);
-  return unfunded ? 'agent wallets are not funded' : null;
+  const [funded] = await db.select({ id: wallets.ownerId }).from(wallets).innerJoin(agents, eq(agents.userId, wallets.ownerId))
+    .where(and(eq(agents.origin, 'wild'), isNotNull(wallets.fundedAt))).limit(1);
+  return funded ? null : 'agent wallets are not funded';
 }
 
-/** One-time setup from the treasury: the launchpad config if it is missing, then 0.1 SOL to every unfunded agent. */
+/** One-time setup from the treasury: the launchpad config if it is missing, then 0.05 SOL to every unfunded house agent. */
 export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => Date) {
   if (chain instanceof LedgerChain) throw new TreasuryEmpty('A ledger world is funded by its season (npm run mainnet:season), not by the devnet treasury');
   let launchpad: string | null = null;
@@ -184,8 +186,18 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const waiting = await worldNotReady(db, chain);
   if (waiting) {
     const treasury = await walletOf(db, TREASURY);
-    console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
+    console.log(chain instanceof LedgerChain
+      ? `[world] agents wait: ${waiting}. A ledger world is funded by its season: npm run mainnet:season -- open.`
+      : `[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
+  if (chain instanceof DevnetChain && chain.hasLaunchpad) {
+    // New house agents (WORLD_AGENT_COUNT grew) get their 0.05 SOL from the treasury in the background; the engine skips them
+    // until it lands, and everyone else keeps running. A short treasury is logged, never fatal: "Set up and fund" retries.
+    void fundAgents(db, chain, key, now).then((r) => {
+      if (r.funded) console.log(`[world] funded ${r.funded} new house agents from the treasury`);
+      if (r.funded && !handles.engine) console.log('[world] agents:', handles.startAgents());
+    }).catch((e) => console.error(`[world] could not fund new house agents at boot (${(e as Error).message}); the rest run on`));
+  }
   // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s. No OPENAI_API_KEY: no paid images.
   // Started last, once nothing in boot can throw, so a failed boot leaves no sweeping interval behind.
   const stopSpotlight = startSpotlight({
