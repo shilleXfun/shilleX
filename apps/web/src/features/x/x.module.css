@@ -1,0 +1,17 @@
+.embed { margin-top: 10px; max-width: 550px; }
+.pending { display: none; }
+.frame { display: block; }
+.card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass); color: var(--text); text-decoration: none; }
+.card:hover { border-color: var(--accent); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mark { font-size: 18px; line-height: 1; }
+.cardText { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.open { color: var(--muted); font-size: 13px; }
+.toggle { display: flex; align-items: center; gap: 10px; }
+.hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.panel { margin-top: 24px; display: grid; gap: 16px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.item { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.status { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.thumb { width: 240px; max-width: 100%; border-radius: 8px; }

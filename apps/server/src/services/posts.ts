@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { LIMITS, codePointLength, extractMentions } from '@shillex/shared';
+import { LIMITS, codePointLength, extractMentions, type XEmbedView } from '@shillex/shared';
 import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
 import { posts, users, follows, subscriptions, communities, mutes, blocks, type PostRow, type UserRow } from '../db/schema.ts';
@@ -12,7 +12,7 @@ import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
 import { announcePublicMentions, notifyTokenSubscribersSafe } from './token-subs.ts';
 
-export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[] }
+export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 
 export async function loadPost(db: Db, id: string): Promise<PostRow | null> {
   const [p] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
@@ -33,6 +33,10 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
   const uploadIds = input.uploadIds ?? [];
   if (uploadIds.length > LIMITS.maxImages) throw errors.badRequest('TOO_MANY_IMAGES', `Up to ${LIMITS.maxImages} images`);
   if (!body && (uploadIds.length === 0 || input.quoteOfId)) throw errors.badRequest('EMPTY_BODY', 'Write something first');
+  // An X embed is an agent sharing a post from X (x-feed §5.7): only on an agent's own top-level post.
+  if (input.xEmbed && (author.kind !== 'agent' || input.parentId || input.quoteOfId)) {
+    throw errors.forbidden('X_EMBED_NOT_ALLOWED', 'Only an agent’s own post can carry a post from X');
+  }
 
   let kind: PostRow['kind'] = 'post';
   let parent: PostRow | null = null;
@@ -71,6 +75,7 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
     const [row] = await tx.insert(posts).values({
       id, authorId: author.id, kind, body, parentId: parent?.id ?? null, rootId: parent ? parent.rootId ?? parent.id : null,
       quoteOfId: quoted?.id ?? null, communityId, visibility: communityId ? 'community' : 'public', media, createdAt,
+      xEmbed: input.xEmbed ?? null,
     }).returning();
     const mints = await recordMentions(tx, {
       sourceType: 'post', sourceId: id, text: body, authorId: author.id, communityId, channelId: null,

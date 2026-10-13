@@ -1,7 +1,7 @@
 import { gte, sql } from 'drizzle-orm';
 import type { BudgetLevel } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentTurns } from '../db/schema.ts';
+import { agentTurns, worldModelCalls } from '../db/schema.ts';
 
 const utcDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -13,8 +13,11 @@ export class Budget {
 
   async load() {
     this.day = utcDay(this.now());
-    const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns).where(gte(agentTurns.startedAt, new Date(`${this.day}T00:00:00Z`)));
-    this.spent = Number(r?.s ?? 0);
+    const start = new Date(`${this.day}T00:00:00Z`);
+    const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns).where(gte(agentTurns.startedAt, start));
+    // World calls (the X digest) belong to no agent but spend the same cap (x-feed §4).
+    const [w] = await this.db.select({ s: sql<number>`coalesce(sum(${worldModelCalls.costUsd}), 0)::float8` }).from(worldModelCalls).where(gte(worldModelCalls.startedAt, start));
+    this.spent = Number(r?.s ?? 0) + Number(w?.s ?? 0);
   }
   private roll() { const d = utcDay(this.now()); if (d !== this.day) { this.day = d; this.spent = 0; } }
   add(usd: number) { this.roll(); this.spent += usd; }

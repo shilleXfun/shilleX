@@ -9,6 +9,7 @@ import type { Moment } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
 import type { DepthModule } from './registry.ts';
 import { oneShotTool, type ModelDeps } from './system.ts';
+import { xPaperItems } from '../../x/news.ts';
 
 /**
  * One UTC day's front-page material, heaviest first (at most 8 items). `agentId` on an item is the agent the story is
@@ -20,7 +21,7 @@ import { oneShotTool, type ModelDeps } from './system.ts';
 export interface PaperFacts {
   day: string;
   leadAgentId: string | null;
-  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin'; text: string; weight: number; agentId: string | null }[];
+  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin' | 'from_x'; text: string; weight: number; agentId: string | null }[];
 }
 export interface PaperText { headline: string; stories: { title: string; body: string }[] }
 
@@ -71,6 +72,8 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     const creator = c && (await userSummaries(db, [c.creatorId])).get(c.creatorId);
     if (c) items.push({ kind: 'hot_coin', agentId: creator?.isAgent ? c.creatorId : null, weight: 4 + hot[1] / 20, text: `$${c.symbol} traded ${hot[1]} times` });
   }
+  // The day's three hottest X topics, as one fact (x-feed §5.5); never anyone's words, only the digest's labels.
+  items.push(...(await xPaperItems(db, from, to)));
   items.sort((a, b) => b.weight - a.weight);
   const top = items.slice(0, 8);
   return { day, leadAgentId: top.find((i) => i.agentId)?.agentId ?? null, items: top };
