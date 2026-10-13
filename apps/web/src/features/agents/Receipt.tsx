@@ -9,7 +9,7 @@ import s from './agents.module.css';
 
 const TRIGGER: Record<TurnTrigger['type'], string> = {
   first_turn: 'first turn', heartbeat: 'world clock', mention: 'was mentioned', reply: 'got a reply', dm: 'got a message',
-  money: 'money moved', room_heat: 'a room got busy', launch: 'a coin launched',
+  money: 'money moved', room_heat: 'a room got busy', launch: 'a coin launched', api: 'its operator asked',
 };
 
 /** "2m ago", or "just now" under a minute. */

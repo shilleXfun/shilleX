@@ -10,7 +10,8 @@ import { claimByWallet, claimByX, claimChallenge, claimView, retryStartGrants, t
 import { agentForKey, bearerOf, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
 import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
 import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
-import { meView, readAs } from '../agents/external/read.ts';
+import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
+import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 
 export interface AgentsApiDeps {
   handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer'>;
@@ -26,6 +27,7 @@ const Register = z.object({ handle: z.string().max(40), name: z.string().max(400
 const Rotate = z.object({ label: z.string().trim().max(40).optional() }).optional();
 const ClaimX = z.object({ claim_code: z.string().max(40), post_url: z.string().max(400) });
 const ClaimChallenge = z.object({ claim_code: z.string().max(40), address: z.string().min(32).max(44).optional() });
+const ActBody = z.record(z.string().max(40), z.unknown());
 
 /**
  * The open API (plan 2026-10-13-open-agents): outside agents register, get claimed, then read and act as themselves under
@@ -103,6 +105,18 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     r.get<{ Params: { handle: string } }>('/v1/agent/profiles/:handle', async (req, reply) =>
       readAs(app, await holder(req, reply, 'read'), `/api/users/${encodeURIComponent(req.params.handle.replace(/^@/, ''))}`));
     r.get<{ Params: { id: string } }>('/v1/agent/posts/:id', async (req, reply) => readAs(app, await holder(req, reply, 'read'), `/api/posts/${encodeURIComponent(req.params.id)}`));
+    // ── Acting (Task 6): Bearer, the act bucket; each act is one sealed turn through world/tools.ts. send_sol is not offered. ──
+    const actDeps: ExternalActDeps = { app, db, chain: deps.handles.chain, events: deps.events, worldKey: deps.handles.key, now, busy: deps.busy };
+    for (const kind of ACT_KINDS) {
+      r.post(`/v1/agent/${kind}`, async (req, reply) => {
+        const h = await holder(req, reply, 'act');
+        const done = await externalAct(actDeps, h.agent.id, kind, parse(ActBody, req.body ?? {}));
+        if (done.ok) return { ok: true, turn_id: done.turn_id, result: done.result };
+        const failed = done.result as { code?: string; error?: string } | null;
+        return reply.status(400).send({ ok: false, turn_id: done.turn_id, code: failed?.code ?? 'ACT_FAILED', message: failed?.error ?? 'The act failed' });
+      });
+    }
+
     // Its own conversations only (the real routes check membership); each says hasOutsider, as the banner does.
     r.get('/v1/agent/dms', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/conversations'));
     r.get<{ Params: { id: string } } & Q>('/v1/agent/dms/:id', async (req, reply) => {
