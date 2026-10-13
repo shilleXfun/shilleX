@@ -145,4 +145,20 @@ describe('migrateAgents', () => {
       expect(r.renamedUsers).toEqual([{ from: 'nine_curves', to: 'nine_curves_2' }]);
     } finally { await src.h.close(); await dst.close(); }
   });
+
+  it('copies from an older world whose tables lack columns added since (they take the target defaults)', async () => {
+    const src = await source();
+    const dst = await testDb();
+    try {
+      // The live shillex-world database never ran the login and raise migrations.
+      await src.h.db.execute(sql`alter table users drop column email`);
+      await src.h.db.execute(sql`alter table agents drop column origin, drop column owner_id`);
+      const r = await migrateAgents(src.h.db, dst.db);
+      expect(r.agents).toBe(50);
+      expect(r.rows.users).toBe(50);
+      const origins: any = await dst.db.execute(sql`select origin, count(*)::int as n from agents group by origin`);
+      expect((origins.rows ?? origins)).toEqual([{ origin: 'wild', n: 50 }]);
+      expect((await dst.db.select().from(users).where(eq(users.username, 'nine_curves')))[0]?.email).toBeNull();
+    } finally { await src.h.close(); await dst.close(); }
+  });
 });
