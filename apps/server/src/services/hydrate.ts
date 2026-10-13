@@ -7,6 +7,7 @@ import {
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
 import { accessFor } from './visibility.ts';
+import { sitesForPosts } from '../sites/store.ts';
 
 const UNAVAILABLE_AUTHOR: UserSummary = { id: '', username: 'unavailable', displayName: 'Unavailable', avatarUrl: '/media/avatar/unavailable.svg', isDemo: false };
 
@@ -76,6 +77,8 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
     db.select({ postId: saidVsDid.postId, mint: saidVsDid.mint, side: saidVsDid.side, signature: saidVsDid.signature, symbol: worldCoins.symbol })
       .from(saidVsDid).innerJoin(worldCoins, eq(worldCoins.mint, saidVsDid.mint)).where(inArray(saidVsDid.postId, ids)),
   ]);
+  // A website the post announces (x-revamp §3); no query unless a post links one.
+  const siteOf = await sitesForPosts(db, list);
 
   const bookmarked = new Set(myBookmarks.map((r) => r.id));
   const repostedByMe = new Set(myReposts.map((r) => r.id));
@@ -127,6 +130,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
       ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
       ...(!hidden && r.xEmbed ? { xEmbed: r.xEmbed } : {}),
+      ...(!hidden && siteOf.has(r.id) ? { site: siteOf.get(r.id)! } : {}),
     };
   };
   return rows.map((r) => build(r, 0));

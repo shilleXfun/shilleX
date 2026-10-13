@@ -72,6 +72,8 @@ export interface Config {
   external: ExternalConfig;
   /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
   scenes: SceneConfig;
+  /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; default 12, 0 stops building). */
+  sitesPerDay: number;
 }
 
 export interface ExternalConfig {
@@ -227,5 +229,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     x: loadXConfig(env),
     external: externalConfig(env),
     scenes: loadSceneConfig(env, nodeEnv),
+    sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 12)) || 0),
   };
 }

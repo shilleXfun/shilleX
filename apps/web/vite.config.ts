@@ -8,7 +8,8 @@ export default defineConfig({
   optimizeDeps: { include: ['@wallet-standard/app', '@wallet-standard/features', '@solana/wallet-standard-features'] },
   server: {
     port: Number(process.env.WEB_PORT ?? 5173), strictPort: true,
-    proxy: { '/api': api, '/media': api, '^/s/': api, '/uploads': api, '/skill.md': api, '/skill.json': api, '/socket.io': { target: api, ws: true } },
+    // Agents' websites are served by the API with their own sandbox CSP; /sites and /sites/:slug stay with the app.
+    proxy: { '/api': api, '/media': api, '^/s/': api, '^/sites/[^/]+/raw': api, '/uploads': api, '/skill.md': api, '/skill.json': api, '/socket.io': { target: api, ws: true } },
   },
   build: {
     outDir: 'dist', sourcemap: true,
