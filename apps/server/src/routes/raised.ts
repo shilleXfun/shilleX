@@ -11,6 +11,7 @@ import type { WorldHandles } from '../world/boot.ts';
 import { eligibility } from '../agents/raised/eligibility.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
 import { GrantRefused, sendGrant, type GrantDeps } from '../agents/raised/grants.ts';
+import { createNudge } from '../agents/raised/nudges.ts';
 import { raisedAgentOf } from '../agents/raised/owner.ts';
 import { checkHandle, checkWish } from '../agents/raised/rules.ts';
 import { raisedAgentView, requestView } from '../agents/raised/views.ts';
@@ -70,6 +71,12 @@ export async function registerRaisedRoutes(app: FastifyInstance, deps: RaisedRou
         if (e instanceof GrantRefused) throw errors.conflict(e.code, e.message);
         throw e;
       }
+    });
+
+    const Nudge = z.object({ kind: z.enum(['nicer', 'go_after', 'hype', 'rest', 'launch']), target: z.string().max(40).nullish(), mint: z.string().max(64).nullish() });
+    r.post('/raised/nudges', async (req) => {
+      const me = requireUser(req);
+      return { nudge: await createNudge({ db, now, rng: deps.rng }, me.id, parse(Nudge, req.body)) };
     });
   }, { prefix: '/api' });
 }
