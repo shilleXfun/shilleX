@@ -50,6 +50,20 @@
       "when": 1791848379217,
       "tag": "0006_agent_turns_running",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791889828093,
+      "tag": "0007_slippery_ghost_rider",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791889835090,
+      "tag": "0008_mainnet_data",
+      "breakpoints": true
     }
   ]
 }
