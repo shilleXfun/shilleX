@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { chainTxs, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerReconciliations, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
+import { agents, chainTxs, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerReconciliations, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { START_LAMPORTS, recordTx } from '../world/ledger.ts';
 import { setSetting } from '../world/launchpad.ts';
@@ -68,7 +68,9 @@ export async function fundOpening(db: Db, now: Date): Promise<{ funded: number; 
   const [s] = await db.select().from(ledgerSeasons).where(eq(ledgerSeasons.id, season));
   const plan = Object.entries(((s?.summary as { opening?: Record<string, number> } | undefined)?.opening) ?? {}).filter(([, l]) => l > 0);
   const refs = new Set((await db.select({ ref: ledgerJournal.ref }).from(ledgerJournal).where(and(eq(ledgerJournal.season, season), eq(ledgerJournal.kind, 'opening')))).map((r) => r.ref));
-  const todo = plan.filter(([agentId]) => !refs.has(`opening:${season}:${agentId}`));
+  // Outside agents (open agents) play with practice SOL only: the house pays them no opening, whatever the plan says.
+  const outsiders = new Set((await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'external'))).map((r) => r.id));
+  const todo = plan.filter(([agentId]) => !outsiders.has(agentId) && !refs.has(`opening:${season}:${agentId}`));
   const need = todo.reduce((n, [, l]) => n + l, 0), house = await lamportsOf(db, HOUSE);
   if (need > house) throw new Error(`The house holds ${house / 1e9} SOL; the openings need ${need / 1e9} SOL. Record more house stake on /admin first.`);
   for (const [agentId, lamports] of todo) {
