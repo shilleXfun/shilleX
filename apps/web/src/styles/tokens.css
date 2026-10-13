@@ -1,36 +1,42 @@
-/* The revamp (docs/superpowers/specs/2026-10-13-x-revamp-design.md §1) over The Swarm. Token names are stable. */
+/* Lumen over The Swarm (2026-10-14). Token names are stable. */
 :root {
   color-scheme: dark;
-  /* Void: the page base, deep enough that the agents' lights read. */
-  --bg: #04060D;
-  --panel: #0E1019;
-  --raised: #151826;
-  --hover: #1B1F30;
-  --bg-hover: #0A0C14;
-  /* Hairlines: row dividers and column edges. */
-  --line: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  /* Lumen (2026-10-14): true black, white type, glass with luminous edges. The world's lights bring the colour; amber is
+     what is alive (live, focus, the brand mark); white is what a person can press. */
+  --bg: #020203;
+  --panel: #0B0B0E;
+  --raised: #141418;
+  --hover: #1B1B21;
+  --bg-hover: #09090C;
+  /* Hairlines: row dividers, column and card edges. */
+  --line: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.13);
   --line-hover: rgba(255, 255, 255, 0.24);
-  --text: #EEF0F7;
-  --muted: #9AA0B6;
-  /* Amber: what a person can do (Bring your agent, Post, Follow) and focus rings. Nothing else. */
-  --accent: #FFB86B;
-  --accent-hover: #FFC98A;
-  --accent-ink: #1A1206;
-  --accent-soft: rgba(255, 184, 107, 0.12);
-  --accent-line: rgba(255, 184, 107, 0.4);
-  --accent-wash: rgba(255, 184, 107, 0.06);
-  --accent-select: rgba(255, 184, 107, 0.3);
+  --text: #F4F4F6;
+  --muted: #8F8F9B;
+  --text-2: #C9C9D1;
+  /* Amber: life and focus. */
+  --accent: #FFBE6B;
+  --accent-hover: #FFCC8A;
+  --accent-ink: #160F04;
+  --accent-soft: rgba(255, 190, 107, 0.12);
+  --accent-line: rgba(255, 190, 107, 0.42);
+  --accent-wash: rgba(255, 190, 107, 0.06);
+  --accent-select: rgba(255, 190, 107, 0.3);
+  /* White: the primary action. */
+  --press: #F4F4F6;
+  --press-hover: #FFFFFF;
+  --press-ink: #08080A;
   /* Cyan: coins and tickers. Up and down for money moves only. */
-  --token: #7DE3FF;
-  --token-soft: rgba(125, 227, 255, 0.1);
-  --token-line: rgba(125, 227, 255, 0.4);
-  --token-hover: rgba(125, 227, 255, 0.18);
+  --token: #7FE4FF;
+  --token-soft: rgba(127, 228, 255, 0.1);
+  --token-line: rgba(127, 228, 255, 0.4);
+  --token-hover: rgba(127, 228, 255, 0.18);
   --token-ink: #04130F;
-  --up: #4BF0A0;
-  --up-soft: rgba(75, 240, 160, 0.12);
-  --down: #FF5A6E;
-  --down-soft: rgba(255, 90, 110, 0.12);
+  --up: #46E8A0;
+  --up-soft: rgba(70, 232, 160, 0.12);
+  --down: #FF6378;
+  --down-soft: rgba(255, 99, 120, 0.12);
   --warn: #FFD166;
   --warn-soft: rgba(255, 209, 102, 0.12);
   --warn-line: rgba(255, 209, 102, 0.4);
@@ -38,31 +44,34 @@
   --heat-soft: rgba(255, 138, 76, 0.14);
   /* Coin diamonds and agents with no faction or no life, as the backdrop and the Graph draw them. */
   --coin: #FFE3B0;
-  --ghost: #6B7085;
-  --scrim: rgba(3, 4, 8, 0.7);
-  --scrim-strong: rgba(3, 4, 12, 0.9);
-  --scrim-soft: rgba(4, 5, 14, 0.55);
-  --glass: rgba(7, 9, 16, 0.72);
-  --glass-blur: blur(18px) saturate(140%);
-  /* Floating cards (pages that lay out their own): the world shows between and faintly through them. Phones drop the blur. */
-  --card: rgba(9, 11, 19, 0.66);
-  --card-hover: rgba(15, 18, 29, 0.74);
-  --card-solid: rgba(8, 10, 17, 0.95);
-  --card-blur: blur(14px) saturate(140%);
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.25);
+  --ghost: #6B6B78;
+  --scrim: rgba(2, 2, 4, 0.72);
+  --scrim-strong: rgba(2, 2, 4, 0.9);
+  --scrim-soft: rgba(2, 2, 4, 0.55);
+  --glass: rgba(14, 14, 18, 0.62);
+  --glass-blur: blur(22px) saturate(160%);
+  /* Glass: white at a few percent over the world, a luminous edge, light from above. Phones drop the blur. */
+  --card: rgba(20, 20, 26, 0.55);
+  --card-hover: rgba(28, 28, 36, 0.62);
+  --card-solid: rgba(12, 12, 16, 0.96);
+  --card-blur: blur(22px) saturate(160%);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 50px rgba(0, 0, 0, 0.45);
+  /* The edge of a glass surface: brighter at the top left, fading round. Use as a border-box background. */
+  --edge: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0.1));
   /* The sheet: the timeline column and the side column are one continuous surface each, rows split by hairlines. */
-  --sheet: rgba(7, 9, 16, 0.86);
-  --sheet-blur: blur(16px) saturate(140%);
+  --sheet: rgba(9, 9, 12, 0.78);
+  --sheet-blur: blur(22px) saturate(160%);
   /* A post row carries the sheet when it sits alone over the world (pages of floating cards); on a sheet it is clear. */
   --row-bg: var(--sheet);
   --row-blur: var(--sheet-blur);
-  --row-hover: rgba(255, 255, 255, 0.028);
+  --row-hover: rgba(255, 255, 255, 0.03);
   /* Fallback faction colours (real ones come from the data). */
   --faction-1: #FF7A59;
   --faction-2: #3DDBD9;
   --faction-3: #B69CFF;
 
-  --glow-accent: 0 0 24px rgba(255, 184, 107, 0.32);
+  --glow-accent: 0 0 28px rgba(255, 190, 107, 0.3);
+  --glow-press: 0 0 0 1px rgba(255, 255, 255, 0.3), 0 8px 30px rgba(255, 255, 255, 0.16);
   --glow-token: 0 0 24px rgba(125, 227, 255, 0.3);
 
   /* System emoji first; the bundled Twemoji (base.css) only fills glyphs the OS lacks, e.g. Unicode 13+ such as 🪖 on
@@ -70,15 +79,18 @@
   --font-emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Twemoji';
   --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
-  --font-brand: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, var(--font-emoji), sans-serif;
+  /* Real code only (keys, JSON, curl, shortcuts); interface numbers use the UI face with tabular figures. */
+  --font-code: var(--font-mono);
+  /* One family: Geist, tight and heavy for display, plain for reading. */
+  --font-brand: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
 
   /* 12 / 13.5 / 15.5 (posts and body) / 18 / 24 / 34, then display: page-level names at 44 and the home hero's headline. */
   --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15.5px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-3xl: 44px;
   --fs-display: clamp(56px, 8.4vw, 132px);
-  --lh: 1.45; --lh-display: 1.1;
+  --lh: 1.5; --lh-display: 1.04;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
   /* Radius by role: chips 6, inputs/buttons 12, popovers/dialogs 14, cards 16, pills/avatars 999. */
-  --radius-chip: 6px; --radius-sm: 12px; --radius: 12px; --radius-pop: 14px; --radius-card: 16px; --radius-pill: 999px;
+  --radius-chip: 7px; --radius-sm: 12px; --radius: 12px; --radius-pop: 16px; --radius-card: 20px; --radius-pill: 999px;
   --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --shadow-drawer: -24px 0 60px rgba(2, 2, 10, 0.55);
@@ -93,7 +105,7 @@
   --right-w: var(--side-w); --center-max: var(--main-max); --panel-w: 420px; --tabbar-h: 58px;
   /* Rows (posts, the composer, the timeline's parts): the side padding and the gap between the 40 px avatar column and
      the text. The avatar's centre, where thread lines run, is at --row-px + 20 px. */
-  --row-px: 16px; --card-gap: 12px;
+  --row-px: 18px; --card-gap: 12px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }

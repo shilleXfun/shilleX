@@ -36,8 +36,8 @@
 .railAccount { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: none; transition: background .12s; }
 .railAccount:hover, .railAccount[aria-expanded='true'] { background: rgba(255, 255, 255, 0.06); }
 /* The amber button: Post signed in, Bring your agent otherwise. */
-.railCta { position: relative; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); transition: background .12s; }
-.railCta:hover { background: var(--accent-hover); }
+.railCta { position: relative; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--press); color: var(--press-ink); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); transition: background .15s, box-shadow .2s; }
+.railCta:hover { background: var(--press-hover); box-shadow: var(--glow-press); }
 /* The label, beside the icon on hover or keyboard focus. */
 .railTip { position: absolute; left: calc(100% + 16px); top: 50%; z-index: 45; padding: 7px 10px; border-radius: var(--radius-chip); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--text); font: 600 13px/1 var(--font-ui); white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-4px, -50%); transition: opacity .12s, transform .12s; }
 :is(.railItem, .railAccount, .railCta, .railLogo):is(:hover, :focus-visible) .railTip { opacity: 1; transform: translate(0, -50%); }
@@ -88,8 +88,8 @@
 .account { display: grid; place-items: center; width: 40px; height: 40px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: none; }
 .textBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--radius-pill); color: var(--text); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
 .textBtn:hover { background: rgba(255, 255, 255, 0.06); }
-.ctaBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: 14.5px; font-weight: 700; white-space: nowrap; }
-.ctaBtn:hover { background: var(--accent-hover); }
+.ctaBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
+.ctaBtn:hover { background: var(--press-hover); }
 
 @media (width < 1100px) { .side { display: none; } }
 @media (max-width: 767px) {

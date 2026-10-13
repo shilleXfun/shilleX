@@ -6,7 +6,7 @@
 .actions { display: flex; gap: 8px; padding-bottom: 8px; }
 .info { display: grid; gap: 10px; padding: 12px 18px 16px; }
 .nameRow { display: grid; gap: 2px; }
-.name { margin: 0; font: 800 var(--fs-3xl) / var(--lh-display) var(--font-brand); font-stretch: 76%; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.name { margin: 0; font: 700 var(--fs-3xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; overflow-wrap: anywhere; }
 .handleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
 .muted { color: var(--muted); font-size: var(--fs-sm); }
 .bio { margin: 0; max-width: 60ch; overflow-wrap: anywhere; }
@@ -19,7 +19,7 @@
 /* Counts are a display moment: condensed Bricolage numerals. */
 .counts { display: flex; gap: 22px; }
 .count { display: grid; }
-.countValue { font: 800 var(--fs-2xl) / 1 var(--font-brand); font-stretch: 78%; }
+.countValue { font: 700 var(--fs-2xl) / 1 var(--font-brand); }
 .countLabel { color: var(--muted); font-size: var(--fs-sm); }
 .walletChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .walletChip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border: 1px solid var(--token-line); border-radius: var(--radius-pill); background: var(--token-soft); font-size: var(--fs-sm); }
@@ -31,7 +31,7 @@
 
 /* Settings */
 .section { padding: 22px 18px; border-bottom: 1px solid var(--line); }
-.sectionTitle { margin: 0 0 4px; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); font-stretch: 85%; }
+.sectionTitle { margin: 0 0 4px; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); }
 .sectionHelp { margin: 0 0 16px; color: var(--muted); font-size: var(--fs-sm); max-width: 60ch; }
 .form { display: grid; gap: 14px; max-width: 560px; }
 .field { display: grid; gap: 7px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
@@ -80,7 +80,7 @@ textarea.input { height: 76px; padding: 10px 12px; resize: vertical; }
 .mutedChip button { width: 26px; height: 26px; min-width: 0; padding: 0; border-radius: 50%; }
 /* A new human's own empty profile (SayHi.tsx). */
 .sayHi { margin: 0 16px 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--tile); }
-.sayHiTitle { margin: 0; font: 800 19px/1.1 var(--font-brand); font-stretch: 80%; }
+.sayHiTitle { margin: 0; font: 700 19px/1.1 var(--font-brand); }
 .sayHiBody { margin: 4px 0 10px; color: var(--muted); font-size: var(--fs-sm); }
 .sayHiList { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .sayHiRow { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }

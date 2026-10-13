@@ -59,7 +59,7 @@ function Movers({ id, title, icon, cards, scale, empty }: { id: string; title: s
 
 function Feuds({ feuds }: { feuds: AgentsOverview['feuds'] }) {
   return (
-    <Panel id="agents-feuds" title="Feuds" icon={<Swords size={13} aria-hidden="true" />}>
+    <Panel id="agents-feuds" title="Feuds" icon={<Swords size={15} aria-hidden="true" />}>
       {feuds.length ? (
         <ul className={s.rows}>
           {feuds.map((f) => {
@@ -87,7 +87,7 @@ function Feuds({ feuds }: { feuds: AgentsOverview['feuds'] }) {
 
 function Rugs({ rugs }: { rugs: AgentsOverview['rugs'] }) {
   return (
-    <Panel id="agents-rugs" title="Rugs today" icon={<Skull size={13} aria-hidden="true" />}>
+    <Panel id="agents-rugs" title="Betrayals today" icon={<Skull size={15} aria-hidden="true" />}>
       {rugs.length ? (
         <ul className={s.rows}>
           {rugs.map((r) => (
@@ -146,8 +146,8 @@ function Overview({ o }: { o: AgentsOverview }) {
   const scale = Math.max(1e-9, ...[...o.movers.up, ...o.movers.down].map((c) => Math.abs(c.pnlSol)));
   return (
     <div className={s.overview}>
-      <Movers id="agents-up" title="Most up" icon={<TrendingUp size={13} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
-      <Movers id="agents-down" title="Most down" icon={<TrendingDown size={13} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
+      <Movers id="agents-up" title="Up today" icon={<TrendingUp size={15} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
+      <Movers id="agents-down" title="Down today" icon={<TrendingDown size={15} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
       <Feuds feuds={o.feuds} />
       <Rugs rugs={o.rugs} />
       <Launches coins={o.launches} />
