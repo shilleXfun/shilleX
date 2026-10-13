@@ -1,13 +1,14 @@
 import { Keypair } from '@solana/web3.js';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, gte, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { ledgerAccounts, ledgerHoldings, ledgerPools } from '../db/schema.ts';
+import { ledgerAccounts, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, users, wallets } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { CURVE, ChainError, GRADUATED_MESSAGE, type Chain, type ChainLimits, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from '../world/chain.ts';
 import { getSetting, setSetting } from '../world/launchpad.ts';
 import { EXTERNAL, FROZEN_KEY, HOUSE, currentSeason, move, moveTokens, need, ownerOfKey, poolAccount, type JournalKind } from './accounts.ts';
 import { priceOf, quoteBuy, quoteSell } from './curve.ts';
 import { DEFAULT_RULES, type LedgerRules } from './rules.ts';
+import { breakerTripped, vestingLocked } from './safety.ts';
 
 type PoolRow = typeof ledgerPools.$inferSelect;
 const asDb = (t: unknown) => t as Db;
@@ -163,12 +164,44 @@ export class LedgerChain implements Chain {
     await this.afterTrade(tx, p!, at);
   }
 
-  // ── Safety hooks: Task 5 fills these with the spec's rules. ──
-  private checkOpen() {}
-  private checkBuySize(_lamports: number) {}
-  private checkSell(_p: PoolRow, _pk: string, _held: number, _raw: number, _at: Date) {}
-  private checkPaused(_p: PoolRow, _at: Date) {}
-  private async afterTrade(_tx: Db, _p: PoolRow, _at: Date) {}
-  private locked(_p: PoolRow, _now: Date): number { return 0; }
-  private async checkSend(tx: Db, _from: string, to: string, _lamports: number, _at: Date) { await ownerOfKey(tx, to); }
+  // ── Safety rules (mainnet spec §3) ──
+  private checkOpen() {
+    if (this.frozenReason) throw new ChainError('FROZEN', 'Trading is paused while the books are checked');
+  }
+  private checkBuySize(lamports: number) {
+    if (lamports > this.rules.maxTradeLamports) throw new ChainError('TRADE_TOO_LARGE', `One trade spends at most ${this.rules.maxTradeLamports / 1e9} SOL`);
+  }
+  /** A creator's launch buy unlocks over 24 h, and one creator sale moves at most 30% of the bag. Other holders sell freely. */
+  private checkSell(p: PoolRow, pk: string, held: number, raw: number, at: Date) {
+    if (p.creatorAccount !== pk) return;
+    const free = held - Math.min(held, this.locked(p, at));
+    if (raw > free) throw new ChainError('VESTING_LOCKED', `Only ${free} of your ${held} raw units are unlocked: a creator's launch buy unlocks over 24 hours`);
+    const cap = Math.ceil(held * this.rules.maxCreatorSaleShare);
+    if (raw > cap) throw new ChainError('SALE_TOO_LARGE', `A creator sells at most ${Math.round(this.rules.maxCreatorSaleShare * 100)}% of the bag at once (${cap} raw units now)`);
+  }
+  private checkPaused(p: PoolRow, at: Date) {
+    if (p.pausedUntil && p.pausedUntil > at) throw new ChainError('PAUSED', `This coin fell too fast; trading reopens at ${p.pausedUntil.toISOString()}`);
+  }
+  /** Records the new price and pauses the coin when it fell `breakerDrop` within the window. Prices older than an hour go. */
+  private async afterTrade(tx: Db, p: PoolRow, at: Date) {
+    const price = priceOf(p), r = this.rules;
+    await tx.delete(ledgerPrices).where(and(eq(ledgerPrices.mint, p.mint), lt(ledgerPrices.at, new Date(at.getTime() - 60 * 60_000))));
+    const recent = await tx.select({ price: ledgerPrices.priceLamports }).from(ledgerPrices)
+      .where(and(eq(ledgerPrices.mint, p.mint), gte(ledgerPrices.at, new Date(at.getTime() - r.breakerWindowMs))));
+    await tx.insert(ledgerPrices).values({ id: newId(), mint: p.mint, at, priceLamports: price });
+    if (breakerTripped(recent.map((x) => x.price), price, r.breakerDrop)) {
+      await tx.update(ledgerPools).set({ pausedUntil: new Date(at.getTime() + r.breakerPauseMs) }).where(eq(ledgerPools.mint, p.mint));
+    }
+  }
+  private locked(p: PoolRow, now: Date): number { return vestingLocked(p.vestedRaw, p.launchedAt, now, this.rules.vestingMs); }
+  /** SOL moves only between agents: at most `maxSendLamports` a transfer and `maxSendDailyLamports` per sender per UTC day. */
+  private async checkSend(tx: Db, from: string, to: string, lamports: number, at: Date) {
+    if (lamports > this.rules.maxSendLamports) throw new ChainError('SEND_LIMIT', `One transfer moves at most ${this.rules.maxSendLamports / 1e9} SOL`);
+    const [r] = await tx.select({ kind: users.kind }).from(wallets).innerJoin(users, eq(users.id, wallets.ownerId)).where(eq(wallets.publicKey, to));
+    if (r?.kind !== 'agent') throw new ChainError('SEND_NOT_ALLOWED', 'SOL moves only between agents here; nothing leaves the ledger except an owner’s withdrawal');
+    const day = new Date(`${at.toISOString().slice(0, 10)}T00:00:00Z`);
+    const [s] = await tx.select({ n: sql<number>`coalesce(sum(-${ledgerJournal.lamportsDelta}), 0)::float8` }).from(ledgerJournal)
+      .where(and(eq(ledgerJournal.account, from), eq(ledgerJournal.kind, 'send'), lt(ledgerJournal.lamportsDelta, 0), gte(ledgerJournal.createdAt, day)));
+    if ((s?.n ?? 0) + lamports > this.rules.maxSendDailyLamports) throw new ChainError('SEND_LIMIT', `An agent sends at most ${this.rules.maxSendDailyLamports / 1e9} SOL a day`);
+  }
 }
