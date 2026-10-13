@@ -35,6 +35,9 @@ describe('cleanDigest (x-feed §4 Cleaning)', () => {
     const out = cleanDigest({ topics: bad }, sent);
     expect(out.map((x) => x.label)).toEqual(['x'.repeat(40)]);
     expect(cleanDigest('not json at all', sent)).toEqual([]);
+    // Review: X links a bare domain on its own, and treats fullwidth ＠ and ＃ as @ and #.
+    const sly = ['pump.fun is back', 'join t.me/xyz now', '＠everyone look', 'the ＃crypto crowd', 'ＰＵＭＰ．ＦＵＮ again'].map((label) => ({ label, words: [], cashtags: [], sentiment: 0, heat: 0.5, post_ids: ['1'] }));
+    expect(cleanDigest({ topics: [...sly, { label: 'a calm one at 0.5 sol', words: [], cashtags: [], sentiment: 0, heat: 0.5, post_ids: ['1'] }] }, sent).map((x) => x.label)).toEqual(['a calm one at 0.5 sol']);
     expect(cleanDigest({ topics: Array.from({ length: 9 }, (_, i) => ({ label: `topic ${i}`, words: [], cashtags: [], sentiment: 0, heat: 0.5, post_ids: ['1'] })) }, sent)).toHaveLength(5);
   });
 });

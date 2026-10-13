@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
 import { FakeXApi, XApiError, xConfig } from './x-helpers.ts';
-import { agentEvents, factionMembers, factions, papers, shareCards, xHighlights } from '../src/db/schema.ts';
+import { agentEvents, factionMembers, factions, papers, shareCards, xHighlights, xTopics } from '../src/db/schema.ts';
 import { newId } from '../src/lib/ids.ts';
 import { createShareCard } from '../src/agents/share.ts';
 import { HIGHLIGHT_GAP_MS, coinText, draftHighlights, highlightTextOk, plainText, postDueHighlights } from '../src/x/highlights.ts';
@@ -24,6 +24,10 @@ describe('highlight text (x-feed §6)', () => {
     expect(highlightTextOk('MOTH (devnet coin) graduated', null)).toBe(true);
     expect(highlightTextOk('x'.repeat(250), 'https://shillex.example/times/2026-10-09')).toBe(false);
     expect(highlightTextOk('hi @you', null)).toBe(false);
+  });
+  it('Review: refuses a bare domain X would link, and fullwidth ＠ ＃ ＄ that X reads as @ # $', () => {
+    for (const bad of ['Lamp rugged it on pump.fun', 'The t.me/xyz Club formed', '＠lamp formed a faction', 'the ＃rekt gang', 'ＭＯＴＨ．ＣＯＭ fans', 'up ＄5']) expect(highlightTextOk(bad, null), bad).toBe(false);
+    for (const good of ['ORBIT (devnet coin) graduated on Shillex.', 'Lamp rugged MOTH (devnet coin) on Shillex: sold for 0.090 SOL while 4 other AI agents still held it.']) expect(highlightTextOk(good, null), good).toBe(true);
   });
 });
 
@@ -70,6 +74,23 @@ describe('draftHighlights (x-feed §6)', () => {
     expect(byKey.get(`faction_formed:${long}`)).toMatchObject({ status: 'skipped', error: 'broke the highlight text rules' });
     expect(byKey.get(`faction_formed:${named}`)).toMatchObject({ status: 'skipped' });
     expect(byKey.get(`faction_formed:${fine}`)).toMatchObject({ status: 'draft', body: 'A new faction formed among the AI agents on Shillex: The Lamp Club, 1 member.' });
+  });
+  it('Review Focus 4: a 200-character faction name is skipped even though the whole post would fit in 280', async () => {
+    const id = newId(), name = 'L'.repeat(200);
+    await w.t.db.insert(factions).values({ id, name, colour: '#fff', formedAt: w.t.clock.now() });
+    await w.t.db.insert(factionMembers).values({ factionId: id, agentId: w.agents[0]!.id, joinedAt: w.t.clock.now() });
+    await event(w.agents[0]!.id, 'faction_formed', { factionId: id, name });
+    expect(await draftHighlights(deps())).toBe(0);
+    expect((await rows())[0]).toMatchObject({ key: `faction_formed:${id}`, status: 'skipped' });
+  });
+  it('Review: the paper never carries a trending X topic back to X', async () => {
+    await w.t.db.insert(xTopics).values({ id: newId(), label: 'senator smith etf remarks', words: ['senator'], avoidSymbols: [], sentiment: 0, heat: 1, sourcePostIds: ['1'], sourceHandle: null,
+      createdAt: w.t.clock.now(), expiresAt: new Date(w.t.clock.now().getTime() + 3 * 3600_000) });
+    await w.t.db.insert(papers).values({ day: '2026-10-09', headline: 'FROM X: SENATOR SMITH ETF REMARKS', body: { stories: [], memeBrief: null, source: 'local' }, createdAt: w.t.clock.now() });
+    expect(await draftHighlights(deps())).toBe(1);
+    const [paper] = await rows();
+    expect(paper).toMatchObject({ kind: 'paper', status: 'draft', link: `${URL_}/times/2026-10-09` });
+    expect(paper!.body.toLowerCase()).not.toMatch(/senator|smith|from x/);
   });
 });
 
@@ -118,6 +139,21 @@ describe('postDueHighlights (x-feed §6)', () => {
     api.failNext = new XApiError(401, 'Unauthorized');
     expect((await post()).halted).toMatch(/401/);
     expect((await rows()).find((r) => r.key === 'next')!.status).toBe('approved');
+  });
+  it('Review: posts at most X_HIGHLIGHTS_PER_DAY in a UTC day, however many were approved', async () => {
+    for (let i = 0; i < 5; i++) await approved({ key: `many:${i}`, body: `ORBIT${i} (devnet coin) graduated on Shillex.` });
+    for (let i = 0; i < 4; i++) { await post(); w.t.clock.advance(HIGHLIGHT_GAP_MS); } // 12:00, 15:00, 18:00, 21:00 UTC
+    expect(api.created).toHaveLength(3);
+    w.t.clock.advance(HIGHLIGHT_GAP_MS); // 03:00 the next day
+    await post();
+    expect(api.created).toHaveLength(4);
+  });
+  it('Review: a post X may have taken (a timeout) is marked failed at once, never sent again', async () => {
+    const id = await approved();
+    api.failNext = new XApiError(408, 'X did not answer in time');
+    await post();
+    expect((await w.t.db.select().from(xHighlights).where(eq(xHighlights.id, id)))[0]).toMatchObject({ status: 'failed', attempts: 1 });
+    expect(api.created).toEqual([]);
   });
   it('stops at the X budget', async () => {
     await approved();

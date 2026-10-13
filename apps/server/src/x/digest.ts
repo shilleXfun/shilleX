@@ -8,6 +8,7 @@ import { HAIKU, billedCall, type ModelBudget } from '../agents/haiku.ts';
 import { wrap, type MomentHandler } from '../agents/moments.ts';
 import { cleanModelText } from '../agents/phrasebook-writer.ts';
 import { utcDay } from './spend.ts';
+import { xSafeText } from './text.ts';
 
 export const DIGEST_MAX_TOKENS = 2000;
 /** A digest's worst case: every max token billed as Haiku output, the convention every model call here uses. */
@@ -43,8 +44,9 @@ export function cleanDigest(raw: unknown, sentIds: ReadonlySet<string>): CleanTo
   for (const t of topics.slice(0, 50)) {
     if (out.length >= 5) break;
     const o = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
-    const label = cleanModelText(o.label, 40);
-    if (!label || /[$#]/.test(label)) continue;
+    // NFKC first: fullwidth letters and signs (＠ ＃ ＄ ．) are checked, and stored, as the plain ones X reads them as.
+    const label = cleanModelText(typeof o.label === 'string' ? o.label.normalize('NFKC') : o.label, 40);
+    if (!label || !xSafeText(label)) continue;
     const postIds = [...new Set(list(o.post_ids).filter((id) => sentIds.has(id)))];
     const sentiment = inRange(o.sentiment, -1, 1), heat = inRange(o.heat, 0, 1);
     if (!postIds.length || sentiment === null || heat === null) continue;
