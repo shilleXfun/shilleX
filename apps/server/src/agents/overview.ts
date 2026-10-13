@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
-import type { AgentsOverview, UserSummary } from '@shillex/shared';
+import { LAMPORTS_PER_SOL, type AgentsOverview, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentAffinity, agentState, chainTxs, factionMembers, factions, users, worldCoins, type ChainTxRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
@@ -53,6 +53,14 @@ export async function buildOverview(d: { db: Db; indexer: Indexer; now: () => Da
     const coin = coinOf.get(sale.mint!);
     if (coin) rugs.push({ coin, creator: summary.get(sale.agentId!)!, soldPct, at: sale.createdAt.toISOString() });
   }
+  // Today's activity for the counters (Today panel, Graph, Times): every buy and sell, every launch, today's rugs and the SOL that changed hands.
+  const dayTx = await db.select({ kind: chainTxs.kind, lamports: chainTxs.lamportsDelta }).from(chainTxs)
+    .where(and(gte(chainTxs.createdAt, day), inArray(chainTxs.kind, ['launch', 'buy', 'sell'])));
+  const swaps = dayTx.filter((t) => t.kind !== 'launch');
+  const today = {
+    trades: swaps.length, launches: dayTx.length - swaps.length, rugs: rugs.length,
+    volumeSol: Number((swaps.reduce((n, t) => n + Math.abs(t.lamports), 0) / LAMPORTS_PER_SOL).toFixed(4)),
+  };
 
   const byPnl = [...cards].sort((a, b) => b.pnlSol - a.pnlSol);
   const stateOf = new Map(states.map((s) => [s.agentId, s]));
@@ -62,6 +70,7 @@ export async function buildOverview(d: { db: Db; indexer: Indexer; now: () => Da
     feuds: feuds.slice(0, 5),
     launches: [...coins].sort((a, b) => b.launchedAt.localeCompare(a.launchedAt)).slice(0, 6),
     rugs,
+    today,
     moods: cards.map((c) => {
       const st = stateOf.get(c.user.id);
       return { user: c.user, mood: st ? fadedMood(st.mood, st.updatedAt, d.now()) : 0, pnlSol: c.pnlSol, faction: factionOf.get(c.user.id) ?? null, broke: !!st?.brokeSince, ghost: !!st?.ghostSince };

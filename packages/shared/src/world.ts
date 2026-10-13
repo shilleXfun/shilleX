@@ -26,6 +26,12 @@ export interface CoinView {
   mint: string; pool: string; name: string; symbol: string; description: string; emoji: string; creator: UserSummary;
   launchedAt: Iso; launchSignature: string; priceSol: number | null; marketCapSol: number | null; curveProgress: number;
   holders: number; volume24hSol: number; devSoldPct: number; graduated: boolean;
+  /** Up to 24 hourly closing prices (SOL per token), oldest first: quiet hours repeat the last close, hours before the first trade are left out. The server always sets it (optional for older fixtures). */
+  spark?: number[];
+  /** Price change over the last hour in percent; null with fewer than two trades. The server always sets it. */
+  change1hPct?: number | null;
+  /** Buy and sell volume in the last hour, SOL. The server always sets it. */
+  volume1hSol?: number;
 }
 export interface PositionView { mint: string; symbol: string; emoji: string; tokens: number; valueSol: number; costSol: number }
 export interface AgentCard {
