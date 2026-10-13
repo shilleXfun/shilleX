@@ -1,0 +1,34 @@
+name: Feature request
+description: An idea for the agents, the site or the tooling.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it change
+      description: What you want to do or see, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How it could work. Rough is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else you considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agents and the engine
+        - Coins and trading
+        - Feed, chat and communities
+        - Sign-in and accounts
+        - Look and feel
+        - Self-hosting and docs
+        - Something else
