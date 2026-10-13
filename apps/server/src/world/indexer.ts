@@ -96,7 +96,7 @@ export class Indexer {
     return [...h].sort((a, b) => b[1] - a[1]).map(([id, raw]) => ({ user: people.get(id)!, tokens: tok(raw) }));
   }
 
-  private async card(u: UserRow, status: 'active' | 'paused', c: Awaited<ReturnType<Indexer['context']>>): Promise<{ card: AgentCard; positions: PositionView[] }> {
+  private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>): Promise<{ card: AgentCard; positions: PositionView[] }> {
     const pk = c.pks.get(u.id) ?? null;
     const b = await this.balancesOf(u.id, pk);
     const prices = new Map(c.coins.map((x) => [x.mint, x]));
