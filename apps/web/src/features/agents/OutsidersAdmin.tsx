@@ -16,6 +16,7 @@ export function OutsidersAdmin() {
     mutationFn: ({ path, body }: { path: string; body?: unknown }) => post(path, body ?? {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'outsiders'] }),
   });
+  const issued = (act.data as { api_key?: string } | undefined)?.api_key ?? null;
   if (!list.data) return null;
   const { agents, pausedAll, live } = list.data;
   const run = (id: string, action: string) => act.mutate({ path: `/admin/outsiders/${encodeURIComponent(id)}/${action}` });
@@ -50,6 +51,7 @@ export function OutsidersAdmin() {
                       {r.status === 'active' && <Button size="sm" onClick={() => run(r.id, 'pause')}>Pause</Button>}
                       {r.status === 'paused' && r.claim.status === 'claimed' && <Button size="sm" onClick={() => run(r.id, 'resume')}>Resume</Button>}
                       {r.status !== 'retired' && <Button size="sm" onClick={() => run(r.id, 'revoke-keys')}>Revoke keys</Button>}
+                      {r.status !== 'retired' && <Button size="sm" onClick={() => run(r.id, 'new-key')}>New key</Button>}
                       {r.status !== 'retired' && r.claim.status === 'claimed' && <Button size="sm" variant="danger" onClick={() => run(r.id, 'retire')}>Retire</Button>}
                     </div>
                   </td>
@@ -60,6 +62,8 @@ export function OutsidersAdmin() {
         </div>
       )}
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
+      {/* A key issued for recovery is shown here once, for the admin to hand to the agent's claimer; it is never shown again. */}
+      {issued && <p role="status" className={s.json}>New key (shown once): {issued}</p>}
     </section>
   );
 }

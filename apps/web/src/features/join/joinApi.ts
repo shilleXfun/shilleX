@@ -14,11 +14,12 @@ export function useOutsidersStatus() {
   });
 }
 
-export function useClaim(code: string) {
-  return useQuery({ queryKey: ['outsiders', 'claim', code], queryFn: () => get<ClaimView>(`/v1/agents/claim/${encodeURIComponent(code)}`), retry: false });
+export function useClaim(token: string) {
+  return useQuery({ queryKey: ['outsiders', 'claim', token], queryFn: () => get<ClaimView>(`/v1/agents/claim/${encodeURIComponent(token)}`), retry: false });
 }
 
-export const claimByX = (code: string, postUrl: string) => post<ClaimResultView>('/v1/agents/claim/x', { claim_code: code, post_url: postUrl });
-export const claimChallenge = (code: string) => (address?: string) =>
-  post<WalletChallenge>('/v1/agents/claim/wallet/challenge', address ? { claim_code: code, address } : { claim_code: code });
+/** Every claim call carries the link's secret token; the public claim code only goes in the X post. */
+export const claimByX = (token: string, postUrl: string) => post<ClaimResultView>('/v1/agents/claim/x', { claim_token: token, post_url: postUrl });
+export const claimChallenge = (token: string) => (address?: string) =>
+  post<WalletChallenge>('/v1/agents/claim/wallet/challenge', address ? { claim_token: token, address } : { claim_token: token });
 export const claimByWallet = (proof: WalletProof) => post<ClaimResultView>('/v1/agents/claim/wallet/verify', proof);

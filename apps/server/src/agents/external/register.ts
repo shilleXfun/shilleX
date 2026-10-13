@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import bs58 from 'bs58';
 import { and, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import type { Config } from '../../config.ts';
@@ -18,6 +19,10 @@ export const NAME_MAX = 40, BIO_MAX = 160;
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const newClaimCode = () => [...randomBytes(12)].map((b) => ALPHABET[b & 31]).join('');
 export const CLAIM_CODE = /^[0-9A-HJKMNP-TV-Z]{12}$/;
+/** The claim link's secret: 24 random bytes, base58. Only its sha256 is stored; the X post never carries it. */
+export const newClaimToken = () => bs58.encode(randomBytes(24));
+export const CLAIM_TOKEN = /^[1-9A-HJ-NP-Za-km-z]{30,36}$/;
+export const hashClaimToken = (token: string) => createHash('sha256').update(`claim:${token}`).digest('hex');
 
 /**
  * The client's address. Behind the host's proxy (no trustProxy here) req.ip is the proxy, so the rightmost X-Forwarded-For
@@ -58,7 +63,7 @@ function cleanField(code: string, v: string | undefined, max: number, required: 
   return c;
 }
 
-export interface Registered { agentId: string; handle: string; apiKey: string; claimCode: string }
+export interface Registered { agentId: string; handle: string; apiKey: string; claimCode: string; claimToken: string }
 
 /**
  * Registers an outside agent (plan Task 3): a user (kind agent), an agent row (origin external, paused until claimed), a
@@ -81,19 +86,19 @@ export async function registerAgent(d: { db: Db; config: Config; now: () => Date
   const [pending] = await db.select({ n: sql<number>`count(*)::int` }).from(externalRegistrations).where(eq(externalRegistrations.status, 'pending'));
   if ((pending?.n ?? 0) >= 4 * Math.max(1, config.external.max)) throw errors.conflict('FULL', 'Too many agents are waiting to be claimed; try again later');
   if (await handleInUse(db, h.handle)) throw errors.conflict('HANDLE_TAKEN', 'That handle is taken');
-  const agentId = newId(), apiKey = newKey(), claimCode = newClaimCode();
+  const agentId = newId(), apiKey = newKey(), claimCode = newClaimCode(), claimToken = newClaimToken();
   try {
     await db.transaction(async (tx) => {
       await tx.insert(users).values({ id: agentId, username: h.handle, displayName: name, bio, kind: 'agent', avatarUrl: agentAvatarUrl(agentId), createdAt: now });
       await tx.insert(agents).values({ userId: agentId, status: 'paused', origin: 'external', createdAt: now });
-      await tx.insert(externalRegistrations).values({ agentId, claimCode, ipHash: ipKey, createdAt: now, expiresAt: new Date(now.getTime() + REGISTRATION_TTL_MS), status: 'pending' });
+      await tx.insert(externalRegistrations).values({ agentId, claimCode, claimTokenHash: hashClaimToken(claimToken), ipHash: ipKey, createdAt: now, expiresAt: new Date(now.getTime() + REGISTRATION_TTL_MS), status: 'pending' });
       await tx.insert(agentApiKeys).values({ id: hashKey(apiKey), agentId, createdAt: now });
     });
   } catch (e) {
     if (isUniqueViolation(e)) throw errors.conflict('HANDLE_TAKEN', 'That handle is taken');
     throw e;
   }
-  return { agentId, handle: h.handle, apiKey, claimCode };
+  return { agentId, handle: h.handle, apiKey, claimCode, claimToken };
 }
 
 /** Unclaimed registrations past their 24 h: the user goes (its agent row, registration and keys cascade), freeing the handle. */

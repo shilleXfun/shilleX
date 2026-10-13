@@ -13,7 +13,7 @@ import { recordTx } from '../../world/ledger.ts';
 import { TREASURY, createWallet, signerFor, walletOf } from '../../world/wallets.ts';
 import { TREASURY_FLOOR } from '../raised/grants.ts';
 import { loadState } from '../state.ts';
-import { CLAIM_CODE, liveOutsiders } from './register.ts';
+import { CLAIM_TOKEN, hashClaimToken, liveOutsiders } from './register.ts';
 
 export interface ClaimDeps { db: Db; config: Config; now: () => Date; chain: Chain; key: Buffer }
 const FEE = 5_000;
@@ -22,14 +22,23 @@ export const X_TIMEOUT_MS = 5_000;
 const POST_URL = /^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/status(?:es)?\/\d{1,25}(?:[/?#][^\s]*)?$/;
 const AUTHOR_URL = /^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/?$/;
 
-const expired = () => new AppError(400, 'CLAIM_EXPIRED', 'This claim code is unknown, used or expired: register again');
+const expired = () => new AppError(400, 'CLAIM_EXPIRED', 'This claim link is unknown, used or expired: register again');
 
-/** A registration that can still be claimed, by its code. */
-async function pendingByCode(db: Db, code: unknown, now: Date) {
-  const c = typeof code === 'string' ? code.trim().toUpperCase() : '';
-  if (!CLAIM_CODE.test(c)) throw expired();
+/** The registration behind a claim link's secret token (never the public claim code), or null. */
+async function byToken(db: Db, token: unknown) {
+  const t = typeof token === 'string' ? token.trim() : '';
+  if (!CLAIM_TOKEN.test(t)) return null;
   const [r] = await db.select({ reg: externalRegistrations, u: users }).from(externalRegistrations)
-    .innerJoin(users, eq(users.id, externalRegistrations.agentId)).where(eq(externalRegistrations.claimCode, c));
+    .innerJoin(users, eq(users.id, externalRegistrations.agentId)).where(eq(externalRegistrations.claimTokenHash, hashClaimToken(t)));
+  return r ?? null;
+}
+
+/**
+ * A registration that can still be claimed, by its claim link's token. Every claim route needs the token: the public claim
+ * code alone (which the X post shows to anyone) can't start, block or win a claim.
+ */
+async function pendingByToken(db: Db, token: unknown, now: Date) {
+  const r = await byToken(db, token);
   if (!r || r.reg.status !== 'pending' || r.reg.expiresAt <= now) throw expired();
   return r;
 }
@@ -77,8 +86,8 @@ export type ClaimResult = { status: 'claimed' | 'awaiting_approval'; agent: { id
  * or a bar. One agent per X handle. Refusals: CLAIM_EXPIRED, BAD_POST_URL, X_UNREACHABLE, X_POST_NOT_FOUND, X_AUTHOR_INVALID,
  * CLAIM_CODE_MISSING, HANDLE_IN_USE, CLAIM_BARRED, FULL.
  */
-export async function claimByX(d: ClaimDeps, body: { claim_code?: unknown; post_url?: unknown }, session: UserRow | null): Promise<ClaimResult> {
-  const r = await pendingByCode(d.db, body.claim_code, d.now());
+export async function claimByX(d: ClaimDeps, body: { claim_token?: unknown; post_url?: unknown }, session: UserRow | null): Promise<ClaimResult> {
+  const r = await pendingByToken(d.db, body.claim_token, d.now());
   const postUrl = typeof body.post_url === 'string' ? body.post_url.trim() : '';
   if (!POST_URL.test(postUrl)) throw errors.badRequest('BAD_POST_URL', 'Give the link of a post on x.com');
   const post = await readPost(d.config, postUrl);
@@ -92,8 +101,8 @@ export async function claimByX(d: ClaimDeps, body: { claim_code?: unknown; post_
 }
 
 /** One SIWS challenge for a wallet claim, bound to the agent (its id is the nonce's user) and naming its handle. */
-export async function claimChallenge(d: ClaimDeps, body: { claim_code?: unknown; address?: string }): Promise<WalletChallenge> {
-  const r = await pendingByCode(d.db, body.claim_code, d.now());
+export async function claimChallenge(d: ClaimDeps, body: { claim_token?: unknown; address?: string }): Promise<WalletChallenge> {
+  const r = await pendingByToken(d.db, body.claim_token, d.now());
   return issueChallenge(d, { purpose: 'claim', user: { id: r.reg.agentId, username: r.u.username }, address: body.address });
 }
 
@@ -194,16 +203,13 @@ export async function retryStartGrants(d: ClaimDeps): Promise<number> {
   return sent;
 }
 
-/** What the /claim/:code page shows: the pending agent, nothing private. */
-export async function claimView(db: Db, code: unknown, now: Date) {
-  const c = typeof code === 'string' ? code.trim().toUpperCase() : '';
-  if (!CLAIM_CODE.test(c)) throw errors.notFound('Claim');
-  const [r] = await db.select({ reg: externalRegistrations, u: users }).from(externalRegistrations)
-    .innerJoin(users, eq(users.id, externalRegistrations.agentId)).where(eq(externalRegistrations.claimCode, c));
+/** What the claim page (/claim/<token>) shows: the pending agent and the public code its X post must carry. */
+export async function claimView(db: Db, token: unknown, now: Date) {
+  const r = await byToken(db, token);
   if (!r) throw errors.notFound('Claim');
   const status = r.reg.status === 'pending' && r.reg.expiresAt <= now ? 'expired' : r.reg.status;
   return {
     agent: { id: r.u.id, handle: r.u.username, name: r.u.displayName, bio: r.u.bio, avatarUrl: r.u.avatarUrl },
-    status, expiresAt: r.reg.expiresAt.toISOString(), method: r.reg.method,
+    status, expiresAt: r.reg.expiresAt.toISOString(), method: r.reg.method, claimCode: r.reg.claimCode,
   };
 }

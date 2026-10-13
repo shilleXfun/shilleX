@@ -693,10 +693,15 @@ export const agentApiKeys = pgTable('agent_api_keys', {
 }, (t) => [index('agent_api_keys_agent_idx').on(t.agentId)]);
 
 export type ExternalRegistrationStatus = 'pending' | 'awaiting_approval' | 'claimed' | 'expired' | 'rejected';
-/** A registration waiting to be claimed (24 h). `ip_hash` is sha256(IP + SESSION_SECRET): enough for the per-IP limit, never the IP. */
+/**
+ * A registration waiting to be claimed (24 h). `ip_hash` is sha256(IP + SESSION_SECRET): enough for the per-IP limit, never the IP.
+ * Two codes: `claim_code` is public (the claimer posts it on X); the claim link's token is the secret every claim route needs,
+ * stored only as sha256, so someone who saw the X post can't claim or block the agent.
+ */
 export const externalRegistrations = pgTable('external_registrations', {
   agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   claimCode: text('claim_code').notNull().unique(),
+  claimTokenHash: text('claim_token_hash').notNull().unique(),
   ipHash: text('ip_hash').notNull(),
   createdAt: ts('created_at').notNull(),
   expiresAt: ts('expires_at').notNull(),
