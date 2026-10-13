@@ -1,19 +1,21 @@
 import { Keypair } from '@solana/web3.js';
-import { and, eq, gte, inArray, lt, sql, type SQL } from 'drizzle-orm';
-import type { DepositView } from '@shillex/shared';
+import { and, asc, desc, eq, gte, inArray, lt, sql, type SQL } from 'drizzle-orm';
+import type { DepositView, WithdrawalView } from '@shillex/shared';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
-import { ledgerChainSeen, ledgerDeposits } from '../db/schema.ts';
+import { ledgerChainSeen, ledgerDeposits, ledgerPools, ledgerWithdrawals } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
+import { ChainError } from '../world/chain.ts';
 import { getSetting } from '../world/launchpad.ts';
 import { recordTx } from '../world/ledger.ts';
-import { walletOf } from '../world/wallets.ts';
-import { EXTERNAL, currentSeason, move } from './accounts.ts';
+import { refreshCoinPrice } from '../world/market.ts';
+import { signerFor, walletOf } from '../world/wallets.ts';
+import { EXTERNAL, HOUSE, WITHDRAWALS, currentSeason, lamportsOf, move, need } from './accounts.ts';
 import { books } from './books.ts';
 import { assertCanDeposit } from './consent.ts';
 import { CustodyError, isUniqueViolation } from './errors.ts';
 import type { LedgerChain } from './ledger-chain.ts';
-import { assertCustodyNetwork, type CustodyNetwork, type CustodyRpc, type Transfer } from './rpc.ts';
+import { assertCustodyNetwork, isAddress, type CustodyNetwork, type CustodyRpc, type Transfer } from './rpc.ts';
 import { payUrl } from './solana-pay.ts';
 import { hotVault } from './vault.ts';
 
@@ -47,6 +49,11 @@ export interface CustodyDeps {
 }
 type DepositRow = typeof ledgerDeposits.$inferSelect;
 class Skip extends Error {}
+export const MIN_WITHDRAW = 1_000_000;
+/** Kept back for the network fee of one send. */
+export const FEE_MARGIN = 10_000;
+type WithdrawalRow = typeof ledgerWithdrawals.$inferSelect;
+const utcDay = (t: Date) => new Date(`${t.toISOString().slice(0, 10)}T00:00:00Z`);
 
 export const toDepositView = (r: DepositRow, hot: string): DepositView => ({
   id: r.id, agentId: r.agentId, reference: r.reference, lamports: r.lamports, sol: r.lamports / SOL, hot, status: r.status, expiresAt: r.expiresAt.toISOString(),
@@ -190,5 +197,155 @@ export class Custody {
       await db.update(ledgerChainSeen).set({ outcome: 'refund_failed', reason: `${reason}; refund failed: ${(e as Error).message}` }).where(eq(ledgerChainSeen.signature, sig));
       return false;
     }
+  }
+
+  /** An owner's withdrawal: always to the payout wallet in force at request time (spec §4, §7). */
+  async requestWithdrawal(i: { agentId: string; userId: string; lamports: number | 'all' }): Promise<WithdrawalView> {
+    const to = await this.d.payoutOf(i.userId);
+    if (!to) throw new CustodyError('NO_PAYOUT_WALLET', 'Choose a payout wallet first');
+    return this.enqueue({ agentId: i.agentId, userId: i.userId, to, lamports: i.lamports, approvedBy: null });
+  }
+
+  /**
+   * Moves the amount from the agent's account (or the house's) into the pending account and queues the send. Game state never
+   * blocks this (spec §4): only processWithdrawals decides when it leaves. The house's SOL leaves only for the cold address.
+   */
+  async enqueue(i: { agentId: string | null; userId: string | null; to: string; lamports: number | 'all'; approvedBy: string | null }): Promise<WithdrawalView> {
+    const { db, now } = this.d;
+    if (!isAddress(i.to)) throw new CustodyError('BAD_ADDRESS', 'That is not a Solana address');
+    if (i.agentId === null && i.to !== this.d.cold) throw new CustodyError('COLD_ONLY', 'The house’s SOL leaves only for the cold address');
+    const from = i.agentId ? (await walletOf(db, i.agentId))!.publicKey : HOUSE;
+    const id = newId(), at = now();
+    const row = await db.transaction(async (x) => {
+      const tx = x as unknown as Db, season = await currentSeason(tx);
+      const have = await lamportsOf(tx, from);
+      const amount = i.lamports === 'all' ? have : i.lamports;
+      if (!Number.isSafeInteger(amount) || amount < MIN_WITHDRAW) throw new CustodyError('BAD_AMOUNT', 'Withdrawals are at least 0.001 SOL');
+      await need(tx, from, amount);
+      await move(tx, { from, to: WITHDRAWALS, lamports: amount, kind: 'withdraw', ref: id, season, at });
+      const r: WithdrawalRow = { id, season, agentId: i.agentId, userId: i.userId, toAddress: i.to, lamports: amount, status: 'queued', reason: null, approvedBy: i.approvedBy, signature: null, requestedAt: at, sentAt: null };
+      await tx.insert(ledgerWithdrawals).values(r);
+      if (i.agentId) await recordTx(tx, { signature: `ldg_${id}`, agentId: i.agentId, turnId: null, kind: 'withdraw', counterparty: i.to, lamportsDelta: -amount, createdAt: at });
+      return r;
+    });
+    return (await this.withdrawals({ id: row.id }))[0]!;
+  }
+
+  /** Why a queued withdrawal must wait, or null when it can go now. */
+  private async holdReason(w: WithdrawalRow, caps: MainnetCaps, hot: string): Promise<string | null> {
+    const { db, rpc, now } = this.d;
+    if (this.d.chain.frozen && !w.approvedBy) return 'review: the books did not reconcile, an admin checks before anything leaves';
+    if (!w.approvedBy) {
+      const [s] = await db.select({ n: sql<number>`coalesce(sum(${ledgerWithdrawals.lamports}), 0)::float8` }).from(ledgerWithdrawals)
+        .where(and(eq(ledgerWithdrawals.status, 'sent'), gte(ledgerWithdrawals.sentAt, utcDay(now()))));
+      if ((s?.n ?? 0) + w.lamports > caps.outflowDaily) return 'the daily outflow limit is reached: it waits for the owner’s approval';
+    }
+    if ((await rpc.balance(hot)) < w.lamports + FEE_MARGIN) return 'the hot vault is low: the owner tops it up and it is paid within 24 hours';
+    if ((await lamportsOf(db, HOUSE)) < FEE_MARGIN) return 'the house cannot pay the network fee yet';
+    return null;
+  }
+
+  /**
+   * Sends what can go, oldest first. A row is claimed (queued → sending) before its send; a send that throws stays `sending`
+   * with a note and is never retried here: it may have landed, so an admin checks the chain and resolves it (Task 12).
+   */
+  async processWithdrawals(): Promise<{ sent: number; held: number; failed: number }> {
+    const { db, rpc } = this.d, out = { sent: 0, held: 0, failed: 0 };
+    const queued = await db.select().from(ledgerWithdrawals).where(eq(ledgerWithdrawals.status, 'queued')).orderBy(asc(ledgerWithdrawals.requestedAt));
+    if (!queued.length) return out;
+    const caps = await this.caps(), hot = await this.hot();
+    for (const w of queued) {
+      const hold = await this.holdReason(w, caps, hot);
+      if (hold) {
+        if (w.reason !== hold) await db.update(ledgerWithdrawals).set({ reason: hold }).where(eq(ledgerWithdrawals.id, w.id));
+        out.held++; continue;
+      }
+      const claimed = await db.update(ledgerWithdrawals).set({ status: 'sending', reason: null })
+        .where(and(eq(ledgerWithdrawals.id, w.id), eq(ledgerWithdrawals.status, 'queued'))).returning({ id: ledgerWithdrawals.id });
+      if (!claimed.length) continue;
+      try {
+        await assertCustodyNetwork(rpc, this.d.network);
+        const s = await rpc.send(await this.signer(), w.toAddress, w.lamports);
+        await this.settleSent(w, s.signature, s.feeLamports);
+        out.sent++;
+      } catch (e) {
+        await db.update(ledgerWithdrawals).set({ reason: `send failed (${(e as Error).message}); it may still have landed: check the chain before resolving` }).where(eq(ledgerWithdrawals.id, w.id));
+        out.failed++;
+      }
+    }
+    return out;
+  }
+
+  private async settleSent(w: WithdrawalRow, signature: string, feeLamports: number) {
+    const { db, now } = this.d, at = now();
+    await db.transaction(async (x) => {
+      const tx = x as unknown as Db, season = await currentSeason(tx);
+      await tx.update(ledgerWithdrawals).set({ status: 'sent', signature, sentAt: at, reason: null }).where(eq(ledgerWithdrawals.id, w.id));
+      await move(tx, { from: WITHDRAWALS, to: EXTERNAL, lamports: w.lamports, kind: 'withdraw_sent', ref: signature, season, at });
+      await move(tx, { from: HOUSE, to: EXTERNAL, lamports: Math.min(feeLamports, await lamportsOf(tx, HOUSE)), kind: 'network_fee', ref: signature, season, at });
+    });
+    if (w.userId && w.agentId) await this.d.notify?.(w.userId, w.agentId, `sent ${w.lamports / SOL} SOL to your wallet`);
+  }
+
+  /** An admin lets a held withdrawal past the outflow limit or the review hold. */
+  async approve(id: string, adminId: string): Promise<void> {
+    const r = await this.d.db.update(ledgerWithdrawals).set({ approvedBy: adminId }).where(and(eq(ledgerWithdrawals.id, id), eq(ledgerWithdrawals.status, 'queued'))).returning({ id: ledgerWithdrawals.id });
+    if (!r.length) throw new CustodyError('NOT_QUEUED', 'Only a queued withdrawal can be approved');
+  }
+
+  /**
+   * A `sending` withdrawal after an admin checked the chain. 'sent': the given transaction must be a transfer of exactly this
+   * amount from the hot vault to this address. 'return': nothing left, so the SOL goes back to the agent (or the house).
+   */
+  async resolveStuck(id: string, outcome: 'sent' | 'return', signature?: string): Promise<void> {
+    const { db, rpc, now } = this.d;
+    const [w] = await db.select().from(ledgerWithdrawals).where(eq(ledgerWithdrawals.id, id));
+    if (!w || w.status !== 'sending') throw new CustodyError('NOT_STUCK', 'Only a withdrawal stuck in sending can be resolved');
+    if (outcome === 'sent') {
+      const t = signature ? await rpc.transferIn(signature, w.toAddress) : null;
+      if (!t || t.from !== (await this.hot()) || t.lamports !== w.lamports) throw new CustodyError('NOT_THIS_TRANSFER', 'That transaction is not this withdrawal leaving the hot vault');
+      await this.settleSent(w, signature!, t.feeLamports);
+      return;
+    }
+    const at = now(), back = w.agentId ? (await walletOf(db, w.agentId))!.publicKey : HOUSE;
+    await db.transaction(async (x) => {
+      const tx = x as unknown as Db;
+      await tx.update(ledgerWithdrawals).set({ status: 'failed', reason: 'returned after a failed send' }).where(eq(ledgerWithdrawals.id, w.id));
+      await move(tx, { from: WITHDRAWALS, to: back, lamports: w.lamports, kind: 'withdraw_return', ref: `return_${w.id}`, season: await currentSeason(tx), at });
+      if (w.agentId) await recordTx(tx, { signature: `ldg_return_${w.id}`, agentId: w.agentId, turnId: null, kind: 'withdraw', counterparty: w.toAddress, lamportsDelta: w.lamports, createdAt: at });
+    });
+  }
+
+  /** Sells what the rules allow (vesting, the 30% creator cap; paused or graduated coins stay held), then withdraws all free SOL. */
+  async cashOut(i: { agentId: string; userId: string }): Promise<{ sold: string[]; withdrawal: WithdrawalView | null }> {
+    const { db, chain, now } = this.d;
+    const signer = await signerFor(db, i.agentId, this.d.worldKey), pk = signer.publicKey.toBase58();
+    const sold: string[] = [];
+    for (const t of (await chain.balances(pk)).tokens) {
+      const [p] = await db.select({ creator: ledgerPools.creatorAccount }).from(ledgerPools).where(eq(ledgerPools.mint, t.mint));
+      const free = t.raw - (t.lockedRaw ?? 0);
+      const raw = p?.creator === pk ? Math.min(free, Math.floor(t.raw * chain.rules.maxCreatorSaleShare)) : free;
+      if (raw <= 0) continue;
+      try {
+        const r = await chain.sell(signer, t.mint, raw, 10_000);
+        await recordTx(db, { signature: r.signature, agentId: i.agentId, turnId: null, kind: 'sell', mint: t.mint, lamportsDelta: r.lamportsDelta, tokenDelta: r.tokenDelta, createdAt: now() });
+        await refreshCoinPrice(db, chain, t.mint, now());
+        sold.push(t.mint);
+      } catch (e) { if (!(e instanceof ChainError)) throw e; }
+    }
+    const free = (await chain.balances(pk)).lamports;
+    return { sold, withdrawal: free >= MIN_WITHDRAW ? await this.requestWithdrawal({ agentId: i.agentId, userId: i.userId, lamports: 'all' }) : null };
+  }
+
+  async withdrawals(f: { id?: string; agentId?: string; open?: boolean }): Promise<WithdrawalView[]> {
+    const { db } = this.d;
+    const rows = await db.select().from(ledgerWithdrawals)
+      .where(and(f.id ? eq(ledgerWithdrawals.id, f.id) : undefined, f.agentId ? eq(ledgerWithdrawals.agentId, f.agentId) : undefined, f.open ? inArray(ledgerWithdrawals.status, ['queued', 'sending']) : undefined))
+      .orderBy(desc(ledgerWithdrawals.requestedAt)).limit(100);
+    const queue = (await db.select({ id: ledgerWithdrawals.id }).from(ledgerWithdrawals).where(eq(ledgerWithdrawals.status, 'queued')).orderBy(asc(ledgerWithdrawals.requestedAt))).map((r) => r.id);
+    return rows.map((r) => ({
+      id: r.id, agentId: r.agentId, lamports: r.lamports, sol: r.lamports / SOL, to: r.toAddress, status: r.status, reason: r.reason,
+      position: r.status === 'queued' ? queue.indexOf(r.id) + 1 : null, requestedAt: r.requestedAt.toISOString(), sentAt: r.sentAt?.toISOString() ?? null, signature: r.signature,
+    }));
   }
 }
