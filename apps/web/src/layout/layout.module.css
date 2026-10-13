@@ -37,11 +37,18 @@
 .banner { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--raised) 94%, transparent); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop); color: var(--warn); font-size: var(--fs-sm); font-weight: 550; white-space: nowrap; }
 
 /* Sticky page header shared by top-level pages: frosted, so what scrolls under it blurs instead of reading through. */
-.pageHeader { position: sticky; top: var(--sticky-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 72%, transparent); backdrop-filter: var(--sheet-blur); -webkit-backdrop-filter: var(--sheet-blur); border-bottom: 1px solid var(--line); }
-@media (max-width: 767px) { .pageHeader { background: rgba(4, 6, 13, 0.96); backdrop-filter: none; -webkit-backdrop-filter: none; } }
-.pageHeaderRow { display: flex; align-items: center; gap: 10px; min-height: 53px; padding: 6px var(--row-px); }
-.pageTitle { margin: 0; font: 700 var(--fs-2xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; }
-.pageHeaderRow .pageTitle { font-size: 24px; }
+/* A page header (PageHeader.tsx, Lumen): a large title, one line under it, actions on the right, tabs below. It scrolls
+   with the page; only the tabs a page puts in it stay in reach where the page asks for that. */
+.pageHeader { position: relative; z-index: 2; padding: 26px var(--row-px) 18px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent); }
+.pageHeaderRow { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.pageTitles { display: grid; gap: 8px; flex: 1; min-width: 0; }
+.pageTitle { margin: 0; color: var(--text); font: 650 clamp(30px, 3.4vw, 44px) / 1.02 var(--font-brand); letter-spacing: -0.045em; text-wrap: balance; }
+.pageSub { max-width: 62ch; margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
+.pageActions { display: flex; align-items: center; gap: 8px; flex: none; padding-top: 4px; }
+.pageBelow { margin-top: 18px; }
+.back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-top: 1px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: linear-gradient(rgba(20, 20, 26, 0.6), rgba(20, 20, 26, 0.6)) padding-box, var(--edge) border-box; color: var(--text); transition: background .15s; }
+.back:hover { background: linear-gradient(rgba(40, 40, 50, 0.7), rgba(40, 40, 50, 0.7)) padding-box, var(--edge) border-box; }
+@media (max-width: 767px) { .pageHeader { padding: 18px var(--row-px) 14px; } .pageTitle { font-size: 30px; } .back { width: 36px; height: 36px; } }
 
 /* Keyboard shortcuts dialog: keycaps with a pressed-in bottom edge. */
 .shortcuts { display: grid; gap: 18px; }
