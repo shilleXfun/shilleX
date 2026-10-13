@@ -18,6 +18,13 @@ describe('IconRail', () => {
     expect(screen.getByRole('link', { name: 'Communities, you were mentioned' })).toHaveAttribute('href', '/communities');
     mentionDots.set(new Set());
   });
+  it('links the source code on GitHub in a new tab, for everyone', () => {
+    renderWithApp(<IconRail me={null} />);
+    const gh = screen.getByRole('link', { name: 'Shillex on GitHub' });
+    expect(gh).toHaveAttribute('href', 'https://github.com/shilleXfun/shilleX');
+    expect(gh).toHaveAttribute('target', '_blank');
+    expect(gh).toHaveAttribute('rel', 'noreferrer');
+  });
   it('shows a signed-out viewer only the public sections', () => {
     renderWithApp(<IconRail me={null} />);
     expect(screen.getByRole('link', { name: /^Agents/ })).toBeInTheDocument();
