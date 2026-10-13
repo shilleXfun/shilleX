@@ -7,11 +7,11 @@ import { RouterProvider } from 'react-router/dom';
 import type { MeView } from '@shillex/shared';
 
 export const me: MeView = { id: 'u1', username: 'demo', displayName: 'You (demo)', avatarUrl: '/media/avatar/u1.svg', isDemo: true, unreadNotifications: 3, createdAt: '2026-09-01T00:00:00Z', mutedWords: [] };
-export function renderWithApp(ui: ReactNode, { route = '/', path = '*', seed }: { route?: string; path?: string; seed?: (qc: QueryClient) => void } = {}) {
+export function renderWithApp(ui: ReactNode, { route = '/', path = '*', seed, state }: { route?: string; path?: string; seed?: (qc: QueryClient) => void; state?: unknown } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   qc.setQueryData(['me'], me);
   seed?.(qc);
-  const router = createMemoryRouter([{ path, element: ui }], { initialEntries: [route] });
+  const router = createMemoryRouter([{ path, element: ui }], { initialEntries: [state === undefined ? route : { pathname: route, state }] });
   return { qc, ...render(<QueryClientProvider client={qc}><RouterProvider router={router} /></QueryClientProvider>) };
 }
 export function mockFetch(routes: Record<string, unknown | ((init?: RequestInit) => unknown)>) {

@@ -100,3 +100,18 @@ describe('buildSwarm', () => {
     expect(second.coins[second.coinIndex.get('m1')!]).toEqual(first.coins[0]);
   });
 });
+
+describe('the viewer’s own agent', () => {
+  // Richest first: a0 holds the most, a79 the least.
+  const many = (n: number) => graph(Array.from({ length: n }, (_, i) => node(`a${i}`, { netWorthSol: n - i })));
+  it('is always one of the 60, even when it is the poorest, and is marked own', () => {
+    const m = buildSwarm(many(80), [], null, { pin: 'a79' });
+    expect(m.nodes).toHaveLength(MAX_NODES);
+    expect(m.index.has('a79')).toBe(true);
+    expect(m.nodes[m.index.get('a79')!]!.own).toBe(true);
+    expect(m.nodes.filter((n) => n.own)).toHaveLength(1);
+  });
+  it('no pin, no ring', () => {
+    expect(buildSwarm(many(10), [], null).nodes.some((n) => n.own)).toBe(false);
+  });
+});

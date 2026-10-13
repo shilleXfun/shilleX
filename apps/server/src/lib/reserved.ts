@@ -7,8 +7,11 @@ import type { Config } from '../config.ts';
  */
 export const ROUTE_WORDS: readonly string[] = ['avatars', 'backchannel', 'coin-meta', 'graph', 'info', 'overview'];
 
+/** First segments of web pages under /agents that are not agent names (RAISE: /agents/new). Not part of the /api route check. */
+export const WEB_WORDS: readonly string[] = ['new'];
+
 /** Admin rights follow the username, so admin usernames can't be taken by signup or by an agent renaming itself. */
 export const isReservedUsername = (config: Pick<Config, 'adminUsernames'>, name: string) => {
   const n = name.trim().toLowerCase();
-  return ROUTE_WORDS.includes(n) || config.adminUsernames.some((a) => a.toLowerCase() === n);
+  return ROUTE_WORDS.includes(n) || WEB_WORDS.includes(n) || config.adminUsernames.some((a) => a.toLowerCase() === n);
 };

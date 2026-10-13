@@ -38,6 +38,22 @@ export interface Config {
   hideDemo: boolean;
   /** Engine tick interval range in ms, ENGINE_TICK_MS="min,max". */
   engineTickMs: [number, number];
+  /** USER_AGENTS=on lets any eligible human raise an agent; off (the default) leaves raising to admins (spec 2026-10-13-user-agents §11). */
+  userAgentsOn: boolean;
+  /** USER_AGENTS_MAX: raised agents alive at once (default 200). */
+  userAgentsMax: number;
+  /** USER_AGENTS_PER_DAY: agents hatched per UTC day (default 30). */
+  userAgentsPerDay: number;
+  /** USER_AGENT_GRANTS_DAILY_SOL: devnet SOL the treasury grants raised agents per UTC day (default 3). */
+  userAgentGrantsDailySol: number;
+  /** USER_AGENT_BUDGET_SHARE: raised agents' share of AGENT_DAILY_BUDGET_USD, 0..1 (default 0.35). */
+  userAgentBudgetShare: number;
+  /** OWNER_MODEL_REPLIES_PER_DAY: model-written chat replies an owner gets from their agent per UTC day (default 5). */
+  ownerModelRepliesPerDay: number;
+  /** USER_AGENTS_MIN_AGE_DAYS: how old an account must be to raise an agent (default 3; admins are exempt). */
+  userAgentMinAccountDays: number;
+  /** Hatch from the fallback phrasebook, with no model call: only a local memory-chain world without ANTHROPIC_API_KEY, outside production (dev, e2e). */
+  hatchWithoutModel: boolean;
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
@@ -81,5 +97,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
+    userAgentsOn: on(env.USER_AGENTS, false),
+    userAgentsMax: Number(env.USER_AGENTS_MAX ?? 200),
+    userAgentsPerDay: Number(env.USER_AGENTS_PER_DAY ?? 30),
+    userAgentGrantsDailySol: Number(env.USER_AGENT_GRANTS_DAILY_SOL ?? 3),
+    userAgentBudgetShare: Math.min(1, Math.max(0, Number(env.USER_AGENT_BUDGET_SHARE ?? 0.35))),
+    ownerModelRepliesPerDay: Number(env.OWNER_MODEL_REPLIES_PER_DAY ?? 5),
+    userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
+    hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
   };
 }

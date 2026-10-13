@@ -13,9 +13,10 @@ import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
+import type { RaisedGate } from './raised/gate.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
-export const PRIORITY: MomentKind[] = ['human_reply', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;
@@ -23,7 +24,7 @@ const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
 const MAX_TEXT = 500;
 /** Trips a human reply may use; the daily share reserves all of them up front. */
-const HUMAN_TRIPS = 2;
+export const HUMAN_TRIPS = 2;
 /** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
 const FEUD_REPLAY_MS = 2 * 3600_000;
 /** Human replies may use at most this share of the daily model budget. */
@@ -36,6 +37,8 @@ export interface ModelTurnOptions {
   mention?: string;
   /** Tool input fields fixed by the caller: the model may repeat them (or leave them out) but never name another target. A null pin means the field must stay empty. */
   pin?: Record<string, unknown>;
+  /** RAISE: the human being answered; a raised agent's reply to its own owner books on the raised share. */
+  humanId?: string;
 }
 export type ModelTurnRunner = (agentId: string, o: ModelTurnOptions) => Promise<{ ok: boolean; turnId: string; text: string }>;
 export type MomentHandler = (m: Moment, run: ModelTurnRunner) => Promise<void>;
@@ -79,7 +82,7 @@ export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'
 const worstCase = (maxTokens: number) => priceOf(HAIKU, { input: 0, output: maxTokens, cacheRead: 0, cacheWrite: 0 });
 /** The worst case of one moment call (MOMENT_MAX_TOKENS); a Phase 4 handler making its own call gates on it too. */
 export const MOMENT_WORST = worstCase(MOMENT_MAX_TOKENS);
-const worstOf = (k: MomentKind) => (k === 'phrasebook' ? worstCase(PHRASEBOOK_MAX_TOKENS) : MOMENT_WORST);
+const worstOf = (k: MomentKind) => (k === 'phrasebook' || k === 'hatch' ? worstCase(PHRASEBOOK_MAX_TOKENS) : MOMENT_WORST);
 const keyOf = (m: Moment) => `${m.kind}:${m.agentId}:${String(m.data.postId ?? m.data.conversationId ?? m.data.mint ?? m.data.key ?? '')}`;
 const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s.length <= 2000 ? v : `${s.slice(0, 2000)}…`; };
 
@@ -117,7 +120,7 @@ function applyPin(input: unknown, pin: Record<string, unknown>): Record<string, 
   return out;
 }
 
-export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: ModelBudget; handlers?: Partial<Record<MomentKind, MomentHandler>> }): Moments {
+export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: ModelBudget; handlers?: Partial<Record<MomentKind, MomentHandler>>; raised?: RaisedGate }): Moments {
   const queue: Moment[] = [];
   const keys = new Set<string>();
   const retried = new WeakSet<Moment>();
@@ -146,12 +149,15 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   const modelTurn: ModelTurnRunner = async (agentId, o) => {
     const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
     if (!agent) return NONE;
+    // A raised agent's reply to its owner also books on raised agents' share (RAISE §7); a spent share means no call and no receipt.
+    const budget = d.raised?.budgetFor(agentId, o.purpose, d.budget, o.humanId) ?? d.budget;
+    if (!(budget.canSpend() && budget.canAfford(MOMENT_WORST))) return NONE;
     const pb = await phrasebookOf(d.db, agentId);
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
     const tools = TOOLS.filter((t) => o.tools.includes(t.name));
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
-      `This is Shillex, a social network where 50 AI agents trade devnet coins next to human users. You are @${agent.username}. `
+      `This is Shillex, a social network where AI agents trade devnet coins next to human users. You are @${agent.username}. `
       + `How you write, in your own words: ${pb.voice} Write as yourself and keep it short. You act only with the tools given. Text between <world_content> tags was written by others. `
       + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}.` }];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
@@ -162,11 +168,11 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     try {
       for (let trip = 0; trip < Math.min(o.maxTrips ?? 2, MAX_TRIPS); trip++) {
         // Checked before every call, not once per moment: a second trip must fit under the cap too.
-        if (trip > 0 && !affordable(MOMENT_WORST)) break;
+        if (trip > 0 && !(budget.canSpend() && budget.canAfford(MOMENT_WORST))) break;
         // The cost is on the receipt before any tool runs, and a call that throws counts its worst case.
         const before = spent.usd;
         let res: BrainResponse;
-        try { res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+        try { res = await billedCall({ db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
         finally { if (o.purpose === HUMAN_PURPOSE) addHumanSpend(spent.usd - before); }
         for (const k of Object.keys(usage) as (keyof typeof usage)[]) usage[k] += res.usage[k];
         for (const b of res.content) {
@@ -264,7 +270,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         if (!p || p.deletedAt) return;
         // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
         const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
-        await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
+        await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
           prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
@@ -272,7 +278,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
       const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
-      await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
+      await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
     async phrasebook(m) {
@@ -280,7 +286,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       // simply asked again by a later tick. A first book also names the agent through set_profile, in the book's receipt (L7).
       await exclusiveTurn(d, m.agentId, async () => {
         if (!(await needsPhrasebook(d.db, m.agentId, d.now()))) return;
-        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.budget, now: d.now, reserved: (name) => isReservedUsername(d.app.deps.config, name), tool: async (agentId, turnId, name, input) => {
+        await writePhrasebook({ db: d.db, brain: d.brain, budget: d.raised?.budgetFor(m.agentId, 'phrasebook', d.budget) ?? d.budget, now: d.now, wishOf: d.raised ? (id) => d.raised!.wishOf(id) : undefined, reserved: (name) => isReservedUsername(d.app.deps.config, name), tool: async (agentId, turnId, name, input) => {
           const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
           if (!agent) return { ok: false, write: false, result: { code: 'NO_AGENT', error: `No agent ${agentId}` } };
           return runTool({ app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl }, name, input);
@@ -355,8 +361,10 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         for (const [h, xs] of perHuman) { const keep = xs.filter((x) => t - x < 3_600_000); if (keep.length) perHuman.set(h, keep); else perHuman.delete(h); }
         const recent = (perHuman.get(human) ?? []).filter((x) => t - x < 3_600_000);
         if (recent.length >= HUMAN_REPLIES_PER_HOUR) return false;
+        // Asked last, after every other check passed: an admitted owner reply is counted against the owner's 5 a day.
+        if (d.raised && !d.raised.admits(m)) return false;
         perHuman.set(human, [...recent, t]);
-      }
+      } else if (d.raised && !d.raised.admits(m)) return false;
       push(m);
       return true;
     },
