@@ -6,6 +6,7 @@ import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
+import { registerStoryRoutes } from '../routes/stories.ts';
 import { type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
@@ -27,6 +28,8 @@ import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
+import { SceneShare, startScenes, type Scenes } from '../agents/scenes/index.ts';
+import { startStories, type Stories } from '../agents/stories/index.ts';
 import { RaisedGate } from '../agents/raised/gate.ts';
 import { hatchMomentHandler, retryStartGrants, runHatch, type HatchDeps } from '../agents/raised/hatch.ts';
 import { retireReported } from '../agents/raised/lifecycle.ts';
@@ -138,6 +141,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
   const gate = new RaisedGate({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
+  // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
+  const share = new SceneShare({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.scenes.budgetShare });
+  await share.load();
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -166,11 +173,18 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
+      // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).
+      if (config.scenes.on) {
+        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
+        storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => handles.moments?.halted() ?? scenesH?.stats().halted ?? null });
+        scenesH.onSceneEnd(() => storiesH?.soon());
+      }
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
   await registerAgentRoutes(app, handles);
   await registerDepthRoutes(app, { indexer: handles.indexer });
+  await registerStoryRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
@@ -207,5 +221,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
