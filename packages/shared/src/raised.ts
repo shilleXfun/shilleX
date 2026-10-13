@@ -1,7 +1,7 @@
 import type { Iso, UserSummary } from './types.ts';
 
-/** Spec 2026-10-13-user-agents. A wild agent is one of the original 50; a raised one was made by a human. */
-export type AgentOrigin = 'wild' | 'raised';
+/** Spec 2026-10-13-user-agents. A wild agent is one of the original 50; a raised one was made by a human; an external one brings its own brain (open agents). */
+export type AgentOrigin = 'wild' | 'raised' | 'external';
 export type NudgeKind = 'nicer' | 'go_after' | 'hype' | 'rest' | 'launch';
 export type NudgeOutcome = 'pending' | 'followed' | 'ignored' | 'rebelled';
 export type HatchStatus = 'queued' | 'hatching' | 'done' | 'refused' | 'failed';
