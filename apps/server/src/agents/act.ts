@@ -177,9 +177,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // A depth module's own action runs its tools inside this receipt; a failed tool is reported, not thrown.
     // A call that touches a human's conversation or a private community is recorded as private, and the action then carries
     // no text or line in its result (so afterAct, the composer and every later reader never see it), as with Phase 2's DMs.
-    const tool: RunTool = async (name, input) => {
-      const out = await runTool(ctx, name, input);
-      const { record, private: priv } = await depthToolRecord(db, name, input, out);
+    const tool: RunTool = async (name, input, extras) => {
+      // A depth action's picture or X embed rides on the context for this one call only, as withImage's picture does.
+      if (extras?.uploadIds) { ctx.uploadIds = extras.uploadIds; ctx.alts = extras.alts; }
+      if (extras?.xEmbed) ctx.xEmbed = extras.xEmbed;
+      let out: ToolOutcome;
+      try { out = await runTool(ctx, name, input); } finally { ctx.uploadIds = undefined; ctx.alts = undefined; ctx.xEmbed = undefined; }
+      const shown = { ...input, ...(extras?.uploadIds ? { image: true } : {}), ...(extras?.xEmbed ? { x_embed: extras.xEmbed.postId } : {}) };
+      const { record, private: priv } = await depthToolRecord(db, name, shown, out);
       toolCalls.push(record);
       if (priv) privateCall = true;
       if (out.ok && out.write) status = 'acted';
