@@ -1,5 +1,5 @@
 import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
-import { AUTH_LIMITS, type WalletView } from '@shillex/shared';
+import { AUTH_LIMITS, type ProfileWallet, type WalletView } from '@shillex/shared';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { userWallets, users, type UserRow } from '../db/schema.ts';
@@ -36,6 +36,14 @@ const iso = (d: Date | null) => d?.toISOString() ?? null;
 export async function walletViews(db: Db, userId: string): Promise<WalletView[]> {
   const rows = await db.select().from(userWallets).where(eq(userWallets.userId, userId)).orderBy(asc(userWallets.createdAt), asc(userWallets.address));
   return rows.map((w) => ({ address: w.address, walletName: w.walletName, verified: w.verifiedAt !== null, verifiedAt: iso(w.verifiedAt), showOnProfile: w.showOnProfile, isPayout: w.isPayout, lastLoginAt: iso(w.lastLoginAt) }));
+}
+
+/** A profile's public wallets: verified, and shown by their owner's choice (off by default). */
+export async function profileWallets(db: Db, userId: string): Promise<ProfileWallet[]> {
+  const rows = await db.select().from(userWallets)
+    .where(and(eq(userWallets.userId, userId), eq(userWallets.showOnProfile, true), isNotNull(userWallets.verifiedAt)))
+    .orderBy(asc(userWallets.createdAt), asc(userWallets.address));
+  return rows.map((w) => ({ address: w.address, walletName: w.walletName, verifiedAt: w.verifiedAt!.toISOString() }));
 }
 
 const inUse = () => errors.conflict('WALLET_IN_USE', WALLET_IN_USE);

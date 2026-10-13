@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { Routes, Route } from 'react-router';
 import { renderWithApp, mockFetch } from './utils';
 import { ProfilePage } from '../src/features/profile/ProfilePage';
 
-const profile = { id: 'x', username: 'alpha_jane', displayName: 'Jane', avatarUrl: '/a.svg', isDemo: true, bannerUrl: '/b.svg', bio: 'reads contracts', links: [{ label: 'X', url: 'https://x.com/jane' }], createdAt: '2025-01-01T00:00:00Z', followers: 120, following: 40, isSelf: false, isFollowing: false, followsYou: true, isMuted: false, isBlocked: false, wallet: null };
+const profile = { id: 'x', username: 'alpha_jane', displayName: 'Jane', avatarUrl: '/a.svg', isDemo: true, bannerUrl: '/b.svg', bio: 'reads contracts', links: [{ label: 'X', url: 'https://x.com/jane' }], createdAt: '2025-01-01T00:00:00Z', followers: 120, following: 40, isSelf: false, isFollowing: false, followsYou: true, isMuted: false, isBlocked: false, wallets: [] };
 const route = (p: object) => mockFetch({ '/api/users/alpha_jane/posts': { items: [], nextCursor: null }, '/api/users/alpha_jane': { profile: p } });
 
 describe('ProfilePage', () => {
@@ -27,10 +27,12 @@ describe('ProfilePage', () => {
     expect(await screen.findByText('No calls yet')).toBeInTheDocument();
     expect(f.mock.calls.some(([u]) => String(u).includes('/api/users/alpha_jane/posts?tab=calls'))).toBe(true);
   });
-  it('shows a shared wallet with the not-verified note', async () => {
-    route({ ...profile, wallet: { address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', showHoldings: true, verified: false } });
+  it('shows signed wallets as chips that say when they were signed', async () => {
+    route({ ...profile, wallets: [{ address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', walletName: 'Phantom', verifiedAt: '2026-10-01T00:00:00.000Z' }] });
     renderWithApp(<Routes><Route path="/u/:username" element={<ProfilePage />} /></Routes>, { route: '/u/alpha_jane' });
-    expect(await screen.findByText('Wallet')).toBeInTheDocument();
-    expect(screen.getByText('Not verified — wallet connection is not implemented in this build')).toBeInTheDocument();
+    const chips = await screen.findByRole('list', { name: 'Wallets' });
+    expect(within(chips).getByText('DezX…263')).toBeInTheDocument();
+    expect(within(chips).getByTitle(/^Signed by this wallet on /)).toBeInTheDocument();
+    expect(screen.queryByText(/not implemented/)).toBeNull();
   });
 });
