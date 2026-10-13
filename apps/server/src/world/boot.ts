@@ -168,7 +168,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
   // Open agents (plan 2026-10-13-open-agents): the /api/v1 routes, off unless EXTERNAL_AGENTS=on; one busy set with the engine.
-  const outside = await registerAgentsApiRoutes(app, { handles, events, busy });
+  const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
   const pumpTimer = setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
   pumpTimer.unref?.();
   const waiting = await worldNotReady(db, chain);

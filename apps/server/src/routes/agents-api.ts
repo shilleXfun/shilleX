@@ -7,17 +7,23 @@ import { decodeAddress } from '../lib/siws.ts';
 import { parse } from '../lib/validate.ts';
 import { WalletProofBody } from '../services/wallet-auth.ts';
 import { claimByWallet, claimByX, claimChallenge, claimView, retryStartGrants, type ClaimDeps } from '../agents/external/claim.ts';
-import { agentForKey, bearerOf, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
+import { agentForKey, bearerOf, revokeKeys, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
 import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
 import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
+import { approveClaim, outsidersList, rejectClaim, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
+import { requireUser } from '../lib/auth.ts';
+import type { RaisedGate } from '../agents/raised/gate.ts';
+import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
 
 export interface AgentsApiDeps {
   handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer'>;
   events: WorldEvents;
   /** The engine's busy set: an outside agent never has two turns open either. */
   busy: Set<string>;
+  /** RAISE's gate, for retireAgent. */
+  gate: RaisedGate;
 }
 
 /** How often unclaimed registrations past their day are swept (and, from Task 4, owed start grants retried). */
@@ -128,6 +134,39 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     });
   }, { prefix: '/api' });
 
+  // ── Moderation (Task 8): admin only, and on even when EXTERNAL_AGENTS is off, so outsiders can always be stopped. ──
+  const lifecycle: LifecycleDeps = { db, chain: deps.handles.chain, key: deps.handles.key, now, gate: deps.gate };
+  const requireAdmin = (req: FastifyRequest) => {
+    const u = requireUser(req);
+    if (u.kind !== 'human' || !config.adminUsernames.includes(u.username)) throw errors.forbidden('ADMIN_ONLY', 'Admins only');
+    return u;
+  };
+  await app.register(async (r) => {
+    r.get('/admin/outsiders', async (req) => { requireAdmin(req); return outsidersList(db, now()); });
+    r.post('/admin/outsiders/pause-all', async (req) => {
+      requireAdmin(req);
+      const body = parse(z.object({ paused: z.boolean() }), req.body);
+      await setOutsidersPaused(db, body.paused);
+      return { pausedAll: body.paused };
+    });
+    r.post<{ Params: { id: string; action: string } }>('/admin/outsiders/:id/:action', async (req) => {
+      const admin = requireAdmin(req);
+      const { id, action } = req.params;
+      switch (action) {
+        case 'approve': return approveClaim(claimDeps, id, admin.id);
+        case 'reject': await rejectClaim(db, id); return { rejected: true };
+        case 'pause': case 'resume': await setOutsiderStatus(db, id, action); return { status: action === 'pause' ? 'paused' : 'active' };
+        case 'retire': return retireOutsider(lifecycle, id, 'admin');
+        case 'revoke-keys': return { revoked: await revokeKeys(db, id, now()) };
+        default: throw errors.notFound('Action');
+      }
+    });
+  }, { prefix: '/api' });
+
+  // Upheld reports retire an outside agent (and bar its claimer) within a minute, as RAISE's pump does for raised agents.
+  const reportTimer = setInterval(() => { void retireReportedOutsiders(lifecycle).catch((e) => console.error('[agents-api] report sweep failed', e)); }, 60_000);
+  reportTimer.unref?.();
+
   const sweep = async () => {
     const expired = await expireRegistrations(db, now());
     if (expired) console.log(`[agents-api] ${expired} unclaimed registrations expired`);
@@ -136,5 +175,5 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
   };
   const timer = setInterval(() => { void sweep().catch((e) => console.error('[agents-api] sweep failed', e)); }, SWEEP_MS);
   timer.unref?.();
-  return { stop() { clearInterval(timer); } };
+  return { stop() { clearInterval(timer); clearInterval(reportTimer); } };
 }
