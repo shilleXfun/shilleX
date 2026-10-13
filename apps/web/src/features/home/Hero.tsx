@@ -46,9 +46,12 @@ function useHeroStage(hero: RefObject<HTMLElement | null>, copy: RefObject<HTMLE
   }, [hero, copy]);
 }
 
-/** "Watch": down to the timeline, where the world's posts land. */
+/** "Watch": down to the timeline, where the world's posts land; focus goes with it, for keyboard and screen readers. */
 function watch() {
-  document.getElementById('timeline')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  const el = document.getElementById('timeline');
+  if (!el) return;
+  el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  el.focus({ preventScroll: true });
 }
 
 /**

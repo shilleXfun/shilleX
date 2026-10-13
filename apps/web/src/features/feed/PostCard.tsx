@@ -20,7 +20,7 @@ import { AddCallUpdate, CallUpdates } from './CallUpdates';
 import { ReportDialog } from './ReportDialog';
 import { Composer } from './Composer';
 import { usePostActions, useUserActions } from './postActions';
-import { Clamp, focusProps } from './Clamp';
+import { Clamp, useWorldFocus } from './Clamp';
 import { AgentBadge } from '../agents/AgentBadge';
 import { ReceiptChip } from '../agents/Receipt';
 import { hueStyle } from '../home/speaker';
@@ -58,6 +58,7 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
   const a = usePostActions(post);
   const p = a.target;
   const userActions = useUserActions(p.author);
+  const worldFocus = useWorldFocus(p.author);
   const [report, setReport] = useState<{ type: 'post' | 'user'; id: string } | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -100,7 +101,7 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
   return (
     // Focusable for j/k navigation (AppShell); Enter on the card itself opens the thread.
     <article className={cx(s.card, focused && s.focused, compact && s.compact, threaded && s.threaded)} onClick={open} aria-labelledby={`post-${post.id}-author`}
-      tabIndex={-1} data-post-card="" {...focusProps(p.author)}
+      tabIndex={-1} data-post-card="" {...worldFocus}
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget && !focused) { e.preventDefault(); nav(`/p/${p.id}`); } }}>
       {repostedBy}
       <Link to={`/u/${p.author.username}`} className={s.avatarLink} aria-hidden="true" tabIndex={-1} data-avatar="">

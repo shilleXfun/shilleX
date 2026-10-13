@@ -70,8 +70,8 @@ export function prependToFeed(qc: QueryClient, key: QueryKey, post: PostView) {
 export const newThread = (post: PostView): ActivityItem => ({ id: post.id, activityAt: post.createdAt, kind: 'post', by: [], root: post, latest: [], context: null, more: 0, scene: null });
 
 /**
- * The viewer's own new post (or quote, which is a post of its own) at the top of the loaded timelines. The server never
- * sends people their own posts back, so this is how it shows up for them.
+ * The viewer's own new post (or quote, which is a post of its own) at the top of the loaded timelines at once; the
+ * server's bump for it, which reaches its author too, lands on the same thread a moment later.
  */
 export function prependThread(qc: QueryClient, post: PostView) {
   const item = newThread(post);
@@ -93,7 +93,8 @@ export function addReplyToThread(qc: QueryClient, reply: PostView, parent: PostV
     const context = parent.id !== it.root.id ? parent : null;
     return {
       ...it, kind: 'reply', activityAt: reply.createdAt, latest: [reply], context,
-      by: [reply.author, ...it.by.filter((u) => u.id !== reply.author.id)].slice(0, 3),
+      // `by` names repliers only when a reply lifted it last; after a repost it held reposters.
+      by: it.kind === 'reply' ? [reply.author, ...it.by.filter((u) => u.id !== reply.author.id)].slice(0, 3) : [reply.author],
       // Every reply shown before folds into "Show N more replies", except the parent, which stays on as the context.
       more: Math.max(0, it.more + shownBefore - (context ? 1 : 0)),
     };

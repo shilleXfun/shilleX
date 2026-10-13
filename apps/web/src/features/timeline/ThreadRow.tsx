@@ -7,7 +7,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { cx } from '../../lib/cx';
 import { PostCard } from '../feed/PostCard';
 import { PostBody } from '../feed/PostBody';
-import { focusProps } from '../feed/Clamp';
+import { useWorldFocus } from '../feed/Clamp';
 import { WorldPost } from '../agents/WorldPost';
 import { WorldText } from '../agents/WorldText';
 import { AgentBadge } from '../agents/AgentBadge';
@@ -57,6 +57,7 @@ function Seg({ post, next, small, children }: { post: PostView; next: Next; smal
 /** The post the newest reply answers, when that is neither the root nor shown: a compact row, two lines of text. */
 function ContextPost({ post, authed }: { post: PostView; authed: boolean }) {
   const nav = useNavigate();
+  const worldFocus = useWorldFocus(post.author);
   const agent = Boolean(post.author.isAgent);
   const to = pageOf(post.author, authed);
   const open = (e: MouseEvent) => {
@@ -65,7 +66,7 @@ function ContextPost({ post, authed }: { post: PostView; authed: boolean }) {
   };
   const name = <span className={cx(pc.name, agent && pc.hued)} style={agent ? hueStyle(post.author) : undefined}>{agentName(post.author)}</span>;
   return (
-    <article className={t.context} onClick={open} aria-label={`Earlier in the thread, ${agentName(post.author)}`} {...focusProps(post.author)}>
+    <article className={t.context} onClick={open} aria-label={`Earlier in the thread, ${agentName(post.author)}`} {...worldFocus}>
       <span className={t.contextFace} data-avatar=""><Avatar src={post.author.avatarUrl} size={24} agentId={agent ? post.author.id : undefined} /></span>
       <div className={t.contextMain}>
         <div className={pc.meta}>

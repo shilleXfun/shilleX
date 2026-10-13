@@ -34,16 +34,19 @@ export function useActivity(tab: TimelineTab, viewer: string) {
   });
 }
 
-/** The post whose row a bump lights up: the newest reply or quote, else the root (a new post, a repost). */
+/** The post whose row a bump lights up: the newest reply, else the root (a new post, a repost). */
 const targetOf = (it: ActivityItem) => newestPost(it).id;
 
+/** Each washing row's timer, so a wash that starts again is not cut short by the one before it. */
+const washing = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 /** A short wash of the replier's hue over a row; restarted, not stacked, when the same row is washed again. */
 function wash(row: HTMLElement, hue: number) {
+  clearTimeout(washing.get(row));
   row.style.setProperty('--wash-hue', String(hue));
   row.removeAttribute('data-wash');
   void row.offsetWidth;
   row.setAttribute('data-wash', '');
-  setTimeout(() => row.removeAttribute('data-wash'), WASH_MS + 60);
+  washing.set(row, setTimeout(() => { row.removeAttribute('data-wash'); washing.delete(row); }, WASH_MS + 60));
 }
 
 /**
@@ -51,7 +54,7 @@ function wash(row: HTMLElement, hue: number) {
  * the top (the rows slide: motion layout), then a spark flies from the replier's light in the world to the new reply's
  * avatar and the row takes the replier's colour for a moment. Further down, or with the page hidden, bumps wait behind
  * the pill; the returned function (the pill's click) scrolls up and lands them. One animated bump per 1.2 s at most.
- * Reduced motion: the rows reorder at once, with no spark and no wash.
+ * Reduced motion: the rows reorder at once, with no spark and no wash. `enabled` once the list has data.
  */
 export function useTimelineLive({ tab, viewer, enabled, section, head, list }: {
   tab: TimelineTab; viewer: string; enabled: boolean;
@@ -70,6 +73,8 @@ export function useTimelineLive({ tab, viewer, enabled, section, head, list }: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = -Infinity;
     let disposed = false;
+    // While the pill's click scrolls up, bumps that arrive are held here and land after the batch the click took.
+    let during: ActivityItem[] | null = null;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const later = (fn: () => void, ms: number) => {
       const t = setTimeout(() => { timers.delete(t); if (!disposed) fn(); }, ms);
@@ -98,21 +103,34 @@ export function useTimelineLive({ tab, viewer, enabled, section, head, list }: {
         void swarm.spark(actor.id, { x: r.left + r.width / 2, y: r.top + r.height / 2 }, hue).then(() => { if (!disposed && row.isConnected) wash(row, hue); });
       }, SETTLE_MS);
     };
+    // A page load in flight would write back the pages it started from and undo the lift: it is called off first (the
+    // sentinel asks for the page again while it is still in view).
     const apply = (items: ActivityItem[]) => {
-      if (items.length && liftThreads(qc, tab, key, items)) { last = performance.now(); land(items.at(-1)!); }
+      if (!items.length) return;
+      const run = () => { if (!disposed && liftThreads(qc, tab, key, items)) { last = performance.now(); land(items.at(-1)!); } };
+      if (qc.isFetching({ queryKey: key })) void qc.cancelQueries({ queryKey: key }).then(run);
+      else run();
+    };
+    /** What waited, with `items` after it; a list marked stale by a dropped socket reloads instead of patching. */
+    const settle = (items: ActivityItem[]) => {
+      const w = takeWaiting(tab);
+      if (w.stale) void qc.invalidateQueries({ queryKey: key });
+      else apply([...w.items, ...items]);
     };
     const flush = () => {
       timer = undefined;
       const batch = pending;
       pending = [];
       if (!batch.length) return;
+      if (during) { during.push(...batch); return; }
       if (!live()) { batch.forEach((it) => keep(tab, it, viewer)); return; }
       // Anything waiting behind the pill lands with them, so the order on screen stays the order things happened.
-      apply([...takeWaiting(tab).items, ...batch]);
+      settle(batch);
     };
     const bump = (it: ActivityItem) => {
       // Not loaded yet: the first page will have it. Following only moves threads it already lists.
       if (!qc.getQueryData(key) || (tab === 'following' && !isListed(qc, key, it.id))) return;
+      if (during) { during.push(it); return; }
       if (!live()) { keep(tab, it, viewer); return; }
       pending = [...pending.filter((x) => x.id !== it.id), it];
       timer ??= setTimeout(flush, Math.max(0, last + BUMP_GAP_MS - performance.now()));
@@ -140,10 +158,14 @@ export function useTimelineLive({ tab, viewer, enabled, section, head, list }: {
       window.scrollTo({ top: y, behavior: 'smooth' });
     };
     show.current = () => {
+      if (during) return;
       const w = takeWaiting(tab);
+      during = [];
       toStart(() => {
-        if (w.stale) void qc.invalidateQueries({ queryKey: key });
-        else apply(w.items);
+        const held = during ?? [];
+        during = null;
+        if (w.stale) { takeWaiting(tab); void qc.invalidateQueries({ queryKey: key }); }
+        else settle([...w.items, ...held]);
       });
     };
     return () => {
@@ -151,8 +173,8 @@ export function useTimelineLive({ tab, viewer, enabled, section, head, list }: {
       openTimeline(tab, null);
       if (timer) clearTimeout(timer);
       timers.forEach(clearTimeout);
-      // Bumps caught mid-window are kept for the next visit's pill, not lost.
-      pending.forEach((it) => keep(tab, it, viewer));
+      // Bumps caught mid-window or mid-scroll are kept for the next visit's pill, not lost.
+      [...pending, ...(during ?? [])].forEach((it) => keep(tab, it, viewer));
       show.current = () => undefined;
     };
   }, [enabled, tab, viewer, qc, section, head, list]);

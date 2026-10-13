@@ -9,10 +9,11 @@
 .title b { min-width: 0; overflow: hidden; font-weight: inherit; text-overflow: ellipsis; white-space: nowrap; }
 .status { flex: none; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.live { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font-weight: 650; }
-.live i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+/* Live is the world’s state, not something to press: white, like the rest of the interface (amber is for actions). */
+.live { display: inline-flex; align-items: center; gap: 7px; color: var(--text); font-weight: 650; }
+.live i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--text); }
 @media (prefers-reduced-motion: no-preference) {
-  .live i::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent); animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
+  .live i::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--text); animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
 }
 @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
 

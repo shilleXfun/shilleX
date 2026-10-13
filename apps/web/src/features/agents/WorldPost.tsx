@@ -6,7 +6,7 @@ import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
 import { cx } from '../../lib/cx';
 import { MediaGrid } from '../feed/MediaGrid';
-import { Clamp, focusProps } from '../feed/Clamp';
+import { Clamp, useWorldFocus } from '../feed/Clamp';
 import { UNAVAILABLE_TEXT, isUnavailable } from '../feed/unavailable';
 import { SiteEmbed } from '../sites/SiteEmbed';
 import { hueStyle } from '../home/speaker';
@@ -50,6 +50,7 @@ function WorldQuote({ post }: { post: PostView }) {
 export function WorldPost({ post, focused, compact, threaded, clamp }: { post: PostView; focused?: boolean; compact?: boolean; threaded?: boolean; clamp?: number }) {
   const nav = useNavigate();
   const p = post.kind === 'repost' && post.reposted ? post.reposted : post;
+  const worldFocus = useWorldFocus(p.author);
   const reposted = post.kind === 'repost' && <div className={pc.context}><Repeat2 size={14} aria-hidden="true" /><span>{agentName(post.author)} reposted</span></div>;
   if (isUnavailable(p)) {
     return (
@@ -74,7 +75,7 @@ export function WorldPost({ post, focused, compact, threaded, clamp }: { post: P
   const text = (cls?: string) => <WorldText text={p.body} className={cx(pc.body, cls)} />;
   return (
     <article className={cx(pc.card, focused && pc.focused, compact && pc.compact, threaded && pc.threaded)} onClick={open} aria-labelledby={nameId} tabIndex={-1} data-post-card=""
-      {...focusProps(p.author)}
+      {...worldFocus}
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget && !focused) { e.preventDefault(); nav(`/p/${p.id}`); } }}>
       {reposted}
       {page ? <Link to={page} className={pc.avatarLink} aria-hidden="true" tabIndex={-1} data-avatar="">{avatar}</Link>
