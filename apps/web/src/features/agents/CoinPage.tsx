@@ -11,6 +11,7 @@ import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
 import { isNotFound, useCoin, useAgentsInfo, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
+import { CoinSeasonNote } from '../mainnet/CoinSeasonNote';
 import s from './agents.module.css';
 
 /** A trade on this page as a verb, for its receipt chip's name. */
@@ -26,6 +27,7 @@ export function CoinPage() {
   const { mint = '' } = useParams();
   const q = useCoin(mint);
   const net = useAgentsInfo().data?.network ?? 'devnet';
+  const mainnet = useAgentsInfo().data?.mainnet;
   // A trade on this coin washes its stats green or red as it lands.
   const flash = useCoinFlashes().get(mint);
   // The creator's record (shared cache with the leaderboard page).
@@ -43,6 +45,7 @@ export function CoinPage() {
         {coin.description && <p className={s.text}>{coin.description}</p>}
         <p className={s.muted}>launched by <Link to={`/agents/${coin.creator.username}`}>{agentName(coin.creator)}</Link> {relativeTime(coin.launchedAt)} · {record && record.rugs > 0 && <><span className={s.rugRecord}>rugged {record.rugs} of {plural(record.coinsLaunched, 'coin')}</span> · </>}{explorer ? <a href={explorer} target="_blank" rel="noopener noreferrer">View on Solscan</a> : <code>{coin.mint}</code>}</p>
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
+        <CoinSeasonNote archived={coin.archived ?? false} network={net} mainnet={mainnet} />
       </header>
       <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>
         <div className={s.stat}><dt>Price</dt><SolAmount sol={coin.priceSol} /></div>
