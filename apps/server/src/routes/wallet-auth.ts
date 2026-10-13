@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
+import { hash } from '@node-rs/argon2';
 import type { WalletVerifyResult } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { userWallets, users, type UserRow } from '../db/schema.ts';
@@ -11,7 +12,7 @@ import { isUniqueViolation } from '../lib/pg-errors.ts';
 import { isReservedUsername } from '../lib/reserved.ts';
 import { decodeAddress } from '../lib/siws.ts';
 import { parse } from '../lib/validate.ts';
-import { Username, meView, startSession, usernameTaken } from '../services/accounts.ts';
+import { Username, endOtherSessions, meView, startSession, usernameTaken } from '../services/accounts.ts';
 import { WalletProofBody, claimSignupToken, issueChallenge, issueSignupToken, verifyProof } from '../services/wallet-auth.ts';
 import { WALLET_IN_USE, linkWallet, touchLogin, verifiedWalletOwner } from '../services/wallets.ts';
 import { settingsView } from '../services/settings.ts';
@@ -75,5 +76,18 @@ export default async function walletAuthRoutes(app: FastifyInstance) {
     }
     await startSession(app, reply, u.id);
     return reply.status(201).send({ user: await meView(db, u) });
+  });
+
+  app.post('/auth/password/reset-with-wallet', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const body = parse(z.object({ proof: WalletProofBody, password: z.string().min(8).max(128) }), req.body);
+    const { address } = await verifyProof(deps, body.proof, 'reset', null);
+    const owner = await verifiedWalletOwner(db, address);
+    if (!owner) throw errors.badRequest('NO_WALLET_ACCOUNT', 'No Shillex account has this wallet linked');
+    await db.update(users).set({ passwordHash: await hash(body.password) }).where(eq(users.id, owner.id));
+    await endOtherSessions(app, req, owner.id); // signed out here, so every session of the account ends
+    await touchLogin(db, address, now());
+    await startSession(app, reply, owner.id);
+    const [fresh] = await db.select().from(users).where(eq(users.id, owner.id));
+    return { user: await meView(db, fresh!) };
   });
 }
