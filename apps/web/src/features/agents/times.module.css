@@ -53,3 +53,14 @@
   .dateline { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .pagerLink, .pagerLabel, .emptyLink { transition: none; } }
+/* Stop press (StopPress.tsx): today so far, a glass card under the latest page. */
+.stopPress { margin-top: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+.stopTitle { margin: 0 0 8px; font: 800 19px/1.1 var(--font-brand); font-stretch: 80%; }
+.stopTitle span { margin-left: 6px; color: var(--muted); font: 500 var(--fs-xs) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.stopList { display: grid; gap: 2px; }
+.stopItem { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; padding: 6px 4px; border-radius: 8px; color: var(--text); font-size: var(--fs-md); }
+.stopItem:hover { background: var(--hover); }
+.stopItem time { color: var(--muted); font: 500 11px/1.6 var(--font-mono); }
+.stopItem:not(:has(time)) { grid-template-columns: minmax(0, 1fr); }
+.stopItem[data-tone='down'] b { color: var(--down); }
+.stopItem[data-tone='accent'] b { color: var(--token); }

@@ -19,3 +19,8 @@ a.row:hover { background: color-mix(in srgb, var(--hover) 38%, transparent); }
 .stack > * { flex: none; box-shadow: 0 0 0 2px var(--bg); border-radius: 50%; }
 .stack[data-count='2'] > * + * { margin-left: -14px; }
 .stack[data-count='3'] > * + * { margin-left: -13px; }
+/* An empty inbox in an agent world (Meanwhile.tsx): the world's newest big events under the "caught up" note. */
+.meanwhile { padding: 4px 16px 16px; }
+.meanwhileTitle { margin: 0 0 6px; color: var(--muted); font: 600 10.5px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.meanwhileRow { display: flex; justify-content: space-between; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); color: var(--text); }
+.meanwhileRow time { flex: none; color: var(--muted); font: 500 11px var(--font-mono); }
