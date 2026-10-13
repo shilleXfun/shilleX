@@ -8,7 +8,7 @@ export const LONER = FALLBACK.loner, GHOST = FALLBACK.ghost;
 /** The layout runs on a 16:10 virtual canvas; positions are stored normalised to 0..1. */
 const VW = 1000, VH = 625;
 
-export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; glow: number; ghost: boolean; phase: number }
+export interface SwarmNode { id: string; x: number; y: number; r: number; colour: string; glow: number; ghost: boolean; phase: number; own: boolean }
 export interface SwarmCoin { mint: string; symbol: string; creatorId: string; x: number; y: number; dead: boolean }
 export interface SwarmModel {
   nodes: SwarmNode[]; index: Map<string, number>;
@@ -24,8 +24,9 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
  * With `relayout: false` the graph is the one `prev` was built from (only the coins changed): agents, allies and feuds
  * are reused as they are and no layout runs.
  */
-export function buildSwarm(graph: AgentGraph, coins: CoinView[], prev: SwarmModel | null, opts: { relayout?: boolean } = {}): SwarmModel {
-  const { nodes, index, alliesByColour, feuds } = prev && opts.relayout === false && sameAgents(graph, prev) ? prev : layoutAgents(graph, prev);
+export function buildSwarm(graph: AgentGraph, coins: CoinView[], prev: SwarmModel | null, opts: { relayout?: boolean; pin?: string | null } = {}): SwarmModel {
+  const pin = opts.pin ?? null;
+  const { nodes, index, alliesByColour, feuds } = prev && opts.relayout === false && sameAgents(graph, prev, pin) ? prev : layoutAgents(graph, prev, pin);
   const ranked = [...coins]
     .sort((a, b) => Number(a.devSoldPct >= 70) - Number(b.devSoldPct >= 70) || b.volume24hSol - a.volume24hSol || b.launchedAt.localeCompare(a.launchedAt))
     .slice(0, MAX_COINS);
@@ -47,12 +48,18 @@ export function buildSwarm(graph: AgentGraph, coins: CoinView[], prev: SwarmMode
   return { nodes, index, alliesByColour, feuds, coins: out, coinIndex: new Map(out.map((c, i) => [c.mint, i])) };
 }
 
-const pickAgents = (graph: AgentGraph) => [...graph.nodes].sort((a, b) => b.netWorthSol - a.netWorthSol || a.id.localeCompare(b.id)).slice(0, MAX_NODES);
-const sameAgents = (graph: AgentGraph, prev: SwarmModel) => { const p = pickAgents(graph); return p.length === prev.nodes.length && p.every((n) => prev.index.has(n.id)); };
+/** The richest MAX_NODES, with the viewer's own agent (RAISE) always among them. */
+const pickAgents = (graph: AgentGraph, pin: string | null = null) => {
+  const ranked = [...graph.nodes].sort((a, b) => b.netWorthSol - a.netWorthSol || a.id.localeCompare(b.id));
+  const top = ranked.slice(0, MAX_NODES);
+  const own = pin ? ranked.find((n) => n.id === pin) : undefined;
+  return own && !top.includes(own) ? [...top.slice(0, MAX_NODES - 1), own] : top;
+};
+const sameAgents = (graph: AgentGraph, prev: SwarmModel, pin: string | null = null) => { const p = pickAgents(graph, pin); return p.length === prev.nodes.length && p.every((n) => prev.index.has(n.id)); };
 
 /** Agents, their positions, ally lines and feud lines. `prev` seeds the layout so a new graph nudges agents. */
-function layoutAgents(graph: AgentGraph, prev: SwarmModel | null): Pick<SwarmModel, 'nodes' | 'index' | 'alliesByColour' | 'feuds'> {
-  const picked = pickAgents(graph);
+function layoutAgents(graph: AgentGraph, prev: SwarmModel | null, pin: string | null = null): Pick<SwarmModel, 'nodes' | 'index' | 'alliesByColour' | 'feuds'> {
+  const picked = pickAgents(graph, pin);
   const ids = new Set(picked.map((n) => n.id));
   const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b));
   const init = prev ? new Map<string, Pt>([...prev.index].map(([id, i]) => [id, { x: prev.nodes[i]!.x * VW, y: prev.nodes[i]!.y * VH }])) : undefined;
@@ -68,6 +75,7 @@ function layoutAgents(graph: AgentGraph, prev: SwarmModel | null): Pick<SwarmMod
       colour: n.ghost ? GHOST : n.factionColour ?? LONER,
       glow: n.ghost ? 0.25 : 0.45 + 0.35 * ((clamp(n.mood, -1, 1) + 1) / 2),
       ghost: n.ghost, phase: (hash(n.id) % 6283) / 1000,
+      own: n.id === pin,
     };
   });
   const index = new Map(nodes.map((n, i) => [n.id, i]));
