@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { custodyCtx } from './ledger-helpers.ts';
-import { ledgerAccounts, ledgerReconciliations } from '../src/db/schema.ts';
+import { ledgerAccounts, ledgerReconciliations, ledgerWithdrawals } from '../src/db/schema.ts';
 import { reconcile, reservesView } from '../src/ledger/reconcile.ts';
 import { registerMainnetRoutes } from '../src/ledger/routes.ts';
 
@@ -49,6 +49,24 @@ describe('reconciliation', () => {
     await run();
     expect(c.chain.frozen).toMatch(/unreachable/);
     expect((await c.t.db.select().from(ledgerReconciliations)).length).toBe(3);
+  });
+  it('counts a withdrawal in flight as possibly gone, not as a shortfall (I1)', async () => {
+    const hot = await deposited();
+    const w = await c.custody.requestWithdrawal({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    // Sent and finalized on-chain, not settled in the books yet.
+    await c.t.db.update(ledgerWithdrawals).set({ status: 'sending' }).where(eq(ledgerWithdrawals.id, w.id));
+    c.rpc.balances.set(hot, 0.05 * SOL - 5000);
+    expect((await run()).ok).toBe(true);
+    expect(c.chain.frozen).toBeNull();
+  });
+  it('publishes the books and the reserves from the same check (I7)', async () => {
+    await deposited();
+    await run();
+    const d = await c.custody.createDeposit({ agentId: c.agents[1]!.id, userId: c.owner.id, lamports: 0.05 * SOL });
+    c.rpc.pay(c.payer, d.hot, 0.05 * SOL, d.reference);
+    await c.custody.pollDeposits();
+    const v = await reservesView(c.t.db, { mode: 'rehearsal', chain: c.chain, custody: c.custody, stop: async () => {} });
+    expect(v).toMatchObject({ ledgerTotalSol: 0.1, onchainTotalSol: 0.1 });
   });
   it('publishes the reserves', async () => {
     const hot = await deposited();

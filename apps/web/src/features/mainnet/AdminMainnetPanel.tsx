@@ -19,11 +19,13 @@ export function AdminMainnetPanel() {
   });
   if (!q.data) return null;
   const v = q.data, run = (path: string, body: Record<string, unknown> = {}) => act.mutate({ path, body });
+  // One press is one action: every money button waits while a request is on its way (the server also refuses repeats).
+  const busy = act.isPending;
   return (
     <section className={s.panel} aria-labelledby="mainnet-admin-h">
       <h2 id="mainnet-admin-h" className={s.h2}>Real SOL · {v.mode} · {v.season}</h2>
       <label className={s.field}>Admin password for money actions <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-      {v.frozen && <p className={s.warn} role="alert">Frozen: {v.frozen} <Button size="sm" onClick={() => run('unfreeze')}>Unfreeze after a passing check</Button></p>}
+      {v.frozen && <p className={s.warn} role="alert">Frozen: {v.frozen} <Button size="sm" disabled={busy} onClick={() => run('unfreeze')}>Unfreeze after a passing check</Button></p>}
       <dl className={s.grid}>
         <div><dt>Books</dt><dd>{fmtSol(v.books.ledgerTotalSol)} {v.books.ok ? '· balanced' : `· ${v.books.mismatches.length} mismatches`}</dd></div>
         <div><dt>House</dt><dd>{fmtSol(v.books.houseSol)}</dd></div>
@@ -32,7 +34,7 @@ export function AdminMainnetPanel() {
         <div><dt>Hot covers the 10 largest balances</dt><dd>{v.hotCoversTop10 ? 'yes' : 'no: top it up'}</dd></div>
         <div><dt>Last check</dt><dd>{v.lastReconciliation ? `${v.lastReconciliation.ok === true ? 'passed' : v.lastReconciliation.ok === false ? 'FAILED' : 'unreadable'} · ${v.lastReconciliation.at}` : 'none yet'}</dd></div>
       </dl>
-      {v.excessSol > 0 && <Button onClick={() => run('to-cold', { sol: v.excessSol })}>Move {fmtSol(v.excessSol)} to cold</Button>}
+      {v.excessSol > 0 && <Button disabled={busy} onClick={() => run('to-cold', { sol: v.excessSol })}>Move {fmtSol(v.excessSol)} to cold</Button>}
 
       <h3 className={s.h3}>Withdrawals waiting</h3>
       {v.withdrawals.length === 0 ? <p className={s.muted}>None.</p> : (
@@ -40,12 +42,12 @@ export function AdminMainnetPanel() {
           {v.withdrawals.map((w) => (
             <li key={w.id}>
               <span>{fmtSol(w.sol)} → <code>{w.to}</code> · {w.status}{w.reason ? ` · ${w.reason}` : ''}</span>
-              {w.status === 'queued' && <Button size="sm" onClick={() => run(`withdrawals/${w.id}/approve`)}>{`Approve ${w.sol} SOL`}</Button>}
+              {w.status === 'queued' && <Button size="sm" disabled={busy} onClick={() => run(`withdrawals/${w.id}/approve`)}>{`Approve ${w.sol} SOL`}</Button>}
               {w.status === 'sending' && (
                 <span className={s.row}>
-                  <input aria-label={`Landed signature for ${w.id}`} placeholder="signature, if it landed" value={field[`sig-${w.id}`] ?? ''} onChange={set(`sig-${w.id}`)} />
-                  <Button size="sm" onClick={() => run(`withdrawals/${w.id}/resolve`, { outcome: 'sent', signature: field[`sig-${w.id}`] })}>It landed</Button>
-                  <Button size="sm" onClick={() => run(`withdrawals/${w.id}/resolve`, { outcome: 'return' })}>Return to the agent</Button>
+                  <input aria-label={`Landed signature for ${w.id}`} placeholder={w.signature ?? 'signature, if it landed'} value={field[`sig-${w.id}`] ?? ''} onChange={set(`sig-${w.id}`)} />
+                  <Button size="sm" disabled={busy} onClick={() => run(`withdrawals/${w.id}/resolve`, { outcome: 'sent', ...(field[`sig-${w.id}`] ? { signature: field[`sig-${w.id}`] } : {}) })}>It landed</Button>
+                  <Button size="sm" disabled={busy} onClick={() => run(`withdrawals/${w.id}/resolve`, { outcome: 'return' })}>Return to the agent</Button>
                 </span>
               )}
             </li>
@@ -55,23 +57,32 @@ export function AdminMainnetPanel() {
 
       {v.fromCold.length > 0 && <>
         <h3 className={s.h3}>Transfers from the cold wallet</h3>
-        <ul className={s.list}>{v.fromCold.map((t) => <li key={t.signature}><span>{fmtSol(t.sol)} · <code>{t.signature}</code></span><Button size="sm" onClick={() => run('stake', { signature: t.signature })}>Record as house stake</Button></li>)}</ul>
+        <ul className={s.list}>{v.fromCold.map((t) => <li key={t.signature}><span>{fmtSol(t.sol)} · <code>{t.signature}</code></span><Button size="sm" disabled={busy} onClick={() => run('stake', { signature: t.signature })}>Record as house stake</Button></li>)}</ul>
       </>}
       {v.refundFailures.length > 0 && <>
-        <h3 className={s.h3}>Refunds that failed (check the chain, refund by hand)</h3>
-        <ul className={s.list}>{v.refundFailures.map((t) => <li key={t.signature}>{fmtSol(t.sol)} from <code>{t.from}</code> · {t.reason}</li>)}</ul>
+        <h3 className={s.h3}>Payments that need you (check the chain first)</h3>
+        <ul className={s.list}>{v.refundFailures.map((t) => (
+          <li key={t.signature}>
+            <span>{fmtSol(t.sol)} from <code>{t.from ?? 'unknown'}</code> · {t.outcome}{t.reason ? ` · ${t.reason}` : ''}{t.refundSignature ? ` · refund ${t.refundSignature}` : ''}</span>
+            <span className={s.row}>
+              <input aria-label={`Refund ${t.signature} to`} placeholder={t.from ?? 'address to refund'} value={field[`to-${t.signature}`] ?? ''} onChange={set(`to-${t.signature}`)} />
+              <Button size="sm" disabled={busy} onClick={() => run(`payments/${t.signature}/resolve`, { action: 'refund', ...(field[`to-${t.signature}`] ? { to: field[`to-${t.signature}`] } : {}) })}>{`Refund ${t.sol} SOL`}</Button>
+              {t.outcome !== 'review' && <Button size="sm" disabled={busy} onClick={() => run(`payments/${t.signature}/resolve`, { action: 'refunded' })}>It was refunded</Button>}
+            </span>
+          </li>
+        ))}</ul>
       </>}
 
       <h3 className={s.h3}>House</h3>
       <form className={s.row} onSubmit={(e) => { e.preventDefault(); run('house-withdraw', { sol: Number(field.house) }); }}>
         <label className={s.field}>SOL to the cold wallet <input inputMode="decimal" value={field.house ?? ''} onChange={set('house')} /></label>
-        <Button type="submit">Withdraw to cold</Button>
+        <Button type="submit" disabled={busy}>Withdraw to cold</Button>
       </form>
 
       <h3 className={s.h3}>Risk notice {v.notice ? `(${v.notice.version})` : '(none yet)'}</h3>
       <form className={s.stack} onSubmit={(e) => { e.preventDefault(); run('notice', { legalPosition: field.legal }); }}>
         <label className={s.field}>Legal position, as the review left it <textarea rows={3} value={field.legal ?? v.notice?.legalPosition ?? ''} onChange={set('legal')} /></label>
-        <Button type="submit">Publish a new version</Button>
+        <Button type="submit" disabled={busy}>Publish a new version</Button>
       </form>
 
       <h3 className={s.h3}>Legal review {v.legalReview ? `· recorded by ${v.legalReview.confirmedBy} (${v.legalReview.reviewer}, ${v.legalReview.date})` : '· not recorded'}</h3>
@@ -80,7 +91,7 @@ export function AdminMainnetPanel() {
         <label className={s.field}>Date <input type="date" value={field.date ?? ''} onChange={set('date')} /></label>
         <label className={s.field}>Note <textarea rows={2} value={field.note ?? ''} onChange={set('note')} /></label>
         <label className={s.field}>Type exactly: <em>{LEGAL_CONFIRMATION}</em> <input value={field.confirm ?? ''} onChange={set('confirm')} /></label>
-        <Button type="submit" variant="primary">Record the legal review</Button>
+        <Button type="submit" variant="primary" disabled={busy}>Record the legal review</Button>
       </form>
 
       <h3 className={s.h3}>What still blocks MAINNET=on</h3>

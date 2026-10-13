@@ -94,6 +94,45 @@ describe('withdrawals', () => {
     expect((await books(c.t.db)).ok).toBe(true);
   });
 
+  it('returns a stuck withdrawal once, however many times an admin presses it (I4)', async () => {
+    await funded();
+    const w1 = await c.custody.requestWithdrawal({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    c.rpc.failSend = new Error('timeout');
+    await c.custody.processWithdrawals();
+    c.rpc.failSend = null;
+    await c.custody.requestWithdrawal({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL }); // another owner's money waits in the same account
+    const r = await Promise.allSettled([c.custody.resolveStuck(w1.id, 'return'), c.custody.resolveStuck(w1.id, 'return')]);
+    expect(r.filter((x) => x.status === 'fulfilled').length).toBe(1);
+    expect((await c.chain.balances(await c.pk(0))).lamports).toBe(0.05 * SOL);
+    expect(await lamportsOf(c.t.db, WITHDRAWALS)).toBe(0.05 * SOL);
+  });
+
+  it('settles a stuck withdrawal only by the signature it stored before broadcasting (I4)', async () => {
+    const hot = await funded();
+    const w = await c.custody.requestWithdrawal({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    c.rpc.failSend = new Error('timeout');
+    await c.custody.processWithdrawals();
+    c.rpc.failSend = null;
+    const [row] = await c.t.db.select().from(ledgerWithdrawals).where(eq(ledgerWithdrawals.id, w.id));
+    expect(row).toMatchObject({ status: 'sending', signature: expect.any(String) });
+    const other = c.rpc.pay(hot, c.payer, 0.05 * SOL); // an earlier payout of the same amount to the same wallet
+    await expect(c.custody.resolveStuck(w.id, 'sent', other)).rejects.toMatchObject({ code: 'NOT_THIS_TRANSFER' });
+    // The stored signature did land after all: returning it would pay twice.
+    c.rpc.txs.set(row!.signature!, { from: hot, to: c.payer, lamports: 0.05 * SOL, references: [], feeLamports: 5000, blockTime: Math.floor(c.t.clock.now().getTime() / 1000) });
+    await expect(c.custody.resolveStuck(w.id, 'return')).rejects.toMatchObject({ code: 'LANDED' });
+    await c.custody.resolveStuck(w.id, 'sent');
+    expect((await c.custody.withdrawals({ id: w.id }))[0]).toMatchObject({ status: 'sent', signature: row!.signature });
+    expect((await books(c.t.db)).ok).toBe(true);
+  });
+
+  it('leaves a withdrawal queued when nothing could be signed (I4)', async () => {
+    await funded();
+    const w = await c.custody.requestWithdrawal({ agentId: c.agentId, userId: c.owner.id, lamports: 0.05 * SOL });
+    c.rpc.genesis = 'SomethingElse111111111111111111111111111111';
+    await expect(c.custody.processWithdrawals()).rejects.toMatchObject({ code: 'WRONG_NETWORK' });
+    expect((await c.custody.withdrawals({ id: w.id }))[0]).toMatchObject({ status: 'queued' });
+  });
+
   it('a withdrawal racing a buy never overdraws (review focus 3)', async () => {
     await funded(0.05);
     await c.fund(1, 0.1);

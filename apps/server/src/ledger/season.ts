@@ -1,15 +1,13 @@
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { chainTxs, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
+import { chainTxs, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerReconciliations, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { START_LAMPORTS, recordTx } from '../world/ledger.ts';
 import { setSetting } from '../world/launchpad.ts';
 import { TREASURY } from '../world/wallets.ts';
-import { FROZEN_KEY, HOUSE, SEASON_KEY, currentSeason, lamportsOf, move } from './accounts.ts';
+import { FROZEN_KEY, HOUSE, PRACTICE_SEASONS, SEASON_KEY, currentSeason, lamportsOf, move } from './accounts.ts';
 import { books } from './books.ts';
 
-/** Seasons whose books are only ever devnet or paper SOL: the only ones a new season may wipe (spec §10). */
-const PRACTICE_SEASONS = new Set(['dev', 'rehearsal']);
 
 /**
  * Each agent's devnet net worth from the world's own records (spec §10, the rehearsal's opening balances): its SOL changes
@@ -43,6 +41,9 @@ export async function startSeason(db: Db, name: string, opening: Map<string, num
   const prev = await currentSeason(db);
   if (name === prev) throw new Error(`Season ${name} is already running`);
   if (!PRACTICE_SEASONS.has(prev)) throw new Error(`Season ${prev} holds real SOL on its books; it cannot be wiped by starting another season`);
+  // Belt and braces: a season that ever ran with MAINNET=on holds real SOL, whatever it is called.
+  const [real] = await db.select({ id: ledgerReconciliations.id }).from(ledgerReconciliations).where(and(eq(ledgerReconciliations.season, prev), eq(ledgerReconciliations.mode, 'on'))).limit(1);
+  if (real) throw new Error(`Season ${prev} ran with MAINNET=on, so it holds real SOL; it cannot be wiped by starting another season`);
   const [d] = await db.select({ n: sql<number>`count(*)::int` }).from(ledgerDeposits).where(eq(ledgerDeposits.status, 'pending'));
   const [w] = await db.select({ n: sql<number>`count(*)::int` }).from(ledgerWithdrawals).where(inArray(ledgerWithdrawals.status, ['queued', 'sending']));
   if (d?.n || w?.n) throw new Error('Settle every pending deposit and withdrawal before a new season');

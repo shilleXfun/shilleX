@@ -64,6 +64,13 @@
       "when": 1791889835090,
       "tag": "0008_mainnet_data",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791895068445,
+      "tag": "0009_eager_plazm",
+      "breakpoints": true
     }
   ]
 }

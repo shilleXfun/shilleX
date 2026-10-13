@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { eq, ne } from 'drizzle-orm';
 import { ledgerCtx } from './ledger-helpers.ts';
 import { worldTestCtx } from './world-helpers.ts';
-import { chainTxs, ledgerDeposits, ledgerPools, wallets, worldCoins } from '../src/db/schema.ts';
+import { chainTxs, ledgerDeposits, ledgerPools, ledgerReconciliations, wallets, worldCoins } from '../src/db/schema.ts';
 import { devnetNetWorth, fundOpening, startSeason } from '../src/ledger/season.ts';
 import { HOUSE, currentSeason } from '../src/ledger/accounts.ts';
 import { books } from '../src/ledger/books.ts';
@@ -61,6 +61,14 @@ describe('seasons', () => {
     expect((await c.t.db.select().from(chainTxs).where(eq(chainTxs.kind, 'opening'))).length).toBe(3);
     expect((await c.t.db.select().from(wallets).where(ne(wallets.ownerId, TREASURY))).every((x) => x.fundedAt !== null)).toBe(true);
     expect((await books(c.t.db)).ok).toBe(true);
+  });
+
+  it('never wipes a season that ran with MAINNET=on, whatever its name (C1)', async () => {
+    const c = await ledgerCtx(); close = () => c.t.close();
+    await startSeason(c.t.db, 'rehearsal', new Map(), c.t.clock.now());
+    await c.t.db.insert(ledgerReconciliations).values({ id: 'r-on', season: 'rehearsal', mode: 'on', at: c.t.clock.now(), ok: true, ledgerTotal: 0, onchainTotal: 0, details: { mismatches: [], shortBy: 0, error: null } });
+    await expect(startSeason(c.t.db, 'season1', new Map(), c.t.clock.now())).rejects.toThrow(/real SOL/);
+    expect(await currentSeason(c.t.db)).toBe('rehearsal');
   });
 
   it('never wipes a mainnet season’s books: they hold real SOL', async () => {

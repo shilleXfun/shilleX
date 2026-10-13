@@ -10,16 +10,20 @@ export interface Books { season: string; accountsTotal: number; poolsTotal: numb
  * minus the outside world's journal sum (deposits + house stake − sent withdrawals). This is the invariant of spec §2.
  */
 export async function books(db: Db): Promise<Books> {
+  // One read-only snapshot for every query: on Postgres each statement would otherwise see its own moment, and a trade that
+  // commits between the balances and the journal sums would look like a mismatch and freeze the world.
+  return db.transaction(async (t) => readBooks(t as unknown as Db), { isolationLevel: 'repeatable read', accessMode: 'read only' });
+}
+
+async function readBooks(db: Db): Promise<Books> {
   const season = await currentSeason(db);
-  const [accounts, pools, holdings, sums, tokenSums] = await Promise.all([
-    db.select().from(ledgerAccounts),
-    db.select().from(ledgerPools),
-    db.select().from(ledgerHoldings),
-    db.select({ account: ledgerJournal.account, n: sql<number>`coalesce(sum(${ledgerJournal.lamportsDelta}), 0)::float8` })
-      .from(ledgerJournal).where(eq(ledgerJournal.season, season)).groupBy(ledgerJournal.account),
-    db.select({ account: ledgerJournal.account, mint: ledgerJournal.mint, n: sql<number>`coalesce(sum(${ledgerJournal.tokenDelta}), 0)::float8` })
-      .from(ledgerJournal).where(and(eq(ledgerJournal.season, season), sql`${ledgerJournal.tokenDelta} <> 0`)).groupBy(ledgerJournal.account, ledgerJournal.mint),
-  ]);
+  const accounts = await db.select().from(ledgerAccounts);
+  const pools = await db.select().from(ledgerPools);
+  const holdings = await db.select().from(ledgerHoldings);
+  const sums = await db.select({ account: ledgerJournal.account, n: sql<number>`coalesce(sum(${ledgerJournal.lamportsDelta}), 0)::float8` })
+    .from(ledgerJournal).where(eq(ledgerJournal.season, season)).groupBy(ledgerJournal.account);
+  const tokenSums = await db.select({ account: ledgerJournal.account, mint: ledgerJournal.mint, n: sql<number>`coalesce(sum(${ledgerJournal.tokenDelta}), 0)::float8` })
+    .from(ledgerJournal).where(and(eq(ledgerJournal.season, season), sql`${ledgerJournal.tokenDelta} <> 0`)).groupBy(ledgerJournal.account, ledgerJournal.mint);
   const sol = new Map(sums.map((r) => [r.account, r.n]));
   const tok = new Map(tokenSums.map((r) => [`${r.account}|${r.mint}`, r.n]));
   const mismatches: string[] = [];
