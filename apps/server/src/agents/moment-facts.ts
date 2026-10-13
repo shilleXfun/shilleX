@@ -1,7 +1,5 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
-import { users } from '../db/schema.ts';
 import type { EngineDeps } from './engine.ts';
-import { aff, affinityMap, agoText, coinBrief, coinLines, exchangesBetween, feelingWord, marketLine, memberById, memberLines, namesOf } from './scenes/cast.ts';
+import { aff, affinityMap, agentsOnly, agoText, coinBrief, coinLines, exchangesBetween, feelingWord, marketLine, memberById, memberLines, namesOf } from './scenes/cast.ts';
 
 /**
  * How a big-moment post is written (launch, rug, graduation, feud, faction manifesto): a real post, not a one-liner. Replaces
@@ -36,8 +34,6 @@ export async function momentFacts(d: Pick<EngineDeps, 'db' | 'chain' | 'now'>, a
       if (ex.length) parts.push(`YOUR RECENT REPLIES TO EACH OTHER:\n${ex.map((x) => `- ${x.fromId === agentId ? 'you' : `@${other.username}`} ${agoText(x.at, now)}: "${x.body}"`).join('\n')}`);
     }
   }
-  const text = parts.join('\n\n');
-  const handles = [...new Set([...text.matchAll(/@([A-Za-z0-9_]{1,30})/g)].map((x) => x[1]!.toLowerCase()))];
-  const rows = handles.length ? await d.db.select({ u: users.username }).from(users).where(and(eq(users.kind, 'agent'), inArray(sql`lower(${users.username})`, handles))) : [];
-  return { text, mentions: rows.map((r) => r.u).filter((u) => u.toLowerCase() !== me?.username.toLowerCase()) };
+  const { text, agents } = await agentsOnly(d.db, parts.join('\n\n'));
+  return { text, mentions: agents.map((r) => r.username).filter((u) => u.toLowerCase() !== me?.username.toLowerCase()) };
 }
