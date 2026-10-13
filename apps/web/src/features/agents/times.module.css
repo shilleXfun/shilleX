@@ -1,25 +1,26 @@
 /* The Shillex Times (/times): one large floating card over the swarm, set like a front page. The page root carries data-cards. */
-.wrap { container-type: inline-size; padding: 12px 0 28px; }
-.front { min-width: 0; padding: clamp(18px, 5cqi, 40px) clamp(18px, 5.5cqi, 44px) clamp(18px, 4cqi, 32px); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
+.wrap { container-type: inline-size; }
+.wrap { display: grid; gap: 16px; padding: 20px var(--row-px) 32px; }
+.front { position: relative; min-width: 0; padding: clamp(20px, 5cqi, 44px) clamp(18px, 5.5cqi, 46px) clamp(18px, 4cqi, 32px); border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(14, 14, 18, 0.74), rgba(14, 14, 18, 0.74)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
 
-/* Masthead: the nameplate, then a dateline strip between a double rule and a hairline. */
+/* Masthead: the nameplate, then the dateline between two hairlines. */
 .masthead { text-align: center; }
-.nameplate { margin: 0; color: var(--text); font: 700 clamp(34px, 9.4cqi, 72px)/.92 var(--font-brand); letter-spacing: -0.03em; white-space: nowrap; }
-.dateline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 16px; margin: clamp(10px, 2.4cqi, 16px) 0 0; padding: 7px 0 6px; border-top: 3px double var(--line-strong); border-bottom: 1px solid var(--line-strong); color: var(--muted); font: 500 10.5px/1.4 var(--font-ui); letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-.dateline time { color: var(--text); }
-.motto::before { content: '◆'; content: '◆' / ''; margin-right: 8px; color: var(--accent); font-size: 8px; vertical-align: 1px; }
+.nameplate { margin: 0; color: var(--text); font: 650 clamp(34px, 9.4cqi, 74px)/.92 var(--font-brand); letter-spacing: -0.05em; white-space: nowrap; }
+.dateline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 16px; margin: clamp(12px, 2.6cqi, 18px) 0 0; padding: 9px 0; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); color: var(--muted); font: 500 13px/1.4 var(--font-ui); font-variant-numeric: tabular-nums; }
+.dateline time { color: var(--text-2); }
+.motto { font-style: italic; }
 
-.headline { margin: clamp(18px, 4cqi, 28px) 0 18px; font: 700 40px/1.02 var(--font-brand); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; }
+.headline { margin: clamp(20px, 4cqi, 30px) 0 18px; color: var(--text); font: 650 clamp(30px, 6cqi, 46px)/1.02 var(--font-brand); letter-spacing: -0.045em; overflow-wrap: anywhere; text-wrap: balance; }
 
 /* The front-page meme, uncropped: letterboxed on a dark ground when it is taller than the frame. */
-.meme { margin: 0 0 22px; border-radius: 12px; background: rgba(0, 0, 0, 0.32); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.meme { margin: 0 0 22px; border-radius: 16px; background: rgba(0, 0, 0, 0.32); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
 .meme img { display: block; width: 100%; height: auto; max-height: min(560px, 70vh); object-fit: contain; }
 
 /* Stories: one column on phones, ruled between; two newspaper columns once the card is 600 px wide (the desktop reading column). */
 .story { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); }
 .story:first-child { padding-top: 0; margin-top: 0; border-top: 0; }
-.story h3 { margin: 0; font: 700 21px/1.15 var(--font-brand); letter-spacing: -0.005em; overflow-wrap: anywhere; text-wrap: balance; }
-.story p { margin: 6px 0 0; color: color-mix(in srgb, var(--text) 86%, transparent); font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; text-wrap: pretty; }
+.story h3 { margin: 0; color: var(--text); font: 650 21px/1.18 var(--font-brand); letter-spacing: -0.025em; overflow-wrap: anywhere; text-wrap: balance; }
+.story p { margin: 6px 0 0; color: var(--text-2); font-size: 15.5px; line-height: 1.6; overflow-wrap: anywhere; text-wrap: pretty; }
 @container (min-width: 600px) {
   .stories { columns: 2; column-gap: 36px; column-rule: 1px solid var(--line); }
   .story { break-inside: avoid; padding-top: 0; margin: 0 0 20px; border-top: 0; }
@@ -28,39 +29,41 @@
 }
 
 /* Pager: previous and next edition, each with its date. */
-.pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; padding-top: 12px; border-top: 3px double var(--line-strong); }
+.pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line-strong); }
 .pagerLink { display: grid; gap: 3px; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; color: var(--muted); transition: color .15s, background .15s; }
 .pagerLink[data-dir='next'] { margin-left: auto; justify-items: end; text-align: right; }
 .pagerLink:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 55%, transparent); }
-.pagerLink:hover .pagerLabel { color: var(--accent); }
-.pagerLabel { display: inline-flex; align-items: center; gap: 6px; font: 500 10.5px/1.4 var(--font-ui); letter-spacing: 0; text-transform: none; transition: color .15s; font-variant-numeric: tabular-nums; }
-.pagerDate { font-size: var(--fs-sm); color: var(--text); }
+.pagerLink:hover .pagerLabel { color: var(--text); }
+.pagerLabel { display: inline-flex; align-items: center; gap: 6px; font: 500 13px/1.4 var(--font-ui); transition: color .15s; font-variant-numeric: tabular-nums; }
+.pagerDate { color: var(--text); font-size: 15px; font-weight: 600; }
 
 /* No edition yet, or none for that day. */
 .empty { display: grid; justify-items: center; gap: 8px; padding: clamp(28px, 8cqi, 56px) 8px clamp(16px, 4cqi, 28px); text-align: center; }
-.emptyIcon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 6px; border-radius: 14px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); color: var(--accent); }
-.emptyTitle { margin: 0; font: 700 21px/1.2 var(--font-brand); text-wrap: balance; }
+.emptyIcon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
+.emptyTitle { margin: 0; color: var(--text); font: 650 24px/1.2 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
 .emptyBody { margin: 0; color: var(--muted); font-size: var(--fs-md); }
 .emptyLink { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 6px 13px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: var(--fs-sm); font-weight: 550; transition: box-shadow .15s; }
-.emptyLink:hover { box-shadow: inset 0 0 0 1px var(--accent-line); }
+.emptyLink:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
 
 .skeleton { display: grid; gap: 12px; margin-top: 24px; }
 
 /* Phones: a smaller headline; solid card, no blur (cost). */
 @media (max-width: 767px) {
-  .front { background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .headline { font-size: 28px; }
+  .stopPress { padding: 18px; border-radius: 20px; -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; }
+  .wrap { gap: 12px; padding: 12px 12px 24px; }
+  .front { border-radius: 20px; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .headline { font-size: 30px; }
   .dateline { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .pagerLink, .pagerLabel, .emptyLink { transition: none; } }
 /* Stop press (StopPress.tsx): today so far, a glass card under the latest page. */
-.stopPress { margin-top: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); }
-.stopTitle { margin: 0 0 8px; font: 700 19px/1.1 var(--font-brand); }
-.stopTitle span { margin-left: 6px; color: var(--muted); font: 500 var(--fs-xs) var(--font-ui); letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.stopPress { padding: 22px; border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.stopTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.stopTitle span { color: var(--muted); font: 500 13.5px var(--font-ui); letter-spacing: 0; }
 .stopList { display: grid; gap: 2px; }
-.stopItem { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; padding: 6px 4px; border-radius: 8px; color: var(--text); font-size: var(--fs-md); }
-.stopItem:hover { background: var(--hover); }
-.stopItem time { color: var(--muted); font: 500 11px/1.6 var(--font-ui); font-variant-numeric: tabular-nums; }
+.stopItem { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: baseline; gap: 12px; margin: 0 -10px; padding: 9px 10px; border-radius: 12px; color: var(--text); font-size: 15.5px; transition: background .15s; }
+.stopItem:hover { background: rgba(255, 255, 255, 0.045); }
+.stopItem time { color: var(--muted); font: 500 13px/1.5 var(--font-ui); font-variant-numeric: tabular-nums; }
 .stopItem:not(:has(time)) { grid-template-columns: minmax(0, 1fr); }
 .stopItem[data-tone='down'] b { color: var(--down); }
 .stopItem[data-tone='accent'] b { color: var(--token); }

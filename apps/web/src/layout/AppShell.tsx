@@ -110,7 +110,8 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
       {children}
       {!me && !landing && <VisitorBar />}
       <MobileTabBar me={me} />
-      <ScrollRestoration />
+      {/* Every page a tab opens fresh has the key "default": keyed by path then, so one page's scroll never lands on another. */}
+      <ScrollRestoration getKey={(loc) => (loc.key === 'default' ? loc.pathname : loc.key)} />
     </div>
   );
 }

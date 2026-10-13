@@ -1,0 +1,61 @@
+/* /leaderboard (LeaderboardPage.tsx): the top three on a podium of glass cards lit in their own hue, then everyone else
+   in one table card. The page body (lumen .page) is the container the columns answer to. */
+.podium { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; }
+@container (min-width: 560px) {
+  .podium { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
+  /* The winner stands in the middle, a step higher. */
+  .slot[data-place='1'] { order: 2; }
+  .slot[data-place='2'] { order: 1; }
+  .slot[data-place='3'] { order: 3; }
+}
+.place { isolation: isolate; overflow: hidden; display: grid; justify-items: center; gap: 8px; padding: 26px 16px 20px; color: inherit; text-align: center; }
+.place::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(90% 70% at 50% 0%, hsl(var(--hue, 220) 80% 60% / 0.2), transparent 70%); pointer-events: none; }
+@container (min-width: 560px) { .slot[data-place='1'] .place { padding-top: 40px; padding-bottom: 28px; } }
+.rank { position: absolute; top: 14px; left: 16px; color: var(--muted); font: 650 16px/1 var(--font-brand); font-variant-numeric: tabular-nums; }
+.slot[data-place='1'] .rank { color: #ffd28a; }
+.face { display: grid; width: 64px; height: 64px; border-radius: 50%; box-shadow: 0 0 36px hsl(var(--hue, 220) 80% 60% / 0.5); }
+.face > * { width: 100% !important; height: 100% !important; }
+.who { display: grid; gap: 2px; min-width: 0; max-width: 100%; }
+.who b { overflow: hidden; color: var(--text); font: 650 18px/1.25 var(--font-brand); letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
+.who span { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.total { color: var(--text); font: 650 26px/1.1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.total small { color: var(--muted); font: 550 13px var(--font-ui); letter-spacing: 0; }
+.pnl { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+/* Narrow: each place is a row (rank, face, name, worth). */
+@container (max-width: 559px) {
+  .place { grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: 'face who total' 'face who pnl'; justify-items: start; align-items: center; column-gap: 12px; row-gap: 2px; padding: 14px 16px 14px 44px; text-align: left; }
+  .place::before { background: radial-gradient(60% 120% at 0% 50%, hsl(var(--hue, 220) 80% 60% / 0.18), transparent 70%); }
+  .rank { top: 50%; left: 18px; transform: translateY(-50%); }
+  .face { grid-area: face; width: 48px; height: 48px; }
+  .who { grid-area: who; }
+  .total { grid-area: total; justify-self: end; font-size: 18px; }
+  .pnl { grid-area: pnl; justify-self: end; font-size: 13px; }
+}
+
+/* Everyone else. */
+.wrap { margin: 0 -10px; overflow-x: auto; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.table th { padding: 0 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 550; text-align: left; white-space: nowrap; }
+.table td { padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 14.5px; white-space: nowrap; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr { transition: background .15s; }
+.table tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
+.table td:first-child, .table th:first-child { border-radius: 12px 0 0 12px; }
+.num { text-align: right !important; }
+.strong { color: var(--text) !important; font-weight: 600; }
+.muted { color: var(--muted) !important; }
+.rankCell { width: 34px; color: var(--muted) !important; }
+.agentCell { width: 100%; max-width: 0; }
+.agent { display: flex; align-items: center; gap: 11px; min-width: 0; color: inherit; }
+.rowFace { flex: none; display: grid; border-radius: 50%; box-shadow: 0 0 16px hsl(var(--hue, 220) 80% 60% / 0.35); }
+.rowNames { display: grid; min-width: 0; }
+.rowNames b { overflow: hidden; color: var(--text); font-size: 15px; font-weight: 650; text-overflow: ellipsis; }
+.rowNames span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; }
+.agent:hover .rowNames b { text-decoration: underline; text-underline-offset: 3px; }
+@container (max-width: 719px) { .o3 { display: none; } }
+@container (max-width: 599px) { .o2 { display: none; } }
+@container (max-width: 469px) { .o1 { display: none; } }
+.table .up { color: var(--up); }
+.table .down { color: var(--down); }

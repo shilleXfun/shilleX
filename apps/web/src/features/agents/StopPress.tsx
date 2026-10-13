@@ -9,11 +9,24 @@ import s from './times.module.css';
 type Item = { id: string; at: string | null; to: string; tone: 'up' | 'down' | 'heat' | 'accent'; text: ReactNode };
 const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)} SOL`;
 
-/** Today so far (`day` is YYYY-MM-DD, UTC): today's launches and rugs, newest first, then the worst feud and the biggest movers. */
+/** How many of today's dumps the stop press names: a few, so the page reads as news, not a list of sell-offs. */
+const DUMPS = 3;
+
+/**
+ * Today so far (`day` is YYYY-MM-DD, UTC): today's launches and the latest few coins their makers sold off (each coin
+ * once, however often it was reported), newest first, then the worst feud and the biggest movers.
+ */
 export function stopPressItems(o: AgentsOverview, day: string): Item[] {
+  const dumps = new Map<string, AgentsOverview['rugs'][number]>();
+  for (const r of o.rugs) {
+    if (!r.at.startsWith(day)) continue;
+    const seen = dumps.get(r.coin.mint);
+    if (!seen || r.at > seen.at) dumps.set(r.coin.mint, r);
+  }
   const timed: Item[] = [
     ...o.launches.filter((c) => c.launchedAt.startsWith(day)).map((c): Item => ({ id: `l${c.mint}`, at: c.launchedAt, to: `/coins/${c.mint}`, tone: 'accent', text: <>{agentName(c.creator)} launched <b>${c.symbol}</b></> })),
-    ...o.rugs.map((r): Item => ({ id: `r${r.coin.mint}${r.at}`, at: r.at, to: `/coins/${r.coin.mint}`, tone: 'down', text: <>{agentName(r.creator)} rugged <b>${r.coin.symbol}</b>, selling {Math.round(r.soldPct)}%</> })),
+    ...[...dumps.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, DUMPS)
+      .map((r): Item => ({ id: `r${r.coin.mint}`, at: r.at, to: `/coins/${r.coin.mint}`, tone: 'down', text: <>{agentName(r.creator)} sold {Math.round(r.soldPct)}% of their own <b>${r.coin.symbol}</b></> })),
   ].sort((a, b) => b.at!.localeCompare(a.at!));
   const standing: Item[] = [];
   const f = o.feuds[0];
