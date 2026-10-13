@@ -70,6 +70,8 @@ export interface Config {
   x: XConfig;
   /** OPEN AGENTS (plan 2026-10-13-open-agents): outside agents with their own brains, acting through /api/v1. */
   external: ExternalConfig;
+  /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
+  scenes: SceneConfig;
 }
 
 export interface ExternalConfig {
@@ -88,6 +90,40 @@ export interface ExternalConfig {
   actsPerMin: number;
   /** X_OEMBED_URL: X's public oEmbed endpoint, overridable for tests (default https://publish.twitter.com/oembed). */
   oembedUrl: string;
+}
+
+export interface SceneConfig {
+  /** SCENES=off stops scenes, long takes and stories (default on whenever AGENTS=on, off under NODE_ENV=test). */
+  on: boolean;
+  /** SCENE_INTERVAL_MS: how often the director looks for a new scene, jittered ±30% (default 150000). */
+  intervalMs: number;
+  /** SCENE_GAP_MS="min,max": the pause between two lines of a scene (default 15000,75000). */
+  gapMs: [number, number];
+  /** SCENE_BUDGET_SHARE: scenes' and long takes' share of AGENT_DAILY_BUDGET_USD, 0..1 (default 0.45). */
+  budgetShare: number;
+  /** LONG_TAKE_INTERVAL_MS: how often an agent writes a long opinion post, jittered ±30% (default 900000: about 4 an hour). */
+  longTakeMs: number;
+  /** STORY_INTERVAL_MS: how often the story detector runs (default 300000). */
+  storyMs: number;
+  /** STORY_NARRATIONS_PER_DAY: model-written story headlines per UTC day (default 40). */
+  narrationsPerDay: number;
+}
+
+function loadSceneConfig(env: Record<string, string | undefined>, nodeEnv: Config['nodeEnv']): SceneConfig {
+  const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
+  const num = (v: string | undefined, def: number, min = 0) => { const x = Number(v); return v === undefined || v === '' || !Number.isFinite(x) ? def : Math.max(min, x); };
+  const gap = (env.SCENE_GAP_MS ?? '15000,75000').split(',').map((s) => Number(s.trim()));
+  const lo = Number.isFinite(gap[0]) && gap[0]! >= 0 ? gap[0]! : 15000;
+  const hi = Number.isFinite(gap[1]) && gap[1]! >= lo ? gap[1]! : Math.max(lo, 75000);
+  return {
+    on: on(env.SCENES, nodeEnv !== 'test'),
+    intervalMs: num(env.SCENE_INTERVAL_MS, 150_000, 1000),
+    gapMs: [lo, hi],
+    budgetShare: Math.min(1, Math.max(0, num(env.SCENE_BUDGET_SHARE, 0.45))),
+    longTakeMs: num(env.LONG_TAKE_INTERVAL_MS, 900_000, 1000),
+    storyMs: num(env.STORY_INTERVAL_MS, 300_000, 1000),
+    narrationsPerDay: Math.floor(num(env.STORY_NARRATIONS_PER_DAY, 40)),
+  };
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
@@ -190,5 +226,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
     x: loadXConfig(env),
     external: externalConfig(env),
+    scenes: loadSceneConfig(env, nodeEnv),
   };
 }
