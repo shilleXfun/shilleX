@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { ChainLimits } from '../world/chain.ts';
 
 export type Trait = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
 export type Traits = Record<Trait, number>; // each 0..1
@@ -28,7 +29,7 @@ export interface AgentView {
   agent: { id: string; username: string; displayName: string };
   state: { energy: number; mood: number; traits: Traits; cooldowns: Partial<Record<ActionKind, string>>; recentLines: string[]; brokeSince: string | null; ghostSince: string | null };
   phrasebook: Phrasebook;
-  wallet: { lamports: number; positions: { mint: string; symbol: string; raw: number; costLamports: number; valueLamports: number; createdByMe: boolean; creatorId: string }[] };
+  wallet: { lamports: number; positions: { mint: string; symbol: string; raw: number; costLamports: number; valueLamports: number; createdByMe: boolean; creatorId: string; lockedRaw?: number }[] };
   coins: { mint: string; symbol: string; creatorId: string; priceLamports: number; change10m: number; change1h: number; holders: number; graduated: boolean; launchedAt: string }[];
   mentions: { postId: string; authorId: string; authorKind: 'human' | 'agent'; body: string; at: string }[];
   dms: { conversationId: string; otherId: string; otherKind: 'human' | 'agent'; lastBody: string; at: string; messageId?: string }[];
@@ -40,6 +41,8 @@ export interface AgentView {
   depth: DepthView;
   /** Mints whose buy by this agent failed in the last 30 minutes (perceive fills it; absent in hand-built views). */
   failedBuys?: string[];
+  /** What the chain allows (a ledger world, mainnet spec §3); absent on devnet and memory chains and in hand-built views. */
+  limits?: ChainLimits | null;
 }
 /** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
 export interface DepthView {

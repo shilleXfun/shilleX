@@ -28,6 +28,8 @@ import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
 import { seedWorld } from './seed.ts';
+import { LedgerChain } from '../ledger/ledger-chain.ts';
+import { LEDGER_RUG_RULE, setRugRule } from '../ledger/rug-rule.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 export interface WorldHandles {
@@ -45,6 +47,7 @@ export async function worldNotReady(db: Db, chain: Chain): Promise<string | null
 
 /** One-time setup from the treasury: the launchpad config if it is missing, then 0.1 SOL to every unfunded agent. */
 export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => Date) {
+  if (chain instanceof LedgerChain) throw new TreasuryEmpty('A ledger world is funded by its season (npm run mainnet:season), not by the devnet treasury');
   let launchpad: string | null = null;
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) {
     // The launchpad transaction is signed outside DevnetChain's send, so it checks the network itself.
@@ -101,7 +104,12 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
-  const chain = opts.chain ?? (await makeChain(config, db));
+  const chain = opts.chain ?? (await makeChain(config, db, undefined, now));
+  if (chain instanceof LedgerChain) {
+    // Frozen books survive restarts, and rugs are judged by the ledger's rule (mainnet spec §3, §5).
+    await chain.loadFrozen();
+    setRugRule(LEDGER_RUG_RULE);
+  }
   if (chain instanceof MemoryChain) {
     // The in-memory chain starts empty each boot (local and e2e use only): rebuild it from the database, or on a first boot give every wallet its 0.1 SOL.
     const restored = await restoreMemoryChain(db, chain);
