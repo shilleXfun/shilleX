@@ -27,9 +27,10 @@ export async function releaseAgent(d: Pick<LifecycleDeps, 'db' | 'now' | 'gate'>
 }
 
 /** Spec §9: out of the world (paused for good, off the leaderboards and the swarm); its devnet SOL back to the treasury; posts and receipts stay. */
-export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'owner' | 'admin' | 'reports'): Promise<{ returnedSol: number }> {
+/** `origin`: 'raised' (default), or 'external' when open agents retire an outside agent through this same path. */
+export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'owner' | 'admin' | 'reports', origin: 'raised' | 'external' = 'raised'): Promise<{ returnedSol: number }> {
   const [a] = await d.db.select().from(agents).where(eq(agents.userId, agentId));
-  if (!a || a.origin !== 'raised') throw errors.notFound('Raised agent');
+  if (!a || a.origin !== origin) throw errors.notFound(origin === 'raised' ? 'Raised agent' : 'Outside agent');
   if (a.status === 'retired') return { returnedSol: 0 };
   const now = d.now();
   await d.db.update(agents).set({ status: 'retired', ownerId: null, retiredAt: now, retireReason: reason }).where(eq(agents.userId, agentId));
