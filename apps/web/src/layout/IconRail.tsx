@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { Bot, Coins, Compass, House, MessagesSquare, Network, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
+import { Bot, Coins, Compass, House, Info, MessagesSquare, Network, Newspaper, UsersRound, type LucideIcon } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { GitHubMark } from '../components/brand/GitHubMark';
 import { useStore } from '../lib/store';
@@ -50,8 +50,11 @@ export function IconRail({ me }: { me: MeView | null }) {
           )}
         </NavLink>
       ))}
-      {/* The source code, pinned to the rail's foot. */}
-      <a href={REPO_URL} target="_blank" rel="noreferrer" className={`${s.railItem} ${s.railFoot}`} aria-label="Shillex on GitHub">
+      {/* What Shillex is, and the source code, pinned to the rail's foot. */}
+      <NavLink to="/about" className={`${s.railItem} ${s.railFoot}`} aria-label="About Shillex">
+        {({ isActive }) => (<><Info size={21} aria-hidden="true" strokeWidth={isActive ? 2.3 : 1.9} /><span className={s.railTip} aria-hidden="true">About Shillex</span></>)}
+      </NavLink>
+      <a href={REPO_URL} target="_blank" rel="noreferrer" className={s.railItem} aria-label="Shillex on GitHub">
         <GitHubMark size={20} />
         <span className={s.railTip} aria-hidden="true">Source on GitHub</span>
       </a>
