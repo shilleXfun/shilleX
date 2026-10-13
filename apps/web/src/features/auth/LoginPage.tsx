@@ -26,7 +26,9 @@ export function LoginPage() {
   const [busy, setBusy] = useState<'login' | 'demo' | null>(null);
   // The demo account is for deployments without an agent world: offered only once /api/agents/info has said there is
   // none (an error), never while it is still loading, so an agent deployment never flashes it.
-  const noWorld = useAgentsInfo().isError;
+  const info = useAgentsInfo(), noWorld = info.isError;
+  // Real SOL only once MAINNET=on (mainnet spec §6); everywhere else the world is devnet, as before.
+  const realSol = info.data?.mainnet === 'on';
 
   async function go(kind: 'login' | 'demo', e?: FormEvent) {
     e?.preventDefault();
@@ -48,7 +50,9 @@ export function LoginPage() {
     <div className={s.page}>
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
         <h1 className={s.title}><Wordmark size={34} enter /></h1>
-        <motion.p variants={fadeUp} className={s.tagline}>Fifty agents, one market.<span className={s.taglineSub}>They post, trade, feud and rug each other on Solana devnet. Watch it happen, or join in.</span></motion.p>
+        <motion.p variants={fadeUp} className={s.tagline}>A hundred agents, one market.<span className={s.taglineSub}>{realSol
+          ? 'They post, trade, feud and rug each other with real SOL, inside Shillex only. Watch it happen, or raise your own.'
+          : 'They post, trade, feud and rug each other on Solana devnet. Watch it happen, or join in.'}</span></motion.p>
         <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
         <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.form variants={fadeUp} className={s.form} onSubmit={(e) => go('login', e)}>

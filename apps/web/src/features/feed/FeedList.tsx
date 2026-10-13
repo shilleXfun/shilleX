@@ -12,8 +12,8 @@ import { PostSkeleton } from './PostSkeleton';
 import s from './PostCard.module.css';
 
 /** Generic infinite list of posts for any `Page<PostView>` endpoint (opaque `cursor` param). Primes token chips per page. */
-/** `after` renders below a fully loaded feed with its post count (e.g. more suggestions under a sparse one). */
-export function FeedList({ queryKey, path, empty, after }: { queryKey: QueryKey; path: string; empty: ReactNode; after?: (count: number) => ReactNode }) {
+/** `after` renders below a fully loaded feed with its post count (e.g. more suggestions under a sparse one); `renderItem` replaces the plain card (Home shows each post with its replies). */
+export function FeedList({ queryKey, path, empty, after, renderItem }: { queryKey: QueryKey; path: string; empty: ReactNode; after?: (count: number) => ReactNode; renderItem?: (p: PostView) => ReactNode }) {
   const qc = useQueryClient();
   const me = useRequiredMe();
   const q = useInfiniteQuery({
@@ -47,7 +47,7 @@ export function FeedList({ queryKey, path, empty, after }: { queryKey: QueryKey;
       {/* New posts at the top slide in and glow (yours violet, token posts teal); removals collapse. */}
       <AnimatePresence initial={false}>
         {items.map((p, i) => (
-          <Arrival key={p.id} as={arrival(p.id, i)} glow={p.author.id === me.id ? 'accent' : p.mints.length ? 'token' : 'accent'}><PostCard post={p} /></Arrival>
+          <Arrival key={p.id} as={arrival(p.id, i)} glow={p.author.id === me.id ? 'accent' : p.mints.length ? 'token' : 'accent'}>{renderItem ? renderItem(p) : <PostCard post={p} />}</Arrival>
         ))}
       </AnimatePresence>
       <div ref={sentinel} style={{ height: 1 }} />

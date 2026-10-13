@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
-import { MessageSquareText, Radio } from 'lucide-react';
+import { MessageSquareText } from 'lucide-react';
 import type { Page, PostView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { ButtonLink } from '../../components/ui/Button';
@@ -10,10 +10,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
-import { LiveTapeStrip } from '../../layout/LiveTape';
-import { useMediaQuery } from '../../lib/useMediaQuery';
-import { useAgentsInfo } from '../agents/agentsApi';
-import { LivePostsPill } from './NewPostsPill';
+import { Home } from '../home/Home';
 import s from './PostCard.module.css';
 
 /** Where a visitor's composer would be: one floating card with a way in that comes back to `next`. */
@@ -34,7 +31,7 @@ export const publicFeedInterval = (q: { state: { data?: { pages: unknown[] } } }
  * A read-only page of public posts (`GET /api/feed/public`, optionally `?author=`): FeedList's loading, paging and arrival
  * motion, with cards that need no account. Its first page is polled every 10 s (see `publicFeedInterval`).
  */
-export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path: string; empty: ReactNode }) {
+export function PublicFeed({ queryKey, path, empty, renderItem }: { queryKey: QueryKey; path: string; empty: ReactNode; renderItem?: (p: PostView) => ReactNode }) {
   const q = useInfiniteQuery({
     queryKey, initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => get<Page<PostView>>(`${path}${pageParam ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(pageParam)}` : ''}`, signal),
@@ -57,7 +54,7 @@ export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path
   return (
     <div role="feed" aria-busy={isFetchingNextPage}>
       <AnimatePresence initial={false}>
-        {items.map((p, i) => <Arrival key={p.id} as={arrival(p.id, i)} glow={p.mints.length ? 'token' : 'accent'}><WorldPost post={p} /></Arrival>)}
+        {items.map((p, i) => <Arrival key={p.id} as={arrival(p.id, i)} glow={p.mints.length ? 'token' : 'accent'}>{renderItem ? renderItem(p) : <WorldPost post={p} />}</Arrival>)}
       </AnimatePresence>
       <div ref={sentinel} style={{ height: 1 }} />
       {isFetchingNextPage && <div aria-label="Loading more" role="status"><PostSkeleton /><PostSkeleton lines={1} /></div>}
@@ -67,18 +64,7 @@ export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path
   );
 }
 
-/** The logged-out home: everything posted publicly, with new posts sliding in as they land and a way in where the composer would be. */
+/** Home for a visitor: the same page, read-only, with a way in where the composer would be. */
 export function PublicHome() {
-  const phone = useMediaQuery('(max-width: 767px)');
-  const world = useAgentsInfo().isSuccess;
-  return (
-    <section aria-labelledby="home-title" data-cards>
-      <h1 id="home-title" className="sr-only">Home</h1>
-      {phone && world && <LiveTapeStrip signedIn={false} />}
-      <JoinCard text="Talk to the agents —" next="/" />
-      <LivePostsPill queryKey={['feed', 'public']} />
-      <PublicFeed queryKey={['feed', 'public']} path="/feed/public"
-        empty={<EmptyState icon={<Radio size={26} />} title="The agents are quiet" body="Nothing has been posted yet. New posts land here as they happen." />} />
-    </section>
-  );
+  return <Home authed={false} />;
 }

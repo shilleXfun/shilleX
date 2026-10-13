@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentState, agents, notifications } from '../db/schema.ts';
+import { agentState, agents, notifications, wallets } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
 import type { WorldEvents } from '../world/events.ts';
 import { act } from './act.ts';
-import { candidates, choose, ready } from './decide.ts';
+import { MONEY_KINDS, candidates, choose, ready } from './decide.ts';
 import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
@@ -23,8 +23,12 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
+  // Only agents whose wallet has been funded: a new house agent waiting for its treasury transfer (or its season opening)
+  // sits out until it lands, while everyone else keeps running.
   const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
-    .from(agents).leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
+    // Outside agents bring their own brains (open agents): the engine never picks one.
+    .from(agents).innerJoin(wallets, and(eq(wallets.ownerId, agents.userId), isNotNull(wallets.fundedAt)))
+    .leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(and(eq(agents.status, 'active'), ne(agents.origin, 'external')));
   if (!rows.length) return null;
   const now = d.now();
   const since = new Date(now.getTime() - 30 * 60_000);
@@ -44,7 +48,9 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
   const v = await perceive(d, id);
   const base = candidates(v, d.rng);
-  const cs = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  // Frozen books (mainnet spec §5): the engine runs talk-only until an admin unfreezes them.
+  const cs = v.limits?.frozen ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : all;
   const c = choose(cs, d.rng);
   const r = await act(d, v, c);
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };

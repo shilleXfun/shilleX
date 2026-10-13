@@ -31,6 +31,7 @@ export default async function conversationsRoutes(app: FastifyInstance) {
     return {
       id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: me.muted,
       members: members.map((m) => summaries.get(m.userId)!).filter(Boolean),
+      hasOutsider: [...summaries.values()].some((s) => s.isOutsider === true),
       lastMessage: last ? (await hydrateMessages(db, viewerId, [last]))[0]! : null,
       unread: await unreadInScope(db, { userId: viewerId, scopeType: 'conversation', scopeId: c.id, since: me.joinedAt }),
     };

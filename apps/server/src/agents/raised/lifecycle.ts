@@ -8,6 +8,9 @@ import { recordTx } from '../../world/ledger.ts';
 import { TREASURY, signerFor, walletOf } from '../../world/wallets.ts';
 import type { RaisedGate } from './gate.ts';
 import { raisedAgentOf } from './owner.ts';
+import { HOUSE } from '../../ledger/accounts.ts';
+import { LedgerChain } from '../../ledger/ledger-chain.ts';
+import { settleLeavingOwner } from '../../ledger/owner.ts';
 
 export const REPORTS_TO_RETIRE = 3;
 const FEE = 5_000;
@@ -20,6 +23,8 @@ const endNudges = (db: Db, agentId: string, now: Date) =>
 export async function releaseAgent(d: Pick<LifecycleDeps, 'db' | 'now' | 'gate'>, ownerId: string): Promise<string> {
   const mine = await raisedAgentOf(d.db, ownerId);
   if (!mine || mine.status === 'retired') throw errors.notFound('Raised agent');
+  // Real SOL (mainnet spec §4): what the owner put in goes back to their payout wallet before the agent goes its own way.
+  await settleLeavingOwner(mine.agentId, ownerId);
   await d.db.update(agents).set({ ownerId: null, releasedAt: d.now() }).where(eq(agents.userId, mine.agentId));
   await endNudges(d.db, mine.agentId, d.now());
   d.gate.setOwner(mine.agentId, null);
@@ -27,16 +32,25 @@ export async function releaseAgent(d: Pick<LifecycleDeps, 'db' | 'now' | 'gate'>
 }
 
 /** Spec §9: out of the world (paused for good, off the leaderboards and the swarm); its devnet SOL back to the treasury; posts and receipts stay. */
-export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'owner' | 'admin' | 'reports'): Promise<{ returnedSol: number }> {
+/** `origin`: 'raised' (default), or 'external' when open agents retire an outside agent through this same path. */
+export async function retireAgent(d: LifecycleDeps, agentId: string, reason: 'owner' | 'admin' | 'reports', origin: 'raised' | 'external' = 'raised'): Promise<{ returnedSol: number }> {
   const [a] = await d.db.select().from(agents).where(eq(agents.userId, agentId));
-  if (!a || a.origin !== 'raised') throw errors.notFound('Raised agent');
+  if (!a || a.origin !== origin) throw errors.notFound(origin === 'raised' ? 'Raised agent' : 'Outside agent');
   if (a.status === 'retired') return { returnedSol: 0 };
   const now = d.now();
+  // Real SOL (mainnet spec §4): the owner's money goes back to their payout wallet first, however the agent is retired.
+  const toOwner = await settleLeavingOwner(agentId, a.ownerId);
   await d.db.update(agents).set({ status: 'retired', ownerId: null, retiredAt: now, retireReason: reason }).where(eq(agents.userId, agentId));
   await endNudges(d.db, agentId, now);
   d.gate.setOwner(agentId, null);
   const w = await walletOf(d.db, agentId), t = await walletOf(d.db, TREASURY);
-  if (!w || !t) return { returnedSol: 0 };
+  if (!w || !t) return { returnedSol: toOwner / LAMPORTS_PER_SOL };
+  if (d.chain instanceof LedgerChain) {
+    // On the books there is no treasury wallet to send to: whatever is left (winnings, a grant) goes to the house's account.
+    const left = (await d.chain.balances(w.publicKey)).lamports;
+    if (left > 0) await d.chain.transfer(w.publicKey, HOUSE, left, 'retire', `retire:${agentId}`);
+    return { returnedSol: (toOwner + Math.max(0, left)) / LAMPORTS_PER_SOL };
+  }
   const send = (await d.chain.balances(w.publicKey)).lamports - FEE;
   if (send <= 0) return { returnedSol: 0 };
   const r = await d.chain.sendSol(await signerFor(d.db, agentId, d.key), t.publicKey, send);

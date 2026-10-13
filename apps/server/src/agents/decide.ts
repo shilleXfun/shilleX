@@ -13,6 +13,8 @@ export const LAUNCH_MIN = 40_000_000;
 export const LAUNCH_COST = LAUNCH_RENT + 1_000_000;
 export const MIN_TRADE = 2_000_000;
 export const RUG_MIN_SHARE = 0.7;
+/** Kinds that move SOL or tokens: a frozen ledger takes none of them (mainnet spec §5). */
+export const MONEY_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['buy', 'sell', 'launch', 'rug', 'send_sol', 'lend', 'repay', 'revive']);
 const MIN = 60_000, HOUR = 60 * MIN;
 export const COOLDOWN_MS: Record<ActionKind, number> = {
   post: 4 * MIN, reply: 1 * MIN, react: 20_000, follow: 10 * MIN, unfollow: 30 * MIN, chat: 90_000, dm: 2 * MIN,
@@ -205,7 +207,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     const best = pickWeighted(options.map((x) => [x, x.d * x.d] as [typeof x, number]), rng);
     if (best) {
       const size = Math.floor(spendable * (0.1 + 0.4 * t.risk) * (0.5 + 0.5 * rng()));
-      const lamports = Math.min(spendable, Math.max(MIN_TRADE, size));
+      // A ledger world caps one trade (mainnet spec §3); devnet has no cap.
+      const lamports = Math.min(spendable, Math.max(MIN_TRADE, size), v.limits?.maxTradeLamports ?? Infinity);
       add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId },
         reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change10m)} in 10 min, ${best.c.holders} holders, creator affinity ${f2(aff(best.c.creatorId))}, risk ${f2(t.risk)}` });
     }
@@ -215,26 +218,32 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     const c = coin(p.mint) ?? { mint: p.mint, symbol: p.symbol, creatorId: p.creatorId, priceLamports: 0, change10m: 0, change1h: 0, holders: 0, graduated: false, launchedAt: v.now };
     if (c.graduated) continue;
     if (v.wallet.lamports < MIN_FEE || p.raw < RAW_PER_TOKEN) continue; // cannot pay the fee, or dust
+    // A creator's launch buy unlocks over 24 h on the ledger; only the free part can be sold.
+    const free = p.raw - (p.lockedRaw ?? 0);
     const pnl = pnlOf(p);
     if (p.createdByMe) {
       if (pnl > 0.2) {
-        const share = RUG_MIN_SHARE + (1 - RUG_MIN_SHARE) * t.greed;
-        const raw = Math.min(p.raw, Math.max(Math.ceil(p.raw * RUG_MIN_SHARE), Math.floor(p.raw * share)));
-        add({ kind: 'rug', score: (0.6 * t.greed + 0.4 * t.pettiness) * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
+        const rugMin = v.limits?.rugMinShare ?? RUG_MIN_SHARE, cap = v.limits?.maxCreatorSaleShare ?? 1;
+        const share = Math.min(cap, rugMin + (1 - rugMin) * t.greed);
+        const raw = Math.min(free, Math.floor(p.raw * cap), Math.max(Math.ceil(p.raw * rugMin), Math.floor(p.raw * share)));
+        // On the ledger a rug is at least rugMin of the bag in one sale: while vesting leaves less than that free, the creator
+        // waits. Devnet and memory chains have no limits and keep their old rule exactly.
+        if (!v.limits || (raw >= RAW_PER_TOKEN && raw >= Math.ceil(p.raw * rugMin))) add({ kind: 'rug', score: (0.6 * t.greed + 0.4 * t.pettiness) * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
           reason: `dumped my own $${p.symbol}: ${pct(pnl)} on it, ${c.holders} holders, greed ${f2(t.greed)}` });
       }
       continue;
     }
     const score = t.greed * Math.max(0, pnl) * 1.5 + (pnl < -0.3 ? 0.4 * (1 - t.loyalty) : 0) + (c.change10m < -0.15 ? 0.5 * (1 - t.risk) : 0) + 0.6 * Math.max(0, -aff(p.creatorId));
     const all = pnl < -0.3 || rng() < 0.4;
-    const sellRaw = all ? p.raw : Math.floor(p.raw / 2);
+    const sellRaw = Math.min(free, all ? p.raw : Math.floor(p.raw / 2));
     if (sellRaw < RAW_PER_TOKEN) continue;
     add({ kind: 'sell', score, raw: sellRaw, situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
       reason: `sold ${all ? 'all' : 'half'} of $${p.symbol}: P&L ${pct(pnl)}, 10-min move ${pct(c.change10m)}, greed ${f2(t.greed)}` });
   }
   const liveOwn = v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && nowMs - Date.parse(c.launchedAt) < 24 * HOUR);
   if (!broke && v.wallet.lamports >= LAUNCH_MIN && !liveOwn) {
-    const initial = Math.max(0, Math.floor((v.wallet.lamports - RESERVE - LAUNCH_COST) * 0.3 * t.risk));
+    const launchCost = v.limits?.launchCostLamports ?? LAUNCH_COST;
+    const initial = Math.min(v.limits?.maxTradeLamports ?? Infinity, Math.max(0, Math.floor((v.wallet.lamports - RESERVE - launchCost) * 0.3 * t.risk)));
     const recent = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < HOUR).length;
     // Dead coins from the last day damp launches, a thin wallet launches less, and a creator whose last coin flopped is shy.
     const dead = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < 24 * HOUR && isDeadCoin(c, nowMs)).length;
@@ -244,9 +253,11 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     add({ kind: 'launch', score: ((0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent + dead / 4)) * wealth * shy, lamports: initial, situation: 'launching',
       reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, ${recent} launched this hour, ${dead} dead today, risk ${f2(t.risk)}${shy < 1 ? ', my last coin flopped' : ''}` });
   }
-  const ally = Object.entries(v.affinity).filter(([, s]) => s > 0.7).sort((a, b) => b[1] - a[1])[0];
+  // Never an outside agent (open agents): their operators' agents play with practice SOL only, so Shillex's agents send them none.
+  const outside = new Set(v.outsiders ?? []);
+  const ally = Object.entries(v.affinity).filter(([id, s]) => s > 0.7 && !outside.has(id)).sort((a, b) => b[1] - a[1])[0];
   if (!broke && ally && v.wallet.lamports > 80_000_000) {
-    add({ kind: 'send_sol', score: 0.1 * t.loyalty, lamports: 10_000_000, situation: 'thank', target: { userId: ally[0] }, reason: `sending 0.010 SOL to an ally (affinity ${f2(ally[1])})` });
+    add({ kind: 'send_sol', score: 0.1 * t.loyalty, lamports: Math.min(10_000_000, v.limits?.maxSendLamports ?? Infinity), situation: 'thank', target: { userId: ally[0] }, reason: `sending 0.010 SOL to an ally (affinity ${f2(ally[1])})` });
   }
   return out;
 }

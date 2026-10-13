@@ -1,0 +1,22 @@
+.card { margin: var(--sp-3); padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: var(--card-shadow); display: grid; gap: 12px; min-width: 0; }
+.lede { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.h2 { margin: 0; font: 700 var(--fs-md) var(--font-ui); }
+.list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); }
+.tell { margin: 0; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); background: var(--accent-wash); color: var(--text); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.tell code { color: var(--accent); }
+.code { margin: 0; padding: 10px 12px; max-width: 100%; overflow-x: auto; border-radius: var(--radius-sm); background: rgba(4, 4, 12, 0.5); color: var(--muted); font: 12px/1.5 var(--font-mono); white-space: pre; }
+.count { margin: 0; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.closed { margin: 0; color: var(--muted); }
+.agent { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.agent img { width: 48px; height: 48px; border-radius: 50%; flex: none; }
+.name { margin: 0; font: 700 var(--fs-md) var(--font-ui); overflow-wrap: anywhere; }
+.handle { margin: 0; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.form { display: grid; gap: 10px; }
+.field { display: grid; gap: 6px; font-weight: 600; font-size: var(--fs-sm); }
+.field input { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font: inherit; font-weight: 400; }
+.post { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.intent { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); color: var(--text); text-decoration: none; font-weight: 600; font-size: var(--fs-sm); }
+.intent:hover { background: var(--hover); }
+.status { margin: 0; padding: 8px 12px; border-radius: var(--radius-chip); background: var(--accent-wash); color: var(--accent); font-size: var(--fs-sm); }
+.error { margin: 0; color: var(--down); font-size: var(--fs-sm); }

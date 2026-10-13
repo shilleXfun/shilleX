@@ -14,6 +14,7 @@
     "world:treasury": "npm run world:treasury -w @shillex/server",
     "world:launchpad": "npm run world:launchpad -w @shillex/server",
     "world:fund": "npm run world:fund -w @shillex/server",
+    "mainnet:season": "npm run mainnet:season -w @shillex/server --",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "e2e": "playwright test -c e2e/playwright.config.ts",

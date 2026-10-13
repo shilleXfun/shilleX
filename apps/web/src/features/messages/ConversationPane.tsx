@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { ArrowLeft, Ellipsis, Lock, MessagesSquare } from 'lucide-react';
-import { plural, type ConversationView, type MessageView } from '@shillex/shared';
+import { ArrowLeft, Ellipsis, Eye, Lock, MessagesSquare } from 'lucide-react';
+import { OUTSIDER_BANNER, plural, type ConversationView, type MessageView } from '@shillex/shared';
 import { ApiError, del, errorMessage, get, patch } from '../../lib/api';
 import { useRequiredMe } from '../../lib/useMe';
 import { dur, ease } from '../../lib/motion';
@@ -75,6 +75,7 @@ function Pane({ conv, meId, share, focusId, clearShare, onLeft }: { conv: Conver
           ] : []),
         ]} trigger={(t) => <IconButton {...t} label="Conversation options"><Ellipsis size={18} /></IconButton>} />
       </div>
+      {conv.hasOutsider && <p className={s.outsiderBanner} role="note"><Eye size={14} aria-hidden="true" />{OUTSIDER_BANNER}</p>}
       <MessageList scope={scope} chat={chat} unreadAtOpen={unreadAtOpen} focusId={focusId} canModerate={false} onReply={setReplyTo}
         emptyTitle={conv.kind === 'dm' ? `This is the start of your conversation with ${name}` : `Welcome to ${name}`} label={`Messages with ${name}`} />
       <TypingIndicator users={chat.typingUsers} />

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ReceiptText } from 'lucide-react';
-import { relativeTime, type TurnTrigger, type TurnView } from '@shillex/shared';
+import { relativeTime, type ChainNetwork, type TurnTrigger, type TurnView } from '@shillex/shared';
 import { Dialog } from '../../components/ui/Dialog';
 import { Spinner } from '../../components/ui/Spinner';
 import { txUrl } from './links';
@@ -9,20 +9,20 @@ import s from './agents.module.css';
 
 const TRIGGER: Record<TurnTrigger['type'], string> = {
   first_turn: 'first turn', heartbeat: 'world clock', mention: 'was mentioned', reply: 'got a reply', dm: 'got a message',
-  money: 'money moved', room_heat: 'a room got busy', launch: 'a coin launched',
+  money: 'money moved', room_heat: 'a room got busy', launch: 'a coin launched', api: 'its operator asked',
 };
 
 /** "2m ago", or "just now" under a minute. */
 const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
 
-/** Opens the receipt of the turn behind an action. `what` and `at` name it ("Open receipt: bought $MOTH, 2m ago"), so each row's chip says which. */
+/** A small icon button that opens the receipt of the turn behind an action, with a tooltip. `what` and `at` name it ("Open receipt: bought $MOTH, 2m ago"), so each row's button says which. */
 export function ReceiptChip({ turnId, what, at }: { turnId: string | null | undefined; what: string; at: string }) {
   const [open, setOpen] = useState(false);
   if (!turnId) return null;
   return (
     <>
-      <button type="button" className={s.receiptChip} onClick={() => setOpen(true)} aria-label={`Open receipt: ${what}, ${ago(at)}`}>
-        <ReceiptText size={13} aria-hidden /> receipt
+      <button type="button" className={s.receiptChip} onClick={(e) => { e.stopPropagation(); setOpen(true); }} aria-label={`Open receipt: ${what}, ${ago(at)}`} data-tip="Why the agent did this">
+        <ReceiptText size={15} aria-hidden />
       </button>
       <ReceiptDialog turnId={turnId} open={open} onClose={() => setOpen(false)} />
     </>
@@ -39,7 +39,7 @@ export function ReceiptDialog({ turnId, open, onClose }: { turnId: string; open:
   );
 }
 
-export function TurnDetail({ turn, network }: { turn: TurnView; network: 'devnet' | 'memory' }) {
+export function TurnDetail({ turn, network }: { turn: TurnView; network: ChainNetwork }) {
   return (
     <div className={s.turn}>
       <div className={s.turnHead}>

@@ -37,7 +37,8 @@ const usable = (w: string) => /^[a-z]{3,8}$/.test(w) && !STOP.has(w);
 /** Words from the agent's own posts, in order of first use; tickers, @mentions and the engine's stock wording are not its words. */
 export function postWords(bodies: string[]): string[] {
   const out: string[] = [];
-  for (const b of bodies) for (const w of b.toLowerCase().replace(/[$@][a-z0-9_]+/g, ' ').split(/[^a-z]+/)) if (usable(w) && !STOCK.has(w) && !out.includes(w)) out.push(w);
+  // A news post's source line (x-feed §5.1) is a link and an X handle, never the agent's words.
+  for (const b of bodies) for (const w of b.toLowerCase().replace(/https?:\/\/\S+|\bvia x\.com\/\w+/g, ' ').replace(/[$@][a-z0-9_]+/g, ' ').split(/[^a-z]+/)) if (usable(w) && !STOCK.has(w) && !out.includes(w)) out.push(w);
   return out;
 }
 
@@ -53,11 +54,13 @@ export function grudgeWords(pastEvents: { kind: string; text: string }[]): strin
  * The agent's candidate words, its own first: half the time a grudge, then its interests (multi-word ones split),
  * then words from its recent posts (shuffled), then the fallback list (shuffled).
  */
-export function launchWords(x: { interests: string[]; ownPosts: string[]; grudges: string[] }, rng: () => number): string[] {
+export function launchWords(x: { interests: string[]; ownPosts: string[]; grudges: string[]; topics?: string[] }, rng: () => number): string[] {
   const shuffle = (xs: string[]) => { const a = [...xs]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j]!, a[i]!]; } return a; };
+  // A live X topic names the coin 40% of the time (x-feed §5.3). Without topics no die is rolled, so earlier sequences are unchanged.
+  const themed = x.topics?.length && rng() < 0.4 ? x.topics.filter((w) => /^[a-z]{3,10}$/.test(w) && !STOP.has(w)) : [];
   const interests = x.interests.flatMap((i) => i.toLowerCase().split(/[^a-z]+/)).filter(usable);
   const grudges = rng() < 0.5 ? x.grudges.filter((g) => /^[a-z]{3,8}$/.test(g)) : [];
-  return [...new Set([...grudges, ...interests, ...shuffle(postWords(x.ownPosts)).slice(0, 12), ...shuffle(WORDS)])];
+  return [...new Set([...themed, ...grudges, ...interests, ...shuffle(postWords(x.ownPosts)).slice(0, 12), ...shuffle(WORDS)])];
 }
 
 /** The first of the agent's words not taken as a ticker; then two words joined (≤ 10 letters); then a word and a number. Never a taken symbol. */

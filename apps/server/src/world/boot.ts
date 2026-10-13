@@ -6,6 +6,7 @@ import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
+import { registerStoryRoutes } from '../routes/stories.ts';
 import { type AgentBrain } from './brain.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
@@ -27,32 +28,45 @@ import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
+import { SceneShare, startScenes, type Scenes } from '../agents/scenes/index.ts';
+import { startStories, type Stories } from '../agents/stories/index.ts';
 import { RaisedGate } from '../agents/raised/gate.ts';
 import { hatchMomentHandler, retryStartGrants, runHatch, type HatchDeps } from '../agents/raised/hatch.ts';
 import { retireReported } from '../agents/raised/lifecycle.ts';
 import { createHatchPump } from '../agents/raised/pump.ts';
 import { Population } from '../agents/raised/pacing.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
+import { registerAgentsApiRoutes } from '../routes/agents-api.ts';
 import { seedWorld } from './seed.ts';
+import { bootX } from '../x/boot.ts';
+import { xDigestHandler } from '../x/digest.ts';
+import { LedgerChain } from '../ledger/ledger-chain.ts';
+import { bootMainnet } from '../ledger/boot.ts';
+import type { MainnetHandles } from '../ledger/routes.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 export interface WorldHandles {
-  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: 'devnet' | 'memory';
+  indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
+  /** A ledger world's custody and routes (mainnet spec); null or absent everywhere else. */
+  mainnet?: MainnetHandles | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
 
-/** Why the agents can't start yet, or null when they can: they need the launchpad and their 0.1 SOL first. */
+/**
+ * Why the agents can't start yet, or null when they can: they need the launchpad, and at least one funded house agent. Unfunded
+ * ones (new house agents waiting for the treasury, raised ones waiting for a grant) never hold the world: the engine skips them.
+ */
 export async function worldNotReady(db: Db, chain: Chain): Promise<string | null> {
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) return 'the launchpad is not set up';
-  // Wild agents only: a raised agent waiting for its start grant stays paused (RAISE) and must not keep the 50 from starting.
-  const [unfunded] = await db.select({ id: wallets.ownerId }).from(wallets).innerJoin(agents, eq(agents.userId, wallets.ownerId))
-    .where(and(eq(agents.origin, 'wild'), isNull(wallets.fundedAt))).limit(1);
-  return unfunded ? 'agent wallets are not funded' : null;
+  const [funded] = await db.select({ id: wallets.ownerId }).from(wallets).innerJoin(agents, eq(agents.userId, wallets.ownerId))
+    .where(and(eq(agents.origin, 'wild'), isNotNull(wallets.fundedAt))).limit(1);
+  return funded ? null : 'agent wallets are not funded';
 }
 
-/** One-time setup from the treasury: the launchpad config if it is missing, then 0.1 SOL to every unfunded agent. */
+/** One-time setup from the treasury: the launchpad config if it is missing, then 0.05 SOL to every unfunded house agent. */
 export async function setUpWorld(db: Db, chain: Chain, key: Buffer, now: () => Date) {
+  if (chain instanceof LedgerChain) throw new TreasuryEmpty('A ledger world is funded by its season (npm run mainnet:season), not by the devnet treasury');
   let launchpad: string | null = null;
   if (chain instanceof DevnetChain && !chain.hasLaunchpad) {
     // The launchpad transaction is signed outside DevnetChain's send, so it checks the network itself.
@@ -109,7 +123,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
-  const chain = opts.chain ?? (await makeChain(config, db));
+  const chain = opts.chain ?? (await makeChain(config, db, undefined, now));
+  // A ledger world: frozen state, the ledger's rug rule, custody and its routes. Throws (and so stops boot) when MAINNET is
+  // misconfigured or MAINNET=on meets a closed launch gate (mainnet spec §9).
+  const mainnet = await bootMainnet(app, { chain, worldKey: key });
   if (chain instanceof MemoryChain) {
     // The in-memory chain starts empty each boot (local and e2e use only): rebuild it from the database, or on a first boot give every wallet its 0.1 SOL.
     const restored = await restoreMemoryChain(db, chain);
@@ -125,6 +142,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
   const gate = new RaisedGate({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
+  // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
+  const share = new SceneShare({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.scenes.budgetShare });
+  await share.load();
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -139,7 +160,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet,
     startAgents() {
       if (handles.engine) return 'running';
       if (!config.agentsOn) return 'AGENTS is off';
@@ -149,15 +170,22 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
-      handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }) } }) : null;
+      handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md) } }) : null;
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
+      // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).
+      if (config.scenes.on) {
+        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
+        storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => handles.moments?.halted() ?? scenesH?.stats().halted ?? null });
+        scenesH.onSceneEnd(() => storiesH?.soon());
+      }
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
   await registerAgentRoutes(app, handles);
   await registerDepthRoutes(app, { indexer: handles.indexer });
+  await registerStoryRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
@@ -166,13 +194,27 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => { await retireReported({ db, chain, key, now, gate }); },
   });
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
+  // Open agents (plan 2026-10-13-open-agents): the /api/v1 routes, off unless EXTERNAL_AGENTS=on; one busy set with the engine.
+  const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
   const pumpTimer = setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
   pumpTimer.unref?.();
+  // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
+  const x = await bootX(app, handles);
   const waiting = await worldNotReady(db, chain);
   if (waiting) {
     const treasury = await walletOf(db, TREASURY);
-    console.log(`[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
+    console.log(chain instanceof LedgerChain
+      ? `[world] agents wait: ${waiting}. A ledger world is funded by its season: npm run mainnet:season -- open.`
+      : `[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
+  if (chain instanceof DevnetChain && chain.hasLaunchpad) {
+    // New house agents (WORLD_AGENT_COUNT grew) get their 0.05 SOL from the treasury in the background; the engine skips them
+    // until it lands, and everyone else keeps running. A short treasury is logged, never fatal: "Set up and fund" retries.
+    void fundAgents(db, chain, key, now).then((r) => {
+      if (r.funded) console.log(`[world] funded ${r.funded} new house agents from the treasury`);
+      if (r.funded && !handles.engine) console.log('[world] agents:', handles.startAgents());
+    }).catch((e) => console.error(`[world] could not fund new house agents at boot (${(e as Error).message}); the rest run on`));
+  }
   // Share cards, follower notifications and meme templates for big moments (Task 5.6), every 60 s. No OPENAI_API_KEY: no paid images.
   // Started last, once nothing in boot can throw, so a failed boot leaves no sweeping interval behind.
   const stopSpotlight = startSpotlight({
@@ -182,5 +224,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); offPulses(); await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }

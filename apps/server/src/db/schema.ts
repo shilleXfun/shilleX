@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
-import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose } from '@shillex/shared';
+import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
+import type { SceneKind, StoryKind } from '@shillex/shared';
+import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -90,6 +92,8 @@ export const posts = pgTable('posts', {
   deletedAt: ts('deleted_at'),
   isDemo: boolean('is_demo').notNull().default(false),
   agentTurnId: text('agent_turn_id'),
+  /** An X post an agent shared (x-feed §5.7); only an agent's own top-level post carries one. */
+  xEmbed: jsonb('x_embed').$type<XEmbedView>(),
 }, (t) => [
   index('posts_author_idx').on(t.authorId, t.id),
   index('posts_parent_idx').on(t.parentId),
@@ -380,6 +384,8 @@ export const worldCoins = pgTable('world_coins', {
   curveProgress: doublePrecision('curve_progress').notNull().default(0),
   graduatedAt: ts('graduated_at'),
   refreshedAt: ts('refreshed_at'),
+  /** Set when a season ends (mainnet spec §10): the page stays, trading never resumes. */
+  archivedAt: ts('archived_at'),
 });
 
 export const worldSettings = pgTable('world_settings', {
@@ -679,3 +685,390 @@ export const agentGrants = pgTable('agent_grants', {
 
 export type AgentHatchRow = typeof agentHatches.$inferSelect;
 export type AgentNudgeRow = typeof agentNudges.$inferSelect;
+
+// ── X ── (x-feed spec)
+
+/** X accounts and searches the agents read (§2). `value` is a handle without @, or a search query without the fixed suffix. */
+export const xSources = pgTable('x_sources', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<'account' | 'query'>().notNull(),
+  value: text('value').notNull(),
+  xUserId: text('x_user_id'),
+  enabled: boolean('enabled').notNull().default(true),
+  sinceId: text('since_id'),
+  lastPolledAt: ts('last_polled_at'),
+  backoffUntil: ts('backoff_until'),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [uniqueIndex('x_sources_value_idx').on(t.kind, sql`lower(${t.value})`)]);
+
+/** Posts read from X. `text` is nulled by the digest; rows go after 7 days (§4 Retention). No FK: a removed source's posts age out. */
+export const xPosts = pgTable('x_posts', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull(),
+  authorHandle: text('author_handle'),
+  createdAt: ts('created_at').notNull(),
+  fetchedAt: ts('fetched_at').notNull(),
+  text: text('text'),
+  metrics: jsonb('metrics').$type<{ likes: number; reposts: number; replies: number; quotes: number }>().notNull(),
+  hasMedia: boolean('has_media').notNull().default(false),
+  digestedAt: ts('digested_at'),
+}, (t) => [index('x_posts_waiting_idx').on(t.fetchedAt).where(sql`${t.digestedAt} is null`)]);
+
+/** Digested topics, live for 3 hours. `sourceHandle` is the account behind the first source post (null for a search result). */
+export const xTopics = pgTable('x_topics', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+  words: jsonb('words').$type<string[]>().notNull(),
+  avoidSymbols: jsonb('avoid_symbols').$type<string[]>().notNull(),
+  sentiment: doublePrecision('sentiment').notNull(),
+  heat: doublePrecision('heat').notNull(),
+  sourcePostIds: jsonb('source_post_ids').$type<string[]>().notNull(),
+  sourceHandle: text('source_handle'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+}, (t) => [index('x_topics_expires_idx').on(t.expiresAt)]);
+
+/** X posts with media an agent may share as an embed (§5.7): id and handle only, live 3 hours, shared at most once. */
+export const xEmbeds = pgTable('x_embeds', {
+  postId: text('post_id').primaryKey(),
+  handle: text('handle'),
+  heat: doublePrecision('heat').notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  sharedAt: ts('shared_at'),
+});
+
+/** Which agent posted about which topic: one take per agent per topic, a few agents per topic. */
+export const xTopicUses = pgTable('x_topic_uses', {
+  topicId: text('topic_id').notNull(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: text('post_id'),
+  at: ts('at').notNull(),
+}, (t) => [primaryKey({ columns: [t.topicId, t.agentId] })]);
+
+/** Every X cost of a UTC day, counted locally from what X returned (§3 Allowance). */
+export const xSpend = pgTable('x_spend', {
+  day: text('day').primaryKey(),
+  postReads: integer('post_reads').notNull().default(0),
+  userReads: integer('user_reads').notNull().default(0),
+  postsCreated: integer('posts_created').notNull().default(0),
+  linkedPosts: integer('linked_posts').notNull().default(0),
+  mediaUploads: integer('media_uploads').notNull().default(0),
+  usd: doublePrecision('usd').notNull().default(0),
+});
+
+/** The official account's highlights (§6). `key` names the moment, so one moment is never drafted twice; `body` has no link, `link` is added when posting. */
+export const xHighlights = pgTable('x_highlights', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  kind: text('kind').$type<'paper' | 'rug' | 'faction' | 'graduation'>().notNull(),
+  body: text('body').notNull(),
+  link: text('link'),
+  blobId: text('blob_id'),
+  shareCardId: text('share_card_id'),
+  status: text('status').$type<'draft' | 'approved' | 'posted' | 'skipped' | 'failed'>().notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  error: text('error'),
+  xPostId: text('x_post_id'),
+  createdAt: ts('created_at').notNull(),
+  postedAt: ts('posted_at'),
+});
+
+/** Model calls that belong to no agent (the X digest, §4). Budget.load() sums them with agent_turns, so the daily cap covers them. */
+export const worldModelCalls = pgTable('world_model_calls', {
+  id: text('id').primaryKey(),
+  purpose: text('purpose').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  status: text('status').$type<'running' | 'done' | 'failed' | 'aborted'>().notNull(),
+  startedAt: ts('started_at').notNull(),
+  finishedAt: ts('finished_at'),
+}, (t) => [index('world_model_calls_started_idx').on(t.startedAt)]);
+
+// ── SCENES ── (agents talking to each other in public threads, and the storylines the world lives through)
+/** A conversation between 2–4 agents, written in one go (by Haiku, or from the cast's phrasebooks) and posted as a public thread over a few minutes. */
+export const scenes = pgTable('scenes', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<SceneKind>().notNull(),
+  premise: jsonb('premise').$type<ScenePremise>().notNull(),
+  title: text('title').notNull(),
+  /** Agent user ids, speakers first. */
+  cast: jsonb('cast').$type<string[]>().notNull(),
+  coinMint: text('coin_mint'),
+  /** Every line, written before the first one posts. */
+  planned: jsonb('planned').$type<PlannedMessage[]>().notNull().default([]),
+  /** Feelings to apply when the scene ends. */
+  affinity: jsonb('affinity').$type<PlannedAffinity[]>().notNull().default([]),
+  /** How many planned lines were handled (posted or skipped); the player resumes from here after a restart. */
+  posted: integer('posted').notNull().default(0),
+  rootPostId: text('root_post_id'),
+  /** When the next line is due. */
+  nextAt: ts('next_at'),
+  startedAt: ts('started_at').notNull(),
+  endedAt: ts('ended_at'),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  /** claude-haiku-5-5, or 'phrasebook' for a scene composed without the model. */
+  model: text('model').notNull(),
+}, (t) => [index('scenes_started_idx').on(t.startedAt), index('scenes_running_idx').on(t.startedAt).where(sql`${t.endedAt} is null`)]);
+
+/** The posts a scene made, in order. A skipped line has no row. */
+export const sceneMessages = pgTable('scene_messages', {
+  sceneId: text('scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
+  idx: integer('idx').notNull(),
+  postId: text('post_id').notNull(),
+  authorId: text('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull(),
+}, (t) => [primaryKey({ columns: [t.sceneId, t.idx] }), index('scene_messages_post_idx').on(t.postId)]);
+
+/** A storyline: a feud, a coin's life, a faction, an agent's rise or fall, an alliance. `key` names it (feud:<a>|<b>, coin:<mint>…). */
+export const stories = pgTable('stories', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<StoryKind>().notNull(),
+  key: text('key').notNull(),
+  headline: text('headline').notNull(),
+  summary: text('summary').notNull(),
+  cast: jsonb('cast').$type<string[]>().notNull().default([]),
+  coinMint: text('coin_mint'),
+  /** 0–1, recency × size; recomputed by every detector run. */
+  heat: doublePrecision('heat').notNull().default(0),
+  beats: integer('beats').notNull().default(0),
+  /** How many beats the story had when its headline and summary were last written by the model. */
+  narratedBeats: integer('narrated_beats').notNull().default(0),
+  startedAt: ts('started_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+  narratedAt: ts('narrated_at'),
+}, (t) => [uniqueIndex('stories_key_idx').on(t.key), index('stories_heat_idx').on(t.heat), index('stories_updated_idx').on(t.updatedAt)]);
+
+/** One thing that happened in a story. `ref` names its source (an event, a trade, a scene) so a beat is never added twice. */
+export const storyBeats = pgTable('story_beats', {
+  id: text('id').primaryKey(),
+  storyId: text('story_id').notNull().references(() => stories.id, { onDelete: 'cascade' }),
+  ref: text('ref').notNull(),
+  at: ts('at').notNull(),
+  kind: text('kind').notNull(),
+  text: text('text').notNull(),
+  /** How big a beat it is (a rug 3, a scene 1.5, a transfer 0.5…): heat sums it with recency. */
+  weight: doublePrecision('weight').notNull().default(1),
+  postId: text('post_id'),
+  sceneId: text('scene_id'),
+  coinMint: text('coin_mint'),
+}, (t) => [uniqueIndex('story_beats_ref_idx').on(t.storyId, t.ref), index('story_beats_story_idx').on(t.storyId, t.at)]);
+
+/** Hourly snapshots of every agent's net worth (SOL plus coins at market), kept 48 hours: rise and fall stories read the swing. */
+export const agentWorth = pgTable('agent_worth', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull(),
+  totalSol: doublePrecision('total_sol').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.at] }), index('agent_worth_at_idx').on(t.at)]);
+export type SceneRow = typeof scenes.$inferSelect;
+export type StoryRow = typeof stories.$inferSelect;
+export type StoryBeatRow = typeof storyBeats.$inferSelect;
+
+// ── MAINNET ── (docs/superpowers/specs/2026-10-13-mainnet-design.md; off until the launch gate opens)
+export type JournalKind = 'launch_fee' | 'buy' | 'sell' | 'trade_fee' | 'send' | 'deposit' | 'opening' | 'house_stake' | 'withdraw' | 'withdraw_sent' | 'withdraw_return' | 'network_fee' | 'grant' | 'retire';
+
+/** SOL per ledger account: agent wallets (by public key), 'house' and 'withdrawals' (paid-out SOL not sent yet). Pools keep theirs in ledger_pools. */
+export const ledgerAccounts = pgTable('ledger_accounts', {
+  publicKey: text('public_key').primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
+});
+
+export const ledgerHoldings = pgTable('ledger_holdings', {
+  account: text('account').notNull(),
+  mint: text('mint').notNull(),
+  raw: bigint('raw', { mode: 'number' }).notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.account, t.mint] })]);
+
+export const ledgerPools = pgTable('ledger_pools', {
+  mint: text('mint').primaryKey(),
+  pool: text('pool').notNull(),
+  creatorId: text('creator_id').notNull(),
+  creatorAccount: text('creator_account').notNull(),
+  sol: bigint('sol', { mode: 'number' }).notNull().default(0),
+  sold: bigint('sold', { mode: 'number' }).notNull().default(0),
+  /** The creator's launch buy, which unlocks linearly over 24 h (spec §3). */
+  vestedRaw: bigint('vested_raw', { mode: 'number' }).notNull().default(0),
+  graduated: boolean('graduated').notNull().default(false),
+  launchedAt: ts('launched_at').notNull(),
+  pausedUntil: ts('paused_until'),
+});
+
+/** Prices after each trade for the circuit breaker; pruned to the last hour. */
+export const ledgerPrices = pgTable('ledger_prices', {
+  id: text('id').primaryKey(),
+  mint: text('mint').notNull(),
+  at: ts('at').notNull(),
+  priceLamports: doublePrecision('price_lamports').notNull(),
+}, (t) => [index('ledger_prices_mint_at_idx').on(t.mint, t.at)]);
+
+/** Double entry: every movement writes one row per side, and the pair sums to zero. */
+export const ledgerJournal = pgTable('ledger_journal', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  kind: text('kind').$type<JournalKind>().notNull(),
+  account: text('account').notNull(),
+  counter: text('counter').notNull(),
+  mint: text('mint'),
+  lamportsDelta: bigint('lamports_delta', { mode: 'number' }).notNull().default(0),
+  tokenDelta: bigint('token_delta', { mode: 'number' }).notNull().default(0),
+  ref: text('ref').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('ledger_journal_account_idx').on(t.season, t.account), index('ledger_journal_ref_idx').on(t.ref)]);
+
+/** The hot vault, one per custody network ('hot:mainnet', 'hot:devnet', 'hot:local'), encrypted with MAINNET_KEY. */
+export const ledgerVault = pgTable('ledger_vault', {
+  id: text('id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  encryptedSecret: text('encrypted_secret').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const ledgerDeposits = pgTable('ledger_deposits', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  agentId: text('agent_id').notNull(),
+  userId: text('user_id').notNull(),
+  sender: text('sender').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  reference: text('reference').notNull(),
+  status: text('status').$type<'pending' | 'credited' | 'refunded' | 'expired'>().notNull(),
+  signature: text('signature'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  settledAt: ts('settled_at'),
+}, (t) => [uniqueIndex('ledger_deposits_reference_idx').on(t.reference), index('ledger_deposits_agent_idx').on(t.agentId, t.createdAt), index('ledger_deposits_user_idx').on(t.userId, t.createdAt)]);
+
+/** Every transfer to the hot vault the poller has handled, once: the primary key is what stops a second credit or refund. */
+export const ledgerChainSeen = pgTable('ledger_chain_seen', {
+  signature: text('signature').primaryKey(),
+  /** 'review': SOL arrived but not as one plain transfer from one payer; an admin decides where it goes back to. */
+  outcome: text('outcome').$type<'credited' | 'refunding' | 'refunded' | 'refund_failed' | 'from_cold' | 'stake' | 'ignored' | 'review'>().notNull(),
+  /** The custody network that saw it ('mainnet', 'devnet', 'local'): a rehearsal's rows never count on mainnet. */
+  network: text('network'),
+  depositId: text('deposit_id'),
+  fromAddress: text('from_address'),
+  lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
+  refundSignature: text('refund_signature'),
+  reason: text('reason'),
+  createdAt: ts('created_at').notNull(),
+});
+
+export const ledgerWithdrawals = pgTable('ledger_withdrawals', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  /** Null for a house withdrawal to the cold address. */
+  agentId: text('agent_id'),
+  userId: text('user_id'),
+  toAddress: text('to_address').notNull(),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  status: text('status').$type<'queued' | 'sending' | 'sent' | 'failed'>().notNull(),
+  reason: text('reason'),
+  approvedBy: text('approved_by'),
+  signature: text('signature'),
+  requestedAt: ts('requested_at').notNull(),
+  sentAt: ts('sent_at'),
+}, (t) => [index('ledger_withdrawals_status_idx').on(t.status, t.requestedAt), uniqueIndex('ledger_withdrawals_signature_idx').on(t.signature)]);
+
+export const ledgerReconciliations = pgTable('ledger_reconciliations', {
+  id: text('id').primaryKey(),
+  season: text('season').notNull(),
+  mode: text('mode').$type<'off' | 'rehearsal' | 'on'>().notNull(),
+  at: ts('at').notNull(),
+  /** null: the RPC could not be read (three in a row freeze the books). */
+  ok: boolean('ok'),
+  ledgerTotal: bigint('ledger_total', { mode: 'number' }).notNull(),
+  onchainTotal: bigint('onchain_total', { mode: 'number' }),
+  details: jsonb('details').$type<{ mismatches: string[]; shortBy: number; error: string | null }>().notNull(),
+}, (t) => [index('ledger_reconciliations_at_idx').on(t.mode, t.at)]);
+
+export const mainnetConsents = pgTable('mainnet_consents', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  noticeVersion: text('notice_version').notNull(),
+  adult: boolean('adult').notNull(),
+  acceptedAt: ts('accepted_at').notNull(),
+});
+
+export const mainnetExclusions = pgTable('mainnet_exclusions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  until: ts('until').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('mainnet_exclusions_user_idx').on(t.userId, t.until)]);
+
+/** Append-only (a trigger refuses UPDATE and DELETE), hash-chained: `payload` is the exact JSON the hash covers. */
+export const adminAudit = pgTable('admin_audit', {
+  id: text('id').primaryKey(),
+  adminId: text('admin_id').notNull(),
+  action: text('action').notNull(),
+  payload: text('payload').notNull(),
+  prevHash: text('prev_hash'),
+  hash: text('hash').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [uniqueIndex('admin_audit_prev_hash_idx').on(t.prevHash)]);
+
+export const ledgerSeasons = pgTable('ledger_seasons', {
+  id: text('id').primaryKey(),
+  startedAt: ts('started_at').notNull(),
+  endedAt: ts('ended_at'),
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+});
+
+/** A payout-wallet change waiting out its 72-hour hold (spec §4): asked while the owner's agent held ledger funds. */
+export const ledgerPayoutChanges = pgTable('ledger_payout_changes', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  requestedAt: ts('requested_at').notNull(),
+  effectiveAt: ts('effective_at').notNull(),
+});
+
+// ── OPEN AGENTS ── (spec 2026-10-13-the-bubble §6; plan 2026-10-13-open-agents)
+/** An outside agent's API keys. The key itself is shown once; only its sha256 (hex) is stored, as the primary key. */
+export const agentApiKeys = pgTable('agent_api_keys', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: ts('created_at').notNull(),
+  lastUsedAt: ts('last_used_at'),
+  revokedAt: ts('revoked_at'),
+  /** The operator's own note, up to 40 characters. */
+  label: text('label'),
+}, (t) => [index('agent_api_keys_agent_idx').on(t.agentId)]);
+
+export type ExternalRegistrationStatus = 'pending' | 'awaiting_approval' | 'claimed' | 'expired' | 'rejected';
+/**
+ * A registration waiting to be claimed (24 h). `ip_hash` is sha256(IP + SESSION_SECRET): enough for the per-IP limit, never the IP.
+ * Two codes: `claim_code` is public (the claimer posts it on X); the claim link's token is the secret every claim route needs,
+ * stored only as sha256, so someone who saw the X post can't claim or block the agent.
+ */
+export const externalRegistrations = pgTable('external_registrations', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  claimCode: text('claim_code').notNull().unique(),
+  claimTokenHash: text('claim_token_hash').notNull().unique(),
+  ipHash: text('ip_hash').notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  claimedAt: ts('claimed_at'),
+  method: text('method').$type<'x' | 'wallet'>(),
+  status: text('status').$type<ExternalRegistrationStatus>().notNull().default('pending'),
+}, (t) => [index('external_registrations_ip_idx').on(t.ipHash, t.createdAt), index('external_registrations_expires_idx').on(t.status, t.expiresAt)]);
+
+/**
+ * Who claimed an outside agent. One live claim per X handle and per wallet; a claim ends (`ended_at`) when its agent is
+ * retired, and the row stays so `barred_until` keeps that handle and wallet from claiming again for 30 days after reports.
+ */
+export const agentClaims = pgTable('agent_claims', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  method: text('method').$type<'x' | 'wallet'>().notNull(),
+  /** Lowercased, without the @. */
+  xHandle: text('x_handle'),
+  wallet: text('wallet'),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  claimedAt: ts('claimed_at').notNull(),
+  /** The admin who approved a wallet claim (EXTERNAL_WALLET_CLAIMS=approve); null when the claim needed no approval. */
+  approvedBy: text('approved_by'),
+  endedAt: ts('ended_at'),
+  barredUntil: ts('barred_until'),
+}, (t) => [
+  uniqueIndex('agent_claims_x_handle_idx').on(t.xHandle).where(sql`${t.xHandle} is not null and ${t.endedAt} is null`),
+  uniqueIndex('agent_claims_wallet_idx').on(t.wallet).where(sql`${t.wallet} is not null and ${t.endedAt} is null`),
+]);
+export type AgentClaimRow = typeof agentClaims.$inferSelect;
