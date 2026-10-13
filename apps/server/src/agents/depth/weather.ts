@@ -7,6 +7,7 @@ import { newId } from '../../lib/ids.ts';
 import { mulberry32 } from '../../seed/rng.ts';
 import type { Situation } from '../types.ts';
 import type { DepthModule } from './registry.ts';
+import { newsTilt } from '../../x/news.ts';
 
 export type Regime = 'euphoria' | 'grind' | 'fear' | 'chaos';
 export const WEATHER: Record<Regime, { risk: number; chatty: number; mood: number }> = {
@@ -22,8 +23,10 @@ const H = 3600_000;
  * The regime after `prev`; chaos never repeats. A world with no weather yet (`prev === null`) never opens in fear: a 2-6 h
  * spell of it would show every first visitor a dead market, so the first regime draws from the other three at the same weights.
  */
-export function nextRegime(prev: Regime | null, rng: () => number): { regime: Regime; durationMs: number } {
-  const pool = WEIGHTS.filter(([r]) => !(prev === 'chaos' && r === 'chaos') && !(prev === null && r === 'fear'));
+export function nextRegime(prev: Regime | null, rng: () => number, tilt = 0): { regime: Regime; durationMs: number } {
+  // `tilt` is the live X topics' heat-weighted sentiment (x-feed §5.4): at ≤ -0.4 fear's weight doubles, at ≥ 0.4 euphoria's.
+  const pool = WEIGHTS.filter(([r]) => !(prev === 'chaos' && r === 'chaos') && !(prev === null && r === 'fear'))
+    .map(([r, w]): [Regime, number] => [r, w * ((tilt <= -0.4 && r === 'fear') || (tilt >= 0.4 && r === 'euphoria') ? 2 : 1)]);
   let x = rng() * pool.reduce((n, [, w]) => n + w, 0);
   let regime: Regime = pool[pool.length - 1]![0];
   for (const [r, w] of pool) { x -= w; if (x <= 0) { regime = r; break; } }
@@ -40,9 +43,10 @@ async function resolveWeather(db: Db, now: Date, rng: () => number): Promise<Cur
   const [last] = await db.select().from(weather).orderBy(desc(weather.endsAt)).limit(1);
   let start = last && last.endsAt <= now ? last.endsAt : now;
   let prev: Regime | null = last?.regime ?? null;
+  const tilt = await newsTilt(db, now).catch(() => 0);
   // Catch up after downtime: walk forward until a regime covers now.
   for (;;) {
-    const n = nextRegime(prev, rng);
+    const n = nextRegime(prev, rng, tilt);
     const endsAt = new Date(start.getTime() + n.durationMs);
     if (endsAt > now) {
       await db.insert(weather).values({ id: newId(), regime: n.regime, startedAt: start, endsAt });
