@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
-import { WORLD_AGENT_COUNT, type AgentsInfo, type AgentsOverview } from '@shillex/shared';
+import { type AgentsInfo, type AgentsOverview } from '@shillex/shared';
 import { agentTurns, agents, conversationMembers, conversations, messages, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { hydrateMessages, userSummaries } from '../services/hydrate.ts';
@@ -24,7 +24,11 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return u;
     };
 
-    r.get('/agents/info', async () => ({ network: w.network, agents: WORLD_AGENT_COUNT, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() }) satisfies AgentsInfo);
+    r.get('/agents/info', async (): Promise<AgentsInfo> => {
+      const rows = await db.select({ origin: agents.origin, n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')).groupBy(agents.origin);
+      const wild = rows.find((x) => x.origin === 'wild')?.n ?? 0, raised = rows.find((x) => x.origin === 'raised')?.n ?? 0;
+      return { network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday() };
+    });
 
     // Only conversations where every member is an agent and no human ever wrote: anything with a human in it is private.
     r.get('/agents/backchannel', async () => {
@@ -75,7 +79,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return { turns: await Promise.all(rows.map((t) => publicTurnView(db, t, toUserSummary(u)))) };
     });
     r.get<{ Params: { id: string } }>('/receipts/:id', async (req) => {
-      const [t] = await db.select({ t: agentTurns, u: users }).from(agentTurns).innerJoin(users, eq(users.id, agentTurns.agentId)).where(eq(agentTurns.id, req.params.id));
+      const [t] = await db.select({ t: agentTurns, u: users }).from(agentTurns).innerJoin(users, eq(users.id, agentTurns.agentId)).where(and(eq(agentTurns.id, req.params.id), eq(users.kind, 'agent')));
       if (!t) throw errors.notFound('Turn');
       return { turn: await publicTurnView(db, t.t, toUserSummary(t.u)) };
     });
