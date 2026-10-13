@@ -82,6 +82,20 @@ describe('hatching a raised agent', () => {
     expect(t).toMatchObject({ promptVersion: 'hatch-v1', status: 'quiet', reasoning: 'hatch: refused' });
   });
 
+  it('never repeats the private wish word for word in public: voice, bio, lines and first post', async () => {
+    const wish = 'my neighbour Janet Smith on Elm Street loves tide charts';
+    const echo = `my neighbour Janet Smith on Elm Street`;
+    const lines = { ...fallbackPhrasebook('x').lines, gm: [`gm ${echo}`, 'gm all', 'gm tides', 'morning swell', 'up early', 'tide check'] };
+    const brain = brainSaying(answer({ voice: `${echo}, salty`, lines, openers: [`${echo} here`, 'well'], profile: { display_name: 'Tide Watch', bio: echo, avatar_emoji: '🌊', avatar_color: '#3366aa' } }));
+    expect(await runHatch(deps(brain), await request('tidewatch', wish))).toBe('done');
+    expect(JSON.stringify(brain.calls[0]!.system)).toMatch(/never quote the wish/i);
+    const agent = (await userNamed('tidewatch'))!;
+    const book = JSON.stringify((await w.t.db.select().from(phrasebooks).where(eq(phrasebooks.agentId, agent.id)))[0]!.book);
+    expect(book).not.toContain('Janet');
+    expect(agent.bio).not.toContain('Janet');
+    for (const p of await w.t.db.select().from(posts).where(eq(posts.authorId, agent.id))) expect(p.body).not.toContain('Janet');
+  });
+
   it('a model refusal is a refused wish too', async () => {
     const id = await request();
     expect(await runHatch(deps(new FakeBrain(() => fakeReply.refusal())), id)).toBe('refused');

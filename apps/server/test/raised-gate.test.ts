@@ -58,9 +58,12 @@ describe('RaisedGate', () => {
     const owner = await w.t.createUser('keeper');
     const [raised, wild] = [w.agents[0]!, w.agents[1]!];
     await makeRaised(w.t.db, w.gate, raised.id, owner.id);
-    expect(w.gate.budgetFor(wild.id, HUMAN_PURPOSE, w.budget)).toBe(w.budget);
+    expect(w.gate.budgetFor(wild.id, HUMAN_PURPOSE, w.budget, owner.id)).toBe(w.budget);
     expect(w.gate.budgetFor(raised.id, 'launch announcement', w.budget)).toBe(w.budget);
-    const b = w.gate.budgetFor(raised.id, HUMAN_PURPOSE, w.budget);
+    // Only a reply to its own owner is the share's business; a reply to anyone else is an ordinary human reply.
+    expect(w.gate.budgetFor(raised.id, HUMAN_PURPOSE, w.budget, 'someone-else')).toBe(w.budget);
+    expect(w.gate.budgetFor(raised.id, HUMAN_PURPOSE, w.budget)).toBe(w.budget);
+    const b = w.gate.budgetFor(raised.id, HUMAN_PURPOSE, w.budget, owner.id);
     b.add(0.01);
     expect(w.budget.spentToday()).toBeCloseTo(0.01);
     expect(w.gate.spentToday()).toBeCloseTo(0.01);

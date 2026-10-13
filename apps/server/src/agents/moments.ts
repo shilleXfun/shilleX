@@ -37,6 +37,8 @@ export interface ModelTurnOptions {
   mention?: string;
   /** Tool input fields fixed by the caller: the model may repeat them (or leave them out) but never name another target. A null pin means the field must stay empty. */
   pin?: Record<string, unknown>;
+  /** RAISE: the human being answered; a raised agent's reply to its own owner books on the raised share. */
+  humanId?: string;
 }
 export type ModelTurnRunner = (agentId: string, o: ModelTurnOptions) => Promise<{ ok: boolean; turnId: string; text: string }>;
 export type MomentHandler = (m: Moment, run: ModelTurnRunner) => Promise<void>;
@@ -147,6 +149,9 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   const modelTurn: ModelTurnRunner = async (agentId, o) => {
     const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
     if (!agent) return NONE;
+    // A raised agent's reply to its owner also books on raised agents' share (RAISE §7); a spent share means no call and no receipt.
+    const budget = d.raised?.budgetFor(agentId, o.purpose, d.budget, o.humanId) ?? d.budget;
+    if (!(budget.canSpend() && budget.canAfford(MOMENT_WORST))) return NONE;
     const pb = await phrasebookOf(d.db, agentId);
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
@@ -159,8 +164,6 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
     const spent = { usd: 0 };
-    // A raised agent's reply to a human (its owner's chat included) also books on raised agents' share (RAISE §7).
-    const budget = d.raised?.budgetFor(agentId, o.purpose, d.budget) ?? d.budget;
     let status: 'acted' | 'quiet' | 'refused' | 'failed' = 'quiet', reasoning = '', text = '', thrown: unknown = null;
     try {
       for (let trip = 0; trip < Math.min(o.maxTrips ?? 2, MAX_TRIPS); trip++) {
@@ -267,7 +270,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         if (!p || p.deletedAt) return;
         // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
         const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
-        await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
+        await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
           prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
@@ -275,7 +278,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
       const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
-      await r(m.agentId, { purpose: HUMAN_PURPOSE, maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
+      await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
     async phrasebook(m) {

@@ -26,8 +26,9 @@ export function createHatchPump(d: PumpDeps): () => Promise<void> {
     const now = d.now();
     await d.db.update(agentHatches).set({ status: 'queued', startedAt: null })
       .where(and(eq(agentHatches.status, 'hatching'), lt(agentHatches.startedAt, new Date(now.getTime() - STALE_HATCH_MS))));
-    await d.retryStartGrants();
-    await d.retireReported();
+    // Each chore on its own: a failing one is logged and the creation queue still moves.
+    await d.retryStartGrants().catch((e) => console.error('[raised] owed start grants failed', e));
+    await d.retireReported().catch((e) => console.error('[raised] reported-agent sweep failed', e));
     const n = sql<number>`count(*)::int`;
     const today = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
     const [live] = await d.db.select({ n }).from(agents).where(and(eq(agents.origin, 'raised'), ne(agents.status, 'retired')));
