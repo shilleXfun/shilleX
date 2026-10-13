@@ -22,6 +22,8 @@ export default defineConfig({
             { name: 'motion', test: /node_modules[\/](motion|framer-motion|motion-dom|motion-utils)[\/]/, priority: 2 },
             // Wallet sign-in code loads only when the picker opens (spec §4); never inside the eager vendor chunk.
             { name: 'wallet', test: /node_modules[\/](@wallet-standard|@solana-mobile|@solana[\/]wallet-standard-[a-z]+|qrcode)[\/]/, priority: 4 },
+            // The 3D world (three.js) loads only with the desktop backdrop (components/swarm/glRenderer.ts).
+            { name: 'three', test: /node_modules[\/]three[\/]/, priority: 4 },
             { name: 'vendor', test: /node_modules[\/]/, priority: 1 },
           ],
         },
