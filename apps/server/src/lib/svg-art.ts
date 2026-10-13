@@ -9,19 +9,43 @@ function rng(seed: string) {
 }
 const esc = (s: string) => s.replace(/[^A-Za-z0-9_.-]/g, '');
 
+/**
+ * An agent's face: the neuron it is in the world (the live backdrop draws every agent as a light joined to others). A lit
+ * core, dendrites reaching out with their tips glowing, on a dark field tinted with the agent's hue. The hue is the first
+ * draw of rng(`a:${seed}`), as it always was: the web app repeats that draw so a name takes its avatar's colour
+ * (apps/web/src/features/home/speaker.ts). Everything else comes from a second stream, so it never moves the hue.
+ */
 export function avatarSvg(seed: string): string {
-  const r = rng(`a:${seed}`);
-  const hue = HUES[Math.floor(r() * HUES.length)]!;
-  const bg = `hsl(${hue} 32% 22%)`;
-  const fg = `hsl(${hue} 70% 62%)`;
-  const cells: string[] = [];
-  for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) {
-    if (r() > 0.5) {
-      cells.push(`<rect x="${x * 12 + 4}" y="${y * 12 + 4}" width="12" height="12"/>`);
-      if (x < 2) cells.push(`<rect x="${(4 - x) * 12 + 4}" y="${y * 12 + 4}" width="12" height="12"/>`);
+  const hue = HUES[Math.floor(rng(`a:${seed}`)() * HUES.length)]!;
+  const s = stream(`n:${seed}`);
+  const tip = (hue + 25 + Math.floor(s() * 70)) % 360;
+  const C = 34, n = 5 + Math.floor(s() * 4), turn = s() * Math.PI * 2;
+  const f = (v: number) => v.toFixed(1);
+  const fibres: string[] = [], tips: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = turn + (i / n) * Math.PI * 2 + (s() - 0.5) * 0.7;
+    const len = 17 + s() * 12, bend = (s() - 0.5) * 1.1;
+    const qx = C + Math.cos(a + bend) * len * 0.55, qy = C + Math.sin(a + bend) * len * 0.55;
+    const x = C + Math.cos(a) * len, y = C + Math.sin(a) * len;
+    fibres.push(`<path d="M${C} ${C}Q${f(qx)} ${f(qy)} ${f(x)} ${f(y)}"/>`);
+    tips.push(`<circle cx="${f(x)}" cy="${f(y)}" r="${f(1.3 + s() * 1.5)}"/>`);
+    // Some dendrites fork once, part way out.
+    if (s() < 0.55) {
+      const b = a + (s() < 0.5 ? 0.7 : -0.7), bl = len * (0.3 + s() * 0.25);
+      const bx = qx + Math.cos(b) * bl, by = qy + Math.sin(b) * bl;
+      fibres.push(`<path d="M${f(qx)} ${f(qy)}L${f(bx)} ${f(by)}"/>`);
+      tips.push(`<circle cx="${f(bx)}" cy="${f(by)}" r="1.1"/>`);
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 68" data-seed="${esc(seed)}"><rect width="68" height="68" fill="${bg}"/><g fill="${fg}">${cells.join('')}</g></svg>`;
+  const core = 7 + s() * 3.5;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 68" data-seed="${esc(seed)}"><defs>`
+    + `<radialGradient id="f" cx="50%" cy="46%" r="72%"><stop offset="0" stop-color="hsl(${hue} 48% 17%)"/><stop offset="1" stop-color="hsl(${hue} 34% 5%)"/></radialGradient>`
+    + `<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="hsl(${hue} 95% 68%)" stop-opacity=".5"/><stop offset="1" stop-color="hsl(${hue} 95% 60%)" stop-opacity="0"/></radialGradient>`
+    + `<radialGradient id="c" cx="42%" cy="38%" r="62%"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="hsl(${hue} 100% 80%)"/><stop offset="1" stop-color="hsl(${hue} 85% 52%)"/></radialGradient>`
+    + `</defs><rect width="68" height="68" fill="url(#f)"/><circle cx="${C}" cy="${C}" r="29" fill="url(#g)"/>`
+    + `<g fill="none" stroke="hsl(${hue} 90% 70%)" stroke-width="1.7" stroke-linecap="round" opacity=".88">${fibres.join('')}</g>`
+    + `<g fill="hsl(${tip} 95% 78%)">${tips.join('')}</g>`
+    + `<circle cx="${C}" cy="${C}" r="${f(core + 3)}" fill="hsl(${hue} 95% 70%)" opacity=".22"/><circle cx="${C}" cy="${C}" r="${f(core)}" fill="url(#c)"/></svg>`;
 }
 
 export function tokenSvg(seed: string): string {
