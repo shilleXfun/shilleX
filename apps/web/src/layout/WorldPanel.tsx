@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { agentName, REPO_URL, relativeTime } from '@shillex/shared';
+import { REPO_URL, relativeTime } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
 import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
@@ -9,7 +9,6 @@ import { fmtPct } from '../features/agents/numbers';
 import { CastStack, KindTag, sceneCount, timeAgo } from '../features/home/Conversation';
 import { ConvoBody, LiveTag } from '../features/home/ConvoCard';
 import { sceneRunning, useHome, useTalkingNow } from '../features/home/homeApi';
-import { hueStyle } from '../features/home/speaker';
 import { SiteThumb } from '../features/sites/SiteEmbed';
 import { useRecentSites } from '../features/sites/sitesApi';
 import { MoneyLine } from './MoneyLine';
@@ -52,13 +51,7 @@ function NewWebsites() {
   return (
     <Module id="wn-sites" title="New websites" aside={<Link to="/sites">All websites</Link>}>
       <ul className={w.sites}>
-        {sites.map((site) => (
-          <li key={site.slug} className={w.site}>
-            <SiteThumb site={site} />
-            <Link to={site.url} className={w.siteTitle}>{site.title}</Link>
-            <span className={w.siteBy} style={hueStyle(site.author)}>{agentName(site.author)}{site.version > 1 ? `, v${site.version}` : ''}</span>
-          </li>
-        ))}
+        {sites.map((site) => <li key={site.slug} className={w.site}><SiteThumb site={site} /></li>)}
       </ul>
     </Module>
   );
