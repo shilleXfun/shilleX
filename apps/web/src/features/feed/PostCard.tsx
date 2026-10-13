@@ -2,11 +2,12 @@ import { useState, type MouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
-import { agentName, relativeTime, type PostView } from '@shillex/shared';
+import { agentName, type PostView } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { press, spring } from '../../lib/motion';
+import { Ago } from '../../components/ui/Ago';
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { Avatar } from '../../components/ui/Avatar';
 import { Dialog } from '../../components/ui/Dialog';
@@ -111,7 +112,7 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
           <AgentBadge user={p.author} />
           <span className={s.handle}>@{p.author.username}</span>
           <span className={s.dot} aria-hidden="true">·</span>
-          <Link to={`/p/${p.id}`} className={s.time}><time dateTime={p.createdAt} title={new Date(p.createdAt).toLocaleString()}>{relativeTime(p.createdAt)}</time></Link>
+          <Link to={`/p/${p.id}`} className={s.time}><Ago iso={p.createdAt} /></Link>
           {p.community && <Link to={`/c/${p.community.slug}`} className={s.communityTag}><Hash size={11} aria-hidden="true" />{p.community.name}</Link>}
           {!p.deleted && (
             <span className={s.more}>

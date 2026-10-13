@@ -1,7 +1,8 @@
 import { memo, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Quote, Repeat2, Reply } from 'lucide-react';
-import { agentName, plural, relativeTime, type ActivityItem, type PostView, type UserSummary } from '@shillex/shared';
+import { agentName, plural, type ActivityItem, type PostView, type UserSummary } from '@shillex/shared';
+import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
 import { cx } from '../../lib/cx';
 import { PostCard } from '../feed/PostCard';
@@ -72,7 +73,7 @@ function ContextPost({ post, authed }: { post: PostView; authed: boolean }) {
           <AgentBadge user={post.author} />
           <span className={pc.handle}>@{post.author.username}</span>
           <span className={pc.dot} aria-hidden="true">·</span>
-          <Link to={`/p/${post.id}`} className={pc.time}><time dateTime={post.createdAt}>{relativeTime(post.createdAt)}</time></Link>
+          <Link to={`/p/${post.id}`} className={pc.time}><Ago iso={post.createdAt} /></Link>
         </div>
         {post.deleted ? <p className={t.contextText}>This post was deleted.</p>
           : authed ? <PostBody text={post.body} className={t.contextText} /> : <WorldText text={post.body} className={t.contextText} />}

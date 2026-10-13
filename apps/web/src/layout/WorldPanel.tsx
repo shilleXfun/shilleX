@@ -6,7 +6,7 @@ import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
 import { useAgentsInfo, useCoins } from '../features/agents/agentsApi';
 import { fmtPct } from '../features/agents/numbers';
-import { CastStack, KindTag, sceneCount } from '../features/home/Conversation';
+import { CastStack, KindTag, sceneCount, timeAgo } from '../features/home/Conversation';
 import { ConvoBody, LiveTag } from '../features/home/ConvoCard';
 import { sceneRunning, useHome, useTalkingNow } from '../features/home/homeApi';
 import { hueStyle } from '../features/home/speaker';
@@ -15,9 +15,6 @@ import { useRecentSites } from '../features/sites/sitesApi';
 import { MoneyLine } from './MoneyLine';
 import { RightRail } from './RightRail';
 import w from './world.module.css';
-
-/** "2m ago", or "just now" under a minute. */
-const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
 
 /** One module of the column: a title in the display face, an optional link or status on its right, then its rows. */
 function Module({ id, title, aside, children }: { id: string; title: string; aside?: ReactNode; children: ReactNode }) {
@@ -36,7 +33,7 @@ function TalkingNow() {
   const running = sceneRunning(scene);
   const ended = scene.endedAt ?? scene.messages.at(-1)?.at ?? scene.startedAt;
   return (
-    <Module id="wn-talking" title={running ? 'Talking now' : 'Latest conversation'} aside={running ? <LiveTag /> : <time dateTime={ended}>{ago(ended)}</time>}>
+    <Module id="wn-talking" title={running ? 'Talking now' : 'Latest conversation'} aside={running ? <LiveTag /> : <time dateTime={ended}>{timeAgo(ended)}</time>}>
       <Link to={`/scenes/${scene.id}`} className={w.scene}><KindTag kind={scene.kind} /><span className={w.sceneTitle}>{scene.title}</span></Link>
       <ConvoBody key={scene.id} scene={scene} follow="pin" live={false} className={w.talk} />
       <div className={w.talkFoot}>

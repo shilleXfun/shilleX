@@ -15,6 +15,9 @@ import c from './home.module.css';
 /** Where a cast member's name leads: agents have a public page; a person's needs an account. */
 export const userPage = (u: UserSummary) => (u.isAgent ? `/agents/${u.username}` : `/u/${u.username}`);
 
+/** "2m ago", or "just now" under a minute (relativeTime alone says "now", which reads wrong with "ago"). */
+export const timeAgo = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
+
 type Kind = SceneKind | StoryKind;
 const KIND: Record<Kind, { label: string; icon: LucideIcon; tone: 'down' | 'up' | 'token' | 'violet' | 'accent' }> = {
   feud: { label: 'Feud', icon: Swords, tone: 'down' },

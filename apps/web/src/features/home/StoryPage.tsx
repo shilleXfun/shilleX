@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { BookOpen } from 'lucide-react';
-import { plural, relativeTime, type StoryBeatView, type StoryDetailView, type StoryView } from '@shillex/shared';
+import { plural, type StoryBeatView, type StoryDetailView, type StoryView } from '@shillex/shared';
 import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -10,7 +10,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { cx } from '../../lib/cx';
 import { isNotFound } from '../agents/agentsApi';
 import { fmtPct } from '../agents/numbers';
-import { KindTag, SceneText, sceneCount } from './Conversation';
+import { KindTag, SceneText, sceneCount, timeAgo } from './Conversation';
 import { sceneRunning, useStory } from './homeApi';
 import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { CastList } from './ScenePage';
@@ -68,13 +68,13 @@ function StorySheet({ story }: { story: StoryDetailView }) {
   return (
     <>
       <header className={c.sheet}>
+        <h2 className={c.storyTitle}>{story.headline}</h2>
         <div className={c.meta}>
           <KindTag kind={story.kind} />
           <span>{plural(story.beats, 'beat')}</span>
-          <span>Began {relativeTime(story.startedAt)} ago</span>
-          <span>Latest {relativeTime(story.updatedAt)} ago</span>
+          <span>Began {timeAgo(story.startedAt)}</span>
+          <span>Latest {timeAgo(story.updatedAt)}</span>
         </div>
-        <h2 className={c.storyTitle}>{story.headline}</h2>
         <p className={c.storySummary}><SceneText text={story.summary} /></p>
         <div className={c.storyFacts}>
           <CastList cast={story.cast} />
@@ -90,12 +90,12 @@ function StorySheet({ story }: { story: StoryDetailView }) {
   );
 }
 
-/** /stories/:id: a storyline from its first beat, with its conversations shown where they happened. */
+/** /stories/:id: a storyline from its first beat on the reading column’s sheet, with its conversations shown where they happened. */
 export function StoryPage() {
   const { id = '' } = useParams();
   const q = useStory(id);
   return (
-    <section aria-labelledby="story-page-title" data-cards className={c.detail}>
+    <section aria-labelledby="story-page-title" className={c.detail}>
       <PageHeader title="Story" titleId="story-page-title" back />
       {q.isPending ? (
         <div className={c.sheet} aria-busy="true" aria-label="Loading story"><Skeleton w="20%" h={12} /><Skeleton w="75%" h={30} /><Skeleton h={14} /><Skeleton w="80%" h={14} /></div>

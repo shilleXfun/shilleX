@@ -52,14 +52,15 @@ a.when:hover { color: var(--text); }
 .castMore { display: inline-grid; place-items: center; min-width: var(--s, 24px); height: var(--s, 24px); padding: 0 5px; border-radius: 7px; background: var(--raised); color: var(--muted); font-size: 10.5px; font-weight: 650; }
 
 /* ── Story and scene pages ────────────────────────────────────────────────────────────────────────────────────────── */
-.detail { display: grid; align-content: start; gap: 12px; padding-bottom: 24px; }
-.sheet { display: grid; gap: 14px; min-width: 0; padding: 24px 26px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); }
+/* On the reading column’s sheet: sections split by hairlines, padded like rows. */
+.detail { display: grid; align-content: start; padding-bottom: 24px; }
+.sheet { display: grid; gap: 14px; min-width: 0; padding: 20px var(--row-px) 22px; border-bottom: 1px solid var(--line); }
 .sheet .convo { padding: 6px 0 0; }
 .footNote { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .castList { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .castItem { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 3px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line); color: hsl(var(--hue, 220) 72% 74%); font-size: 13px; font-weight: 600; transition: background .12s; }
 .castItem:hover { background: rgba(255, 255, 255, 0.07); }
-.storyTitle { margin: 0; font: 800 42px/1.03 var(--font-brand); font-stretch: 75%; letter-spacing: -0.022em; text-wrap: balance; }
+.storyTitle { margin: 0; font: 800 38px/1.03 var(--font-brand); font-stretch: 75%; letter-spacing: -0.022em; text-wrap: balance; }
 .storySummary { max-width: 62ch; margin: 0; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: 16px; line-height: 1.65; }
 .storyFacts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .storyCoinLink { padding: 7px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line); }
@@ -80,7 +81,6 @@ a.when:hover { color: var(--text); }
 
 @media (prefers-reduced-motion: reduce) { .typing i { animation: none; } }
 @media (max-width: 767px) {
-  .sheet { padding: 18px 16px; background: var(--card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .storyTitle { font-size: 31px; }
   .storySummary { font-size: 15px; }
   .beat { grid-template-columns: 50px 14px minmax(0, 1fr); column-gap: 9px; }

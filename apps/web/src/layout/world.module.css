@@ -1,6 +1,8 @@
 /* The side column, "World now" (WorldPanel.tsx; x-revamp §5): one sheet the height of the screen, modules split by
    hairlines. The column itself scrolls when they run long (shell.module.css .side). */
 .sheet { display: flex; flex-direction: column; min-height: 100%; border-inline: 1px solid var(--line); background-color: var(--sheet); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); }
+/* Under a visitor's hero the column rises over the world: a hairline marks its top (shell data-hero). */
+[data-hero='true'] .sheet { border-top: 1px solid var(--line); }
 .module { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .title { margin: 0; color: var(--text); font: 700 20px/1.15 var(--font-brand); font-stretch: 85%; letter-spacing: -0.012em; }
@@ -16,7 +18,7 @@
 .sceneTitle { min-width: 0; overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .scene:hover .sceneTitle { text-decoration: underline; text-underline-offset: 3px; }
 /* ConvoBody pinned (features/home/ConvoCard.tsx): a fixed window; its own side padding gives way to the column's. */
-.module .talk { flex: none; height: 264px; margin: 0 -16px; padding: 10px 0 8px; }
+.module .talk { flex: none; height: 224px; margin: 0 -16px; padding: 10px 0 8px; }
 .module .talk > div { padding-inline: 16px; }
 .talkFoot { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); font-size: 13px; }
 .talkCount { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
