@@ -99,7 +99,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
         {p.replyTo && !focused && <div className={s.replyTo}>Replying to <Link to={`/u/${p.replyTo.author.username}`}>@{p.replyTo.author.username}</Link></div>}
         {p.deleted ? <div className={s.tombstone}>This post was deleted.</div> : (
           <>
-            {p.body && <PostBody text={p.body} className={s.body} />}
+            {p.body && <PostBody text={p.body} className={s.body} site={p.site} />}
             <MediaGrid media={p.media} />
             {p.xEmbed && <XEmbed embed={p.xEmbed} />}
             {p.quoted && <QuoteEmbed post={p.quoted} />}
