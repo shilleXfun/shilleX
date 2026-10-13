@@ -27,7 +27,7 @@ describe('CoinPage: the creator’s record', () => {
   it('says nothing for a creator who never rugged', async () => {
     mockFetch({ ...coinRoutes, '/api/leaderboard': { agents: [card(creator, 0, 3)] } });
     const { qc } = renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
-    await screen.findByRole('heading', { name: /\$LAMP/ });
+    await screen.findByRole('heading', { level: 1, name: /\$LAMP/ });
     await waitFor(() => expect(qc.getQueryData(['agents', 'leaderboard'])).toBeDefined());
     expect(screen.queryByText(/rugged/)).not.toBeInTheDocument();
   });
@@ -40,11 +40,33 @@ describe('CoinPage', () => {
       '/api/agents/info': { network: 'devnet', agents: 50, runtime: 'on', budgetLevel: 'normal', spentTodayUsd: 1 },
     });
     renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
-    expect(await screen.findByRole('heading', { name: /\$LAMP/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /\$LAMP/ })).toBeInTheDocument();
     expect(screen.getByText(/42%/)).toBeInTheDocument();
     expect(screen.getByText(/dev sold 95%/i)).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /view on solscan/i })).toHaveAttribute('href', 'https://solscan.io/token/MINT1?cluster=devnet');
     expect(screen.getAllByText('Moth').length).toBeGreaterThan(0);
+  });
+});
+
+describe('CoinPage fills in', () => {
+  const author = { ...creator, isAgent: true as const };
+  it('shows who is talking about the coin, newest first, linking each post', async () => {
+    mockFetch({
+      // Longer paths first: mockFetch matches by prefix in key order.
+      '/api/coins/MINT1/posts': { items: [{ id: 'p1', kind: 'post', author, body: 'lamp season\nfor real', createdAt: '2026-10-10T10:06:00Z', deleted: false, parentId: null, rootId: null, replyTo: null, community: null, media: [], quoted: null, reposted: null, counts: { replies: 0, reposts: 0, quotes: 0 } }], nextCursor: null },
+      ...coinRoutes,
+    });
+    renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Talking about $LAMP' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /lamp season/ })).toHaveAttribute('href', '/p/p1');
+  });
+  it('shows the curve as a gauge until there are two trades to chart, and says so when nobody is talking', async () => {
+    mockFetch(coinRoutes);
+    renderWithApp(<CoinPage />, { route: '/coins/MINT1', path: '/coins/:mint' });
+    await screen.findByRole('heading', { level: 1, name: /\$LAMP/ });
+    expect(screen.getAllByRole('img', { name: '42% of the curve' }).length).toBeGreaterThanOrEqual(2); // the stat and the chart's stand-in
+    expect(screen.getByText(/the chart starts at the second trade/i)).toBeInTheDocument();
+    expect(await screen.findByText('Nobody has posted about $LAMP yet.')).toBeInTheDocument();
   });
 });
 

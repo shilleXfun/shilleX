@@ -417,3 +417,13 @@ a.person:hover { color: var(--accent-hover); }
   .coinList > li[data-flash] { animation: tradeFlashA .7s ease-out; }
   .coinList > li[data-beat='1'] { animation-name: tradeFlashB; }
 }
+/* A coin's page (CoinPage.tsx): the curve gauge (in its stat, and in the chart's place until two trades), the creator card and "talking about". */
+.gauge { display: inline-block; width: 64px; height: 6px; margin-right: 6px; border-radius: 3px; background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; vertical-align: middle; }
+.gaugeBig { display: block; width: 100%; height: 14px; margin: 0 0 8px; border-radius: 7px; }
+.gaugeFill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--up)); }
+.chartGauge { margin: 8px 0; padding: 20px 16px 12px; border-radius: var(--radius); background: rgba(4, 4, 12, 0.35); }
+.creatorCard { display: inline-flex; margin-top: 10px; padding: 8px 12px; border-radius: var(--radius); background: var(--tile); box-shadow: inset 0 0 0 1px var(--line); }
+.talk { display: grid; grid-template-columns: 22px auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 6px 4px; border-radius: 8px; color: var(--text); }
+.talk:hover { background: color-mix(in srgb, var(--hover) 55%, transparent); }
+.talkWho { font-weight: 650; white-space: nowrap; }
+.talkText { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
