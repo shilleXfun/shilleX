@@ -13,7 +13,7 @@ import { books } from './books.ts';
 import { currentNotice, publishNotice } from './consent.ts';
 import { CAPS_KEY, type MainnetCaps } from './custody.ts';
 import { toHttp } from './errors.ts';
-import { LEGAL_CONFIRMATION, legalReview, recordLegalReview } from './gate.ts';
+import { LEGAL_CONFIRMATION, gateStatus, legalReview, recordLegalReview } from './gate.ts';
 import { reconcile } from './reconcile.ts';
 import type { MainnetHandles } from './routes.ts';
 import type { Db } from '../db/client.ts';
@@ -50,7 +50,6 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       const seen = await db.select().from(ledgerChainSeen).where(inArray(ledgerChainSeen.outcome, ['from_cold', 'refund_failed'])).orderBy(desc(ledgerChainSeen.createdAt)).limit(50);
       const top10 = (await db.select({ l: ledgerAccounts.lamports }).from(ledgerAccounts).orderBy(desc(ledgerAccounts.lamports)).limit(10)).reduce((n, x) => n + x.l, 0);
       const n = await currentNotice(db), lr = await legalReview(db);
-      const { gateStatus } = await import('./gate.ts');
       return {
         mode: h.mode, season: b.season, frozen: h.chain.frozen,
         hot: hot ? { address: hot, sol: hotSol === null ? null : hotSol / SOL } : null,
@@ -66,7 +65,8 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
         excessSol: caps && hotSol !== null ? Math.max(0, hotSol - caps.hotMax) / SOL : 0,
         hotCoversTop10: hotSol !== null && hotSol >= top10,
         notice: n, legalReview: lr ? { reviewer: lr.reviewer, date: lr.date, note: lr.note, confirmedBy: lr.confirmedBy } : null,
-        gate: h.mode === 'off' ? ['MAINNET is off'] : await gateStatus({ db, config, rpc: c?.d.rpc ?? null, custody: c, now }),
+        // In a rehearsal the custody RPC is devnet: checking it for mainnet would only repeat a known gap.
+        gate: h.mode === 'off' ? ['MAINNET is off'] : await gateStatus({ db, config, rpc: h.mode === 'on' ? c?.d.rpc ?? null : null, custody: h.mode === 'on' ? c : null, now }),
       };
     });
 
