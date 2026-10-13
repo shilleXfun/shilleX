@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { makeTestApp, type TestCtx, type TestUser } from './helpers.ts';
 
-const ADDR = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 let ctx: TestCtx; let a: TestUser; let b: TestUser;
 beforeAll(async () => { ctx = await makeTestApp(); a = await ctx.createUser('anon_ape'); b = await ctx.createUser('based_bob'); });
 afterAll(() => ctx.close());
@@ -10,7 +9,7 @@ describe('profiles and follows', () => {
   it('returns a profile with counts and flags', async () => {
     const r = await ctx.as(a).get('/api/users/BASED_BOB');
     expect(r.status).toBe(200);
-    expect(r.body.profile).toMatchObject({ username: 'based_bob', followers: 0, isSelf: false, isFollowing: false, wallet: null });
+    expect(r.body.profile).toMatchObject({ username: 'based_bob', followers: 0, isSelf: false, isFollowing: false, wallets: [] });
     expect((await ctx.as(a).get('/api/users/nobody_here')).status).toBe(404);
   });
   it('follow / unfollow updates counts and notifies', async () => {
@@ -70,15 +69,6 @@ describe('settings', () => {
     expect(ok.body.profile.bio).toBe('trenches');
     const bad = await ctx.as(a).patch('/api/me/profile', { links: [{ label: 'x', url: 'javascript:alert(1)' }] });
     expect(bad.status).toBe(400);
-  });
-  it('wallet is hidden unless explicitly displayed', async () => {
-    await ctx.as(a).put('/api/me/wallet', { address: ADDR, displayWallet: false, displayHoldings: false });
-    expect((await ctx.as(b).get('/api/users/anon_ape')).body.profile.wallet).toBeNull();
-    await ctx.as(a).put('/api/me/wallet', { address: ADDR, displayWallet: true, displayHoldings: true });
-    expect((await ctx.as(b).get('/api/users/anon_ape')).body.profile.wallet).toEqual({ address: ADDR, showHoldings: true, verified: false });
-    expect((await ctx.as(a).put('/api/me/wallet', { address: 'not-an-address', displayWallet: true, displayHoldings: false })).status).toBe(400);
-    await ctx.as(a).del('/api/me/wallet');
-    expect((await ctx.as(b).get('/api/users/anon_ape')).body.profile.wallet).toBeNull();
   });
   it('notification prefs disable delivery', async () => {
     const s = await ctx.as(b).put('/api/me/notification-prefs', { prefs: [{ type: 'follow', enabled: false }] });

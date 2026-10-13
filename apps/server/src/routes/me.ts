@@ -1,12 +1,20 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { LIMITS, MUTED_WORDS, NOTIFICATION_TYPES, isValidSolanaAddress, type SettingsView } from '@shillex/shared';
-import { users, walletLinks, notificationPrefs, mutes, blocks, type UserRow } from '../db/schema.ts';
+import { hash } from '@node-rs/argon2';
+import { LIMITS, MUTED_WORDS, NOTIFICATION_TYPES } from '@shillex/shared';
+import { users, notificationPrefs, mutes, blocks, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { resolveUploads } from './uploads.ts';
-import { avatarFor, toUserSummary } from '../services/users.ts';
+import { toUserSummary } from '../services/users.ts';
+import { settingsView } from '../services/settings.ts';
+import { linkWallet, notifySignInChange, setWalletPrefs, unlinkWallet } from '../services/wallets.ts';
+import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
+import { errors } from '../lib/errors.ts';
+import { AccountProofBody, requireProof } from '../services/account-proof.ts';
+import { Email, emailOwner, emailTaken, endOtherSessions } from '../services/accounts.ts';
+import { isUniqueViolation } from '../lib/pg-errors.ts';
 
 const Link = z.object({ label: z.string().trim().min(1).max(24), url: z.string().max(200).regex(/^https?:\/\/[^\s]+$/i, 'Links must start with http:// or https://') });
 const Profile = z.object({
@@ -16,26 +24,14 @@ const Profile = z.object({
   avatarUploadId: z.string().nullable().optional(),
   bannerUploadId: z.string().nullable().optional(),
 });
-const Wallet = z.object({
-  address: z.string().refine(isValidSolanaAddress, 'Not a valid Solana address'),
-  displayWallet: z.boolean(), displayHoldings: z.boolean(),
-});
 const Prefs = z.object({ prefs: z.array(z.object({ type: z.enum(NOTIFICATION_TYPES), enabled: z.boolean() })).max(NOTIFICATION_TYPES.length) });
+const WalletPrefs = z.object({ showOnProfile: z.boolean().optional(), isPayout: z.literal(true).optional() })
+  .refine((b) => b.showOnProfile !== undefined || b.isPayout !== undefined, 'Nothing to change');
 
 export default async function meRoutes(app: FastifyInstance) {
-  const { db } = app.deps;
+  const { db, config } = app.deps;
 
-  async function settings(u: UserRow): Promise<SettingsView> {
-    const [w] = await db.select().from(walletLinks).where(eq(walletLinks.userId, u.id));
-    const prefs = await db.select().from(notificationPrefs).where(eq(notificationPrefs.userId, u.id));
-    const byType = new Map(prefs.map((p) => [p.type, p.enabled]));
-    return {
-      profile: { displayName: u.displayName, bio: u.bio, links: u.links, avatarUrl: avatarFor(u), bannerUrl: u.bannerUrl },
-      wallet: w ? { address: w.address, displayWallet: w.displayWallet, displayHoldings: w.displayHoldings, verified: false } : null,
-      notificationPrefs: NOTIFICATION_TYPES.map((type) => ({ type, enabled: byType.get(type) ?? true })),
-      mutedWords: u.mutedWords,
-    };
-  }
+  const settings = (u: UserRow) => settingsView(app.deps, u);
   const fresh = async (id: string) => (await db.select().from(users).where(eq(users.id, id)))[0]!;
 
   app.get('/me/settings', async (req) => settings(requireUser(req)));
@@ -53,16 +49,53 @@ export default async function meRoutes(app: FastifyInstance) {
     return settings(await fresh(me.id));
   });
 
-  app.put('/me/wallet', async (req) => {
+  const perUser = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 hour', keyGenerator: (r: FastifyRequest) => r.user?.id ?? r.ip } } });
+
+  app.put('/me/password', perUser(10), async (req) => {
     const me = requireUser(req);
-    const body = parse(Wallet, req.body);
-    await db.insert(walletLinks).values({ userId: me.id, ...body, verified: false })
-      .onConflictDoUpdate({ target: walletLinks.userId, set: { address: body.address, displayWallet: body.displayWallet, displayHoldings: body.displayHoldings, verified: false } });
+    const body = parse(z.object({ password: z.string().min(8).max(128), proof: AccountProofBody }), req.body);
+    await requireProof(app.deps, me, body.proof);
+    await db.update(users).set({ passwordHash: await hash(body.password) }).where(eq(users.id, me.id));
+    await endOtherSessions(app, req, me.id);
+    return settings(await fresh(me.id));
+  });
+
+  app.put('/me/email', perUser(5), async (req) => {
+    const me = requireUser(req);
+    const body = parse(z.object({ email: Email.nullable(), proof: AccountProofBody }), req.body);
+    await requireProof(app.deps, me, body.proof);
+    if (body.email) {
+      const owner = await emailOwner(db, body.email);
+      if (owner && owner !== me.id) throw emailTaken();
+    }
+    try { await db.update(users).set({ email: body.email }).where(eq(users.id, me.id)); }
+    catch (e) { if (isUniqueViolation(e)) throw emailTaken(); throw e; }
+    return settings(await fresh(me.id));
+  });
+
+  // Linking adds a way to sign in (and to reset the password), so a session alone isn't enough: like a password change, it
+  // needs the current password, or a `confirm` signature by a wallet already on the account. Per user, as /me/password.
+  app.post('/me/wallets', perUser(10), async (req) => {
+    const me = requireUser(req);
+    const body = parse(z.object({ wallet: WalletProofBody, proof: AccountProofBody.optional() }), req.body);
+    if (!body.proof) throw errors.forbidden('PROOF_REQUIRED', 'Confirm with your password, or one of your wallets, to link a new wallet');
+    // The proof first: a refused one leaves the new wallet's signature unused, so the person can retry without signing again.
+    await requireProof(app.deps, me, body.proof);
+    const w = await verifyProof(app.deps, body.wallet, 'link', me.id);
+    await linkWallet(db, me.id, w.address, w.walletName, app.deps.now());
+    await notifySignInChange(app.deps, me.id, 'linked', w.address);
+    return settings(await fresh(me.id));
+  });
+
+  app.patch<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
+    const me = requireUser(req);
+    await setWalletPrefs(db, config, me.id, req.params.address, parse(WalletPrefs, req.body));
     return settings(me);
   });
-  app.delete('/me/wallet', async (req) => {
+  app.delete<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
     const me = requireUser(req);
-    await db.delete(walletLinks).where(eq(walletLinks.userId, me.id));
+    await unlinkWallet(db, me, req.params.address);
+    await notifySignInChange(app.deps, me.id, 'removed', req.params.address);
     return settings(me);
   });
 
