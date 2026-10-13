@@ -65,6 +65,40 @@ describe('SettingsPage', () => {
     } finally { f.unregister(); }
   });
 
+  it('a password account links a wallet with its current password, and not before it is typed', async () => {
+    const f = fakeWallet({ name: 'Phantom' });
+    try {
+      let body: unknown = null;
+      mockFetch({ ...base, '/api/me/settings': { ...settings, signIn: { ...signIn, hasPassword: true } }, '/api/auth/wallet/challenge': CHALLENGE,
+        '/api/me/wallets': (init?: RequestInit) => { if (init?.method === 'POST') body = JSON.parse(String(init.body)); return settings; } });
+      renderWithApp(<SettingsPage />);
+      const add = await screen.findByRole('button', { name: 'Add a wallet' });
+      expect(add).toBeDisabled();
+      fireEvent.change(screen.getByLabelText('Password (to add or verify a wallet)'), { target: { value: 'old-password' } });
+      fireEvent.click(add);
+      fireEvent.click(await screen.findByRole('button', { name: /Phantom/ }));
+      await waitFor(() => expect(body).toEqual({ wallet: expect.objectContaining({ mode: 'signIn', nonce: CHALLENGE.nonce }), proof: { password: 'old-password' } }));
+    } finally { f.unregister(); }
+  });
+
+  it('a wallet-only account confirms with a linked wallet first, then signs with the new one', async () => {
+    const f = fakeWallet({ name: 'Phantom' });
+    try {
+      let body: unknown = null;
+      mockFetch({ ...base, '/api/auth/wallet/challenge': CHALLENGE,
+        '/api/me/wallets': (init?: RequestInit) => { if (init?.method === 'POST') body = JSON.parse(String(init.body)); return settings; } });
+      renderWithApp(<SettingsPage />);
+      expect(await screen.findByRole('button', { name: 'Add a wallet' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm with a linked wallet' }));
+      fireEvent.click(await screen.findByRole('button', { name: /Phantom/ }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Add a wallet' })).toBeEnabled());
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      fireEvent.click(screen.getByRole('button', { name: 'Add a wallet' }));
+      fireEvent.click(await screen.findByRole('button', { name: /Phantom/ }));
+      await waitFor(() => expect(body).toEqual({ wallet: expect.objectContaining({ mode: 'signIn' }), proof: { wallet: expect.objectContaining({ mode: 'signIn', walletName: 'Phantom' }) } }));
+    } finally { f.unregister(); }
+  });
+
   it('lists notification preferences as toggles', async () => {
     mockFetch(base);
     renderWithApp(<SettingsPage />);

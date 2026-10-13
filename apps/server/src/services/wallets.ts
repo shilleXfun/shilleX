@@ -1,10 +1,20 @@
 import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
-import { AUTH_LIMITS, type ProfileWallet, type WalletView } from '@shillex/shared';
+import { AUTH_LIMITS, abbreviateMint, type ProfileWallet, type WalletView } from '@shillex/shared';
 import type { Config } from '../config.ts';
+import type { AppDeps } from '../deps.ts';
 import type { Db } from '../db/client.ts';
 import { userWallets, users, type UserRow } from '../db/schema.ts';
 import { errors } from '../lib/errors.ts';
 import { isUniqueViolation } from '../lib/pg-errors.ts';
+import { notify } from './notify.ts';
+
+/**
+ * Tells the owner a wallet was linked to or removed from their account (an in-app notification; Shillex sends no email).
+ * A security notice: no actor, and not in the notification preferences, so a stolen session can't switch it off.
+ */
+export async function notifySignInChange(deps: Pick<AppDeps, 'db' | 'bus' | 'now'>, userId: string, action: 'linked' | 'removed', address: string): Promise<void> {
+  await notify(deps, { userId, type: 'sign_in_change', actorId: null, targetType: 'user', targetId: userId, data: { action, wallet: abbreviateMint(address, 4, 4) } });
+}
 
 export const WALLET_IN_USE = 'This wallet is linked to another Shillex account. Sign in with it there and unlink it first.';
 

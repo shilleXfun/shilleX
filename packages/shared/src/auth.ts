@@ -1,4 +1,4 @@
-import type { Iso, MeView, SettingsView } from './types.ts';
+import type { Iso, MeView } from './types.ts';
 
 /** What a wallet signature is for. `login` and `reset` work signed out; `link` and `confirm` need a session. */
 export type WalletPurpose = 'login' | 'reset' | 'link' | 'confirm';
@@ -19,8 +19,12 @@ export interface WalletProof {
 }
 export type WalletVerifyResult =
   | { status: 'signedIn'; user: MeView }
-  | { status: 'new'; signupToken: string; address: string; walletName: string | null }
-  | { status: 'linked'; settings: SettingsView };
+  | { status: 'new'; signupToken: string; address: string; walletName: string | null };
+/**
+ * `POST /api/me/wallets`: link a wallet. `wallet` is the new wallet's `link` signature; `proof` shows the account holder is
+ * asking (the password, or a `confirm` signature by a wallet already on the account), so a session alone can't add one.
+ */
+export interface LinkWalletRequest { wallet: WalletProof; proof: AccountProof }
 
 /** A wallet on the owner's settings page. `verified` false: an address typed before wallet sign-in existed. */
 export interface WalletView {

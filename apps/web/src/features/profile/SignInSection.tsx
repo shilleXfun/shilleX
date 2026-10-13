@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { BadgeCheck, Trash2 } from 'lucide-react';
-import { abbreviateMint, AUTH_LIMITS, type AccountProof, type SettingsView, type SignInView, type WalletProof, type WalletVerifyResult, type WalletView } from '@shillex/shared';
-import { del, errorMessage, patch, post, put } from '../../lib/api';
+import { abbreviateMint, AUTH_LIMITS, type AccountProof, type LinkWalletRequest, type SettingsView, type SignInView, type WalletProof, type WalletView } from '@shillex/shared';
+import { ApiError, del, errorMessage, patch, post, put } from '../../lib/api';
 import { Button, IconButton } from '../../components/ui/Button';
 import { toast } from '../../components/ui/Toaster';
 import { WalletButton } from '../auth/WalletButton';
@@ -87,23 +87,50 @@ function EmailForm({ si, commit }: { si: SignInView; commit: Commit }) {
   );
 }
 
+/**
+ * Linking a wallet adds a way to sign in, so a session alone isn't enough: the current password, or (no password) a
+ * signature by a wallet already on the account goes with the new wallet's signature. The owner is notified either way.
+ */
 function Wallets({ si, commit }: { si: SignInView; commit: Commit }) {
-  const link = async (proof: WalletProof) => {
-    const r = await post<WalletVerifyResult>('/auth/wallet/verify', { ...proof, purpose: 'link' });
-    if (r.status === 'linked') commit(r.settings, 'Wallet linked');
+  const [password, setPassword] = useState('');
+  const [confirmed, setConfirmed] = useState<WalletProof | null>(null);
+  const proof: AccountProof | null = si.hasPassword ? (password ? { password } : null) : (confirmed ? { wallet: confirmed } : null);
+  const link = async (wallet: WalletProof) => {
+    if (!proof) return;
+    try {
+      const v = await post<SettingsView>('/me/wallets', { wallet, proof } satisfies LinkWalletRequest);
+      setPassword(''); setConfirmed(null);
+      commit(v, 'Wallet linked');
+    } catch (e) {
+      // A wallet confirmation is single-use: once the server has seen it, the next try needs a fresh one.
+      if (e instanceof ApiError) setConfirmed(null);
+      throw e;
+    }
   };
+  const room = si.wallets.length < AUTH_LIMITS.walletsPerAccount;
+  const unverified = si.wallets.some((w) => !w.verified);
   return (
     <div className={s.form}>
       <h3 className={s.subTitle}>Wallets</h3>
       {si.wallets.length === 0
         ? <p className={s.muted} style={{ margin: 0 }}>No wallets linked.</p>
-        : <ul className={s.walletList} aria-label="Linked wallets">{si.wallets.map((w) => <WalletRow key={w.address} w={w} si={si} commit={commit} onVerify={link} />)}</ul>}
-      {si.wallets.length < AUTH_LIMITS.walletsPerAccount && <div><WalletButton purpose="link" variant="secondary" label="Add a wallet" onProof={link} /></div>}
+        : <ul className={s.walletList} aria-label="Linked wallets">{si.wallets.map((w) => <WalletRow key={w.address} w={w} si={si} commit={commit} onVerify={link} canVerify={proof !== null} />)}</ul>}
+      {(room || unverified) && <>
+        <p className={s.muted} style={{ margin: 0 }}>
+          {si.hasPassword ? 'To add or verify a wallet, enter your password.' : 'To add or verify a wallet, first confirm with a wallet already on your account.'} You get a notification whenever a wallet is linked or removed.
+        </p>
+        {si.hasPassword
+          ? <label className={s.field}>Password (to add or verify a wallet)<input className={s.input} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          : confirmed
+            ? <p className={s.muted} style={{ margin: 0 }} role="status">Confirmed with {confirmed.walletName ?? 'your wallet'}. Now add or verify a wallet.</p>
+            : <div><WalletButton purpose="confirm" size="sm" variant="secondary" label="Confirm with a linked wallet" onProof={async (p) => setConfirmed(p)} /></div>}
+      </>}
+      {room && <div><WalletButton purpose="link" variant="secondary" label="Add a wallet" disabled={!proof} onProof={link} /></div>}
     </div>
   );
 }
 
-function WalletRow({ w, si, commit, onVerify }: { w: WalletView; si: SignInView; commit: Commit; onVerify: (p: WalletProof) => Promise<void> }) {
+function WalletRow({ w, si, commit, onVerify, canVerify }: { w: WalletView; si: SignInView; commit: Commit; onVerify: (p: WalletProof) => Promise<void>; canVerify: boolean }) {
   const short = abbreviateMint(w.address, 4, 4);
   const act = async (fn: () => Promise<SettingsView>, ok: string) => {
     try { commit(await fn(), ok); } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
@@ -115,7 +142,7 @@ function WalletRow({ w, si, commit, onVerify }: { w: WalletView; si: SignInView;
         <span className="mono">{short}</span>
         {w.verified
           ? <span className={s.walletVerified}><BadgeCheck size={14} aria-hidden="true" />Verified</span>
-          : <WalletButton purpose="link" size="sm" variant="ghost" label="Verify" onProof={onVerify} />}
+          : <WalletButton purpose="link" size="sm" variant="ghost" label="Verify" disabled={!canVerify} onProof={onVerify} />}
         <IconButton label={`Remove wallet ${short}`} onClick={() => void act(() => del<SettingsView>(`/me/wallets/${w.address}`), 'Wallet removed')}><Trash2 size={14} /></IconButton>
       </div>
       <label className={s.toggle}>
