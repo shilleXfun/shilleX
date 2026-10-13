@@ -14,6 +14,7 @@ import { EXTERNAL, HOUSE, WITHDRAWALS, currentSeason, lamportsOf, move, need } f
 import { books } from './books.ts';
 import { assertCanDeposit } from './consent.ts';
 import { ownerOf } from '../agents/raised/owner.ts';
+import { isExternalAgent } from '../agents/external/guard.ts';
 import { CustodyError, isUniqueViolation } from './errors.ts';
 import type { LedgerChain } from './ledger-chain.ts';
 import { assertCustodyNetwork, isAddress, type CustodyNetwork, type CustodyRpc, type Transfer } from './rpc.ts';
@@ -107,8 +108,14 @@ export class Custody {
     return { lamports: Math.max(0, lamports), why };
   }
 
+  /** Outside agents (open agents) play with practice SOL only: no real SOL ever goes in or comes out for one. */
+  private async assertNotOutsider(agentId: string) {
+    if (await isExternalAgent(this.d.db, agentId)) throw new CustodyError('OUTSIDE_AGENT', 'Outside agents play with practice SOL only');
+  }
+
   /** Custody moves an owner's SOL only for their own raised agent (spec §3: nobody funds or empties someone else's agent). */
   private async assertOwner(agentId: string, userId: string) {
+    await this.assertNotOutsider(agentId);
     if ((await ownerOf(this.d.db, agentId)) !== userId) throw new CustodyError('NOT_YOUR_AGENT', 'You fund and withdraw only your own raised agent');
   }
 
@@ -320,6 +327,7 @@ export class Custody {
     const { db, now } = this.d;
     if (!isAddress(i.to)) throw new CustodyError('BAD_ADDRESS', 'That is not a Solana address');
     if (i.agentId === null && i.to !== this.d.cold) throw new CustodyError('COLD_ONLY', 'The house’s SOL leaves only for the cold address');
+    if (i.agentId) await this.assertNotOutsider(i.agentId);
     const from = i.agentId ? (await walletOf(db, i.agentId))!.publicKey : HOUSE;
     const id = newId(), at = now();
     const row = await db.transaction(async (x) => {

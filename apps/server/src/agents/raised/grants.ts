@@ -9,6 +9,7 @@ import { TREASURY, signerFor, walletOf } from '../../world/wallets.ts';
 import type { EngineDeps } from '../engine.ts';
 import { HOUSE, PRACTICE_SEASONS, currentSeason, lamportsOf as lamportsOnBooks } from '../../ledger/accounts.ts';
 import { LedgerChain } from '../../ledger/ledger-chain.ts';
+import { isExternalAgent } from '../external/guard.ts';
 
 /** Spec §6. A raised agent starts with what a wild agent started with. */
 export const START_GRANT = START_LAMPORTS;
@@ -58,6 +59,8 @@ async function treasuryLamports(d: GrantDeps, cached: boolean): Promise<number |
 
 /** Why a grant can't go out now, or null. The treasury check reads the chain (`cached`: a read up to 30 s old will do). */
 async function refusal(d: GrantDeps, agentId: string, kind: 'start' | 'top_up', cached = false): Promise<GrantRefused | null> {
+  // Raised agents only: an outside agent's one start grant is claim.ts's, and the house funds it with nothing else.
+  if (agentId && await isExternalAgent(d.db, agentId)) return new GrantRefused('GRANTS_OFF', 'Outside agents get no grants here.');
   const src = await sourceOf(d);
   if (src.kind === 'house' && src.real) return kind === 'start' ? null : new GrantRefused('GRANTS_OFF', 'On real SOL you fund your agent with a deposit.');
   const lamports = lamportsOf(kind), today = dayStart(d.now());

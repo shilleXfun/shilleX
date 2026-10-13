@@ -12,6 +12,8 @@ import type { Chain } from '../../world/chain.ts';
 import { recordTx } from '../../world/ledger.ts';
 import { TREASURY, createWallet, signerFor, walletOf } from '../../world/wallets.ts';
 import { TREASURY_FLOOR } from '../raised/grants.ts';
+import { HOUSE, PRACTICE_SEASONS, currentSeason, lamportsOf as lamportsOnBooks } from '../../ledger/accounts.ts';
+import { LedgerChain } from '../../ledger/ledger-chain.ts';
 import { loadState } from '../state.ts';
 import { CLAIM_TOKEN, hashClaimToken, liveOutsiders } from './register.ts';
 
@@ -175,6 +177,7 @@ export async function sendStartGrant(d: ClaimDeps, agentId: string): Promise<boo
   if (inFlight.has(agentId)) return false;
   inFlight.add(agentId);
   try {
+    if (d.chain instanceof LedgerChain) return await ledgerStartGrant(d, d.chain, agentId, lamports);
     const to = await walletOf(d.db, agentId), t = await walletOf(d.db, TREASURY);
     if (!to || !t) return false;
     const have = (await d.chain.balances(t.publicKey)).lamports;
@@ -190,6 +193,27 @@ export async function sendStartGrant(d: ClaimDeps, agentId: string): Promise<boo
     console.error('[agents-api] start grant failed; the sweep retries it', agentId, e);
     return false;
   } finally { inFlight.delete(agentId); }
+}
+
+/**
+ * The start grant in a ledger world, where there is no treasury wallet (mainnet spec). Outside agents play with practice SOL
+ * only: in a practice season (dev, rehearsal) the grant is a move from the house's practice books; in a real-SOL season the
+ * house gives an outside agent nothing, so the grant is recorded as zero and the sweep stops asking.
+ */
+async function ledgerStartGrant(d: ClaimDeps, chain: LedgerChain, agentId: string, lamports: number): Promise<boolean> {
+  const to = await walletOf(d.db, agentId);
+  if (!to) return false;
+  const real = !PRACTICE_SEASONS.has(await currentSeason(d.db));
+  const amount = real ? 0 : lamports, signature = `ldg_grant_${newId()}`, now = d.now();
+  if (amount > 0) {
+    if ((await lamportsOnBooks(d.db, HOUSE)) < amount) return false;
+    await chain.transfer(HOUSE, to.publicKey, amount, 'grant', signature);
+    await recordTx(d.db, { signature, agentId, turnId: null, kind: 'fund', counterparty: HOUSE, lamportsDelta: amount, createdAt: now });
+  }
+  await d.db.insert(agentGrants).values({ id: newId(), agentId, lamports: amount, kind: 'start', signature, createdAt: now });
+  // A real-season outside agent holds nothing on the books: no funded wallet, so no START-based P&L basis either.
+  if (amount > 0) await d.db.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, agentId));
+  return true;
 }
 
 /** Claimed, active outside agents still owed their start grant (the treasury was short): the 10-minute sweep sends them. */
