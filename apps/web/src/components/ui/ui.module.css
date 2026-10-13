@@ -125,3 +125,14 @@
 
 /* Slide/none arrivals never collapse, so they don't clip (hover toolbars can overhang). */
 .arrivalOpen { overflow: visible; }
+/* Tick (Tick.tsx): the cell washes green or red for 600 ms when its number changes, then fades back. */
+.tick { display: inline-flex; margin: 0 -3px; padding: 0 3px; border-radius: 4px; transition: background-color .6s ease-out, color .6s ease-out; }
+.tick_up { background-color: var(--up-soft); color: var(--up); transition: none; }
+.tick_down { background-color: var(--down-soft); color: var(--down); transition: none; }
+/* Sparkline (Sparkline.tsx): a small price line; an empty dashed box of the same size before there are two points. */
+.spark { display: block; flex: none; overflow: visible; }
+.sparkEmpty { display: inline-block; flex: none; border-bottom: 1px dashed var(--line-strong); }
+/* A row's rank change, shown for 3 s after it moved (FlipList.tsx). */
+.rank { display: inline-grid; place-items: center; min-width: 14px; margin-right: 4px; font: 600 9px/1 var(--font-mono); }
+.rank[data-dir='up'] { color: var(--up); }
+.rank[data-dir='down'] { color: var(--down); }
