@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { loadConfig } from '../config.ts';
 import { createDb } from '../db/client.ts';
 import { agents } from '../db/schema.ts';
@@ -13,8 +14,8 @@ try {
   if (cmd === 'start' && name === 'rehearsal') console.log(await startSeason(h.db, 'rehearsal', await devnetNetWorth(h.db), new Date()));
   else if (cmd === 'start' && name === 'season1') {
     const per = Math.round(Number(flag('--per-agent') ?? '0.05') * 1e9);
-    // Task 17 narrows this to the original (wild) agents once RAISE's agents.origin exists; raised agents start at 0.
-    const all = await h.db.select({ id: agents.userId }).from(agents);
+    // Every house (wild) agent gets the opening, whatever their number; raised agents start at 0: their owners deposit.
+    const all = await h.db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'));
     console.log(await startSeason(h.db, 'season1', new Map(all.map((a) => [a.id, per])), new Date()));
   } else if (cmd === 'open') console.log(await fundOpening(h.db, new Date()));
   else throw new Error('Usage: npm run mainnet:season -- start rehearsal | start season1 [--per-agent 0.05] | open');

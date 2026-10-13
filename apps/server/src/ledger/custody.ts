@@ -13,6 +13,7 @@ import { signerFor, walletOf } from '../world/wallets.ts';
 import { EXTERNAL, HOUSE, WITHDRAWALS, currentSeason, lamportsOf, move, need } from './accounts.ts';
 import { books } from './books.ts';
 import { assertCanDeposit } from './consent.ts';
+import { ownerOf } from '../agents/raised/owner.ts';
 import { CustodyError, isUniqueViolation } from './errors.ts';
 import type { LedgerChain } from './ledger-chain.ts';
 import { assertCustodyNetwork, isAddress, type CustodyNetwork, type CustodyRpc, type Transfer } from './rpc.ts';
@@ -106,11 +107,17 @@ export class Custody {
     return { lamports: Math.max(0, lamports), why };
   }
 
+  /** Custody moves an owner's SOL only for their own raised agent (spec §3: nobody funds or empties someone else's agent). */
+  private async assertOwner(agentId: string, userId: string) {
+    if ((await ownerOf(this.d.db, agentId)) !== userId) throw new CustodyError('NOT_YOUR_AGENT', 'You fund and withdraw only your own raised agent');
+  }
+
   /** A Solana Pay request to the hot vault with a fresh reference, valid for 30 minutes (spec §4). */
   async createDeposit(i: { agentId: string; userId: string; lamports: number }): Promise<DepositView> {
     const { db, now } = this.d;
     if (this.d.chain.frozen) throw new CustodyError('FROZEN', 'Deposits are paused while the books are checked');
     if (!Number.isSafeInteger(i.lamports) || i.lamports < MIN_DEPOSIT) throw new CustodyError('BAD_AMOUNT', 'Deposits are at least 0.01 SOL');
+    await this.assertOwner(i.agentId, i.userId);
     await assertCanDeposit(db, i.userId, now());
     const sender = await this.d.payoutOf(i.userId);
     if (!sender) throw new CustodyError('NO_PAYOUT_WALLET', 'Choose a payout wallet first: deposits come from it and withdrawals go back to it');
@@ -299,6 +306,7 @@ export class Custody {
 
   /** An owner's withdrawal: always to the payout wallet in force at request time (spec §4, §7). */
   async requestWithdrawal(i: { agentId: string; userId: string; lamports: number | 'all' }): Promise<WithdrawalView> {
+    await this.assertOwner(i.agentId, i.userId);
     const to = await this.d.payoutOf(i.userId);
     if (!to) throw new CustodyError('NO_PAYOUT_WALLET', 'Choose a payout wallet first');
     return this.enqueue({ agentId: i.agentId, userId: i.userId, to, lamports: i.lamports, approvedBy: null });
@@ -437,6 +445,7 @@ export class Custody {
   /** Sells what the rules allow (vesting, the 30% creator cap; paused or graduated coins stay held), then withdraws all free SOL. */
   async cashOut(i: { agentId: string; userId: string }): Promise<{ sold: string[]; withdrawal: WithdrawalView | null }> {
     const { db, chain, now } = this.d;
+    await this.assertOwner(i.agentId, i.userId);
     const signer = await signerFor(db, i.agentId, this.d.worldKey), pk = signer.publicKey.toBase58();
     const sold: string[] = [];
     for (const t of (await chain.balances(pk)).tokens) {
