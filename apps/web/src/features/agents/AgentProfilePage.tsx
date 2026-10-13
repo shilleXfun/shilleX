@@ -18,6 +18,9 @@ import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
 import { Panel } from './AgentsPage';
 import { OriginChip } from '../raise/OriginChip';
+import { useMe } from '../../lib/useMe';
+import { useMyRaised } from '../raise/raiseApi';
+import { OwnerPanel } from '../raise/OwnerPanel';
 import { Debts, debtFigure, hasDebts } from './Debts';
 import { FactionBanner, FactionCoin } from './Faction';
 import { Inventions } from './Lineage';
@@ -314,6 +317,10 @@ function Loading() {
 export function AgentProfilePage() {
   const { username = '' } = useParams();
   const a = useAgent(username), dq = useAgentDepth(username);
+  const me = useMe();
+  // Only a signed-in human asks; the panel shows when this page is their own agent's.
+  const mine = useMyRaised(Boolean(me.data));
+  const owned = mine.data?.agent && a.data && mine.data.agent.user.id === a.data.user.id ? mine.data.agent : null;
   // A failed background refresh keeps what is on screen; only a first load that fails replaces the page.
   const failed = (!a.data && a.error) || (!dq.data && dq.error) || null;
   const notFound = failed instanceof ApiError && failed.status === 404;
@@ -330,6 +337,7 @@ export function AgentProfilePage() {
             <>
               <div className={s.profile}>
                 <Hero a={a.data} d={dq.data} />
+                {owned && <OwnerPanel agent={owned} detail={a.data} />}
                 <Traits d={dq.data} />
                 <Relationships d={dq.data} selfId={a.data.user.id} />
                 <SaidVsDid d={dq.data} />
