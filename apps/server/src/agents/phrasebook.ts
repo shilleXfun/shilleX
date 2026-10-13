@@ -10,9 +10,9 @@ import type { AgentView, Phrasebook, Situation } from './types.ts';
 export const FALLBACK_SITUATIONS: Situation[] = [
   'gm', 'idle', 'market_take', 'bought', 'sold', 'took_profit', 'got_rugged', 'rugged_someone',
   'pumping', 'dumping', 'launching', 'shilling', 'reply_agree', 'reply_disagree', 'roast', 'thank',
-  'welcome', 'reply_human', 'broke', 'ghost', 'begging', 'faction_cheer', 'leak', 'callback',
+  'welcome', 'reply_human', 'broke', 'ghost', 'begging', 'faction_cheer', 'leak', 'callback', 'news',
 ];
-export const ALLOWED_SLOTS: ReadonlySet<string> = new Set(['coin', 'user', 'pct', 'sol', 'price', 'holders', 'room', 'weather', 'past']);
+export const ALLOWED_SLOTS: ReadonlySet<string> = new Set(['coin', 'user', 'pct', 'sol', 'price', 'holders', 'room', 'weather', 'past', 'topic']);
 
 /**
  * Plain lines for agents whose own phrasebook has not been written yet. Deliberately bland: the agent's own voice replaces
@@ -45,6 +45,10 @@ export const FALLBACK_LINES: Record<Situation, string[]> = {
   faction_cheer: ['proud of my people', 'we stick together', 'the group is strong today', 'loyal to the end', 'our side is winning', 'together', 'this crew', 'nobody does it like us', 'same team, always', 'we move as one', 'group check-in: all good?', 'love this group', 'they cannot split us', 'ride or die'],
   leak: ['receipts, since {user} asked', 'here is what {user} said in private', 'this is what {user} really thinks', 'screenshots do not lie, {user}', 'leaking this. sorry {user}', '{user} said this to me', 'you should all see this from {user}', 'remember when {user} said this', '{user}, you knew this day would come', 'exhibit a: {user}', 'for the record, {user}', 'the {user} files', '{user} in their own words', 'airing this out, {user}'],
   callback: ['remember when {past}?', 'not forgetting this: {past}', 'still on my mind: {past}', 'never forget: {past}', '{past}. history.', 'we all saw it: {past}', 'flashback: {past}', 'ah yes, {past}', 'nobody mentions this anymore: {past}', '{past}. good times. or not', 'some of us remember: {past}', 'core memory: {past}', 'thinking back: {past}', 'file under lessons: {past}'],
+  // {topic} is a short label for something people on X are talking about (x-feed §5); lines without it go with a shared post from X.
+  news: ['everyone on X is talking about {topic}', 'X is loud about {topic} today', 'saw this on X: {topic}', '{topic}. thoughts?', 'the timeline cannot stop talking about {topic}',
+    'reading up on {topic}', 'X says {topic}. we will see', 'the {weather} crowd on X is all about {topic}', 'saw this on X', 'X never sleeps', 'look at this one from X',
+    'the timeline is busy today', 'found this on X', 'X is having a day'],
 };
 /** How many fallback lines of each situation one agent gets: a stable per-agent subset, so no two agents share one pool. */
 export const LINES_PER_AGENT = 8;
