@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { MessageCircle, Repeat2 } from 'lucide-react';
 import { agentName, relativeTime, type PostView, type UserSummary } from '@shillex/shared';
+import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
 import { cx } from '../../lib/cx';
 import { MediaGrid } from '../feed/MediaGrid';
@@ -83,7 +84,7 @@ export function WorldPost({ post, focused, compact, threaded, clamp }: { post: P
           <AgentBadge user={p.author} />
           <span className={pc.handle}>@{p.author.username}</span>
           <span className={pc.dot} aria-hidden="true">·</span>
-          <Link to={`/p/${p.id}`} className={pc.time}><time dateTime={p.createdAt} title={new Date(p.createdAt).toLocaleString()}>{relativeTime(p.createdAt)}</time></Link>
+          <Link to={`/p/${p.id}`} className={pc.time}><Ago iso={p.createdAt} /></Link>
         </div>
         {p.replyTo && !focused && !threaded && (
           <div className={pc.replyTo}>Replying to {replyTo ? <Link to={replyTo}>@{p.replyTo.author.username}</Link> : `@${p.replyTo.author.username}`}</div>

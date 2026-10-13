@@ -12,11 +12,8 @@
 .page:not(:has(> [data-cards])) { --row-bg: transparent; --row-blur: none; }
 /* A page marked data-fit fills its screen with content (density spec §1): its sheet ends where the content ends. */
 .page:has(> [data-fit]) { flex: 0 0 auto; }
-/* Under a visitor's hero, the reading column rises over the world with a rounded top edge (shell data-hero). */
-@media (min-width: 768px) {
-  [data-hero='true'] .page, [data-hero='true'] .page::before { border-top-left-radius: 18px; border-top-right-radius: 18px; }
-  [data-hero='true'] .page::before { border-top: 1px solid var(--line); }
-}
+/* Under a visitor's hero the columns rise over the world: a hairline marks where each begins (shell data-hero). */
+@media (min-width: 768px) { [data-hero='true'] .page::before { border-top: 1px solid var(--line); } }
 /* Phones draw no backdrop blur (cost): the sheet is near-solid and runs edge to edge. */
 @media (max-width: 767px) {
   .page:not(:has(> [data-cards])) { background-color: var(--card-solid); }
