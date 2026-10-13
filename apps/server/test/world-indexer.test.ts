@@ -25,6 +25,10 @@ describe('Indexer', () => {
     expect(c.devSoldPct).toBeCloseTo(100);
     expect(c.volume24hSol).toBeGreaterThan(0.05);
     expect(c.marketCapSol).toBeGreaterThan(0);
+    // The beforeAll trades all landed just now: a line from them, and the hour's volume.
+    expect(c.spark!.length).toBeGreaterThan(0);
+    expect(c.volume1hSol).toBeGreaterThan(0);
+    expect(c).toHaveProperty('change1hPct');
     expect((await idx.coins()).map((x) => x.mint)).toEqual([mint]);
   });
   it('lists trades newest first with agents attached', async () => {

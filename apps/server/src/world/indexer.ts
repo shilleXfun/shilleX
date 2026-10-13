@@ -10,6 +10,31 @@ import { chainHead } from './provenance.ts';
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
 const sol = (l: number) => l / LAMPORTS_PER_SOL;
 const tok = (raw: number) => raw / 10 ** COIN_DECIMALS;
+const HOUR = 3_600_000;
+/** Price per token (SOL) of a buy or sell, as the web chart reads it (|SOL| ÷ |tokens|); null for anything else. */
+const tradePrice = (t: ChainTxRow) =>
+  ((t.kind === 'buy' || t.kind === 'sell') && t.tokenDelta !== 0 && t.lamportsDelta !== 0 ? Math.abs(sol(t.lamportsDelta)) / Math.abs(tok(t.tokenDelta)) : null);
+
+/**
+ * A coin's last day as 24 hourly closes, oldest first (hours before its first buy or sell are left out; a quiet hour
+ * repeats the last close), and its change over the last hour: the latest trade price against the last one at least an
+ * hour old, or the first trade for a coin younger than that. No change with fewer than two trades.
+ */
+export function sparkOf(mine: ChainTxRow[], now: number): { spark: number[]; change1hPct: number | null } {
+  const pts = mine.flatMap((t) => { const p = tradePrice(t); return p === null ? [] : [{ at: t.createdAt.getTime(), p }]; }).sort((a, b) => a.at - b.at);
+  if (!pts.length) return { spark: [], change1hPct: null };
+  const spark: number[] = [];
+  let i = 0, last: number | null = null;
+  for (let h = 23; h >= 0; h--) {
+    const end = now - h * HOUR;
+    while (i < pts.length && pts[i]!.at <= end) last = pts[i++]!.p;
+    if (last !== null) spark.push(Number(last.toPrecision(6)));
+  }
+  if (pts.length < 2) return { spark, change1hPct: null };
+  const latest = pts.at(-1)!.p;
+  const base = pts.filter((x) => x.at <= now - HOUR).at(-1)?.p ?? pts[0]!.p;
+  return { spark, change1hPct: Number((((latest - base) / base) * 100).toFixed(2)) };
+}
 
 /** Read models for the viewer: coin stats (dev-sold, rugs, volume), positions, P&L and the leaderboard. */
 export class Indexer {
@@ -59,6 +84,7 @@ export class Indexer {
       devSoldPct: acquired > 0 ? (sold / acquired) * 100 : 0,
       rug: acquired > 0 && soldEarly / acquired >= 0.9,
       volume24hSol: mine.filter((t) => (t.kind === 'buy' || t.kind === 'sell') && t.createdAt.getTime() >= dayAgo).reduce((n, t) => n + Math.abs(sol(t.lamportsDelta)), 0),
+      volume1hSol: mine.filter((t) => (t.kind === 'buy' || t.kind === 'sell') && t.createdAt.getTime() >= this.now().getTime() - HOUR).reduce((n, t) => n + Math.abs(sol(t.lamportsDelta)), 0),
     };
   }
 
@@ -70,10 +96,12 @@ export class Indexer {
     return rows.map((c) => {
       const s = this.coinStats(c, txs.get(c.mint) ?? []);
       const priceSol = c.priceLamports === null ? null : sol(c.priceLamports);
+      const { spark, change1hPct } = sparkOf(txs.get(c.mint) ?? [], this.now().getTime());
       return {
         mint: c.mint, pool: c.pool, name: c.name, symbol: c.symbol, description: c.description, emoji: c.emoji, creator: people.get(c.creatorId)!,
         launchedAt: c.launchedAt.toISOString(), launchSignature: c.launchSignature, priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY,
         curveProgress: c.curveProgress, holders: holders.get(c.mint) ?? 0, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
+        spark, change1hPct, volume1hSol: s.volume1hSol,
       };
     });
   }
