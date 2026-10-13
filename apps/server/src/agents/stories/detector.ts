@@ -13,6 +13,8 @@ const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
 export const HEAT_TAU_MS = 4 * HOUR;
 /** Stories untouched this long cool to zero and drop off the home page. */
 export const COLD_AFTER_MS = 72 * HOUR;
+/** A buy this big (a quarter of a house agent's starting wallet) is a beat on its coin's story. */
+export const WHALE_LAMPORTS = 25_000_000;
 const sol = (l: number) => `${Number((Math.abs(l) / LAMPORTS_PER_SOL).toFixed(3))} SOL`;
 const pct = (x: number) => `${Math.abs(Math.round(x * 100))}%`;
 
@@ -157,7 +159,7 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
   const coinRows = await db.select().from(worldCoins).where(and(isNull(worldCoins.archivedAt), or(gte(worldCoins.launchedAt, new Date(nowMs - 2 * DAY)), gte(worldCoins.graduatedAt, since))));
   const live = new Map((await coinsNow(db, now)).map((c) => [c.mint, c]));
   const rugs = await rugSales(db, since);
-  const bigBuys = await db.select().from(chainTxs).where(and(eq(chainTxs.kind, 'buy'), gte(chainTxs.createdAt, since), lt(chainTxs.lamportsDelta, -15_000_000))).orderBy(desc(chainTxs.id)).limit(40);
+  const bigBuys = await db.select().from(chainTxs).where(and(eq(chainTxs.kind, 'buy'), gte(chainTxs.createdAt, since), lt(chainTxs.lamportsDelta, -WHALE_LAMPORTS))).orderBy(desc(chainTxs.id)).limit(40);
   const holderRows = coinRows.length ? await db.select({ mint: chainTxs.mint, agentId: chainTxs.agentId, raw: sql<number>`sum(${chainTxs.tokenDelta})::float8` }).from(chainTxs)
     .where(and(inArray(chainTxs.mint, coinRows.map((c) => c.mint)), isNotNull(chainTxs.agentId))).groupBy(chainTxs.mint, chainTxs.agentId).having(sql`sum(${chainTxs.tokenDelta}) > 0`) : [];
   for (const c of coinRows) {
@@ -178,7 +180,7 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
       beats.push({ ref: 'graduated', at: c.graduatedAt, kind: 'graduation', text: `${s0} graduated: its bonding curve filled up`, weight: 3, coinMint: c.mint });
     }
     for (const s of sc.filter((x) => x.coinMint === c.mint)) { big = true; beats.push(sceneBeat(s, 1.2)); }
-    for (const t of bigBuys.filter((x) => x.mint === c.mint && x.agentId).slice(0, 4)) beats.push({ ref: `tx:${t.id}`, at: t.createdAt, kind: 'buy', text: `${at(t.agentId)} bought ${sol(t.lamportsDelta)} of ${s0}`, weight: 0.6, coinMint: c.mint });
+    for (const t of bigBuys.filter((x) => x.mint === c.mint && x.agentId).slice(0, 2)) beats.push({ ref: `tx:${t.id}`, at: t.createdAt, kind: 'buy', text: `${at(t.agentId)} bought ${sol(t.lamportsDelta)} of ${s0}`, weight: 0.6, coinMint: c.mint });
     const key = `coin:${c.mint}`;
     if (!big && !(await book.find(key))) continue;
     if (!beats.length) continue;

@@ -66,9 +66,19 @@ async function characters(db: Db, indexer: Indexer, now: Date, hot: Awaited<Retu
 /** GET /api/world/home: stats, the six hottest stories, four scenes (running first) and eight characters. */
 export async function buildHome(d: { db: Db; indexer: Indexer; now: () => Date }): Promise<HomeView> {
   const now = d.now();
-  const hot = await hotStories(d.db, now, 20);
+  const hot = await hotStories(d.db, now, 30);
+  // Hottest first, but at most three of one kind, so a wave of rugs does not hide the feuds and factions.
+  const lead: typeof hot = [];
+  const perKind = new Map<string, number>();
+  for (const s of hot) {
+    if (lead.length >= 6) break;
+    if ((perKind.get(s.kind) ?? 0) >= 3) continue;
+    perKind.set(s.kind, (perKind.get(s.kind) ?? 0) + 1);
+    lead.push(s);
+  }
+  for (const s of hot) if (lead.length < 6 && !lead.includes(s)) lead.push(s);
   const [s, storyList, sceneList, chars] = await Promise.all([
-    stats(d.db, now), storyViews(d.db, d.indexer, hot.slice(0, 6)), homeScenes(d.db, 4), characters(d.db, d.indexer, now, hot),
+    stats(d.db, now), storyViews(d.db, d.indexer, lead), homeScenes(d.db, 4), characters(d.db, d.indexer, now, hot.slice(0, 20)),
   ]);
   return { stats: s, stories: storyList, scenes: sceneList, characters: chars };
 }
