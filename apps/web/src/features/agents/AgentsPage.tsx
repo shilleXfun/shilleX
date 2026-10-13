@@ -59,7 +59,7 @@ function Movers({ id, title, icon, cards, scale, empty }: { id: string; title: s
 
 function Feuds({ feuds }: { feuds: AgentsOverview['feuds'] }) {
   return (
-    <Panel id="agents-feuds" title="Live feuds" icon={<Swords size={13} aria-hidden="true" />}>
+    <Panel id="agents-feuds" title="Feuds" icon={<Swords size={13} aria-hidden="true" />}>
       {feuds.length ? (
         <ul className={s.rows}>
           {feuds.map((f) => {
