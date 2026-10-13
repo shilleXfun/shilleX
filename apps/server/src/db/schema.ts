@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
+import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
+import type { SceneKind, StoryKind } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -781,6 +783,85 @@ export const worldModelCalls = pgTable('world_model_calls', {
   startedAt: ts('started_at').notNull(),
   finishedAt: ts('finished_at'),
 }, (t) => [index('world_model_calls_started_idx').on(t.startedAt)]);
+
+// ── SCENES ── (agents talking to each other in public threads, and the storylines the world lives through)
+/** A conversation between 2–4 agents, written in one go (by Haiku, or from the cast's phrasebooks) and posted as a public thread over a few minutes. */
+export const scenes = pgTable('scenes', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<SceneKind>().notNull(),
+  premise: jsonb('premise').$type<ScenePremise>().notNull(),
+  title: text('title').notNull(),
+  /** Agent user ids, speakers first. */
+  cast: jsonb('cast').$type<string[]>().notNull(),
+  coinMint: text('coin_mint'),
+  /** Every line, written before the first one posts. */
+  planned: jsonb('planned').$type<PlannedMessage[]>().notNull().default([]),
+  /** Feelings to apply when the scene ends. */
+  affinity: jsonb('affinity').$type<PlannedAffinity[]>().notNull().default([]),
+  /** How many planned lines were handled (posted or skipped); the player resumes from here after a restart. */
+  posted: integer('posted').notNull().default(0),
+  rootPostId: text('root_post_id'),
+  /** When the next line is due. */
+  nextAt: ts('next_at'),
+  startedAt: ts('started_at').notNull(),
+  endedAt: ts('ended_at'),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  /** claude-haiku-5-5, or 'phrasebook' for a scene composed without the model. */
+  model: text('model').notNull(),
+}, (t) => [index('scenes_started_idx').on(t.startedAt), index('scenes_running_idx').on(t.startedAt).where(sql`${t.endedAt} is null`)]);
+
+/** The posts a scene made, in order. A skipped line has no row. */
+export const sceneMessages = pgTable('scene_messages', {
+  sceneId: text('scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
+  idx: integer('idx').notNull(),
+  postId: text('post_id').notNull(),
+  authorId: text('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull(),
+}, (t) => [primaryKey({ columns: [t.sceneId, t.idx] }), index('scene_messages_post_idx').on(t.postId)]);
+
+/** A storyline: a feud, a coin's life, a faction, an agent's rise or fall, an alliance. `key` names it (feud:<a>|<b>, coin:<mint>…). */
+export const stories = pgTable('stories', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<StoryKind>().notNull(),
+  key: text('key').notNull(),
+  headline: text('headline').notNull(),
+  summary: text('summary').notNull(),
+  cast: jsonb('cast').$type<string[]>().notNull().default([]),
+  coinMint: text('coin_mint'),
+  /** 0–1, recency × size; recomputed by every detector run. */
+  heat: doublePrecision('heat').notNull().default(0),
+  beats: integer('beats').notNull().default(0),
+  /** How many beats the story had when its headline and summary were last written by the model. */
+  narratedBeats: integer('narrated_beats').notNull().default(0),
+  startedAt: ts('started_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+  narratedAt: ts('narrated_at'),
+}, (t) => [uniqueIndex('stories_key_idx').on(t.key), index('stories_heat_idx').on(t.heat), index('stories_updated_idx').on(t.updatedAt)]);
+
+/** One thing that happened in a story. `ref` names its source (an event, a trade, a scene) so a beat is never added twice. */
+export const storyBeats = pgTable('story_beats', {
+  id: text('id').primaryKey(),
+  storyId: text('story_id').notNull().references(() => stories.id, { onDelete: 'cascade' }),
+  ref: text('ref').notNull(),
+  at: ts('at').notNull(),
+  kind: text('kind').notNull(),
+  text: text('text').notNull(),
+  /** How big a beat it is (a rug 3, a scene 1.5, a transfer 0.5…): heat sums it with recency. */
+  weight: doublePrecision('weight').notNull().default(1),
+  postId: text('post_id'),
+  sceneId: text('scene_id'),
+  coinMint: text('coin_mint'),
+}, (t) => [uniqueIndex('story_beats_ref_idx').on(t.storyId, t.ref), index('story_beats_story_idx').on(t.storyId, t.at)]);
+
+/** Hourly snapshots of every agent's net worth (SOL plus coins at market), kept 48 hours: rise and fall stories read the swing. */
+export const agentWorth = pgTable('agent_worth', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull(),
+  totalSol: doublePrecision('total_sol').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.at] }), index('agent_worth_at_idx').on(t.at)]);
+export type SceneRow = typeof scenes.$inferSelect;
+export type StoryRow = typeof stories.$inferSelect;
+export type StoryBeatRow = typeof storyBeats.$inferSelect;
 
 // ── MAINNET ── (docs/superpowers/specs/2026-10-13-mainnet-design.md; off until the launch gate opens)
 export type JournalKind = 'launch_fee' | 'buy' | 'sell' | 'trade_fee' | 'send' | 'deposit' | 'opening' | 'house_stake' | 'withdraw' | 'withdraw_sent' | 'withdraw_return' | 'network_fee' | 'grant' | 'retire';
