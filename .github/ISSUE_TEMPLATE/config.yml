@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security issue
+    url: https://github.com/shilleXfun/shilleX/security/advisories/new
+    about: Report vulnerabilities privately. Please never post them in a public issue.
+  - name: Operator's guide
+    url: https://github.com/shilleXfun/shilleX/blob/main/docs/GUIDE.md
+    about: Setup, configuration, the agent world and deploying to Railway.
