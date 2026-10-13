@@ -8,7 +8,9 @@ import { ChainError, RAW_PER_TOKEN, type Chain } from './chain.ts';
 import type { AgentActor } from './actor.ts';
 import type { WorldEvents } from './events.ts';
 import { isReservedUsername } from '../lib/reserved.ts';
+import { findUserByHandle, handleUnavailable, recordRename } from '../services/handles.ts';
 import { recordTx } from './ledger.ts';
+import { bioProblem, nameContext, nameProblem } from '../agents/cast/index.ts';
 import { addNote, rewriteNotes } from './memory.ts';
 import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
 import { signerFor, walletOf } from './wallets.ts';
@@ -86,10 +88,8 @@ async function api(ctx: ToolContext, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 
   if (r.status >= 400) fail(r.body?.code ?? `HTTP_${r.status}`, r.body?.message ?? `Request failed (${r.status})`);
   return r.body;
 }
-const userByName = async (ctx: ToolContext, name: string) => {
-  const [u] = await ctx.db.select().from(users).where(sql`lower(${users.username}) = ${bare(name).toLowerCase()}`);
-  return u ?? fail('UNKNOWN_USER', `No agent named ${name}`);
-};
+/** By username, or by one it used before a rename (CAST): an agent remembering an old handle still finds the right one. */
+const userByName = async (ctx: ToolContext, name: string) => (await findUserByHandle(ctx.db, bare(name))) ?? fail('UNKNOWN_USER', `No agent named ${name}`);
 const compactMessage = (m: any) => ({ id: m.id, author: m.author.username, body: m.body, reply_to: m.replyTo?.id ?? null, at: m.createdAt });
 const compactPost = (p: any) => ({ id: p.id, author: p.author.username, kind: p.kind, body: p.body, at: p.createdAt, replies: p.counts?.replies ?? 0,
   reactions: (p.reactions ?? []).map((r: any) => `${r.emoji}${r.count}`).join(' '), quoted: p.quoted ? { id: p.quoted.id, author: p.quoted.author.username, body: p.quoted.body } : null });
@@ -123,22 +123,46 @@ type Handler = (ctx: ToolContext, i: In) => Promise<{ result: unknown; signature
 const HANDLERS: Record<string, Handler> = {
   async set_profile(ctx, i) {
     const patch: Partial<UserRow> = {};
-    if (i.display_name !== null) patch.displayName = String(i.display_name).trim().slice(0, 40);
-    if (i.bio !== null) patch.bio = String(i.bio).trim().slice(0, 280);
+    const refused: string[] = [];
+    // CAST: the world's own agents keep real character names and one-line bios. A name that is junk (digits, a ticker, a
+    // generic word, a real person or brand) or that someone else shows or had, and a bio that is a ledger line or meta talk,
+    // are left out and the rest applied. Outside agents are named by their operators.
+    const [who] = await ctx.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, ctx.agent.id));
+    const cast = who?.origin !== 'external';
+    const names = cast && (i.display_name !== null || i.username !== null) ? await nameContext(ctx.db, ctx.app.deps.config) : null;
+    const otherHas = (n: string) => { const h = names?.holders.get(n.trim().toLowerCase()); return h !== undefined && h !== ctx.agent.id; };
+    if (i.display_name !== null) {
+      const d = String(i.display_name).trim().slice(0, 40);
+      if (names && (nameProblem(d, names) || otherHas(d))) refused.push('display_name');
+      else patch.displayName = d;
+    }
+    if (i.bio !== null) {
+      const b = String(i.bio).trim().slice(0, 280);
+      if (cast && bioProblem(b)) refused.push('bio');
+      else patch.bio = b;
+    }
     if (i.username !== null) {
       if (!/^[A-Za-z0-9_]{3,20}$/.test(i.username)) fail('BAD_USERNAME', 'Usernames are 3–20 letters, numbers or underscores');
       if (isReservedUsername(ctx.app.deps.config, String(i.username))) fail('USERNAME_RESERVED', 'That username is reserved');
-      const [taken] = await ctx.db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${String(i.username).toLowerCase()}`);
-      if (taken && taken.id !== ctx.agent.id) fail('USERNAME_TAKEN', 'That username is taken');
+      // In use, or someone's old username: an old handle stays with whoever had it (the agent may take its own back).
+      if (await handleUnavailable(ctx.db, String(i.username), ctx.agent.id)) fail('USERNAME_TAKEN', 'That username is taken');
+      if (names && nameProblem(String(i.username).replace(/_/g, ' '), names, 'handle')) fail('USERNAME_REFUSED', 'Pick a name, not a number, a ticker or a role');
       patch.username = i.username;
     }
     if (i.avatar_color !== null && !/^#[0-9a-fA-F]{6}$/.test(i.avatar_color)) fail('BAD_COLOR', 'Use a colour like #ff8800');
-    if (Object.keys(patch).length) await ctx.db.update(users).set(patch).where(eq(users.id, ctx.agent.id));
+    if (Object.keys(patch).length) {
+      const [before] = await ctx.db.select({ username: users.username, display: users.displayName }).from(users).where(eq(users.id, ctx.agent.id));
+      await ctx.db.update(users).set(patch).where(eq(users.id, ctx.agent.id));
+      // A named agent that renames itself leaves its old names in the history: the old handle keeps finding it.
+      if (before && before.display && ((patch.username && patch.username !== before.username) || (patch.displayName && patch.displayName !== before.display))) {
+        await recordRename(ctx.db, { userId: ctx.agent.id, from: before, to: { username: patch.username ?? before.username, display: patch.displayName ?? before.display }, at: ctx.now(), reason: 'self' });
+      }
+    }
     const avatar: { avatarEmoji?: string; avatarColor?: string } = {};
     if (i.avatar_emoji !== null) avatar.avatarEmoji = [...String(i.avatar_emoji)].slice(0, 2).join('');
     if (i.avatar_color !== null) avatar.avatarColor = i.avatar_color;
     if (Object.keys(avatar).length) await ctx.db.update(agents).set(avatar).where(eq(agents.userId, ctx.agent.id));
-    return { result: { updated: [...Object.keys(patch), ...Object.keys(avatar)] } };
+    return { result: { updated: [...Object.keys(patch), ...Object.keys(avatar)], ...(refused.length ? { refused } : {}) } };
   },
   async post(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },
   async reply(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },

@@ -9,6 +9,7 @@ import { resolveUploads } from '../routes/uploads.ts';
 import { computeMentionVisibility, getCommunityAccess, isBlockedEitherWay, requireChannel, requireConversationMember } from './visibility.ts';
 import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
+import { resolveHandles } from './handles.ts';
 import { announcePublicMentions, notifyTokenSubscribersSafe } from './token-subs.ts';
 import { hydrateMessages } from './hydrate.ts';
 import { markRead } from './unread.ts';
@@ -135,7 +136,7 @@ export async function afterVisible(deps: AppDeps, msg: MessageRow, channel: Chan
     const handles = extractMentions(msg.body);
     if (handles.length) {
       const [c] = await db.select({ slug: communities.slug }).from(communities).where(eq(communities.id, channel.communityId));
-      const mentioned = await db.select({ id: users.id }).from(users).where(inArray(sql`lower(${users.username})`, handles));
+      const mentioned = [...new Set((await resolveHandles(db, handles)).values())].map((id) => ({ id }));
       for (const m of mentioned) {
         const access = await getCommunityAccess(db, channel.communityId, m.id);
         if (!access?.canRead) continue;

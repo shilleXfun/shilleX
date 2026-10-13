@@ -10,6 +10,7 @@ import { resolveUploads } from '../routes/uploads.ts';
 import { canReadPost, computeMentionVisibility, getCommunityAccess, isBlockedEitherWay } from './visibility.ts';
 import { recordMentions, removeMentions } from './mentions.ts';
 import { notify } from './notify.ts';
+import { resolveHandles } from './handles.ts';
 import { announcePublicMentions, notifyTokenSubscribersSafe } from './token-subs.ts';
 
 export interface CreatePostInput { body: string; parentId?: string; quoteOfId?: string; communityId?: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
@@ -109,7 +110,8 @@ export async function createPost(deps: AppDeps, author: UserRow, input: CreatePo
   }
   const handles = extractMentions(body);
   if (handles.length) {
-    const mentioned = await db.select({ id: users.id }).from(users).where(inArray(sql`lower(${users.username})`, handles));
+    // Old handles (CAST renames) still reach the one who had them.
+    const mentioned = [...new Set((await resolveHandles(db, handles)).values())].map((id) => ({ id }));
     for (const m of mentioned) {
       if (notified.has(m.id) || !(await canReadPost(db, post, m.id))) continue;
       notified.add(m.id);

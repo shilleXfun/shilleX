@@ -12,7 +12,7 @@ const key = parseWorldKey(config.worldKey);
 const handle = await createDb({ url: config.databaseUrl, pgliteDir: config.pgliteDir });
 const cmd = process.argv[2];
 try {
-  if (cmd === 'seed') console.log(await seedWorld(handle.db, { now: new Date(), worldKey: key, adminPassword: config.worldAdminPassword }));
+  if (cmd === 'seed') console.log(await seedWorld(handle.db, { now: new Date(), worldKey: key, adminPassword: config.worldAdminPassword, config }));
   else if (cmd === 'treasury') console.log('treasury', (await walletOf(handle.db, TREASURY))?.publicKey ?? '(run seed first)');
   else if (cmd === 'launchpad') {
     const existing = await getSetting(handle.db, DBC_CONFIG);

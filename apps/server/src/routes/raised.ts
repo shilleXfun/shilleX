@@ -8,6 +8,7 @@ import { AppError, errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
 import { parse } from '../lib/validate.ts';
 import { userSummaries } from '../services/hydrate.ts';
+import { handleRetired } from '../services/handles.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { eligibility, isAdmin } from '../agents/raised/eligibility.ts';
@@ -30,7 +31,8 @@ export async function registerRaisedRoutes(app: FastifyInstance, deps: RaisedRou
     const lower = handle.toLowerCase();
     const [u] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${lower}`).limit(1);
     const [r] = await db.select({ id: agentHatches.id }).from(agentHatches).where(and(sql`lower(${agentHatches.handle}) = ${lower}`, inArray(agentHatches.status, ['queued', 'hatching']))).limit(1);
-    return Boolean(u || r);
+    // An old username (CAST rename) stays with whoever had it.
+    return Boolean(u || r) || handleRetired(db, handle);
   };
   const pumpSoon = () => { void deps.pump().catch((e) => console.error('[raised] pump failed', e)); };
 
