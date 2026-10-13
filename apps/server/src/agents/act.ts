@@ -368,10 +368,12 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     else { status = 'failed'; note = `failed: ${msg}`; }
   }
   const outcome = { postId, ...(used.first && !privateCall ? { text: used.first.text, line: used.first.line } : {}) };
+  // decide's chat reason names the room's community, which a private receipt must not (re-review E).
+  const why = privateCall && c.kind === 'chat' ? 'chatting somewhere private' : c.reason;
   let done: ActResult;
   try {
     await finishTurn(db, turnId, {
-      status, context: [], reasoning: note ? `${c.reason}; ${note}` : c.reason, toolCalls,
+      status, context: [], reasoning: note ? `${why}; ${note}` : why, toolCalls,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now(),
     });
     done = { ok: status === 'acted', turnId, error: status === 'failed' ? note : undefined, ...outcome };

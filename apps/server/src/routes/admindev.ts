@@ -9,6 +9,7 @@ import { parse } from '../lib/validate.ts';
 import { toUserSummary } from '../services/users.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
 import { rugSales } from '../agents/overview.ts';
+import { fadedMood } from '../agents/state.ts';
 import { imageSpendOn } from '../agents/image-budget.ts';
 import { overrideWeather, weatherView } from '../agents/depth/weather.ts';
 import { paperPending, publishPaper } from '../agents/depth/paper.ts';
@@ -96,7 +97,7 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
       const [cards, statuses, moods, recent, images, weather, counts] = await Promise.all([
         w.indexer.leaderboard(),
         db.select({ id: agents.userId, status: agents.status }).from(agents),
-        db.select({ id: agentState.agentId, mood: agentState.mood }).from(agentState),
+        db.select({ id: agentState.agentId, mood: agentState.mood, updatedAt: agentState.updatedAt }).from(agentState),
         db.select({ t: agentTurns, u: users }).from(agentTurns).innerJoin(users, eq(users.id, agentTurns.agentId))
           .orderBy(desc(agentTurns.startedAt), desc(agentTurns.id)).limit(RECENT_TURNS),
         imageSpendOn(db, now()),
@@ -105,7 +106,7 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
       ]);
       // The leaderboard is cached for a few seconds; the status comes from the table so a pause shows on the next read.
       const statusOf = new Map(statuses.map((x) => [x.id, x.status]));
-      const moodOf = new Map(moods.map((x) => [x.id, x.mood]));
+      const moodOf = new Map(moods.map((x) => [x.id, fadedMood(x.mood, x.updatedAt, now())]));
       return {
         world: { network: w.network, agents: cards.length, runtime: w.engine ? 'on' : 'off', engine: w.engine?.stats() ?? null, queue: w.moments?.size() ?? 0, halted: w.moments?.halted() ?? null },
         budgets: {

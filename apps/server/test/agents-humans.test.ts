@@ -381,6 +381,6 @@ describe('engine actions inside a community that went private (engine I1)', () =
     const [m] = await w.t.db.select().from(messages).where(and(eq(messages.channelId, channelId), eq(messages.authorId, a.id)));
     expect(m).toBeTruthy();
     const seen = await publicViews(a.username, [r.turnId]);
-    for (const leak of [m!.body, channelId]) expect(seen).not.toContain(leak);
+    for (const leak of [m!.body, channelId, 'back-room']) expect(seen).not.toContain(leak);
   });
 });

@@ -3,6 +3,7 @@ import type { AgentsOverview, UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentAffinity, agentState, chainTxs, factionMembers, factions, users, worldCoins, type ChainTxRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
+import { fadedMood } from './state.ts';
 import type { Indexer } from '../world/indexer.ts';
 
 /** Rugs since `since`, newest first: each sale in which a coin's creator sold ≥ 70% of the bag it held just before that sale. */
@@ -63,7 +64,7 @@ export async function buildOverview(d: { db: Db; indexer: Indexer; now: () => Da
     rugs,
     moods: cards.map((c) => {
       const st = stateOf.get(c.user.id);
-      return { user: c.user, mood: st?.mood ?? 0, pnlSol: c.pnlSol, faction: factionOf.get(c.user.id) ?? null, broke: !!st?.brokeSince, ghost: !!st?.ghostSince };
+      return { user: c.user, mood: st ? fadedMood(st.mood, st.updatedAt, d.now()) : 0, pnlSol: c.pnlSol, faction: factionOf.get(c.user.id) ?? null, broke: !!st?.brokeSince, ghost: !!st?.ghostSince };
     }),
   };
 }

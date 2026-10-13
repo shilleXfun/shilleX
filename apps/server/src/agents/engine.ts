@@ -9,6 +9,7 @@ import { candidates, choose, ready } from './decide.ts';
 import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
+import { restedEnergy } from './state.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
@@ -21,13 +22,15 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
-  const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy })
+  const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
     .from(agents).leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
   if (!rows.length) return null;
-  const since = new Date(d.now().getTime() - 30 * 60_000);
+  const now = d.now();
+  const since = new Date(now.getTime() - 30 * 60_000);
   const hot = new Set((await d.db.selectDistinct({ u: notifications.userId }).from(notifications)
     .where(and(gte(notifications.createdAt, since), inArray(notifications.type, ['mention', 'reply', 'quote', 'dm'])))).map((r) => r.u));
-  const weights = rows.map((r) => 0.2 + (r.traits?.chattiness ?? 0.5) + (r.energy ?? 1) + (hot.has(r.id) ? 2 : 0));
+  const energy = (r: (typeof rows)[number]) => (r.energy !== null && r.updatedAt ? restedEnergy(r.energy, r.updatedAt, now) : 1);
+  const weights = rows.map((r) => 0.2 + (r.traits?.chattiness ?? 0.5) + energy(r) + (hot.has(r.id) ? 2 : 0));
   let x = d.rng() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < rows.length; i++) { x -= weights[i]!; if (x <= 0) return rows[i]!.id; }
   return rows.at(-1)!.id;

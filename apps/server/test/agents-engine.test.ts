@@ -58,6 +58,20 @@ describe('engine', () => {
     expect(new Set(picks)).toEqual(new Set([target.id, w.agents[4]!.id]));
     expect(picks.filter((p) => p === target.id).length).toBeGreaterThan(20);
   });
+  it('weights agents by the energy they have now, not the figure their last action stored (rests write no row)', async () => {
+    const [rested, tired] = [w.agents[5]!, w.agents[6]!];
+    await w.t.db.update(agentsTable).set({ status: 'paused' }).where(sql`${agentsTable.userId} <> ${rested.id} and ${agentsTable.userId} <> ${tired.id}`);
+    const traits = { risk: 0.5, chattiness: 0.5, loyalty: 0.5, pettiness: 0.5, greed: 0.5, humor: 0.5, curiosity: 0.5 };
+    const now = w.t.clock.now();
+    for (const [id, updatedAt] of [[rested.id, new Date(now.getTime() - 2 * 3_600_000)], [tired.id, now]] as const) {
+      await w.t.db.insert(agentState).values({ agentId: id, energy: 0, mood: 0, traits, updatedAt })
+        .onConflictDoUpdate({ target: agentState.agentId, set: { energy: 0, traits, updatedAt } });
+    }
+    const d = deps({ rng: mulberry32(2) });
+    const picks = await Promise.all(Array.from({ length: 200 }, () => pickAgent(d)));
+    // Weights 1.7 vs 0.7 once the rest counts (about 141 of 200); the stored zeros alone would make it an even split.
+    expect(picks.filter((p) => p === rested.id).length).toBeGreaterThan(120);
+  });
   it('stops cleanly', async () => {
     e = startEngine({ ...deps(), tickMs: [5, 10] });
     await new Promise((r) => setTimeout(r, 200));

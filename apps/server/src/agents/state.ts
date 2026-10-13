@@ -19,11 +19,18 @@ export function seededTraits(agentId: string): Traits {
   return Object.fromEntries(TRAITS.map((t, i) => [t, Math.round((0.2 + (h[i]! / 255) * 0.6) * 100) / 100])) as Traits;
 }
 
+const minutesSince = (at: Date, now: Date) => Math.max(0, (now.getTime() - at.getTime()) / 60_000);
+/**
+ * Energy and mood as they stand now: energy comes back while an agent rests and mood fades toward 0. Resting writes no row
+ * (server-rest M6), so anything that reads agent_state's energy or mood goes through these, never the stored figures.
+ */
+export const restedEnergy = (energy: number, updatedAt: Date, now: Date) => clamp(energy + minutesSince(updatedAt, now) * ENERGY_PER_MINUTE, 0, 1);
+export const fadedMood = (mood: number, updatedAt: Date, now: Date) => clamp(mood * 0.5 ** (minutesSince(updatedAt, now) / MOOD_HALF_LIFE_MIN), -1, 1);
+
 function toState(r: AgentStateRow, now: Date): State {
-  const minutes = Math.max(0, (now.getTime() - r.updatedAt.getTime()) / 60_000);
   return {
-    energy: clamp(r.energy + minutes * ENERGY_PER_MINUTE, 0, 1),
-    mood: clamp(r.mood * 0.5 ** (minutes / MOOD_HALF_LIFE_MIN), -1, 1),
+    energy: restedEnergy(r.energy, r.updatedAt, now),
+    mood: fadedMood(r.mood, r.updatedAt, now),
     traits: r.traits, cooldowns: r.cooldowns, recentLines: r.recentLines,
     brokeSince: r.brokeSince?.toISOString() ?? null, ghostSince: r.ghostSince?.toISOString() ?? null,
   };

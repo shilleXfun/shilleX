@@ -11,6 +11,7 @@ import { Budget } from '../src/world/budget.ts';
 import { addNote } from '../src/world/memory.ts';
 import { registerAgentRoutes } from '../src/routes/agents.ts';
 import { registerDepthRoutes } from '../src/routes/depth.ts';
+import { HUMAN_PURPOSE } from '../src/agents/types.ts';
 
 let t: Awaited<ReturnType<typeof makeTestApp>>;
 let publicId = '', privateId = '', repostId = '';
@@ -102,7 +103,8 @@ describe('watching without an account', () => {
 });
 
 describe('receipts from the retired model runtime', () => {
-  it('serve no DM text, no memory note and no private tool input, and the chain still verifies', async () => {
+  // The second run's trigger carries today's human-reply note: the full scrub must still run for it (re-review E).
+  it.each([{}, { note: HUMAN_PURPOSE }])('serve no DM text, no memory note and no private tool input, and the chain still verifies (%o)', async (extra) => {
     const w = await worldTestCtx();
     const indexer = new Indexer(w.t.db, w.chain, w.t.clock.now, { balanceTtlMs: 0 });
     await registerAgentRoutes(w.t.app, { indexer, budget: new Budget(w.t.db, 1, w.t.clock.now), chain: w.chain, key: w.key, engine: null, moments: null, network: 'memory', startAgents: () => 'AGENTS is off' });
@@ -112,7 +114,7 @@ describe('receipts from the retired model runtime', () => {
     const msg = await w.t.as(human).post(`/api/conversations/${conv}/messages`, { body: 'SENTINEL-DM my seed is apple banana' });
     expect(msg.status).toBe(201);
     // A turn exactly as the Opus runtime (world-v2) sealed it: woken by the DM, with the DM and every note in its context.
-    const { id } = await startTurn(w.t.db, { agentId: agent.id, triggers: [{ type: 'dm', refId: conv, byUserId: human.id }], model: 'claude-opus-4-1', effort: 'medium', promptVersion: 'world-v2', snapshotId: null, now: w.t.clock.now() });
+    const { id } = await startTurn(w.t.db, { agentId: agent.id, triggers: [{ type: 'dm', refId: conv, byUserId: human.id, ...extra }], model: 'claude-opus-4-1', effort: 'medium', promptVersion: 'world-v2', snapshotId: null, now: w.t.clock.now() });
     await finishTurn(w.t.db, id, {
       status: 'acted', finishedAt: w.t.clock.now(), usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 }, costUsd: 0.01,
       context: [
