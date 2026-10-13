@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithApp, mockFetch } from '../utils';
-import { AgentProfilePage } from '../../src/features/agents/AgentProfilePage';
+import { AgentProfilePage, solSeries } from '../../src/features/agents/AgentProfilePage';
+import { pushPulse, resetPulses } from '../../src/features/agents/pulses';
 
 const u = (id: string, name: string) => ({ id, username: name.toLowerCase(), displayName: name, avatarUrl: '/x.svg', isDemo: false, createdAt: '2026-10-01T00:00:00Z' });
 const agent = (id: string, name: string) => ({ ...u(id, name), isAgent: true as const });
@@ -31,7 +32,11 @@ const owing = { lent: 1, borrowed: 2, defaulted: 1, owesSol: 0.04, recent: [
 ] };
 const vital = (label: string) => screen.queryByText(label, { selector: 'dt' })?.parentElement ?? null;
 // Longer paths first: mockFetch matches by prefix in key order.
-const routes = (d: object = depth) => ({ '/api/agents/nine/depth': d, '/api/agents/nine/receipts': { turns: [] }, '/api/agents/nine': { agent: detail } });
+const trades = [
+  { signature: 'S3', agent: u('a1', 'Nine'), kind: 'sell', mint: 'M1', symbol: 'MOTH', sol: 0.03, tokens: -1000, counterparty: null, createdAt: '2026-10-11T12:00:00Z', turnId: null },
+  { signature: 'S2', agent: u('a1', 'Nine'), kind: 'buy', mint: 'M1', symbol: 'MOTH', sol: -0.02, tokens: 1000, counterparty: null, createdAt: '2026-10-11T11:00:00Z', turnId: null },
+];
+const routes = (d: object = depth) => ({ '/api/agents/nine/depth': d, '/api/agents/nine/receipts': { turns: [] }, '/api/agents/nine/trades': { trades }, '/api/agents/nine': { agent: detail } });
 afterEach(() => vi.restoreAllMocks());
 
 describe('AgentProfilePage', () => {
@@ -222,5 +227,26 @@ describe('AgentProfilePage', () => {
     expect(within(receipts).getByText('launched a coin, posted')).toBeInTheDocument();
     expect(within(receipts).getByText('Rested ×3')).toBeInTheDocument();
     expect(within(receipts).getByText('#3–5')).toBeInTheDocument();
+  });
+});
+
+describe('AgentProfilePage moves', () => {
+  it('walks the wallet’s SOL back through its trades, oldest first, ending at today’s balance', () => {
+    expect(solSeries(trades as never, 0.07)).toEqual([0.06, 0.04, 0.07]);
+  });
+  it('draws the wallet’s line next to the radar', async () => {
+    mockFetch(routes());
+    renderWithApp(<AgentProfilePage />, { route: '/agents/nine', path: '/agents/:username' });
+    expect(await screen.findByRole('img', { name: 'SOL in the wallet over its last 2 trades' })).toHaveAttribute('data-dir', 'up');
+  });
+  it('flashes the P&L tile when this agent trades', async () => {
+    resetPulses();
+    mockFetch(routes());
+    renderWithApp(<AgentProfilePage />, { route: '/agents/nine', path: '/agents/:username' });
+    await screen.findByText('P&L', { selector: 'dt' });
+    act(() => pushPulse({ kind: 'sell', agentId: 'a2', mint: 'M1', sol: 0.01, at: '2026-10-13T10:00:00Z' }));
+    expect(vital('P&L')).not.toHaveAttribute('data-flash');
+    act(() => pushPulse({ kind: 'buy', agentId: 'a1', mint: 'M1', sol: 0.01, at: '2026-10-13T10:00:01Z' }));
+    expect(vital('P&L')).toHaveAttribute('data-flash', 'up');
   });
 });
