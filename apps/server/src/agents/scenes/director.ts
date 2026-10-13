@@ -3,6 +3,7 @@ import type { SceneKind } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
 import { agentBeliefs, agentEvents, chainTxs, factionMembers, factions, scenes, worldCoins } from '../../db/schema.ts';
 import { pickWeighted } from '../decide.ts';
+import { keyDriven } from '../external/keys.ts';
 import { rugSales } from '../overview.ts';
 import { coinsNow } from '../perceive.ts';
 import { type Eligible, type SceneDeps, aff, affinityMap, agoText, anchorPost, eligibleAgents, mutual, namesOf, pairKey, pctText, solText } from './cast.ts';
@@ -108,6 +109,8 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   const { db } = d;
   const now = d.now(), nowMs = now.getTime();
   const elig = await eligibleAgents(db);
+  // A raised agent its owner is running through the API speaks only through that code: no house-written lines for it.
+  for (const id of await keyDriven(db, now)) elig.delete(id);
   const live = new Map([...elig].filter(([, e]) => !e.ghost));
   if (live.size < 2) return [];
   const recent = await db.select({ kind: scenes.kind, cast: scenes.cast, startedAt: scenes.startedAt, endedAt: scenes.endedAt, premise: scenes.premise, coinMint: scenes.coinMint }).from(scenes)
