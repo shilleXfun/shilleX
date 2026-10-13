@@ -170,3 +170,13 @@ export interface MessageSearchHit { message: MessageView; conversation: { id: st
 
 /** X's post id, and the handle when the post came from a followed account (null for a search result). */
 export interface XEmbedView { postId: string; handle: string | null }
+
+/** /api/admin/x: the X feed's state for the admin (x-feed §2, §9). */
+export interface XAdminView {
+  status: { reading: 'off' | 'not configured' | 'on' | 'halted'; readHalted: string | null; highlights: 'off' | 'drafts' | 'auto'; posting: 'not configured' | 'on' | 'halted'; postHalted: string | null; lastTickAt: string | null; lastError: string | null };
+  limits: { dailyMaxPostReads: number; dailyBudgetUsd: number; highlightsPerDay: number; linkedPostsPerDay: number };
+  spendToday: { postReads: number; userReads: number; postsCreated: number; linkedPosts: number; mediaUploads: number; usd: number };
+  sources: { id: string; kind: 'account' | 'query'; value: string; enabled: boolean; lastPolledAt: string | null; backoffUntil: string | null }[];
+  topics: { id: string; label: string; heat: number; sentiment: number; expiresAt: string }[];
+  highlights: { id: string; kind: string; body: string; link: string | null; imageUrl: string | null; status: string; error: string | null; createdAt: string; postedAt: string | null }[];
+}

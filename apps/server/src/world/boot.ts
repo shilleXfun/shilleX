@@ -28,6 +28,8 @@ import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
 import { seedWorld } from './seed.ts';
+import { bootX } from '../x/boot.ts';
+import { xDigestHandler } from '../x/digest.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 export interface WorldHandles {
@@ -136,7 +138,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
-      handles.moments = md ? createMoments({ ...md, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md) } }) : null;
+      handles.moments = md ? createMoments({ ...md, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), x_digest: xDigestHandler(md) } }) : null;
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
@@ -147,6 +149,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
+  // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
+  const x = await bootX(app, handles);
   const waiting = await worldNotReady(db, chain);
   if (waiting) {
     const treasury = await walletOf(db, TREASURY);
@@ -161,5 +165,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { offPulses(); await stopSpotlight(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { offPulses(); await stopSpotlight(); await x.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
