@@ -35,9 +35,9 @@ export async function buildsToday(db: Db, now: Date): Promise<number> {
 export async function mayBuild(db: Db, agentId: string, now: Date): Promise<boolean> {
   const [a] = await db.select({ origin: agents.origin, status: agents.status }).from(agents).where(eq(agents.userId, agentId));
   if (!a || a.origin === 'external' || a.status !== 'active') return false;
-  const [last] = await db.select({ at: agentTurns.startedAt }).from(agentTurns)
-    .where(and(eq(agentTurns.agentId, agentId), eq(agentTurns.promptVersion, SITE_PROMPT_VERSION))).orderBy(desc(agentTurns.startedAt)).limit(1);
-  return !last || now.getTime() - last.at.getTime() >= SITE_COOLDOWN_MS;
+  const [recent] = await db.select({ id: agentTurns.id }).from(agentTurns).where(and(eq(agentTurns.agentId, agentId),
+    eq(agentTurns.promptVersion, SITE_PROMPT_VERSION), gte(agentTurns.startedAt, new Date(now.getTime() - SITE_COOLDOWN_MS)))).limit(1);
+  return !recent;
 }
 
 /** The faction this agent is in now, if any. */
@@ -106,10 +106,10 @@ export function queueCoinSite(d: Pick<EngineDeps, 'app' | 'moments' | 'now'>, ag
 }
 
 const nextPlan = new WeakMap<FastifyInstance, number>();
-/** When the last site was tried, any agent, any kind: ambient builds are spread over the day. */
-async function lastBuildAt(db: Db): Promise<Date | null> {
-  const [r] = await db.select({ at: agentTurns.startedAt }).from(agentTurns).where(eq(agentTurns.promptVersion, SITE_PROMPT_VERSION)).orderBy(desc(agentTurns.startedAt)).limit(1);
-  return r?.at ?? null;
+/** Whether any build was tried since `since`, any agent, any kind: ambient builds are spread over the day. */
+async function builtSince(db: Db, since: Date): Promise<boolean> {
+  const [r] = await db.select({ id: agentTurns.id }).from(agentTurns).where(and(eq(agentTurns.promptVersion, SITE_PROMPT_VERSION), gte(agentTurns.startedAt, since))).limit(1);
+  return Boolean(r);
 }
 
 /**
@@ -126,8 +126,7 @@ export async function planSites(d: EngineDeps, agentId: string): Promise<void> {
     if ((await buildsToday(d.db, now)) >= perDay) return;
     const coin = await coinWithoutSite(d.db, now);
     if (coin) { enqueue(d, coin.creatorId, { site: 'coin', mint: coin.mint }); return; }
-    const last = await lastBuildAt(d.db);
-    if (last && now.getTime() - last.getTime() < 86_400_000 / perDay) return;
+    if (await builtSince(d.db, new Date(now.getTime() - 86_400_000 / perDay))) return;
     if (!(await mayBuild(d.db, agentId, now))) return;
     const job = await ambientJob(d.db, agentId, now, d.rng);
     if (job) enqueue(d, agentId, job);

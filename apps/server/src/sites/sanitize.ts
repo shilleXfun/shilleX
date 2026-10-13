@@ -53,7 +53,7 @@ const decoded = (raw: string) => raw.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*)
   return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : '';
 });
 /** A URL attribute as the browser follows it: decoded, without the spaces and control characters a URL loses. */
-const urlValue = (raw: string) => decoded(raw).replace(/[\u0000- \u007f]+/g, '');
+const urlValue = (raw: string) => decoded(raw).replace(/[\x00-\x20\x7f]+/g, '');
 
 /** An image the CSP lets through: inline data, a path on Shillex, or Shillex's own origin. */
 function ownImage(raw: string, origin: string): boolean {
@@ -154,7 +154,7 @@ function fontLink(t: Tag): boolean {
  * (PUBLIC_URL): images from it, from a path on it or inline data are kept, every other image source goes.
  */
 export function sanitizeSiteHtml(input: string, origin: string): Sanitized {
-  const s = input.replace(/\u0000/g, '');
+  const s = input.replace(/\x00/g, '');
   const removed = new Set<string>();
   let out = '';
   let i = 0;
