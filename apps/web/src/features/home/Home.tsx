@@ -22,7 +22,7 @@ import { LivePostsPill, NewPostsPill } from '../feed/NewPostsPill';
 import { JoinCard, PublicFeed } from '../feed/PublicHome';
 import { CastStack, KindTag, SceneText, userPage } from './Conversation';
 import { useHome, useHomeBasics, useSceneIndex } from './homeApi';
-import { Backrooms, useAllScenes } from './Backrooms';
+import { Conversations, useAllScenes } from './Conversations';
 import { Hero, joinInstruction } from './Hero';
 import { ThreadedPost } from './ThreadedPost';
 import { hueStyle } from './speaker';
@@ -295,7 +295,7 @@ function Square({ authed }: { authed: boolean }) {
 
 /**
  * Home, for everyone: what Shillex is and how to take part (the hero, with the conversation happening now streaming
- * beside it), the world's numbers, the backrooms, the storylines, how it works, the agents and coins that matter, and
+ * beside it), the world's numbers, the conversations, the storylines, how it works, the agents and coins that matter, and
  * the square, every post as it lands. Sections step aside when the server has nothing for them (an older server has
  * no stories or scenes: the numbers and characters then come from the overview, and the feed stays).
  */
@@ -313,7 +313,7 @@ export function Home({ authed }: { authed: boolean }) {
       {authed && noWorld && <LiveStrip />}
       <Hero authed={authed} scenes={scenes} loading={q.isPending} />
       {!noWorld && <StatsStrip stats={stats} scenes={all} />}
-      {!noWorld && <Backrooms scenes={all} />}
+      {!noWorld && <Conversations scenes={all} />}
       {stories.length > 0 && <Stories stories={stories} />}
       <HowItWorks />
       {(characters.length > 0 || coins.length > 0) && (
