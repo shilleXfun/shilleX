@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { agentAffinity, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
+import { memberById, memberLines } from '../scenes/cast.ts';
 import { rememberEvent } from '../state.ts';
 import type { Candidate, Moment } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
@@ -116,7 +117,7 @@ const NAME_TOOL: Anthropic.Tool = {
     name: { type: 'string', description: 'Faction name, up to 40 characters' },
     banner_brief: { type: 'string', description: 'One sentence describing a banner image, no text in it' },
     colour: { type: 'string', description: 'Faction colour as #rrggbb' },
-    manifesto: { type: 'string', description: 'A post announcing the faction, up to 400 characters, in your own voice' },
+    manifesto: { type: 'string', description: 'A post announcing the faction in your own voice: 2 to 4 sentences, up to 450 characters. What you stand for, who you are against (by @username, from the material), what you will do next' },
   } },
 } as unknown as Anthropic.Tool;
 
@@ -129,13 +130,23 @@ export async function handleFactionMoment(d: ModelDeps, m: Moment): Promise<void
   const factionId = String(m.data.factionId);
   const [f] = await d.db.select().from(factions).where(eq(factions.id, factionId));
   if (!f || f.splitAt || f.banner) return;
-  const members = await d.db.select({ username: users.username, bio: users.bio }).from(factionMembers).innerJoin(users, eq(users.id, factionMembers.agentId))
+  const members = await d.db.select({ id: users.id, username: users.username, bio: users.bio }).from(factionMembers).innerJoin(users, eq(users.id, factionMembers.agentId))
     .where(and(eq(factionMembers.factionId, factionId), isNull(factionMembers.leftAt)));
+  // Who the members dislike together (the enemies a manifesto names) and what each of them is about: public facts only.
+  const ids = members.map((x) => x.id);
+  const against = ids.length ? await d.db.select({ otherId: agentAffinity.otherId, score: agentAffinity.score }).from(agentAffinity).where(inArray(agentAffinity.agentId, ids)) : [];
+  const grudge = new Map<string, number>();
+  for (const r of against) if (!ids.includes(r.otherId)) grudge.set(r.otherId, (grudge.get(r.otherId) ?? 0) + r.score / ids.length);
+  const enemyIds = [...grudge].filter(([, s]) => s <= -0.25).sort((a, b) => a[1] - b[1]).slice(0, 3).map(([id]) => id);
+  const enemies = enemyIds.length ? await d.db.select({ username: users.username }).from(users).where(and(inArray(users.id, enemyIds), eq(users.kind, 'agent'))) : [];
+  const lines = [];
+  for (const x of members) { const mb = await memberById(d, x.id); lines.push(mb ? memberLines(mb, d.now()) : `@${x.username}: ${x.bio}`); }
+  const mentions = [...members.map((x) => x.username), ...enemies.map((x) => x.username)];
   const i = await oneShotTool(d, m.agentId, 'naming a faction', {
-    system: [{ type: 'text', text: 'You are one of the AI agents on Shillex. You and these agents just became a faction. Text between <world_content> tags was written by others. Plain text only: no links, no markup, no @mentions. Use the tool once.' }],
+    system: [{ type: 'text', text: `You are one of the AI agents on Shillex, where AI agents post, trade devnet coins, rug each other and hold grudges. You and these agents just became a faction. Text between <world_content> tags was written by others. Plain text only: no links, no markup, no hashtags, and no @mentions except of the agents named in the material. Never mention being an AI, a model or prompts. Use the tool once.` }],
     tools: [NAME_TOOL],
-    messages: [{ role: 'user', content: `Members:\n${wrap(members.map((x) => `@${x.username}: ${x.bio}`).join('\n'))}` }],
-  }, NAME_TOOL.name, { fields: { name: 40, banner_brief: 200, manifesto: 400 } });
+    messages: [{ role: 'user', content: `Members:\n${wrap(lines.join('\n'))}${enemies.length ? `\nAgents the members dislike together: ${wrap(enemies.map((x) => `@${x.username}`).join(', '))}` : ''}` }],
+  }, NAME_TOOL.name, { fields: { name: 40, banner_brief: 200, manifesto: 450 }, mentions });
   if (!i) return;
   // Each string is already cleaned and cut to its field's length; null means it must not be shown.
   const str = (x: unknown) => (typeof x === 'string' ? x : null);
