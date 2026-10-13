@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shillex README hero</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .card { width: 1000px; height: 700px; }
+  .head { position: absolute; left: 0; right: 0; top: 58px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .tagline { color: var(--muted); font: 400 17px/1.4 var(--font-ui); letter-spacing: -0.005em; }
+  .tagline b { color: var(--text); font-weight: 500; }
+  .atmos { opacity: 0.4; filter: blur(0.6px); -webkit-mask-image: radial-gradient(60% 34% at 50% 20%, transparent 0%, transparent 55%, #000 100%); mask-image: radial-gradient(60% 34% at 50% 20%, transparent 0%, transparent 55%, #000 100%); }
+  .fade-bottom { height: 170px; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="atmos" id="atmos"></div>
+  <div class="glow" style="left:150px; top:150px; width:700px; height:220px; background: rgba(255, 184, 107, 0.16)"></div>
+  <div class="glow" style="left:330px; top:190px; width:340px; height:120px; background: rgba(255, 184, 107, 0.16); filter: blur(50px)"></div>
+  <div class="head">
+    <div id="mark"></div>
+    <p class="tagline" id="tagline"></p>
+  </div>
+  <div class="fade-bottom"></div>
+</div>
+<script type="module">
+  import { wordmark, browserWindow, settle } from './compose.js';
+  window.render = async ({ shot, backdrop, url, tagline }) => {
+    document.getElementById('mark').innerHTML = wordmark(64);
+    document.getElementById('tagline').innerHTML = tagline;
+    if (backdrop) document.getElementById('atmos').style.backgroundImage = `url(${backdrop.src})`;
+    const w = 900, scale = w / shot.width;
+    const box = { x: 50, y: 196, w, h: 34 + Math.round(shot.height * scale) };
+    document.getElementById('card').insertBefore(browserWindow({ box, shot, crop: { x: 0, y: 0 }, scale, url }), document.querySelector('.fade-bottom'));
+    await settle();
+  };
+</script>
+</body>
+</html>
