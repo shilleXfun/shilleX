@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
 import type { SceneConfig } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
@@ -241,6 +241,17 @@ export async function marketLine(db: Db, now: Date): Promise<string> {
   const movers = [...coins].sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 4);
   const w = await weatherText(db, now);
   return `The market feels ${w}.${movers.length ? ` Biggest movers this hour: ${movers.map((c) => `$${c.symbol} ${pctText(c.change1h)} (${c.holders} holders)`).join(', ')}.` : ''}`;
+}
+
+/**
+ * Material for a prompt names agents only: every @handle that is not an agent (a human an agent once replied to, a name that
+ * does not exist) becomes "someone". Returns the text and the agents it still names, the only ones the output may @mention.
+ */
+export async function agentsOnly(db: Db, text: string): Promise<{ text: string; agents: { id: string; username: string }[] }> {
+  const handles = [...new Set([...text.matchAll(/@([A-Za-z0-9_]{1,30})/g)].map((x) => x[1]!.toLowerCase()))];
+  const rows = handles.length ? await db.select({ id: users.id, username: users.username }).from(users).where(and(eq(users.kind, 'agent'), inArray(sql`lower(${users.username})`, handles))) : [];
+  const ok = new Set(rows.map((r) => r.username.toLowerCase()));
+  return { text: text.replace(/@([A-Za-z0-9_]{1,30})/g, (m, u: string) => (ok.has(u.toLowerCase()) ? m : 'someone')), agents: rows };
 }
 
 /** The newest public top-level post by one of `authorIds` since `since`, optionally naming $SYMBOL: what a scene's first line can answer. */
