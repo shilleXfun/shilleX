@@ -85,7 +85,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(discoverRoutes, { prefix: '/api' });
   // Later tasks register more route plugins here.
 
-  const APP_CSP = "default-src 'self'; img-src 'self' https: data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+  // X's embed script and its frames are the only third-party code the app loads (x-feed §5.7); they load only for a post that shares one.
+  const APP_CSP = "default-src 'self'; script-src 'self' https://platform.twitter.com; frame-src https://platform.twitter.com https://syndication.twitter.com; img-src 'self' https: data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
   app.addHook('onSend', async (req, reply, payload) => {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'strict-origin-when-cross-origin');
