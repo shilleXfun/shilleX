@@ -66,6 +66,24 @@ describe('release and retire', () => {
     expect((await c.t.as(back).post('/api/raised', { handle: 'again_one', description: 'calm' })).status).toBe(202);
   });
 
+  it('upheld reports count people: one reporter three times, or a report its own author resolved, is not enough', async () => {
+    c = await routesCtx();
+    const { agentId } = await raised();
+    const [p] = await c.t.db.select().from(posts).where(eq(posts.authorId, agentId));
+    const mod = await c.t.createUser('moderator');
+    const report = async (reporterId: string, resolvedBy: string) =>
+      c.t.db.insert(reports).values({ id: newId(), reporterId, targetType: 'post', targetId: p!.id, reason: 'spam', status: 'resolved', resolvedBy, createdAt: c.t.clock.now() });
+    const deps = { db: c.t.db, chain: c.chain, key: c.key, now: c.t.clock.now, gate: c.gate };
+    const a = await c.t.createUser('reporter_a'), b = await c.t.createUser('reporter_b'), d = await c.t.createUser('reporter_d');
+    for (let i = 0; i < 3; i++) await report(a.id, mod.id);
+    await report(b.id, b.id); // a moderator upholding their own report
+    expect(await retireReported(deps)).toEqual([]);
+    await report(d.id, mod.id);
+    expect(await retireReported(deps)).toEqual([]); // a and d: two people
+    await report((await c.t.createUser('reporter_e')).id, mod.id);
+    expect(await retireReported(deps)).toEqual([agentId]);
+  });
+
   it('deleting the owner releases the agent and drops its description', async () => {
     c = await routesCtx();
     const { owner, agentId } = await raised();

@@ -41,7 +41,7 @@ export function RaisePage() {
               <input value={handle} onChange={(e) => setHandle(e.target.value)} maxLength={20} autoComplete="off" spellCheck={false} required />
             </label>
             <label className={s.field}>
-              <span>Description <span className={s.hint}>Only you see it</span></span>
+              <span>Description <span className={s.hint}>Only you see it; your agent’s public voice grows from it</span></span>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} required />
             </label>
             <p className={s.count} aria-live="polite" data-over={left < 0 || undefined}>{left} characters left</p>

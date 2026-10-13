@@ -4,7 +4,8 @@ import { makeTestApp } from './helpers.ts';
 import { loadConfig } from '../src/config.ts';
 import { bootAgents, worldNotReady } from '../src/world/boot.ts';
 import { seedWorld } from '../src/world/seed.ts';
-import { agents, users, wallets } from '../src/db/schema.ts';
+import { agentGrants, agentHatches, agents, users, wallets } from '../src/db/schema.ts';
+import { newId } from '../src/lib/ids.ts';
 import { routesCtx } from './raised-helpers.ts';
 
 let close: (() => Promise<void>) | null = null;
@@ -85,5 +86,37 @@ describe('raised agents in the world', () => {
     await c.settle();
     const r = await fundAgents(c.t.db, c.chain, c.key, c.t.clock.now);
     expect(r.funded + r.skipped).toBe(50);
+  });
+
+  /** A raised agent a crash left half made: its rows exist, paused, with no wallet and no start grant. */
+  const halfMade = async (c: Awaited<ReturnType<typeof routesCtx>>, handle: string) => {
+    const owner = await c.t.createUser(`${handle}_owner`);
+    const id = newId();
+    await c.t.db.insert(users).values({ id, username: handle, displayName: '', bio: '', kind: 'agent', createdAt: c.t.clock.now() });
+    await c.t.db.insert(agents).values({ userId: id, status: 'paused', origin: 'raised', ownerId: owner.id, createdAt: c.t.clock.now() });
+    return id;
+  };
+
+  it('a half-made raised agent with no wallet never stops the queue, and gets its wallet, grant and wake-up', async () => {
+    const c = await routesCtx();
+    close = () => c.t.close();
+    const stuck = await halfMade(c, 'halfmade');
+    const owner = await c.t.createUser('keeper');
+    expect((await c.t.as(owner).post('/api/raised', { handle: 'tidewatch', description: 'calm' })).status).toBe(202);
+    await c.settle();
+    expect((await c.t.db.select().from(agentHatches).where(eq(agentHatches.ownerId, owner.id)))[0]!.status).toBe('done');
+    expect((await c.t.db.select().from(agents).where(eq(agents.userId, stuck)))[0]!.status).toBe('active');
+    expect(await c.t.db.select().from(agentGrants).where(eq(agentGrants.agentId, stuck))).toHaveLength(1);
+  });
+
+  it('a transfer that keeps failing for one owed grant never stops the queue', async () => {
+    const c = await routesCtx();
+    close = () => c.t.close();
+    await halfMade(c, 'halfmade');
+    c.chain.sendSol = (async () => { throw new Error('rpc down'); }) as typeof c.chain.sendSol;
+    const owner = await c.t.createUser('keeper');
+    await c.t.as(owner).post('/api/raised', { handle: 'tidewatch', description: 'calm' });
+    await c.settle();
+    expect((await c.t.db.select().from(agentHatches).where(eq(agentHatches.ownerId, owner.id)))[0]!.status).toBe('done');
   });
 });

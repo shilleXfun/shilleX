@@ -66,4 +66,21 @@ describe('grants', () => {
     expect(card.pnlSol).toBeCloseTo(0);
     expect(TOP_UP).toBe(50_000_000);
   });
+
+  it('the owner panel’s top-up status reads the treasury at most every 30 s, and a failed read is a soft "unavailable"', async () => {
+    w = await raisedTestCtx();
+    const a = w.agents[0]!;
+    const treasury = (await walletOf(w.t.db, TREASURY))!.publicKey;
+    const real = w.chain.balances.bind(w.chain);
+    let reads = 0, down = false;
+    w.chain.balances = (async (pk: string) => { if (pk === treasury) { reads++; if (down) throw new Error('rpc down'); } return real(pk); }) as typeof w.chain.balances;
+    await topUpStatus(deps(), a.id);
+    await topUpStatus(deps(), a.id);
+    expect(reads).toBe(1);
+    w.t.clock.advance(31_000);
+    down = true;
+    expect(await topUpStatus(deps(), a.id)).toMatchObject({ availableToday: false, remainingSol: 0.3, reason: expect.stringMatching(/try again/) });
+    // A grant itself always reads the treasury fresh.
+    await refusedWith(sendGrant(deps(), a.id, 'top_up'), 'TREASURY_UNREADABLE');
+  });
 });
