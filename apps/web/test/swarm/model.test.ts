@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { AgentGraph, CoinView, GraphNode } from '@shillex/shared';
-import { buildSwarm, GHOST, LONER, MAX_COINS, MAX_NODES } from '../../src/components/swarm/model';
+import { breathOf, buildSwarm, GHOST, LONER, MAX_COINS, MAX_NODES } from '../../src/components/swarm/model';
 
 const node = (id: string, o: Partial<GraphNode> = {}): GraphNode => ({ id, username: id, displayName: '', avatarUrl: null, netWorthSol: 0.1, mood: 0, ghost: false, reputation: 0, factionId: null, factionColour: null, ...o });
 const coin = (mint: string, creatorId: string, o: Partial<CoinView> = {}): CoinView => ({
@@ -11,6 +11,14 @@ const coin = (mint: string, creatorId: string, o: Partial<CoinView> = {}): CoinV
 const graph = (nodes: GraphNode[], edges: AgentGraph['edges'] = []): AgentGraph => ({ nodes, edges, generatedAt: '2026-10-12T10:00:00Z' });
 
 describe('buildSwarm', () => {
+  it('gives happier agents a quicker breath, from 6 s at the bottom to 3 s at the top', () => {
+    expect(breathOf(-1)).toBe(6);
+    expect(breathOf(1)).toBe(3);
+    expect(breathOf(5)).toBe(3);
+    const m = buildSwarm(graph([node('sad', { mood: -1 }), node('glad', { mood: 1 })]), [], null);
+    expect(m.nodes[m.index.get('glad')!]!.breath).toBe(3);
+    expect(m.nodes[m.index.get('sad')!]!.breath).toBe(6);
+  });
   it('normalises positions and maps faction, loner and ghost colours', () => {
     const m = buildSwarm(graph([node('a', { factionId: 'f', factionColour: '#3DDBD9' }), node('b'), node('c', { ghost: true })]), [], null);
     for (const n of m.nodes) { expect(n.x).toBeGreaterThanOrEqual(0); expect(n.x).toBeLessThanOrEqual(1); expect(n.y).toBeGreaterThanOrEqual(0); expect(n.y).toBeLessThanOrEqual(1); }
