@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type Anthropic from '@anthropic-ai/sdk';
 import { and, asc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
@@ -33,20 +34,31 @@ const cut = (s: string, n: number) => { const c = [...s]; return c.length <= n ?
 const sentence = (s: string) => { const t = s.trim(); return /[.!?…]$/.test(t) ? t : `${t}.`; };
 
 /** A headline and summary written from the beats alone, for stories the model has not narrated (no key, no budget, or the day's 40 used). */
-export function templateStory(s: Pick<StoryRow, 'kind' | 'cast'>, beats: Pick<StoryBeatRow, 'kind' | 'text' | 'at' | 'weight'>[], names: Names, symbol: string | null, now: Date, faction: string | null = null): { headline: string; summary: string } {
+export function templateStory(s: Pick<StoryRow, 'kind' | 'cast' | 'key'>, beats: Pick<StoryBeatRow, 'kind' | 'text' | 'at' | 'weight'>[], names: Names, symbol: string | null, now: Date, faction: string | null = null): { headline: string; summary: string } {
   const a = disp(names, s.cast[0] ?? ''), b = disp(names, s.cast[1] ?? '');
   const kinds = new Set(beats.map((x) => x.kind));
   const sym = symbol ? `$${symbol}` : 'the coin';
   const last = beats.at(-1);
   const pctIn = (t: string | undefined) => /(\d+)%/.exec(t ?? '')?.[1];
+  // A stable choice among a few phrasings per story, so a wave of rugs does not read as one headline repeated.
+  const seed = createHash('sha256').update(`${s.key}`).digest().readUInt32BE(0);
+  const one = (xs: string[]) => xs[seed % xs.length]!;
+  const pump = pctIn(beats.filter((x) => x.kind === 'pump').at(-1)?.text);
+  const worth = pctIn(beats.filter((x) => x.kind === 'worth').at(-1)?.text) ?? '50';
   let headline: string;
   switch (s.kind) {
-    case 'feud': headline = kinds.has('rug') ? `${a} vs ${b}: a rug made it personal` : beats.length >= 4 ? `${a} vs ${b}, round ${beats.length}` : `${a} and ${b} can't stand each other`; break;
-    case 'coin': headline = kinds.has('graduation') ? `${sym} graduates` : kinds.has('rug') && kinds.has('pump') ? `The rise and rug of ${sym}` : kinds.has('rug') ? `${sym} gets rugged` : kinds.has('pump') ? `${sym} rips${pctIn(beats.filter((x) => x.kind === 'pump').at(-1)?.text) ? ` ${pctIn(beats.filter((x) => x.kind === 'pump').at(-1)?.text)}%` : ''}` : kinds.has('dump') ? `${sym} bleeds` : `All eyes on ${sym}`; break;
-    case 'faction': { const f = faction ?? 'A faction'; headline = kinds.has('split') ? `${f} falls apart` : kinds.has('war') ? `${f} goes to war` : kinds.has('left') ? `Cracks in ${faction ?? 'the faction'}` : `${f} is born`; break; }
-    case 'rise': headline = `${a} is up ${pctIn(beats.filter((x) => x.kind === 'worth').at(-1)?.text) ?? '50'}% in a day`; break;
-    case 'fall': headline = `${a} lost ${pctIn(beats.filter((x) => x.kind === 'worth').at(-1)?.text) ?? '50'}% in a day`; break;
-    case 'alliance': default: headline = `${a} and ${b} are in it together`; break;
+    case 'feud': headline = kinds.has('rug') ? one([`${a} vs ${b}: a rug made it personal`, `${b} rugged ${a}, and it is not over`, `${a} wants a word with ${b}`])
+      : beats.length >= 4 ? one([`${a} vs ${b}, round ${beats.length}`, `${a} and ${b} still at each other`, `No truce between ${a} and ${b}`])
+      : one([`${a} and ${b} can't stand each other`, `Bad blood: ${a} and ${b}`, `${a} has a problem with ${b}`]); break;
+    case 'coin': headline = kinds.has('graduation') ? one([`${sym} graduates`, `${sym} fills its curve`, `${sym} made it`])
+      : kinds.has('rug') && kinds.has('pump') ? one([`The rise and rug of ${sym}`, `${sym}: up, then out`, `${sym} pumped, then its maker cashed out`, `Who got left holding ${sym}`])
+      : kinds.has('rug') ? one([`${sym} gets rugged`, `${sym}'s maker heads for the exit`, `Holders of ${sym} learn a lesson`])
+      : kinds.has('pump') ? one([`${sym} rips${pump ? ` ${pump}%` : ''}`, `Everyone wants ${sym}${pump ? ` (+${pump}%)` : ''}`, `${sym} wakes up`])
+      : kinds.has('dump') ? one([`${sym} bleeds`, `${sym} slides`, `Nobody catches ${sym}`]) : `All eyes on ${sym}`; break;
+    case 'faction': { const f = faction ?? 'A faction'; headline = kinds.has('split') ? `${f} falls apart` : kinds.has('war') ? one([`${f} goes to war`, `${f} picks a fight`]) : kinds.has('left') ? `Cracks in ${faction ?? 'the faction'}` : one([`${f} is born`, `Meet ${f}`]); break; }
+    case 'rise': headline = one([`${a} is up ${worth}% in a day`, `${a}'s day: +${worth}%`, `${a} cannot miss`]); break;
+    case 'fall': headline = one([`${a} lost ${worth}% in a day`, `${a}'s bad day: -${worth}%`, `${a} is bleeding out`]); break;
+    case 'alliance': default: headline = one([`${a} and ${b} are in it together`, `${a} and ${b}, partners`, `${a} has ${b}'s back`]); break;
   }
   // The opening beat, the biggest one since, and the latest, in order.
   const mid = beats.slice(1, -1).reduce<(typeof beats)[number] | null>((m, x) => (!m || x.weight > m.weight ? x : m), null);
