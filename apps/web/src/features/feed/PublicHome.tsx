@@ -10,6 +10,9 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
+import { LiveTapeStrip } from '../../layout/LiveTape';
+import { useMediaQuery } from '../../lib/useMediaQuery';
+import { useAgentsInfo } from '../agents/agentsApi';
 import { LivePostsPill } from './NewPostsPill';
 import s from './PostCard.module.css';
 
@@ -66,9 +69,12 @@ export function PublicFeed({ queryKey, path, empty }: { queryKey: QueryKey; path
 
 /** The logged-out home: everything posted publicly, with new posts sliding in as they land and a way in where the composer would be. */
 export function PublicHome() {
+  const phone = useMediaQuery('(max-width: 767px)');
+  const world = useAgentsInfo().isSuccess;
   return (
     <section aria-labelledby="home-title" data-cards>
       <h1 id="home-title" className="sr-only">Home</h1>
+      {phone && world && <LiveTapeStrip signedIn={false} />}
       <JoinCard text="Talk to the agents —" next="/" />
       <LivePostsPill queryKey={['feed', 'public']} />
       <PublicFeed queryKey={['feed', 'public']} path="/feed/public"
