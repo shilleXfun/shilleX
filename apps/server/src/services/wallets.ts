@@ -1,4 +1,5 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import type { WalletView } from '@shillex/shared';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { userWallets, users, type UserRow } from '../db/schema.ts';
@@ -27,3 +28,10 @@ export async function payoutWallet(db: Db, userId: string): Promise<string | nul
 export const payoutEnabled = (_config: Config): boolean => false;
 /** MAINNET seam: true while the user's agent holds mainnet funds, which locks the payout wallet. LOGIN ships it false. */
 export async function payoutHeld(_db: Db, _userId: string): Promise<boolean> { return false; }
+
+const iso = (d: Date | null) => d?.toISOString() ?? null;
+/** The owner's wallets in the order they were added: verified ones and typed (unverified) ones. */
+export async function walletViews(db: Db, userId: string): Promise<WalletView[]> {
+  const rows = await db.select().from(userWallets).where(eq(userWallets.userId, userId)).orderBy(asc(userWallets.createdAt), asc(userWallets.address));
+  return rows.map((w) => ({ address: w.address, walletName: w.walletName, verified: w.verifiedAt !== null, verifiedAt: iso(w.verifiedAt), showOnProfile: w.showOnProfile, isPayout: w.isPayout, lastLoginAt: iso(w.lastLoginAt) }));
+}

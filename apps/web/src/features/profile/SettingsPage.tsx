@@ -1,7 +1,7 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, Plus, X } from 'lucide-react';
-import { agentName, MUTED_WORDS, isValidSolanaAddress, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
+import { agentName, MUTED_WORDS, type NotificationType, type SettingsView, type UserSummary } from '@shillex/shared';
 import { del, errorMessage, get, patch, put, uploadImage } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -38,7 +38,6 @@ export function SettingsPage() {
         : (
           <>
             <ProfileSection data={q.data} save={save} />
-            <WalletSection data={q.data} save={save} />
             <NotificationSection data={q.data} save={save} />
             <MutedWordsSection data={q.data} save={save} />
             <HiddenAccounts />
@@ -118,33 +117,6 @@ function ProfileSection({ data, save }: { data: SettingsView; save: Save }) {
           </div>
         </fieldset>
         <div className={s.formActions}><Button type="submit" variant="primary" loading={busy}>Save profile</Button></div>
-      </div>
-    </form>
-  );
-}
-
-function WalletSection({ data, save }: { data: SettingsView; save: Save }) {
-  const [address, setAddress] = useState(data.wallet?.address ?? '');
-  const [displayWallet, setDW] = useState(data.wallet?.displayWallet ?? false);
-  const [displayHoldings, setDH] = useState(data.wallet?.displayHoldings ?? false);
-  useEffect(() => { setAddress(data.wallet?.address ?? ''); setDW(data.wallet?.displayWallet ?? false); setDH(data.wallet?.displayHoldings ?? false); }, [data.wallet]);
-  const valid = isValidSolanaAddress(address.trim());
-  return (
-    <form className={s.section} aria-labelledby="set-wallet" onSubmit={(e) => { e.preventDefault(); if (valid) void save(() => put<SettingsView>('/me/wallet', { address: address.trim(), displayWallet, displayHoldings }), 'Wallet settings saved'); }}>
-      <h2 id="set-wallet" className={s.sectionTitle}>Wallet (optional)</h2>
-      <p className={s.sectionHelp}>Shillex never shows a wallet unless you turn it on here.</p>
-      <div className={s.form}>
-        <p className={s.warnBox} style={{ margin: 0 }}>Wallet connection and holdings verification are <strong>not implemented in this build</strong>. Anything shown is labelled not verified.</p>
-        <label className={s.field}>Wallet address
-          <input className={`${s.input} mono`} aria-label="Wallet address" placeholder="Solana address" value={address} onChange={(e) => setAddress(e.target.value)} aria-invalid={!!address && !valid} />
-        </label>
-        {address && !valid && <span className={s.error}>That isn’t a valid Solana address. Check for missing or extra characters.</span>}
-        <label className={s.toggle}><input type="checkbox" className={s.switch} checked={displayWallet} onChange={(e) => { setDW(e.target.checked); if (!e.target.checked) setDH(false); }} /><span className={s.toggleText}>Show this wallet on my profile</span></label>
-        <label className={s.toggle}><input type="checkbox" className={s.switch} checked={displayHoldings} disabled={!displayWallet} onChange={(e) => setDH(e.target.checked)} /><span className={s.toggleText}>Show a holdings section (labelled not verified)</span></label>
-        <div className={s.formActions}>
-          <Button type="submit" variant="primary" disabled={!valid}>Save wallet settings</Button>
-          {data.wallet && <Button variant="ghost" onClick={() => void save(() => del<SettingsView>('/me/wallet'), 'Wallet removed')}>Remove wallet</Button>}
-        </div>
       </div>
     </form>
   );
