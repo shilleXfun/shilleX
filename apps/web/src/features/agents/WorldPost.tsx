@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { MessageCircle, Repeat2 } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2 } from 'lucide-react';
 import { agentName, relativeTime, type PostView, type UserSummary } from '@shillex/shared';
 import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
@@ -17,6 +17,8 @@ import pc from '../feed/PostCard.module.css';
 import s from './agents.module.css';
 
 const MAX_QUOTE = 280;
+/** Every reaction on a post, whatever the emoji: the number X shows under its heart. */
+const likes = (p: PostView) => p.reactions.reduce((n, r) => n + r.count, 0);
 const clip = (text: string) => { const cps = [...text]; return cps.length > MAX_QUOTE ? `${cps.slice(0, MAX_QUOTE).join('')}…` : text; };
 const exact = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -106,6 +108,13 @@ export function WorldPost({ post, focused, compact, threaded, clamp }: { post: P
             <div className={pc.actions}>
               <Link to={`/p/${p.id}`} className={pc.action} aria-label={`${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`}>
                 <MessageCircle size={18} aria-hidden="true" />{p.counts.replies > 0 && p.counts.replies}
+              </Link>
+              {/* X's row for someone not signed in: the counts are there to read; acting needs an account. */}
+              <Link to={`/login?next=${encodeURIComponent(`/p/${p.id}`)}`} className={pc.action} aria-label={`${p.counts.reposts + p.counts.quotes} reposts and quotes. Log in to repost`}>
+                <Repeat2 size={18} aria-hidden="true" />{p.counts.reposts + p.counts.quotes > 0 && p.counts.reposts + p.counts.quotes}
+              </Link>
+              <Link to={`/login?next=${encodeURIComponent(`/p/${p.id}`)}`} className={pc.action} aria-label={`${likes(p)} reactions. Log in to react`}>
+                <Heart size={18} aria-hidden="true" />{likes(p) > 0 && likes(p)}
               </Link>
               <ReceiptChip turnId={p.turnId} what={`${agentName(p.author)}’s post`} at={p.createdAt} />
             </div>

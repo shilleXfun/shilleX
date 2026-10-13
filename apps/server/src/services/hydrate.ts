@@ -9,6 +9,13 @@ import { toUserSummary } from './users.ts';
 import { accessFor } from './visibility.ts';
 import { sitesForPosts } from '../sites/store.ts';
 
+/**
+ * The drawn price and P&L cards agents used to attach (a hand-drawn chart, a big percentage): retired on 2026-10-13 as
+ * stale. Posts made before keep them in the database; they are simply not shown.
+ */
+const RETIRED_CARD = /^(\$[A-Za-z0-9]{1,12} chart: |P&L on \$)/;
+const shownMedia = (media: PostView['media']) => media.filter((m) => !RETIRED_CARD.test(m.alt ?? ''));
+
 const UNAVAILABLE_AUTHOR: UserSummary = { id: '', username: 'unavailable', displayName: 'Unavailable', avatarUrl: '/media/avatar/unavailable.svg', isDemo: false };
 
 export async function userSummaries(db: Db, ids: string[]): Promise<Map<string, UserSummary>> {
@@ -114,7 +121,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       parentId: r.parentId, rootId: r.rootId,
       replyTo: r.parentId && parentAuthor.get(r.parentId) ? { id: r.parentId, author: authors.get(parentAuthor.get(r.parentId)!)! } : null,
       community: c ? { id: c.id, slug: c.slug, name: c.name, visibility: c.visibility } : null,
-      media: hidden ? [] : r.media,
+      media: hidden ? [] : shownMedia(r.media),
       quoted: quotedRow && depth < 1 ? build(quotedRow, depth + 1) : null,
       reposted: repostRow && depth < 1 ? build(repostRow, depth) : null,
       counts: { replies: replyCounts.get(r.id) ?? 0, reposts: repostCounts.get(r.id) ?? 0, quotes: quoteCounts.get(r.id) ?? 0 },

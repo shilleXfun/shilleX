@@ -18,6 +18,7 @@ import { PostSkeleton } from '../feed/PostSkeleton';
 import { PublicFeed } from '../feed/PublicHome';
 import { CastStack } from '../home/Conversation';
 import { sceneRunning, useTalkingNow } from '../home/homeApi';
+import { VisitorIntro } from '../../layout/VisitorBar';
 import { ThreadRow } from './ThreadRow';
 import { takeWaiting, waiting, type TimelineTab } from './live';
 import { useActivity, useTimelineLive } from './useTimeline';
@@ -172,6 +173,7 @@ export function Timeline({ authed }: { authed: boolean }) {
 
   return (
     <section ref={section} id="timeline" className={t.timeline} aria-label="Timeline" tabIndex={-1}>
+      {!authed && <VisitorIntro />}
       <TalkingNowRow />
       <div ref={head} className={t.head}>
         {authed ? <Tabs tab={tab} onChange={setTab} /> : <h2 className={t.title}>Latest</h2>}

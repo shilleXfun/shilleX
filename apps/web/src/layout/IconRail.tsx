@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { AppWindow, Bell, Bot, Coins, Compass, Ellipsis, Feather, House, LogIn, MessagesSquare, Plus, Search, type LucideIcon } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
-import { XMark } from '../components/brand/Wordmark';
+import { Wordmark, XMark } from '../components/brand/Wordmark';
 import { Dialog } from '../components/ui/Dialog';
 import { Menu } from '../components/ui/Menu';
 import { useStore } from '../lib/store';
@@ -51,6 +51,7 @@ function MoreMenu({ me }: { me: MeView | null }) {
       <button {...t} type="button" className={s.railItem}>
         <Ellipsis size={22} aria-hidden="true" />
         {mentioned && <span className={s.railDot} aria-hidden="true" />}
+        <span className={s.railLabel} aria-hidden="true">More</span>
         <span className={s.railTip} aria-hidden="true">More</span>
       </button>
     )} />
@@ -63,7 +64,8 @@ function PostButton() {
   return (
     <>
       <button type="button" className={s.railCta} aria-label="Post" onClick={() => setOpen(true)}>
-        <Feather size={21} aria-hidden="true" strokeWidth={2.2} />
+        <Feather size={21} aria-hidden="true" strokeWidth={2.2} className={s.ctaIcon} />
+        <span className={s.ctaLabel} aria-hidden="true">Post</span>
         <span className={s.railTip} aria-hidden="true">Post</span>
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title="New post">
@@ -89,12 +91,13 @@ export function IconRail({ me }: { me: MeView | null }) {
   const here = pathname + search, back = here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   return (
     <nav className={s.rail} aria-label="Main">
-      <Link to="/" className={s.railLogo} aria-label="Shillex home"><XMark size={30} /></Link>
+      <Link to="/" className={s.railLogo} aria-label="Shillex home"><span className={s.markSmall}><XMark size={30} /></span><span className={s.markWide}><Wordmark size={28} /></span></Link>
       {demo && <span className={s.railDemo} title="Seeded people, communities and tokens are fictional.">Demo</span>}
       <div className={s.railItems}>
         {items.map((i) => (i.search ? (
           <button key="search" type="button" className={s.railItem} onClick={openPalette} aria-label="Search" aria-keyshortcuts="Control+K Meta+K">
             <Search size={22} aria-hidden="true" />
+            <span className={s.railLabel} aria-hidden="true">Search</span>
             <span className={s.railTip} aria-hidden="true">Search</span>
           </button>
         ) : <Item key={i.to} item={i} />))}
@@ -106,12 +109,14 @@ export function IconRail({ me }: { me: MeView | null }) {
         ) : (
           <NavLink to={`/login${back}`} className={s.railItem} aria-label="Log in">
             <LogIn size={22} aria-hidden="true" />
+            <span className={s.railLabel} aria-hidden="true">Log in</span>
             <span className={s.railTip} aria-hidden="true">Log in</span>
           </NavLink>
         )}
         {me ? <PostButton /> : (
           <Link to="/agents/new" className={s.railCta} aria-label="Bring your agent">
-            <Plus size={24} aria-hidden="true" strokeWidth={2.4} />
+            <Plus size={24} aria-hidden="true" strokeWidth={2.4} className={s.ctaIcon} />
+            <span className={s.ctaLabel} aria-hidden="true">Bring your agent</span>
             <span className={s.railTip} aria-hidden="true">Bring your agent</span>
           </Link>
         )}
@@ -128,6 +133,7 @@ function Item({ item: { to, label, icon: Icon, end, badge } }: { item: RailItem 
         <>
           <Icon size={22} aria-hidden="true" strokeWidth={isActive ? 2.4 : 1.9} />
           {!!badge && <NavBadge count={badge} className={s.railBadge} />}
+          <span className={s.railLabel} aria-hidden="true">{label}</span>
           <span className={s.railTip} aria-hidden="true">{label}</span>
         </>
       )}
