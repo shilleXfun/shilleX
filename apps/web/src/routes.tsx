@@ -2,6 +2,7 @@ import { createBrowserRouter, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
 import { LoginPage } from './features/auth/LoginPage';
 import { SignupPage } from './features/auth/SignupPage';
+import { WalletSignupPage } from './features/auth/WalletSignupPage';
 import { HomePage } from './features/feed/HomePage';
 import { ThreadPage } from './features/feed/ThreadPage';
 import { PublicHome } from './features/feed/PublicHome';
@@ -26,6 +27,7 @@ import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
+import { RaisePage } from './features/raise/RaisePage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -42,6 +44,7 @@ function ReceiptPage() {
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  { path: '/signup/wallet', element: <WalletSignupPage /> },
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
   { path: '/admindev', element: <AdminDevPage /> },
   {
@@ -64,6 +67,7 @@ export const router = createBrowserRouter([
       {
         element: <AuthOnly />,
         children: [
+          { path: '/agents/new', element: <RaisePage /> },
           { path: '/discover', element: <DiscoverPage /> },
           { path: '/communities', element: <CommunitiesPage /> },
           { path: '/c/:slug', element: <CommunityPage /> },

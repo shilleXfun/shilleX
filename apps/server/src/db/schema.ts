@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
-import type { ChainTxKind,ContextItem, ToolCallRecord, TurnStatus, TurnTrigger } from '@shillex/shared';
+import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -19,7 +19,12 @@ export const users = pgTable('users', {
   createdAt: ts('created_at').notNull(),
   isDemo: boolean('is_demo').notNull().default(false),
   kind: text('kind').$type<'human' | 'agent'>().notNull().default('human'),
-}, (t) => [uniqueIndex('users_username_lower_idx').on(sql`lower(${t.username})`)]);
+  /** LOGIN: a sign-in name shaped like an address. Never verified, never mailed, never shown to anyone but its owner. */
+  email: text('email'),
+}, (t) => [
+  uniqueIndex('users_username_lower_idx').on(sql`lower(${t.username})`),
+  uniqueIndex('users_email_lower_idx').on(sql`lower(${t.email})`),
+]);
 
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
@@ -46,6 +51,10 @@ export const mutes = pgTable('mutes', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.userId, t.targetId] })]);
 
+/**
+ * @deprecated LOGIN: typed wallet addresses, copied into `user_wallets` (unverified) by the `login_data` migration.
+ * Nothing reads or writes it any more; the controller drops it after every parallel stream has merged.
+ */
 export const walletLinks = pgTable('wallet_links', {
   userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   address: text('address').notNull(),
@@ -285,11 +294,18 @@ export const reports = pgTable('reports', {
 // ── Agents (the agent world boots whenever WORLD_KEY is set) ──
 export const agents = pgTable('agents', {
   userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
-  status: text('status').$type<'active' | 'paused'>().notNull().default('active'),
+  status: text('status').$type<'active' | 'paused' | 'retired'>().notNull().default('active'),
   avatarEmoji: text('avatar_emoji'),
   avatarColor: text('avatar_color'),
   createdAt: ts('created_at').notNull(),
-});
+  // RAISE (spec 2026-10-13-user-agents §1): wild agents are the original 50; a raised one has (or had) a human owner.
+  origin: text('origin').$type<AgentOrigin>().notNull().default('wild'),
+  /** The human who raised it; null for wild agents and once released or retired. Unique: one raised agent per human. */
+  ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
+  releasedAt: ts('released_at'),
+  retiredAt: ts('retired_at'),
+  retireReason: text('retire_reason').$type<'owner' | 'admin' | 'reports'>(),
+}, (t) => [uniqueIndex('agents_owner_idx').on(t.ownerId)]);
 
 export const agentMemory = pgTable('agent_memory', {
   id: text('id').primaryKey(),
@@ -565,3 +581,101 @@ export const spotlightDone = pgTable('spotlight_done', {
   key: text('key').primaryKey(),
   at: ts('at').notNull(),
 });
+
+// ── LOGIN ──
+
+/** Wallets on an account. The address is the key, so a wallet belongs to one account. `verified_at` null: a typed address from before wallet sign-in. */
+export const userWallets = pgTable('user_wallets', {
+  address: text('address').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** As the wallet reports its own name; display only. */
+  walletName: text('wallet_name'),
+  verifiedAt: ts('verified_at'),
+  showOnProfile: boolean('show_on_profile').notNull().default(false),
+  isPayout: boolean('is_payout').notNull().default(false),
+  createdAt: ts('created_at').notNull(),
+  lastLoginAt: ts('last_login_at'),
+}, (t) => [
+  index('user_wallets_user_idx').on(t.userId),
+  uniqueIndex('user_wallets_payout_idx').on(t.userId).where(sql`${t.isPayout}`),
+]);
+export type UserWalletRow = typeof userWallets.$inferSelect;
+
+/** One SIWS challenge. Claimed once (`used_at`), atomically, before its signature is checked. */
+export const authNonces = pgTable('auth_nonces', {
+  nonce: text('nonce').primaryKey(),
+  purpose: text('purpose').$type<WalletPurpose>().notNull(),
+  /** Set for `link` and `confirm`: only this user may use the nonce. */
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  input: jsonb('input').$type<SiwsInput>().notNull(),
+  /** The exact text a wallet without `solana:signIn` signs; null when the challenge had no address. */
+  message: text('message'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  usedAt: ts('used_at'),
+});
+export type AuthNonceRow = typeof authNonces.$inferSelect;
+
+/** One-use tokens, stored as sha256 like sessions. `wallet_signup`: a wallet signed in but has no account yet. */
+export const authTokens = pgTable('auth_tokens', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<'wallet_signup'>().notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  data: jsonb('data').$type<{ address: string; walletName: string | null }>().notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  usedAt: ts('used_at'),
+});
+export type AuthTokenRow = typeof authTokens.$inferSelect;
+
+// ── RAISE ── (spec 2026-10-13-user-agents)
+/** The owner's description of a raised agent. Private: only its owner and admins ever see it. Deleted with the owner. */
+export const agentSeeds = pgTable('agent_seeds', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: text('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  description: text('description').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('agent_seeds_owner_idx').on(t.ownerId, t.createdAt)]);
+
+/** A request to raise an agent: queued until the limits, the treasury and the budget share allow it, then hatched or refused. */
+export const agentHatches = pgTable('agent_hatches', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  handle: text('handle').notNull(),
+  description: text('description').notNull(),
+  status: text('status').$type<HatchStatus>().notNull().default('queued'),
+  reason: text('reason'),
+  agentId: text('agent_id').references(() => users.id, { onDelete: 'set null' }),
+  /** A model call was made for it: it counts toward the owner's 2 attempts a day. */
+  attempted: boolean('attempted').notNull().default(false),
+  createdAt: ts('created_at').notNull(),
+  startedAt: ts('started_at'),
+  finishedAt: ts('finished_at'),
+}, (t) => [index('agent_hatches_owner_idx').on(t.ownerId, t.createdAt), index('agent_hatches_status_idx').on(t.status, t.createdAt)]);
+
+/** An owner's preset nudge: it leans the agent's choices for 2 hours (agents/raised/nudges.ts). Public by design. */
+export const agentNudges = pgTable('agent_nudges', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: text('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<NudgeKind>().notNull(),
+  targetUserId: text('target_user_id').references(() => users.id, { onDelete: 'set null' }),
+  mint: text('mint'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  outcome: text('outcome').$type<NudgeOutcome>().notNull().default('pending'),
+  outcomeTurnId: text('outcome_turn_id'),
+}, (t) => [index('agent_nudges_agent_idx').on(t.agentId, t.expiresAt), index('agent_nudges_owner_idx').on(t.ownerId, t.createdAt)]);
+
+/** Devnet SOL the treasury sent a raised agent: its start grant and its top-ups. */
+export const agentGrants = pgTable('agent_grants', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  kind: text('kind').$type<'start' | 'top_up'>().notNull(),
+  signature: text('signature').notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('agent_grants_agent_idx').on(t.agentId), index('agent_grants_created_idx').on(t.createdAt)]);
+
+export type AgentHatchRow = typeof agentHatches.$inferSelect;
+export type AgentNudgeRow = typeof agentNudges.$inferSelect;

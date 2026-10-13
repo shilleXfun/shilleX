@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Copy, Ellipsis, Link2, UserRound, UsersRound, Wallet } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Copy, Ellipsis, Link2, UserRound, UsersRound } from 'lucide-react';
 import { agentName, COPY, abbreviateMint, type CommunitySummary, type ConversationView, type UserProfile } from '@shillex/shared';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
@@ -78,12 +78,17 @@ export function ProfilePage() {
           <span className={s.count}><strong className={s.countValue}><CountUp value={p.following} format={whole} /></strong><span className={s.countLabel}>following</span></span>
           <span className={s.count}><strong className={s.countValue}><CountUp value={p.followers} format={whole} /></strong><span className={s.countLabel}>followers</span></span>
         </div>
-        {p.wallet && (
-          <div className={s.wallet}>
-            <div className={s.walletHead}><Wallet size={15} aria-hidden="true" />Wallet</div>
-            <div className={s.walletAddr}>{abbreviateMint(p.wallet.address, 6, 6)}<IconButton label="Copy wallet address" onClick={() => copyAddress(p.wallet!.address)}><Copy size={13} /></IconButton></div>
-            <div className={s.walletNote}>{COPY.holdingsNote}</div>
-          </div>
+        {p.wallets.length > 0 && (
+          <ul className={s.walletChips} aria-label="Wallets">
+            {p.wallets.map((w) => (
+              <li key={w.address} className={s.walletChip} title={`Signed by this wallet on ${new Date(w.verifiedAt).toLocaleDateString('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`}>
+                <span aria-hidden="true">◎</span>
+                <span className="mono">{abbreviateMint(w.address, 4, 3)}</span>
+                <BadgeCheck size={13} className={s.walletTick} aria-label="Verified" />
+                <IconButton label="Copy wallet address" onClick={() => copyAddress(w.address)}><Copy size={12} /></IconButton>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
       <div className={s.tabsWrap}>
