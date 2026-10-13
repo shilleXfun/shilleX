@@ -2,16 +2,18 @@
 .shell { --topbar-h: 56px; --rail-w: 72px; --sticky-top: var(--topbar-h); min-height: 100%; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-rows: auto 1fr; }
 .topbar { grid-column: 1 / -1; position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 14px; min-width: 0; height: var(--topbar-h); padding: 0 14px 0 22px; background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
-.live { display: inline-flex; align-items: center; gap: 7px; flex: none; color: var(--text); font: 600 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
-.liveDot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 10px var(--up); }
-@media (prefers-reduced-motion: no-preference) { .liveDot { animation: blink 1.6s ease-in-out infinite; } }
-@keyframes blink { 50% { opacity: .35; } }
 .demoChip { flex: none; padding: 5px 9px; border-radius: var(--radius-pill); background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn-line); color: var(--warn); font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
-.ticker { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
-/* "Waiting for the first trade…" reads in the ticker's own type and stays on one line. */
-.ticker > p { overflow: hidden; font: 500 12px/1.4 var(--font-mono); white-space: nowrap; text-overflow: ellipsis; }
-/* Holds the weather chip; on phones it is a container, so the chip can fold to its dot when the row is short. */
-.wx { display: flex; flex: none; }
+/* "Agents 100": a quiet count beside the brand, set apart by a hairline. */
+.stat { display: inline-flex; align-items: baseline; gap: 7px; flex: none; padding-left: 14px; border-left: 1px solid var(--line); color: var(--text); font-size: var(--fs-sm); line-height: 1; white-space: nowrap; }
+.statLabel { color: var(--muted); font-weight: 500; }
+.statNum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat:hover .statLabel { color: var(--text); }
+/* Signed in: the palette's way in, shaped like the field it opens. */
+.search { display: flex; align-items: center; gap: 9px; flex: 0 1 360px; min-width: 0; height: 34px; margin: 0 auto; padding: 0 8px 0 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: var(--muted); font-size: var(--fs-sm); text-align: left; transition: border-color .12s, color .12s, background .12s; }
+.search:hover { border-color: var(--line-strong); color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.searchText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchKey { flex: none; padding: 3px 6px; border-radius: 6px; background: var(--raised); color: var(--muted); font: 500 11px/1 var(--font-ui); }
+.search + .actions { margin-left: 0; }
 .actions { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
 .iconBtn { position: relative; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--muted); transition: color .12s, background .12s; }
 .iconBtn:hover { color: var(--text); background: var(--hover); }
@@ -57,13 +59,6 @@
 .panelTitle { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 .panelTitle a { color: var(--muted); font: 500 var(--fs-xs) var(--font-ui); letter-spacing: 0; text-transform: none; }
 .panelTitle a:hover { color: var(--text); }
-.wxName { font: 800 26px/1 var(--font-brand); font-stretch: 78%; color: var(--accent); }
-/* The name takes the regime colour, like the top bar chip. */
-.panel[data-regime='grind'] .wxName { color: var(--text); }
-.panel[data-regime='fear'] .wxName { color: var(--down); }
-.panel[data-regime='chaos'] .wxName { color: var(--faction-3); }
-.wxSub { color: var(--muted); font-size: var(--fs-sm); }
-.wxLeft { display: block; margin-top: 4px; font: 500 var(--fs-xs) var(--font-mono); letter-spacing: .02em; }
 .row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 0; font-size: 13.5px; color: var(--text); }
 .row:hover .rowName { text-decoration: underline; text-underline-offset: 3px; }
 .rowName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -100,12 +95,6 @@
 .tapeStrip { display: grid; gap: 2px; margin: 6px 0 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--card-solid); }
 .tapeStrip[data-folded] { padding-block: 2px; }
 
-/* Too little room for the widest name ("Chaos hour"): just the coloured dot. The name stays for screen readers and the title. */
-@container (max-width: 104px) {
-  .wx [data-regime] { padding: 0 9px; }
-  .wx [data-regime] > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-}
-
 /* Three columns from 1440 px when the shell carries the tape (data-tape): tape, centre, World now. */
 @media (min-width: 1440px) {
   .shell { --center-max: 800px; }
@@ -115,23 +104,14 @@
 @media (max-width: 1199px) { .stage { grid-template-columns: minmax(0, var(--center-max)); } .side { display: none; } }
 @media (max-width: 1023px) { .stage { padding: 0 16px; } }
 @media (max-width: 767px) {
-  .shell { --topbar-h: 52px; --ticker-h: 30px; --sticky-top: calc(var(--topbar-h) + var(--ticker-h)); grid-template-columns: minmax(0, 1fr); }
-  /* Two fixed rows (brand row, ticker strip), so the bar is always exactly --sticky-top tall with its bottom border and
-     the brand row can never wrap. The weather takes what the row has left and folds to its dot when that is too little. */
-  .topbar { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-rows: calc(var(--topbar-h) - 1px) var(--ticker-h); gap: 0 10px; height: auto; padding: 0 6px 0 14px; }
-  .brand { grid-area: 1 / 1; }
-  .live { grid-area: 1 / 2; }
-  .wx { grid-area: 1 / 3; container-type: inline-size; min-width: 0; }
-  .actions { grid-area: 1 / 4; }
-  .liveText, .demoChip { display: none; }
-  .ticker { grid-area: 2 / 1 / 3 / -1; align-self: stretch; display: flex; align-items: center; margin: 0 -6px 0 -14px; padding: 0 14px; border-top: 1px solid var(--line); }
+  .shell { --topbar-h: 52px; --sticky-top: var(--topbar-h); grid-template-columns: minmax(0, 1fr); }
+  .topbar { gap: 12px; padding: 0 6px 0 14px; }
+  .demoChip { display: none; }
+  .search { flex: none; width: 38px; margin-left: auto; padding: 0; justify-content: center; border-color: transparent; background: none; }
+  .searchText, .searchKey { display: none; }
+  .search + .actions { margin-left: 0; }
   .textBtn { padding: 8px 10px; }
   .ctaBtn { padding: 8px 12px; }
-  /* No agent world, no strip. */
-  .ticker[data-off] { display: none; }
-  /* Not on immersive pages, which hide the whole bar (their 0 offset must win over this rule's higher specificity). */
-  .shell:not([data-immersive='true']):has(.ticker[data-off]) { --sticky-top: var(--topbar-h); }
-  .shell:has(.ticker[data-off]) .topbar { grid-template-rows: calc(var(--topbar-h) - 1px); }
   .railCol { display: none; }
   .stage { padding: 0 6px; }
   /* Cards and panels round a little less on phones. */
