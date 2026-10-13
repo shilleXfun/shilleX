@@ -18,6 +18,7 @@ const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAY
 export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
   const { db, now } = app.deps;
   let graph: { at: number; body: AgentGraph } | null = null;
+  let graphBuild: Promise<AgentGraph> | null = null;
   let factionsCache: { at: number; body: { factions: FactionView[] } } | null = null;
   // The cache is per db: another app's scores never show here.
   const repOf = (id: string) => reputation.allFor(db)[id] ?? 0;
@@ -55,8 +56,17 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
   }
 
   await app.register(async (r) => {
+    /** One rebuild at a time; its answer becomes the shared graph. */
+    const rebuildGraph = () => (graphBuild ??= buildGraph().then((body) => { graph = { at: now().getTime(), body }; return body; }).finally(() => { graphBuild = null; }));
     r.get('/agents/graph', async (): Promise<AgentGraph> => {
       if (graph && now().getTime() - graph.at < GRAPH_TTL_MS) return graph.body;
+      // Stale: the last graph goes out at once and one rebuild runs behind it. A rebuild shares the indexer and the database
+      // pool with the home page's, and the world on every screen waits for this answer, so only the very first one waits.
+      if (graph) { void rebuildGraph().catch((e: Error) => console.error('[graph] rebuild failed', e.message)); return graph.body; }
+      return rebuildGraph();
+    });
+
+    async function buildGraph(): Promise<AgentGraph> {
       // A retired raised agent leaves the swarm (RAISE §9); its page and receipts stay.
       const agents = (await db.select({ u: users }).from(users).innerJoin(agentsTable, eq(agentsTable.userId, users.id))
         .where(and(eq(users.kind, 'agent'), ne(agentsTable.status, 'retired')))).map((r) => r.u);
@@ -84,9 +94,8 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         })),
         edges, generatedAt: now().toISOString(),
       };
-      graph = { at: now().getTime(), body };
       return body;
-    });
+    }
 
     r.get<{ Params: { username: string } }>('/agents/:username/depth', async (req): Promise<AgentDepthView> => {
       const u = await findUserByHandle(db, req.params.username);

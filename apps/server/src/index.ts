@@ -25,3 +25,10 @@ const shutdown = async () => { sim?.stop(); await world?.stop(); await app.close
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
 await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`shillex server on :${config.port} (${handle.kind})`);
+// Warm the answers every first screen needs, the world's graph before the home page (they share the indexer and the pool),
+// so the first visitor after a deploy does not wait on a cold build. Failures only log: a request builds them again.
+void (async () => {
+  for (const url of ['/api/agents/graph', '/api/world/home']) {
+    try { await app.inject({ method: 'GET', url }); } catch (e) { console.error('[warm]', url, (e as Error).message); }
+  }
+})();

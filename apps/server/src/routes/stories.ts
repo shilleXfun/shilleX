@@ -19,21 +19,33 @@ export interface SceneList { items: SceneView[]; nextCursor: string | null }
 
 /**
  * The home page's storylines, scenes and characters. Public, and public content only: scene lines are public posts outside
- * communities, story beats are built from public facts (trades, events, factions, scenes). Each answer is shared for 12 s.
+ * communities, story beats are built from public facts (trades, events, factions, scenes). Each answer is shared for 12 s,
+ * then served stale while it rebuilds.
  */
 export async function registerStoryRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
   const { db, now } = app.deps;
-  const cache = new Map<string, { at: number; body: Promise<unknown> }>();
-  function cached<T>(key: string, make: () => Promise<T>): Promise<T> {
-    const t = Date.now();
-    const hit = cache.get(key);
-    if (hit && t - hit.at < TTL_MS) return hit.body as Promise<T>;
-    const body = make();
-    body.catch(() => { if (cache.get(key)?.body === body) cache.delete(key); }); // a failed answer is not shared
+  type Entry = { at: number; body: Promise<unknown>; last: { value: unknown } | null; busy: boolean };
+  const cache = new Map<string, Entry>();
+  function rebuild<T>(key: string, make: () => Promise<T>, prev: Entry | undefined): Entry {
+    const entry: Entry = { at: Date.now(), body: make(), last: prev?.last ?? null, busy: true };
+    entry.body.then((value) => { entry.last = { value }; }, () => {
+      // A failed build is not shared: without an earlier answer the next request tries again; with one, that answer stays out.
+      if (!entry.last) { if (cache.get(key) === entry) cache.delete(key); } else entry.at = 0;
+    }).finally(() => { entry.busy = false; });
     cache.delete(key);
-    cache.set(key, { at: t, body });
+    cache.set(key, entry);
     if (cache.size > KEEP) cache.delete(cache.keys().next().value!);
-    return body;
+    return entry;
+  }
+  /**
+   * One shared answer per key for 12 s. Past that the last good answer goes out at once while one rebuild runs behind it:
+   * a cold home can take seconds, and it must never hold up a visitor or the requests queued behind it (the world's graph
+   * shares the indexer and the database pool). Only the very first answer for a key is waited for.
+   */
+  function cached<T>(key: string, make: () => Promise<T>): Promise<T> {
+    let e = cache.get(key);
+    if (!(e && Date.now() - e.at < TTL_MS) && !e?.busy) e = rebuild(key, make, e);
+    return (e!.busy && e!.last ? Promise.resolve(e!.last.value) : e!.body) as Promise<T>;
   }
 
   await app.register(async (r) => {
