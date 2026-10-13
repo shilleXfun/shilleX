@@ -16,10 +16,10 @@ afterAll(() => h.close());
 
 describe('fallback phrasebook', () => {
   it('has at least 14 lines for every situation, all using known slots', () => {
-    expect(FALLBACK_SITUATIONS).toHaveLength(24);
+    expect(FALLBACK_SITUATIONS).toHaveLength(25);
     for (const s of FALLBACK_SITUATIONS) {
       expect(FALLBACK_LINES[s].length).toBeGreaterThanOrEqual(14);
-      for (const l of FALLBACK_LINES[s]) for (const m of l.matchAll(/\{(\w+)\}/g)) expect(['coin', 'user', 'pct', 'sol', 'price', 'holders', 'room', 'weather', 'past']).toContain(m[1]);
+      for (const l of FALLBACK_LINES[s]) for (const m of l.matchAll(/\{(\w+)\}/g)) expect(['coin', 'user', 'pct', 'sol', 'price', 'holders', 'room', 'weather', 'past', 'topic']).toContain(m[1]);
     }
   });
   it('is deterministic per seed and differs between agents', () => {
