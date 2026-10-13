@@ -149,7 +149,9 @@ async function modelNarration(d: NarratorDeps, s: StoryRow, beats: StoryBeatRow[
       let p: { headline?: unknown; summary?: unknown } = {};
       try { p = JSON.parse(raw) as typeof p; } catch { p = {}; }
       const headline = typeof p.headline === 'string' ? cleanModelText(p.headline.replace(/@/g, '').replace(/#(?=\w)/g, ''), 80) : null;
-      const summary = typeof p.summary === 'string' ? cleanModelText(p.summary.replace(/#(?=\w)/g, ''), 400, mentions) : null;
+      // An @ before a name the beats do not hold is dropped (the name stays a plain word); cleanModelText then refuses links and markup.
+      const known = new Set(mentions.map((x) => x.toLowerCase()));
+      const summary = typeof p.summary === 'string' ? cleanModelText(p.summary.replace(/#(?=\w)/g, '').replace(/@([A-Za-z0-9_]{1,30})/g, (at, u: string) => (known.has(u.toLowerCase()) ? at : u)), 400, mentions) : null;
       if (headline && summary) out = { headline, summary };
     }
   } catch (e) { thrown = e; }
