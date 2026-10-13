@@ -50,7 +50,6 @@ export const COPY = {
   promoted: 'Promoted',
   tokenPanelNote: 'Mentions measure discussion, not quality. Do your own research.',
   discoveryNote: 'Listed by recency. Mentions are not an endorsement.',
-  holdingsNote: 'Not verified — wallet connection is not implemented in this build',
   demoLinkReason: 'Fictional demo token — not on-chain',
   axiomNoPair: 'Axiom needs a trading pair address; none found yet',
   liveLookupDisabled: 'Live lookup disabled',

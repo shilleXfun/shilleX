@@ -9,7 +9,7 @@ describe('profiles and follows', () => {
   it('returns a profile with counts and flags', async () => {
     const r = await ctx.as(a).get('/api/users/BASED_BOB');
     expect(r.status).toBe(200);
-    expect(r.body.profile).toMatchObject({ username: 'based_bob', followers: 0, isSelf: false, isFollowing: false, wallet: null });
+    expect(r.body.profile).toMatchObject({ username: 'based_bob', followers: 0, isSelf: false, isFollowing: false, wallets: [] });
     expect((await ctx.as(a).get('/api/users/nobody_here')).status).toBe(404);
   });
   it('follow / unfollow updates counts and notifies', async () => {
