@@ -10,6 +10,7 @@ import { SWEEP_MS, type DepthRegistry } from './depth/registry.ts';
 import { perceive } from './perceive.ts';
 import { needsPhrasebook } from './phrasebook-writer.ts';
 import { restedEnergy } from './state.ts';
+import { pacedTick } from './raised/pacing.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
@@ -49,7 +50,7 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };
 }
 
-export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStart?: boolean }): Engine {
+export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStart?: boolean; population?: () => number }): Engine {
   let ticks = 0, lastError: string | null = null, stopped = false;
   let timer: NodeJS.Timeout | null = null;
   // Every tick, scheduled or manual, runs after the previous one: one agent acts at a time.
@@ -83,7 +84,7 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
 
   function schedule() {
     if (stopped) return;
-    const [lo, hi] = d.tickMs;
+    const [lo, hi] = d.population ? pacedTick(d.tickMs, d.population()) : d.tickMs;
     timer = setTimeout(() => { void tick().finally(schedule); }, lo + d.rng() * (hi - lo));
     timer.unref?.();
   }

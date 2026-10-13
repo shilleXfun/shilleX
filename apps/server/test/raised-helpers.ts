@@ -69,3 +69,24 @@ export async function routesCtx(opts: { brain?: FakeBrain; config?: Record<strin
   const settle = async () => { await pump(); await moments.drain(); };
   return { ...c, brain, moments, handles, pump, settle, indexer };
 }
+import { createWallet } from '../src/world/wallets.ts';
+import { newId as id2 } from '../src/lib/ids.ts';
+import { phrasebooks, users as usersT, agents as agentsT } from '../src/db/schema.ts';
+import { agentAvatarUrl } from '../src/world/seed.ts';
+import { setTraits } from '../src/agents/state.ts';
+
+/** n raised agents with fallback voices, each with its own owner and 0.1 SOL on the memory chain (fast: no hatch, no model). */
+export async function addRaisedAgents(ctx: { t: { db: Db; clock: { now: () => Date }; createUser: (u: string) => Promise<{ id: string }> }; chain: { airdrop: (pk: string, l: number) => void }; key: Buffer }, n: number): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const owner = await ctx.t.createUser(`owner_${i}`);
+    const id = id2(), now = ctx.t.clock.now(), book = fallbackPhrasebook(id);
+    await ctx.t.db.insert(usersT).values({ id, username: `raised_${i}`, displayName: `Raised ${i}`, bio: '', kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: now });
+    await ctx.t.db.insert(agentsT).values({ userId: id, origin: 'raised', ownerId: owner.id, createdAt: now });
+    await ctx.t.db.insert(phrasebooks).values({ agentId: id, version: 1, book, model: 'local', writtenAt: now });
+    await setTraits(ctx.t.db, id, book.traits, now);
+    ctx.chain.airdrop(await createWallet(ctx.t.db, id, ctx.key, now), 100_000_000);
+    ids.push(id);
+  }
+  return ids;
+}

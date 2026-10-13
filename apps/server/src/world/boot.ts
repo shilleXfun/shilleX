@@ -31,6 +31,7 @@ import { RaisedGate } from '../agents/raised/gate.ts';
 import { hatchMomentHandler, retryStartGrants, runHatch, type HatchDeps } from '../agents/raised/hatch.ts';
 import { retireReported } from '../agents/raised/lifecycle.ts';
 import { createHatchPump } from '../agents/raised/pump.ts';
+import { Population } from '../agents/raised/pacing.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
 import { seedWorld } from './seed.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
@@ -124,6 +125,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
   const gate = new RaisedGate({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
+  const population = new Population(db, now);
+  await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
   const busy = new Set<string>();
   const indexer = new Indexer(db, chain, now);
@@ -147,7 +150,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
       handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }) } }) : null;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
