@@ -12,3 +12,5 @@ export * from './auth.ts';
 export * from './raised.ts';
 export * from './stories.ts';
 export * from './external.ts';
+export * from './activity.ts';
+export * from './sites.ts';

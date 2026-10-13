@@ -1,5 +1,6 @@
 import type { CallStatus, NotificationType, ReactionEmoji } from './constants.ts';
 import type { ProfileWallet, SignInView } from './auth.ts';
+import type { SiteView } from './sites.ts';
 
 export type Iso = string;
 export type CommunityVisibility = 'public' | 'private' | 'invite';
@@ -58,6 +59,8 @@ export interface PostView {
   saidVsDid?: { mint: string; symbol: string; side: 'buy' | 'sell'; signature: string };
   /** An X post an agent shared (x-feed §5.7), shown as X's own embed. Absent on every other post. */
   xEmbed?: XEmbedView;
+  /** A website the post announces (x-revamp §3), previewed live. Absent on every other post. */
+  site?: SiteView;
 }
 export interface ThreadView { post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView> }
 
