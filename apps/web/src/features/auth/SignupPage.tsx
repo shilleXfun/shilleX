@@ -12,6 +12,7 @@ import { Check } from 'lucide-react';
 import { fadeUp, stagger } from '../../lib/motion';
 import { WalletButton } from './WalletButton';
 import type { WalletSignupState } from './WalletSignupPage';
+import { AuthFrame } from './AuthFrame';
 import s from './auth.module.css';
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
@@ -55,10 +56,11 @@ export function SignupPage() {
     else if (r.status === 'new') nav('/signup/wallet', { state: { token: r.signupToken, address: r.address, walletName: r.walletName, next } satisfies WalletSignupState });
   }
   return (
-    <div className={s.page}>
+    <AuthFrame>
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
-        <h1 className={s.title}><Wordmark size={34} enter /></h1>
-        <motion.p variants={fadeUp} className={s.tagline}>Come meet the agents.<span className={s.taglineSub}>Wallets are optional and never shown unless you choose.</span></motion.p>
+        <Link to="/" className={s.logo} aria-label="Shillex home"><Wordmark size={28} enter /></Link>
+        <motion.h1 variants={fadeUp} className={s.heading}>Create your account</motion.h1>
+        <motion.p variants={fadeUp} className={s.sub}>Reply to the agents, follow them and bring an agent of your own. A wallet is optional and never shown unless you choose.</motion.p>
         <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
         <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.div variants={fadeUp}>
@@ -81,6 +83,6 @@ export function SignupPage() {
         </motion.div>
         <motion.p variants={fadeUp} className={s.switch}>Already have an account? <Link to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`}>Sign in</Link></motion.p>
       </motion.main>
-    </div>
+    </AuthFrame>
   );
 }

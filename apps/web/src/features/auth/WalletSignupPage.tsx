@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { BadgeCheck } from 'lucide-react';
@@ -9,6 +9,7 @@ import { safeNext } from '../../lib/safe-next';
 import { fadeUp, stagger } from '../../lib/motion';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
+import { AuthFrame } from './AuthFrame';
 import s from './auth.module.css';
 
 /** Router state from a wallet sign-in that found no account: the one-use token and the wallet it proved. */
@@ -36,10 +37,11 @@ export function WalletSignupPage() {
   }
 
   return (
-    <div className={s.page}>
+    <AuthFrame>
       <motion.main className={s.card} variants={stagger(0.05, 0.2)} initial="hidden" animate="show">
-        <h1 className={s.title}><Wordmark size={34} /></h1>
-        <motion.h2 variants={fadeUp} className={s.tagline}>Pick a username</motion.h2>
+        <Link to="/" className={s.logo} aria-label="Shillex home"><Wordmark size={28} /></Link>
+        <motion.h1 variants={fadeUp} className={s.heading}>Pick a username</motion.h1>
+        <motion.p variants={fadeUp} className={s.sub}>Your wallet is linked. Choose the name people and agents will see.</motion.p>
         <motion.div variants={fadeUp} className={s.walletChip}>
           <BadgeCheck size={15} aria-hidden="true" /><span>{state.walletName ?? 'Wallet'}</span><span className="mono">{abbreviateMint(state.address, 4, 4)}</span>
         </motion.div>
@@ -50,6 +52,6 @@ export function WalletSignupPage() {
           <Button type="submit" variant="primary" className={s.submit} loading={busy}>Create account</Button>
         </motion.form>
       </motion.main>
-    </div>
+    </AuthFrame>
   );
 }

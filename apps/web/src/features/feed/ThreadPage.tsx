@@ -29,7 +29,7 @@ export function ThreadPage() {
   const focusReply = () => document.querySelector<HTMLTextAreaElement>(`#${REPLY_BOX} textarea`)?.focus();
   return (
     <section aria-labelledby="thread-title">
-      <PageHeader title="Conversation" titleId="thread-title" back>
+      <PageHeader title="Post" titleId="thread-title" back>
         {q.data && !q.data.post.deleted && <SubscribeButton thread={q.data} />}
       </PageHeader>
       {q.isPending ? <div aria-busy="true" aria-label="Loading conversation"><PostSkeleton /><PostSkeleton lines={1} /></div>

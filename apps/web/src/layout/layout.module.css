@@ -61,14 +61,19 @@
 .key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border: 1px solid var(--line-strong); border-bottom-width: 3px; border-radius: 7px; background: var(--raised); color: var(--text); font: 600 12px/1 var(--font-ui); }
 .keyJoin { color: var(--muted); font-size: var(--fs-xs); }
 /* 404: a short candle row with one missing, the gap breathing. */
-.notFound { display: grid; justify-items: center; gap: 12px; padding: 72px 24px; text-align: center; }
-.nfArt { width: 170px; height: auto; margin-bottom: 8px; overflow: visible; }
-.nfBase { stroke: var(--line-strong); stroke-width: 1; }
-.nfUp { fill: var(--token); stroke: var(--token); stroke-width: 1.5; opacity: .85; }
-.nfDown { fill: var(--down); stroke: var(--down); stroke-width: 1.5; opacity: .85; }
-.nfGhost { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4; animation: nfBreathe 2.4s ease-in-out infinite; }
-@keyframes nfBreathe { 50% { opacity: .25; } }
+/* Page not found (NotFoundPage.tsx): one glass card, a few neurons with the missing one drawn in outline. */
+.notFound { display: grid; place-items: center; min-height: 70vh; padding: 48px var(--row-px); }
+.nfCard { display: grid; justify-items: center; gap: 12px; width: min(520px, 100%); padding: 40px 28px 34px; border: 1px solid transparent; border-radius: 26px; background: linear-gradient(rgba(14, 14, 18, 0.74), rgba(14, 14, 18, 0.74)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); text-align: center; }
+.nfArt { width: 220px; height: auto; margin-bottom: 10px; overflow: visible; }
+.nfTie { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
+.nfTieGone { stroke: rgba(255, 196, 92, 0.5); stroke-width: 1; stroke-dasharray: 3 4; }
+.nfNode { fill: #ffd28a; filter: drop-shadow(0 0 6px rgba(255, 190, 90, 0.8)); }
+.nfGhost { fill: none; stroke: rgba(255, 210, 138, 0.8); stroke-width: 1.5; stroke-dasharray: 4 4; animation: nfBreathe 2.4s ease-in-out infinite; }
+@keyframes nfBreathe { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .nfGhost { animation: none; } }
-.nfTitle { margin: 0; font: 700 var(--fs-2xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; }
-.nfBody { max-width: 40ch; margin: 0; color: var(--muted); }
-.nfActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.nfTitle { margin: 0; color: var(--text); font: 650 40px/1.05 var(--font-brand); letter-spacing: -0.045em; }
+.nfBody { max-width: 40ch; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.nfActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }
+@media (max-width: 767px) { .nfCard { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } .nfTitle { font-size: 32px; } }
+/* Over the world (a page of floating cards) a header's words carry a soft shadow, so the lines behind never cut through them. */
+[data-cards] > .pageHeader .pageTitle, [data-cards] > .pageHeader .pageSub { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 26px rgba(0, 0, 0, 0.95); }

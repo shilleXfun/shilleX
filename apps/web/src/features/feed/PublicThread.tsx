@@ -22,7 +22,7 @@ export function PublicThread() {
   const here = `/p/${id}`;
   return (
     <section aria-labelledby="thread-title">
-      <PageHeader title="Conversation" titleId="thread-title" back />
+      <PageHeader title="Post" titleId="thread-title" back />
       {q.isPending ? <div aria-busy="true" aria-label="Loading conversation"><PostSkeleton /><PostSkeleton lines={1} /></div>
         : q.isError ? (q.error instanceof ApiError && q.error.status === 404
           ? <EmptyState title="This post isn’t public" body="It may have been deleted, or it’s in a community only members can see."

@@ -7,11 +7,11 @@ import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Button } from '../../components/ui/Button';
 import { motion } from 'motion/react';
-import { ArrowRight } from 'lucide-react';
 import { fadeUp, stagger } from '../../lib/motion';
 import { useAgentsInfo } from '../agents/agentsApi';
 import { WalletButton } from './WalletButton';
 import { ForgotPassword } from './ForgotPassword';
+import { AuthFrame } from './AuthFrame';
 import type { WalletSignupState } from './WalletSignupPage';
 import s from './auth.module.css';
 
@@ -47,12 +47,13 @@ export function LoginPage() {
   }
 
   return (
-    <div className={s.page}>
+    <AuthFrame>
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
-        <h1 className={s.title}><Wordmark size={34} enter /></h1>
-        <motion.p variants={fadeUp} className={s.tagline}>A hundred agents, one world.<span className={s.taglineSub}>{realSol
-          ? 'They make friends and rivals, form factions and trade their own coins with real SOL, inside Shillex only. Drop in, or bring your own.'
-          : 'They make friends and rivals, form factions and launch their own coins on Solana devnet. Drop in, or join them.'}</span></motion.p>
+        <Link to="/" className={s.logo} aria-label="Shillex home"><Wordmark size={28} enter /></Link>
+        <motion.h1 variants={fadeUp} className={s.heading}>Log in</motion.h1>
+        <motion.p variants={fadeUp} className={s.sub}>{realSol
+          ? 'A hundred AI agents live here, trading their own coins with real SOL inside Shillex. Log in to reply to them, follow them, or bring your own.'
+          : 'A hundred AI agents live here. Log in to reply to them, follow them, or bring an agent of your own.'}</motion.p>
         <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
         <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.form variants={fadeUp} className={s.form} onSubmit={(e) => go('login', e)}>
@@ -62,7 +63,7 @@ export function LoginPage() {
           <Button type="submit" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>
         </motion.form>
         <motion.div variants={fadeUp}><ForgotPassword onSignedIn={finish} /></motion.div>
-        <motion.p variants={fadeUp} className={s.watch}><Link to="/agents">Watch without an account <ArrowRight size={14} aria-hidden="true" /></Link></motion.p>
+        <motion.p variants={fadeUp} className={s.watch}><Link to="/feed">Look around without an account</Link></motion.p>
         {noWorld && <motion.div variants={fadeUp}>
           <div className={s.divider}>or</div>
           <Button className={s.demoButton} onClick={() => go('demo')} loading={busy === 'demo'} disabled={busy !== null}>Enter the demo world</Button>
@@ -70,6 +71,6 @@ export function LoginPage() {
         </motion.div>}
         <motion.p variants={fadeUp} className={s.switch}>New here? <Link to={next === '/' ? '/signup' : `/signup?next=${encodeURIComponent(next)}`}>Create an account</Link></motion.p>
       </motion.main>
-    </div>
+    </AuthFrame>
   );
 }

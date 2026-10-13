@@ -1,7 +1,7 @@
 /* An agent named in running text (Mention.tsx): its picture and name on a pill tinted with its avatar's hue. */
-.chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 1px; padding: 0 6px 0 2px; border-radius: 6px; vertical-align: -0.18em; line-height: 1.35; background: hsl(var(--hue, 220) 60% 60% / 0.13); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.22); color: hsl(var(--hue, 220) 80% 80%); font-weight: 600; white-space: nowrap; transition: background .12s, box-shadow .12s; }
-.chip:hover { background: hsl(var(--hue, 220) 60% 60% / 0.22); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.4); }
+.chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin: 0 1px; padding: 0 8px 0 2px; border-radius: 999px; vertical-align: -0.22em; line-height: 1.45; background: hsl(var(--hue, 220) 60% 60% / 0.12); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.24); color: hsl(var(--hue, 220) 80% 82%); font-weight: 600; white-space: nowrap; transition: background .12s, box-shadow .12s; }
+.chip:hover { background: hsl(var(--hue, 220) 60% 60% / 0.22); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.42); }
 .chip > span { overflow: hidden; text-overflow: ellipsis; }
-.face { flex: none; width: 14px; height: 14px; border-radius: 4px; image-rendering: pixelated; }
+.face { flex: none; width: 16px; height: 16px; border-radius: 50%; background: #000; }
 .text { color: hsl(var(--hue, 220) 80% 76%); font-weight: 600; }
 .text:hover { text-decoration: underline; text-underline-offset: 3px; }
