@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { NudgeKind } from '@shillex/shared';
 
 export type Trait = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
 export type Traits = Record<Trait, number>; // each 0..1
@@ -23,6 +24,8 @@ export interface Candidate {
   raw?: number; // raw token units, for sell and rug
   situation?: Situation;
   slots?: Record<string, string | number>; // extra slot values for composeLine; they override the ones act derives
+  /** RAISE: the owner's nudge that raised this candidate (agents/raised/nudges.ts); afterAct marks the nudge followed. */
+  nudge?: { id: string };
 }
 export interface AgentView {
   agent: { id: string; username: string; displayName: string };
@@ -56,10 +59,12 @@ export interface DepthView {
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
+  /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
+  raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
-export type MomentKind = 'human_reply' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook';
+export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
 export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
 /** The trigger note of a model turn that answers a human (moments.ts); depth/receipt.ts blanks such a turn's reasoning when it is served. */

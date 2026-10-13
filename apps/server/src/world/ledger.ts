@@ -1,7 +1,7 @@
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { ChainTxKind } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { chainTxs, wallets } from '../db/schema.ts';
+import { agents, chainTxs, wallets } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { ChainError, type Chain } from './chain.ts';
 import { TREASURY, signerFor } from './wallets.ts';
@@ -20,7 +20,8 @@ export class TreasuryEmpty extends Error {}
 
 export async function fundAgents(db: Db, chain: Chain, key: Buffer, now: () => Date, lamports = START_LAMPORTS) {
   const treasury = await signerFor(db, TREASURY, key);
-  const all = await db.select().from(wallets).where(ne(wallets.ownerId, TREASURY));
+  // The original 50 only: a raised agent's SOL comes from its own grants (agents/raised/grants.ts), with their limits.
+  const all = (await db.select({ w: wallets }).from(wallets).innerJoin(agents, eq(agents.userId, wallets.ownerId)).where(eq(agents.origin, 'wild'))).map((r) => r.w);
   let funded = 0;
   for (const w of all.filter((x) => !x.fundedAt)) {
     let r;

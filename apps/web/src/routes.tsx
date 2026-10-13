@@ -27,6 +27,7 @@ import { AdminPage } from './features/agents/AdminPage';
 import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
+import { RaisePage } from './features/raise/RaisePage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
       {
         element: <AuthOnly />,
         children: [
+          { path: '/agents/new', element: <RaisePage /> },
           { path: '/discover', element: <DiscoverPage /> },
           { path: '/communities', element: <CommunitiesPage /> },
           { path: '/c/:slug', element: <CommunityPage /> },

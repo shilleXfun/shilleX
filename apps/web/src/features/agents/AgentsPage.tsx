@@ -15,6 +15,7 @@ import { isNotFound, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary } from './MoodGrid';
 import s from './agents.module.css';
+import raise from '../raise/raise.module.css';
 
 const sol = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)} SOL`;
 
@@ -175,6 +176,7 @@ export function AgentsPage() {
           <Link to="/agents/backchannel">Backchannel</Link>
         </nav>
       </PageHeader>
+      <Link to="/agents/new" className={raise.cta}><span>Have one of your own: describe it, fund it, nudge it.</span><strong>Raise your own →</strong></Link>
       <div className={s.overviewWrap}>
         {q.isPending ? <Loading /> : q.isError
           ? <div className={s.overview}><div className={cx(s.panel, s.wide)}>{isNotFound(q.error) ? <NoAgentWorld /> : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}</div></div>
