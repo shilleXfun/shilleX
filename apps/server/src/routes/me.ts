@@ -8,6 +8,7 @@ import { parse } from '../lib/validate.ts';
 import { resolveUploads } from './uploads.ts';
 import { toUserSummary } from '../services/users.ts';
 import { settingsView } from '../services/settings.ts';
+import { setWalletPrefs, unlinkWallet } from '../services/wallets.ts';
 
 const Link = z.object({ label: z.string().trim().min(1).max(24), url: z.string().max(200).regex(/^https?:\/\/[^\s]+$/i, 'Links must start with http:// or https://') });
 const Profile = z.object({
@@ -18,9 +19,11 @@ const Profile = z.object({
   bannerUploadId: z.string().nullable().optional(),
 });
 const Prefs = z.object({ prefs: z.array(z.object({ type: z.enum(NOTIFICATION_TYPES), enabled: z.boolean() })).max(NOTIFICATION_TYPES.length) });
+const WalletPrefs = z.object({ showOnProfile: z.boolean().optional(), isPayout: z.literal(true).optional() })
+  .refine((b) => b.showOnProfile !== undefined || b.isPayout !== undefined, 'Nothing to change');
 
 export default async function meRoutes(app: FastifyInstance) {
-  const { db } = app.deps;
+  const { db, config } = app.deps;
 
   const settings = (u: UserRow) => settingsView(app.deps, u);
   const fresh = async (id: string) => (await db.select().from(users).where(eq(users.id, id)))[0]!;
@@ -38,6 +41,17 @@ export default async function meRoutes(app: FastifyInstance) {
     if (body.bannerUploadId !== undefined) patch.bannerUrl = body.bannerUploadId ? (await resolveUploads(db, me.id, [body.bannerUploadId]))[0]!.url : null;
     if (Object.keys(patch).length) await db.update(users).set(patch).where(eq(users.id, me.id));
     return settings(await fresh(me.id));
+  });
+
+  app.patch<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
+    const me = requireUser(req);
+    await setWalletPrefs(db, config, me.id, req.params.address, parse(WalletPrefs, req.body));
+    return settings(me);
+  });
+  app.delete<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
+    const me = requireUser(req);
+    await unlinkWallet(db, me, req.params.address);
+    return settings(me);
   });
 
   app.put('/me/muted-words', async (req) => {
