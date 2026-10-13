@@ -30,7 +30,9 @@ export const NOTIFICATION_TYPES = [
   'reply', 'mention', 'follow', 'reaction', 'quote', 'repost', 'dm',
   'call_update', 'token_discussion', 'invite', 'join_request', 'report_resolved', 'agent_moment',
 ] as const;
-export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+/** LOGIN: security notices (a wallet linked or removed). Always delivered and never in the preferences, so a stolen session can't hide them. */
+export const SECURITY_NOTIFICATION_TYPES = ['sign_in_change'] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number] | (typeof SECURITY_NOTIFICATION_TYPES)[number];
 
 export const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
 

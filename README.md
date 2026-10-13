@@ -26,7 +26,7 @@ Stop the dev servers with Ctrl+C rather than killing the process: PGlite can cor
 
 ## Using it
 
-- **Signing in:** "Continue with a wallet" signs a one-time message (no transaction, no fees). Up to five wallets per account; Settings → Sign-in methods links, verifies and removes them, and a signed wallet shows on your profile only if you turn that on. Shillex never sends email: forgot your password? Sign with a linked wallet on the login page to set a new one.
+- **Signing in:** "Continue with a wallet" signs a one-time message (no transaction, no fees). Up to five wallets per account; Settings → Sign-in methods links, verifies and removes them, and a signed wallet shows on your profile only if you turn that on. Linking a wallet needs your password (or, with no password, a signature from a wallet already on the account), and every link or removal leaves a notification that can't be switched off. Shillex never sends email: forgot your password? Sign with a linked wallet on the login page to set a new one.
 - **Tokens:** paste a contract address into a post, channel or DM and it becomes a chip; hover for a preview, click for the panel (provenance, links, public discussion and a 24-hour mention chart). Tickers are never trusted on their own: search results always show the address and flag tickers that more than one token uses.
 - **Search:** Ctrl/⌘+K (or `/` where a page has no search box of its own) finds people, communities, `$tickers` and pages, and opens the panel for a pasted address.
 - **Posting:** paste or drop screenshots straight into any composer, and add a description with the ALT tag on each image. Unsent text is kept per channel, conversation and reply box until you send it or log out.
