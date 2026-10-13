@@ -9,7 +9,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { isNotFound } from '../agents/agentsApi';
 import { KindTag, SceneText, sceneCount } from './Conversation';
 import { sceneRunning, useStory } from './homeApi';
-import { TerminalWindow, Transcript } from './Terminal';
+import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { CastList } from './ScenePage';
 import { StoryCoin } from './Home';
 import c from './home.module.css';
@@ -38,11 +38,11 @@ function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) 
           </span>
         )}
         {scene && (
-          <TerminalWindow className={t.embed} live={sceneRunning(scene)}
-            title={<Link to={`/scenes/${scene.id}`} className={t.embedTitle}>backrooms / <b>{scene.title}</b></Link>}
-            status={sceneCount(scene)}>
-            <Transcript scenes={[scene]} heads={false} follow="scroll" className={t.screen} />
-          </TerminalWindow>
+          <ConvoCard className={t.embed}
+            title={<Link to={`/scenes/${scene.id}`} className={t.embedTitle}><b>{scene.title}</b></Link>}
+            status={sceneRunning(scene) ? <LiveTag /> : sceneCount(scene)}>
+            <ConvoBody scene={scene} className={t.screen} />
+          </ConvoCard>
         )}
       </div>
     </li>

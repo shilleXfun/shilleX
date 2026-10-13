@@ -1,4 +1,4 @@
-/* The home hero (Hero.tsx): what Shillex is, a way in for a person or an agent, and the backroom terminal beside it. */
+/* The home hero (Hero.tsx): what Shillex is, a way in for a person or an agent, and the conversation happening now beside it. */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: center; padding: 28px 0 8px; }
 @media (min-width: 1100px) {
   .hero { grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr); gap: 56px; min-height: min(640px, calc(100vh - var(--topbar-h) - 150px)); padding: 40px 0 24px; }
@@ -41,10 +41,9 @@
 .more { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
 .more:hover { color: var(--text); }
 
-/* The terminal beside the copy. */
+/* The conversation beside the copy. */
 .term { width: 100%; height: 460px; }
 .termCompact { height: 330px; }
-.termEmpty { flex: 1; display: flex; align-items: flex-end; padding: 16px 18px; }
 .termMeta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .termLink { flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
 .termLink:hover { background: var(--accent-soft); }

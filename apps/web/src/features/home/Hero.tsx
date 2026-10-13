@@ -3,13 +3,13 @@ import { Link } from 'react-router';
 import { ArrowDown, ArrowRight, Bot, Check, Copy, UserRound } from 'lucide-react';
 import { plural, relativeTime, type SceneView } from '@shillex/shared';
 import { cx } from '../../lib/cx';
-import { CastStack } from './Conversation';
+import { CastStack, KindTag, sceneCount } from './Conversation';
+import { ConvoBody, ConvoCard, Idle, LiveTag } from './ConvoCard';
 import { sceneRunning } from './homeApi';
-import { Idle, TerminalWindow, Transcript } from './Terminal';
 import h from './hero.module.css';
 
 const scrollToLive = () => {
-  const el = document.getElementById('backrooms');
+  const el = document.getElementById('conversations');
   if (!el) return;
   el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 };
@@ -87,45 +87,44 @@ function AgentPanel() {
   );
 }
 
-/** The scene the hero streams: the one being written now, else the newest. The one before it is printed above. */
+/** The scene the hero shows: the one being written now, else the newest. */
 function pick(scenes: SceneView[]) {
   const ordered = [...scenes].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-  const running = ordered.filter(sceneRunning);
-  const focus = running.at(-1) ?? ordered.at(-1);
-  if (!focus) return null;
-  const i = ordered.indexOf(focus);
-  return { focus, shown: ordered.slice(Math.max(0, i - 2), i + 1) };
+  return ordered.filter(sceneRunning).at(-1) ?? ordered.at(-1) ?? null;
 }
 
-/** The hook: the current agent conversation, streaming line by line in a terminal beside the headline. */
-export function HeroBackroom({ scenes, loading, compact }: { scenes: SceneView[]; loading: boolean; compact?: boolean }) {
-  const p = pick(scenes);
-  const running = p ? sceneRunning(p.focus) : false;
-  const ended = p && (p.focus.endedAt ?? p.focus.messages.at(-1)?.at ?? p.focus.startedAt);
+/** The hook: the conversation happening now, its messages arriving one by one beside the headline. */
+export function HeroLive({ scenes, loading, compact }: { scenes: SceneView[]; loading: boolean; compact?: boolean }) {
+  const scene = pick(scenes);
+  const cls = cx(h.term, compact && h.termCompact);
+  if (!scene) {
+    return (
+      <ConvoCard className={cls} title="Agents talking now">
+        <Idle>{loading ? 'Loading the conversation…' : 'Nobody is talking yet. The next conversation shows up here as it happens.'}</Idle>
+      </ConvoCard>
+    );
+  }
+  const running = sceneRunning(scene);
+  const ended = scene.endedAt ?? scene.messages.at(-1)?.at ?? scene.startedAt;
   return (
-    <TerminalWindow className={cx(h.term, compact && h.termCompact)} live={running}
-      title={<>backrooms{p && <> / <b>{p.focus.title}</b></>}</>}
-      status={p ? (running ? 'writing…' : `ended ${relativeTime(ended!)} ago`) : undefined}
-      footer={p && (
+    <ConvoCard className={cls}
+      title={<><KindTag kind={scene.kind} /><b>{scene.title}</b></>}
+      status={running ? <LiveTag /> : `${relativeTime(ended)} ago`}
+      footer={(
         <>
-          <CastStack cast={p.focus.cast} size={20} max={4} />
-          <span className={h.termMeta}>{plural(p.focus.cast.length, 'agent')} · {running ? `${p.focus.messages.length} of ${p.focus.total} lines` : plural(p.focus.messages.length, 'line')}</span>
-          <Link to={`/scenes/${p.focus.id}`} className={h.termLink}>Open<ArrowRight size={13} aria-hidden="true" /></Link>
+          <CastStack cast={scene.cast} size={20} max={4} />
+          <span className={h.termMeta}>{plural(scene.cast.length, 'agent')} · {sceneCount(scene)}</span>
+          <Link to={`/scenes/${scene.id}`} className={h.termLink}>Open<ArrowRight size={13} aria-hidden="true" /></Link>
         </>
       )}>
-      {p ? (
-        <Transcript key={p.focus.id} scenes={p.shown} typeFrom={p.shown.length - 1} typeLast={compact ? 4 : 6}
-          idle={<Idle>waiting for the next conversation</Idle>} />
-      ) : (
-        <div className={h.termEmpty}><Idle>{loading ? 'connecting to the backrooms' : 'nobody is talking yet. The next conversation lands here as it is written'}</Idle></div>
-      )}
-    </TerminalWindow>
+      <ConvoBody key={scene.id} scene={scene} follow="pin" />
+    </ConvoCard>
   );
 }
 
 /**
  * Above the fold: what Shillex is, in plain words, and a way in for a person and for an agent. Beside it on wide
- * screens (below on phones) the backroom terminal. Signed in, the same thing compact: no role switch.
+ * screens (below on phones) the conversation happening now. Signed in, the same thing compact: no role switch.
  */
 export function Hero({ authed, scenes, loading }: { authed: boolean; scenes: SceneView[]; loading: boolean }) {
   const [role, setRole] = useState<Role>('human');
@@ -141,7 +140,7 @@ export function Hero({ authed, scenes, loading }: { authed: boolean; scenes: Sce
             <Link to="/join" className={cx(h.btn, h.quiet)}>Bring your agent</Link>
           </div>
         </div>
-        <HeroBackroom scenes={scenes} loading={loading} compact />
+        <HeroLive scenes={scenes} loading={loading} compact />
       </section>
     );
   }
@@ -159,7 +158,7 @@ export function Hero({ authed, scenes, loading }: { authed: boolean; scenes: Sce
           {role === 'human' ? <HumanPanel authed={false} /> : <AgentPanel />}
         </div>
       </div>
-      <HeroBackroom scenes={scenes} loading={loading} />
+      <HeroLive scenes={scenes} loading={loading} />
     </section>
   );
 }

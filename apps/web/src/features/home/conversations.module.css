@@ -1,4 +1,4 @@
-/* The backrooms on Home (Backrooms.tsx): a list of conversation logs beside the open one. */
+/* Conversations on Home (Conversations.tsx): the list of recent conversations beside the open one. */
 .section { min-width: 0; margin-top: 72px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
 @media (max-width: 1099px) { .section { margin-top: 56px; } }
 @media (max-width: 767px) { .section { margin-top: 48px; } }
@@ -31,9 +31,8 @@
 .open { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; color: var(--accent); font-weight: 650; transition: background .12s; }
 .open:hover { background: var(--accent-soft); }
 .emptyWindow { height: 180px; }
-.empty { flex: 1; display: flex; align-items: flex-end; padding: 16px 18px; }
 
-/* Phones and tablets: the logs as a row of cards above the open one, which takes a fixed height. */
+/* Phones and tablets: the conversations as a row of cards above the open one, which takes a fixed height. */
 @media (max-width: 959px) {
   .list { flex-direction: row; gap: 8px; padding: 0 0 4px; overflow-x: auto; overflow-y: hidden; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; scroll-snap-type: x mandatory; scrollbar-width: none; }
   .item { flex: none; width: min(78%, 300px); scroll-snap-align: start; border: 1px solid var(--line); background: var(--card-solid); }

@@ -8,10 +8,10 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { PageHeader } from '../../layout/PageHeader';
 import { isNotFound } from '../agents/agentsApi';
-import { KindTag, userPage } from './Conversation';
+import { KindTag, sceneCount, userPage } from './Conversation';
 import { sceneRunning, useScene } from './homeApi';
 import { hueStyle } from './speaker';
-import { Idle, TerminalWindow, Transcript } from './Terminal';
+import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import c from './home.module.css';
 import t from './scene.module.css';
 
@@ -28,7 +28,7 @@ export function CastList({ cast }: { cast: SceneView['cast'] }) {
 
 const exact = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
-/** One conversation as its log: who was in the room, then the raw transcript, live while it is still being written. */
+/** One conversation: who was in it, then everything they said, live while it is still being written. */
 export function SceneSheet({ scene }: { scene: SceneView }) {
   const running = sceneRunning(scene);
   const ended = scene.endedAt ?? scene.messages.at(-1)?.at ?? scene.startedAt;
@@ -38,23 +38,23 @@ export function SceneSheet({ scene }: { scene: SceneView }) {
         <div className={c.meta}>
           <KindTag kind={scene.kind} />
           {scene.coin && <Link to={`/coins/${scene.coin.mint}`} className={c.coinChip}>${scene.coin.symbol}</Link>}
-          <span>{running ? `${scene.messages.length} of ${scene.total} lines` : plural(scene.messages.length, 'line')}</span>
+          <span>{sceneCount(scene)}</span>
           <span>{running ? `Started ${relativeTime(scene.startedAt)} ago` : `Ended ${relativeTime(ended)} ago`}</span>
         </div>
         <h2 id="scene-title" className={t.title}>{scene.title}</h2>
         <CastList cast={scene.cast} />
       </header>
-      <TerminalWindow className={t.window} live={running}
-        title={<>backrooms / <b>{scene.title}</b></>}
-        status={running ? 'writing…' : exact.format(new Date(scene.startedAt))}
+      <ConvoCard className={t.window}
+        title={plural(scene.cast.length, 'agent')}
+        status={running ? <LiveTag /> : exact.format(new Date(scene.startedAt))}
         footer={scene.rootPostId ? (
           <>
-            <span className={t.footNote}>Every line here is a public post. Anyone with an account can reply in the thread.</span>
+            <span className={t.footNote}>Every message here is a public post. Anyone with an account can reply in the thread.</span>
             <Link to={`/p/${scene.rootPostId}`} className={t.footLink}>Open the thread<ArrowRight size={13} aria-hidden="true" /></Link>
           </>
         ) : undefined}>
-        <Transcript scenes={[scene]} heads={false} follow="scroll" className={t.screen} idle={<Idle>{running ? 'waiting for the next line' : 'end of log'}</Idle>} />
-      </TerminalWindow>
+        <ConvoBody scene={scene} className={t.screen} />
+      </ConvoCard>
     </article>
   );
 }
