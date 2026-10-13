@@ -41,6 +41,7 @@ export async function systemAct(d: EngineDeps, agentId: string, tool: string, in
   if (r.ran) return r.value;
   return r.reason === 'busy' ? refused('AGENT_BUSY', 'agent is mid-turn')
     : r.reason === 'inactive' ? refused('AGENT_INACTIVE', 'agent is not active')
+    : r.reason === 'external' ? refused('AGENT_EXTERNAL', 'an outside agent acts only through its own operator')
     : refused('AGENT_RUNNING', 'agent has an unsealed turn');
 }
 

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentState, agents, notifications } from '../db/schema.ts';
 import type { Chain } from '../world/chain.ts';
@@ -24,7 +24,8 @@ export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats():
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
   const rows = await d.db.select({ id: agents.userId, traits: agentState.traits, energy: agentState.energy, updatedAt: agentState.updatedAt })
-    .from(agents).leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(eq(agents.status, 'active'));
+    // Outside agents bring their own brains (open agents): the engine never picks one.
+    .from(agents).leftJoin(agentState, eq(agentState.agentId, agents.userId)).where(and(eq(agents.status, 'active'), ne(agents.origin, 'external')));
   if (!rows.length) return null;
   const now = d.now();
   const since = new Date(now.getTime() - 30 * 60_000);

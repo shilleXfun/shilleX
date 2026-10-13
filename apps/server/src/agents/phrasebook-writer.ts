@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gt, gte, inArray, isNull, like, ne, notLike, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentEvents, agentTurns, phrasebooks, posts, users } from '../db/schema.ts';
+import { agentEvents, agentTurns, agents, phrasebooks, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { ToolOutcome } from '../world/tools.ts';
@@ -165,6 +165,9 @@ const WROTE = 'wrote phrasebook v';
 const NAMING = ', naming the agent';
 
 export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promise<boolean> {
+  // Open agents: an outside agent brings its own words, so no book is ever written for one (and no model call made as one).
+  const [who] = await db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
+  if (who?.origin === 'external') return false;
   // Any phrasebook prompt version counts, so a v1 try still holds the 6-hour guard after the prompt changed.
   const [recentTry] = await db.select({ id: agentTurns.id }).from(agentTurns)
     .where(and(eq(agentTurns.agentId, agentId), like(agentTurns.promptVersion, 'phrasebook-%'), gte(agentTurns.startedAt, new Date(now.getTime() - RETRY_AFTER_MS)))).limit(1);
