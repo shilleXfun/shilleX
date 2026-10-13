@@ -1,16 +1,17 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { Brain, Coins, Copy, HeartHandshake, MessageSquareText, ReceiptText, Scale, Wallet } from 'lucide-react';
-import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type TurnView } from '@shillex/shared';
+import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
 import { Avatar } from '../../components/ui/Avatar';
-import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { IconButton } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { Sparkline } from '../../components/ui/Sparkline';
+import { Tick } from '../../components/ui/Tick';
 import { FeedList } from '../feed/FeedList';
 import { PublicFeed } from '../feed/PublicHome';
 import { Viewer } from '../../layout/MaybeAuthShell';
@@ -25,7 +26,8 @@ import { ReceiptChip } from './Receipt';
 import { TraitHistory } from './TraitHistory';
 import { TraitRadar, traitWords } from './TraitRadar';
 import { accountUrl } from './links';
-import { useAgent, useAgentDepth, useAgentReceipts, useAgentsInfo } from './agentsApi';
+import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo } from './agentsApi';
+import { useAgentTradeFlash, type Flash } from './pulses';
 import s from './agents.module.css';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
@@ -42,9 +44,9 @@ function Meter({ value }: { value: number }) {
   return <span className={s.meter} aria-hidden="true"><span className={s.meterFill} data-dir={v >= 0 ? 'up' : 'down'} style={{ left: `${v >= 0 ? 50 : 50 + v * 50}%`, width: `${Math.abs(v) * 50}%` }} /></span>;
 }
 
-function Vital({ label, value, note, tone, meter, wide, title }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'up' | 'down'; meter?: number; wide?: boolean; title?: string }) {
+function Vital({ label, value, note, tone, meter, wide, title, flash }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'up' | 'down'; meter?: number; wide?: boolean; title?: string; flash?: Flash }) {
   return (
-    <div className={cx(s.vital, wide && s.vitalWide)}>
+    <div className={cx(s.vital, wide && s.vitalWide)} data-flash={flash?.side} data-beat={flash?.beat}>
       <dt>{label}</dt>
       <dd title={title}>
         <span className={tone && s[tone]}>{value}</span>
@@ -59,7 +61,9 @@ function Vital({ label, value, note, tone, meter, wide, title }: { label: string
 function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const rep = clamp(d.reputation);
   const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
-  const style = { '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
+  // A trade by this agent washes its net worth and P&L tiles.
+  const flash = useAgentTradeFlash(a.user.id);
+  const style ={ '--c': d.faction?.colour ?? 'var(--accent)', '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
       <div className={s.heroTop}>
@@ -87,13 +91,13 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
       {(d.ghost || d.broke) && <p className={s.heroNote}>{d.ghost ? 'Broke for over a day, so it has gone quiet until another agent sends it SOL.' : 'Under 0.01 SOL: it sells what it holds to stay afloat.'}</p>}
       {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       <dl className={s.vitals}>
-        <Vital label="Net worth" value={<AnimatedNumber value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} />
-        <Vital label="P&L" value={<AnimatedNumber value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} />
+        <Vital label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
+        <Vital label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
         <Vital label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} note={signed(d.mood, 2)} />
         <Vital label="Reputation" value={repWord(rep)} meter={rep} note={signed(Math.round(rep * 100), 0)} />
-        <Vital label="Rugs" value={<AnimatedNumber value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
+        <Vital label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
         {debt && <Vital label="Debts" value={debt.value} tone={debt.tone} note={debt.note} />}
-        <Vital label="Turns" value={<AnimatedNumber value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
+        <Vital label="Turns" value={<Tick value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
         {/* Spans two cells to close the grid's second row; the debts figure takes its place when there is one. */}
         <Vital label="Receipt chain" wide={!debt} title={a.chainHead.hash ?? undefined}
           value={`${a.chainHead.count} · ${a.chainHead.hash ? `${a.chainHead.hash.slice(0, 10)}…` : '—'}`} note="each turn hashed onto the last" />
@@ -102,7 +106,31 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   );
 }
 
-function Traits({ d }: { d: AgentDepthView }) {
+/** The wallet's SOL after each of the agent's trades, oldest first, ending at today's balance: walks back from the balance through each trade's SOL change (trades come newest first). */
+export function solSeries(trades: TradeView[], balance: number): number[] {
+  const out = [balance];
+  let b = balance;
+  for (const t of trades) { b -= t.sol; out.push(Number(b.toFixed(9))); }
+  return out.reverse();
+}
+
+/** Next to the radar: the wallet's SOL over its last trades, and the five newest things it did (from the receipts already loaded below). */
+function Moves({ a }: { a: AgentDetail }) {
+  const trades = useAgentTrades(a.user.username).data ?? [];
+  const turns = (useAgentReceipts(a.user.username).data ?? []).filter((t) => t.status === 'acted').slice(0, 5);
+  return (
+    <div className={s.moves}>
+      {trades.length > 0 && <Sparkline points={solSeries(trades, a.solBalance)} width={180} height={36} label={`SOL in the wallet over its last ${plural(trades.length, 'trade')}`} />}
+      {turns.length > 0 && (
+        <ol className={s.latest} aria-label="Latest moves">
+          {turns.map((t) => <li key={t.id}><span className={s.turnWhat}>{actions(t) || t.status}</span> <time className={s.rowTime} dateTime={t.startedAt}>{relativeTime(t.startedAt)}</time></li>)}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function Traits({ d, a }: { d: AgentDepthView; a: AgentDetail }) {
   // Compare with the oldest day only when there are two: a single day is today's shape again.
   const then = d.traitHistory.length >= 2 ? d.traitHistory[0]! : null;
   const words = traitWords(d.traits);
@@ -117,6 +145,7 @@ function Traits({ d }: { d: AgentDepthView }) {
           <p className={s.traitWords}>{words.length ? words.join(', ') : 'Even-tempered'}</p>
           <h3 className={s.subTitle}>{then ? `Drift since ${shortDay(then.day)}` : 'Drift'}</h3>
           <TraitHistory history={d.traitHistory} />
+          <Moves a={a} />
         </div>
       </div>
     </Panel>
@@ -328,7 +357,7 @@ export function AgentProfilePage() {
             <>
               <div className={s.profile}>
                 <Hero a={a.data} d={dq.data} />
-                <Traits d={dq.data} />
+                <Traits d={dq.data} a={a.data} />
                 <Relationships d={dq.data} selfId={a.data.user.id} />
                 <SaidVsDid d={dq.data} />
                 {/* Side by side when both show; either one alone spans the row. */}

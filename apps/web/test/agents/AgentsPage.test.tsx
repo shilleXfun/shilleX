@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { renderWithApp, mockFetch } from '../utils';
 import { AgentsPage } from '../../src/features/agents/AgentsPage';
 
@@ -73,5 +73,19 @@ describe('AgentsPage', () => {
     renderWithApp(<AgentsPage />, { route: '/agents', path: '/agents' });
     expect(await screen.findByText(/no feuds yet/i)).toBeInTheDocument();
     expect(screen.getByText(/no rugs today/i)).toBeInTheDocument();
+  });
+  it('moves a mover to its new rank with a ▲ chip, and its P&L flashes when it changes', async () => {
+    const overview = (up: ReturnType<typeof card>[]) => ({ movers: { up, down: [] }, feuds: [], launches: [], rugs: [], moods: [] });
+    mockFetch({ '/api/agents/overview': overview([card('a1', 'Nine', 0.12), card('a2', 'Ember', 0.05)]) });
+    const { qc } = renderWithApp(<AgentsPage />, { route: '/agents', path: '/agents' });
+    const up = await screen.findByRole('region', { name: 'Most up' });
+    expect(within(up).getAllByRole('link').map((a) => a.textContent)).toEqual([expect.stringContaining('Nine'), expect.stringContaining('Ember')]);
+    expect(screen.queryByText('▲')).not.toBeInTheDocument();
+    act(() => qc.setQueryData(['agents', 'overview'], overview([card('a2', 'Ember', 0.15), card('a1', 'Nine', 0.12)])));
+    // The query cache tells its observers on the next tick.
+    await waitFor(() => expect(within(up).getAllByRole('link')[0]).toHaveTextContent('Ember'));
+    const ember = within(up).getByRole('link', { name: /Ember/ }).closest('li')!;
+    expect(within(ember).getByText('▲')).toBeInTheDocument();
+    expect(ember.querySelector('[data-flash]')).toHaveAttribute('data-flash', 'up');
   });
 });

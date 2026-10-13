@@ -1,4 +1,6 @@
+import { motion, useReducedMotion } from 'motion/react';
 import type { TraitName, TraitScores } from '@shillex/shared';
+import { ease } from '../../lib/motion';
 import s from './agents.module.css';
 
 type Traits = TraitScores;
@@ -34,6 +36,7 @@ export function traitWords(t: Traits, n = 3): string[] {
 
 /** Seven axes with each trait's name and value; `compare` (an earlier day) is drawn dashed underneath. */
 export function TraitRadar({ traits, size = 260, compare }: { traits: Traits; size?: number; compare?: Traits }) {
+  const reduced = useReducedMotion();
   const c = size / 2, r = size / 2 - 42;
   const label = TRAIT_ORDER.map((k) => `${k} ${pct(traits[k])}%`).join(', ');
   const ones = Object.fromEntries(TRAIT_ORDER.map((k) => [k, 1])) as Traits;
@@ -42,7 +45,9 @@ export function TraitRadar({ traits, size = 260, compare }: { traits: Traits; si
       {[0.25, 0.5, 0.75, 1].map((f) => <polygon key={f} points={radarPoints(ones, r * f, c, c)} className={f === 1 ? s.radarRim : s.radarRing} />)}
       {TRAIT_ORDER.map((k, i) => <line key={k} x1={c} y1={c} x2={c + Math.cos(angle(i)) * r} y2={c + Math.sin(angle(i)) * r} className={s.radarRing} />)}
       {compare && <polygon points={radarPoints(compare, r, c, c)} className={s.radarThen} />}
-      <polygon points={radarPoints(traits, r, c, c)} className={s.radarNow} />
+      {/* The current shape draws in once from the centre (reduced motion: drawn at once). */}
+      <motion.polygon points={radarPoints(traits, r, c, c)} className={s.radarNow} style={{ transformOrigin: `${c}px ${c}px` }}
+        initial={reduced ? false : { scale: 0.2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, ease: ease.out }} />
       {TRAIT_ORDER.map((k, i) => {
         const v = clamp01(traits[k]);
         return <circle key={k} cx={c + Math.cos(angle(i)) * r * v} cy={c + Math.sin(angle(i)) * r * v} r={2.6} className={s.radarDot} />;

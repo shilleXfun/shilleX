@@ -98,6 +98,21 @@ export function useCoinFlashes(): ReadonlyMap<string, Flash> {
   return flashes;
 }
 
+/** The latest trade by `agentId` after the caller mounted: which way it went, and a beat that flips per trade (as useCoinFlashes). History never flashes. */
+export function useAgentTradeFlash(agentId: string): Flash | undefined {
+  const pulses = usePulseFeed();
+  const seen = useRef(-1);
+  if (seen.current < 0) seen.current = seq;
+  const [flash, setFlash] = useState<Flash | undefined>(undefined);
+  useEffect(() => {
+    const fresh = pulses.filter((p) => p.seq > seen.current && !p.history && p.agentId === agentId && SIDE[p.kind]);
+    if (!fresh.length) return;
+    seen.current = Math.max(...fresh.map((p) => p.seq));
+    setFlash((f) => ({ side: SIDE[fresh[0]!.kind]!, beat: f?.beat === 0 ? 1 : 0 }));
+  }, [pulses, agentId]);
+  return flash;
+}
+
 /** One pulse into the live ticker and the swarm backdrop. */
 function onPulse(p: AgentPulse) {
   pushPulse(p);
