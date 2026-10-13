@@ -4,6 +4,8 @@ import { defaultNonce, oauth1Header } from './oauth1.ts';
 const BASE = 'https://api.x.com';
 /** Appended to every search (x-feed §2): originals only, in English. */
 export const QUERY_SUFFIX = ' -is:retweet -is:reply lang:en';
+/** How long one X call may take before it counts as failed (a 408, retried next tick like any other failure). */
+export const X_TIMEOUT_MS = 15_000;
 
 export interface XPostItem { id: string; text: string; createdAt: string; authorId: string | null; metrics: { likes: number; reposts: number; replies: number; quotes: number }; hasMedia: boolean }
 export interface XPage { posts: XPostItem[]; resultCount: number; newestId: string | null }
@@ -37,7 +39,7 @@ function page(data: Json | null): XPage {
 
 /** X API v2 over fetch. Reads use the app's bearer token; writes use the official account's OAuth 1.0a user keys. */
 export class HttpXApi implements XApi {
-  constructor(private o: { bearer: string | null; oauth: XOAuth | null; fetch?: typeof fetch; nonce?: () => string; now?: () => Date }) {}
+  constructor(private o: { bearer: string | null; oauth: XOAuth | null; fetch?: typeof fetch; nonce?: () => string; now?: () => Date; timeoutMs?: number }) {}
   get readsConfigured() { return Boolean(this.o.bearer); }
   get writesConfigured() { return Boolean(this.o.oauth); }
 
@@ -54,8 +56,16 @@ export class HttpXApi implements XApi {
       headers.authorization = oauth1Header({ method, url: `${url.origin}${url.pathname}`, params: query, creds: this.o.oauth, nonce: (this.o.nonce ?? defaultNonce)(), timestamp });
     }
     if (body && 'json' in body) headers['content-type'] = 'application/json';
-    const res = await (this.o.fetch ?? fetch)(url, { method, headers, body: body ? ('json' in body ? JSON.stringify(body.json) : body.form) : undefined });
-    const text = await res.text();
+    // A call X never answers must not hold the single-flight tick (and every other source) for Node's default 5 minutes.
+    const signal = AbortSignal.timeout(this.o.timeoutMs ?? X_TIMEOUT_MS);
+    let res: Response, text: string;
+    try {
+      res = await (this.o.fetch ?? fetch)(url, { method, headers, body: body ? ('json' in body ? JSON.stringify(body.json) : body.form) : undefined, signal });
+      text = await res.text();
+    } catch (e) {
+      if (signal.aborted) throw new XApiError(408, `X did not answer within ${Math.round((this.o.timeoutMs ?? X_TIMEOUT_MS) / 1000)} s`);
+      throw e;
+    }
     let data: Json | null = null;
     try { data = text ? (JSON.parse(text) as Json) : null; } catch { data = null; }
     if (!res.ok) {
@@ -76,7 +86,8 @@ export class HttpXApi implements XApi {
   }
   async search(query: string, o: { sinceId: string | null; max: number }) {
     // No expansions=author_id: a user object costs twice a post (x-feed §3); results link by id instead.
-    const q: Record<string, string> = { query: `${query}${QUERY_SUFFIX}`, max_results: String(o.max), 'tweet.fields': 'created_at,public_metrics,attachments,author_id' };
+    // Grouped, so the suffix holds for every term of an OR search.
+    const q: Record<string, string> = { query: `(${query})${QUERY_SUFFIX}`, max_results: String(o.max), 'tweet.fields': 'created_at,public_metrics,attachments,author_id' };
     if (o.sinceId) q.since_id = o.sinceId;
     return page(await this.request('GET', '/2/tweets/search/recent', q, 'bearer'));
   }

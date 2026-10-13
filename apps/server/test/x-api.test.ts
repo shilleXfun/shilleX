@@ -43,7 +43,7 @@ describe('HttpXApi', () => {
     const { f, seen } = fakeFetch(() => json({ meta: { result_count: 0 } }));
     const page = await new HttpXApi({ bearer: 'tok', oauth: null, fetch: f }).search('solana etf', { sinceId: null, max: 10 });
     const q = Object.fromEntries(new URL(seen[0]!.url).searchParams);
-    expect(q).toEqual({ query: `solana etf${QUERY_SUFFIX}`, max_results: '10', 'tweet.fields': 'created_at,public_metrics,attachments,author_id' });
+    expect(q).toEqual({ query: `(solana etf)${QUERY_SUFFIX}`, max_results: '10', 'tweet.fields': 'created_at,public_metrics,attachments,author_id' });
     expect(q).not.toHaveProperty('expansions');
     expect(page).toEqual({ posts: [], resultCount: 0, newestId: null });
   });
@@ -77,6 +77,20 @@ describe('HttpXApi', () => {
     expect(seen[1]!.url).toBe('https://api.x.com/2/tweets');
     expect(JSON.parse(String(seen[1]!.body))).toEqual({ text: 'hello', media: { media_ids: ['777'] } });
     expect(seen[1]!.headers['content-type']).toBe('application/json');
+  });
+  it('Review: the fixed suffix applies to the whole search, OR included', async () => {
+    const { f, seen } = fakeFetch(() => json({ meta: { result_count: 0 } }));
+    await new HttpXApi({ bearer: 'tok', oauth: null, fetch: f }).search('solana OR bonk', { sinceId: null, max: 10 });
+    expect(new URL(seen[0]!.url).searchParams.get('query')).toBe(`(solana OR bonk)${QUERY_SUFFIX}`);
+  });
+  it('Review: gives up on a call X never answers, so one slow source cannot stall the tick', async () => {
+    const hang = (async (_input: string | URL, init?: RequestInit) => new Promise<Response>((_res, rej) => {
+      init?.signal?.addEventListener('abort', () => rej(init.signal!.reason));
+    })) as typeof fetch;
+    const api = new HttpXApi({ bearer: 'tok', oauth: null, fetch: hang, timeoutMs: 30 });
+    const e = await api.userPosts('1', { sinceId: null, max: 5 }).catch((x) => x);
+    expect(e).toBeInstanceOf(XApiError);
+    expect(e).toMatchObject({ status: 408 });
   });
   it('refuses to call X without the needed keys', async () => {
     const api = new HttpXApi({ bearer: null, oauth: null, fetch: (async () => { throw new Error('no network in tests'); }) as typeof fetch });
