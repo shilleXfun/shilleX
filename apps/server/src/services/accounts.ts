@@ -7,6 +7,7 @@ import { notifications, sessions, users, type UserRow } from '../db/schema.ts';
 import { SESSION_COOKIE, SESSION_TTL_MS, createSession, hashToken } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { toUserSummary } from './users.ts';
+import { handleUnavailable } from './handles.ts';
 
 export const Username = z.string().regex(/^[A-Za-z0-9_]{3,20}$/, '3–20 letters, numbers or underscores');
 /** An unverified sign-in email: trimmed, lowercased, at most 254 characters, shaped like an address. */
@@ -38,8 +39,9 @@ export async function endOtherSessions(app: FastifyInstance, req: FastifyRequest
   for (const id of ids) app.deps.bus.disconnectSession(id);
 }
 
+/** In use now, or used before a rename (CAST): an old username stays with whoever had it, so old links never change hands. */
 export async function usernameTaken(db: Db, name: string): Promise<boolean> {
-  return (await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${name.toLowerCase()}`).limit(1)).length > 0;
+  return handleUnavailable(db, name);
 }
 /** The id of the account using this email (any case), if one does. */
 export async function emailOwner(db: Db, email: string): Promise<string | null> {

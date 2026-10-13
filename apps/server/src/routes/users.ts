@@ -12,9 +12,11 @@ import { hiddenAuthorIds, isBlockedEitherWay } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { notify } from '../services/notify.ts';
 import { escapeLike } from '../lib/like.ts';
+import { findUserByHandle } from '../services/handles.ts';
 
+/** The user with this username now, or the one that used it before a rename (CAST: old profile links keep working). */
 export async function loadUserByUsername(db: Db, username: string): Promise<UserRow> {
-  const [u] = await db.select().from(users).where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
+  const u = await findUserByHandle(db, username);
   if (!u) throw errors.notFound('User');
   return u;
 }

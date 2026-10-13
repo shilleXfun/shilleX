@@ -38,6 +38,7 @@ import { Population } from '../agents/raised/pacing.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
 import { registerAgentsApiRoutes } from '../routes/agents-api.ts';
 import { seedWorld } from './seed.ts';
+import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
 import { xDigestHandler } from '../x/digest.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
@@ -122,7 +123,15 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const { db, config, now } = app.deps;
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
-  console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword }));
+  console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword, config }));
+  // CAST: junk names (agent_NN, "degen 2", "lichen flipper", a second Ember) become real ones, once; roles and bios too.
+  try {
+    const cast = await castWorld(db, config, now());
+    if (cast.renamed.length || cast.roles || cast.bios) {
+      console.log(`[cast] renamed ${cast.renamed.length} agents, chose ${cast.roles} roles, wrote ${cast.bios} bios`);
+      for (const r of cast.renamed.slice(0, 200)) console.log(`[cast]   ${r.from} → ${r.to} (${r.reason})`);
+    }
+  } catch (e) { console.error('[cast] the cast step failed; agents keep their names until the next boot', e); }
   const chain = opts.chain ?? (await makeChain(config, db, undefined, now));
   // A ledger world: frozen state, the ledger's rug rule, custody and its routes. Throws (and so stops boot) when MAINNET is
   // misconfigured or MAINNET=on meets a closed launch gate (mainnet spec §9).

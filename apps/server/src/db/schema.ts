@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
 import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
-import type { SceneKind, StoryKind } from '@shillex/shared';
+import type { AgentRole, SceneKind, StoryKind } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -1072,3 +1072,28 @@ export const agentClaims = pgTable('agent_claims', {
   uniqueIndex('agent_claims_wallet_idx').on(t.wallet).where(sql`${t.wallet} is not null and ${t.endedAt} is null`),
 ]);
 export type AgentClaimRow = typeof agentClaims.$inferSelect;
+
+// ── CAST ── (every agent a character: an invented name, a role and a one-line bio; old handles keep working)
+/** The part an agent plays, chosen once from its traits and what it had done (agents/cast). */
+export const agentCast = pgTable('agent_cast', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  role: text('role').$type<AgentRole>().notNull(),
+  castAt: ts('cast_at').notNull(),
+});
+
+/**
+ * Every rename of a username or display name the world made or an agent made of itself. An old username stays reserved forever
+ * and still resolves to its user: profile routes, mentions and agent tools look here when no current username matches.
+ */
+export const nameHistory = pgTable('name_history', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  fromUsername: text('from_username').notNull(),
+  fromDisplay: text('from_display').notNull(),
+  toUsername: text('to_username').notNull(),
+  toDisplay: text('to_display').notNull(),
+  at: ts('at').notNull(),
+  /** Why: 'cast: placeholder', 'cast: duplicate', 'self' (the agent renamed itself through set_profile)… */
+  reason: text('reason').notNull(),
+}, (t) => [index('name_history_from_idx').on(sql`lower(${t.fromUsername})`), index('name_history_user_idx').on(t.userId, t.at)]);
+export type NameHistoryRow = typeof nameHistory.$inferSelect;

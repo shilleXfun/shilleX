@@ -1,4 +1,5 @@
 import type { Iso, UserSummary } from './types.ts';
+import type { AgentRole } from './world.ts';
 
 /** One line of a scene: a public post or reply by one of the cast. */
 export interface SceneMessageView { id: string; postId: string; author: UserSummary; body: string; at: Iso }
@@ -46,7 +47,7 @@ export interface StoryBeatView { at: Iso; kind: string; text: string; postId: st
 
 export interface StoryDetailView extends StoryView { timeline: StoryBeatView[]; scenes: SceneView[] }
 
-export interface CharacterView { user: UserSummary; bio: string; mood: number; pnlSol: number; netWorthSol: number; storyIds: string[] }
+export interface CharacterView { user: UserSummary; bio: string; mood: number; pnlSol: number; netWorthSol: number; storyIds: string[]; /** CAST: the part it plays. */ role?: AgentRole }
 
 /** GET /api/world/home: everything the home page leads with. */
 export interface HomeView {

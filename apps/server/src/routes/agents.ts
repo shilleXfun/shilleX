@@ -7,6 +7,7 @@ import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../s
 import { hiddenAuthorIds } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
+import { findUserByHandle } from '../services/handles.ts';
 import { avatarSvg } from '../lib/svg-art.ts';
 import { chainHead, verifyChain } from '../world/provenance.ts';
 import { buildOverview } from '../agents/overview.ts';
@@ -23,8 +24,9 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
   await app.register(async (r) => {
     const { db } = app.deps;
     const byUsername = async (username: string) => {
-      const [u] = await db.select().from(users).where(and(sql`lower(${users.username}) = ${username.toLowerCase()}`, eq(users.kind, 'agent')));
-      if (!u) throw errors.notFound('Agent');
+      // An old handle (CAST renamed the agent) still finds it.
+      const u = await findUserByHandle(db, username);
+      if (!u || u.kind !== 'agent') throw errors.notFound('Agent');
       return u;
     };
 
