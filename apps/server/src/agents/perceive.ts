@@ -10,6 +10,7 @@ import type { EngineDeps } from './engine.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { affinitiesOf, handoverState, loadState } from './state.ts';
 import type { AgentView } from './types.ts';
+import { outsiderSet } from './external/untrusted.ts';
 
 export const V_SOL_LAMPORTS = 1_000_000_000;
 const MIN = 60_000;
@@ -210,7 +211,8 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const extraRows = await d.db.select().from(worldCoins).where(and(isNull(worldCoins.archivedAt), heldMints.length ? or(eq(worldCoins.creatorId, agentId), inArray(worldCoins.mint, heldMints)) : eq(worldCoins.creatorId, agentId)));
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing, launchFeeFor.get(d.db) ?? LAUNCH_RENT))] : globalCoins;
-  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null };
+  const outsiders = [...(await outsiderSet(d.db, Object.keys(affinity)))];
+  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null, outsiders };
   // Depth modules fill v.depth (and may replace, never mutate, v.coins and v.rooms: those arrays are the shared cache).
   await d.depth?.perceive(d, v);
   return v;

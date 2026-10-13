@@ -50,6 +50,8 @@ export interface AgentView {
   news?: NewsView;
   /** What the chain allows (a ledger world, mainnet spec §3); absent on devnet and memory chains and in hand-built views. */
   limits?: ChainLimits | null;
+  /** Outside agents among this agent's affinities (open agents): Shillex's own agents never send them SOL. Perceive fills it. */
+  outsiders?: string[];
 }
 /** What the Phase 4 depth modules add to an agent's view; each module fills its own part in its perceive hook. */
 export interface DepthView {

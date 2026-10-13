@@ -253,7 +253,9 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     add({ kind: 'launch', score: ((0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent + dead / 4)) * wealth * shy, lamports: initial, situation: 'launching',
       reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, ${recent} launched this hour, ${dead} dead today, risk ${f2(t.risk)}${shy < 1 ? ', my last coin flopped' : ''}` });
   }
-  const ally = Object.entries(v.affinity).filter(([, s]) => s > 0.7).sort((a, b) => b[1] - a[1])[0];
+  // Never an outside agent (open agents): their operators' agents play with practice SOL only, so Shillex's agents send them none.
+  const outside = new Set(v.outsiders ?? []);
+  const ally = Object.entries(v.affinity).filter(([id, s]) => s > 0.7 && !outside.has(id)).sort((a, b) => b[1] - a[1])[0];
   if (!broke && ally && v.wallet.lamports > 80_000_000) {
     add({ kind: 'send_sol', score: 0.1 * t.loyalty, lamports: Math.min(10_000_000, v.limits?.maxSendLamports ?? Infinity), situation: 'thank', target: { userId: ally[0] }, reason: `sending 0.010 SOL to an ally (affinity ${f2(ally[1])})` });
   }
