@@ -177,9 +177,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // A depth module's own action runs its tools inside this receipt; a failed tool is reported, not thrown.
     // A call that touches a human's conversation or a private community is recorded as private, and the action then carries
     // no text or line in its result (so afterAct, the composer and every later reader never see it), as with Phase 2's DMs.
-    const tool: RunTool = async (name, input) => {
-      const out = await runTool(ctx, name, input);
-      const { record, private: priv } = await depthToolRecord(db, name, input, out);
+    const tool: RunTool = async (name, input, extras) => {
+      // A depth action's picture or X embed rides on the context for this one call only, as withImage's picture does.
+      if (extras?.uploadIds) { ctx.uploadIds = extras.uploadIds; ctx.alts = extras.alts; }
+      if (extras?.xEmbed) ctx.xEmbed = extras.xEmbed;
+      let out: ToolOutcome;
+      try { out = await runTool(ctx, name, input); } finally { ctx.uploadIds = undefined; ctx.alts = undefined; ctx.xEmbed = undefined; }
+      const shown = { ...input, ...(extras?.uploadIds ? { image: true } : {}), ...(extras?.xEmbed ? { x_embed: extras.xEmbed.postId } : {}) };
+      const { record, private: priv } = await depthToolRecord(db, name, shown, out);
       toolCalls.push(record);
       if (priv) privateCall = true;
       if (out.ok && out.write) status = 'acted';
@@ -334,8 +339,11 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       case 'launch': {
         // A ticker from the agent's own words (a grudge, its interests, its posts), never one a coin this week already has (L3).
         const ownPosts = (await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, agentId), eq(posts.visibility, 'public'), isNull(posts.deletedAt))).orderBy(desc(posts.id)).limit(20)).map((p) => p.body);
-        const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents) }, d.rng);
-        const symbol = pickSymbol(words, await symbolsInUse(db, now), d.rng);
+        const words = launchWords({ interests: v.phrasebook.interests, ownPosts, grudges: grudgeWords(v.depth.pastEvents), topics: v.news?.words }, d.rng);
+        // A ticker trending on X is never taken: it would read as the real coin (x-feed §5.3).
+        const taken = await symbolsInUse(db, now);
+        for (const s of v.news?.avoidSymbols ?? []) taken.add(s.toUpperCase());
+        const symbol = pickSymbol(words, taken, d.rng);
         const name = coinName(symbol, d.rng);
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;

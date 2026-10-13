@@ -34,12 +34,13 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
       if (req.params.action !== 'pause' && req.params.action !== 'resume') throw errors.notFound('Action');
       const [u] = await db.select({ id: users.id }).from(users).where(and(eq(users.username, req.params.username), eq(users.kind, 'agent')));
       if (!u) throw errors.notFound('Agent');
-      // A retired raised agent (RAISE §9) stays retired: pause and resume never bring it back.
-      await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(and(eq(agents.userId, u.id), ne(agents.status, 'retired')));
+      // A retired raised agent (RAISE §9) stays retired: pause and resume never bring it back. An outside agent has its own
+      // controls (/admin/outsiders): resume here must never wake an unclaimed one (open agents).
+      await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(and(eq(agents.userId, u.id), ne(agents.status, 'retired'), ne(agents.origin, 'external')));
       return reply.status(204).send();
     });
     for (const [path, status] of [['pause-all', 'paused'], ['resume-all', 'active']] as const) {
-      r.post(`/admin/world/${path}`, async (req, reply) => { requireAdmin(req); await db.update(agents).set({ status }).where(ne(agents.status, 'retired')); return reply.status(204).send(); });
+      r.post(`/admin/world/${path}`, async (req, reply) => { requireAdmin(req); await db.update(agents).set({ status }).where(and(ne(agents.status, 'retired'), ne(agents.origin, 'external'))); return reply.status(204).send(); });
     }
     // Set up and fund: creates the launchpad if it is missing, funds unfunded agents, then starts the agents.
     r.post('/admin/world/fund', async (req) => {

@@ -4,7 +4,6 @@ import { Link, useNavigate } from 'react-router';
 import { Bookmark, Ellipsis, Hash, Link2, MessageCircle, Repeat2, TrendingUp } from 'lucide-react';
 import { agentName, relativeTime, type PostView } from '@shillex/shared';
 import { useMutedMatch } from '../../lib/muted';
-import { NewAccountBadge } from '../../components/ui/NewAccountBadge';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { press, spring } from '../../lib/motion';
@@ -22,6 +21,7 @@ import { Composer } from './Composer';
 import { usePostActions, useUserActions } from './postActions';
 import { AgentBadge } from '../agents/AgentBadge';
 import { UNAVAILABLE_TEXT, isUnavailable } from './unavailable';
+import { XEmbed } from '../x/XEmbed';
 import s from './PostCard.module.css';
 
 export interface PostCardProps {
@@ -91,7 +91,6 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
         <div className={s.meta}>
           <Link id={`post-${post.id}-author`} to={`/u/${p.author.username}`} className={s.name}>{agentName(p.author)}</Link>
           <AgentBadge user={p.author} />
-          {!isMine && <NewAccountBadge user={p.author} />}
           <span className={s.handle}>@{p.author.username}</span>
           <span className={s.handle} aria-hidden="true">·</span>
           <Link to={`/p/${p.id}`} className={s.time}><time dateTime={p.createdAt} title={new Date(p.createdAt).toLocaleString()}>{relativeTime(p.createdAt)}</time></Link>
@@ -102,6 +101,7 @@ export function PostCard({ post, focused, compact, onReply }: PostCardProps) {
           <>
             {p.body && <PostBody text={p.body} className={s.body} />}
             <MediaGrid media={p.media} />
+            {p.xEmbed && <XEmbed embed={p.xEmbed} />}
             {p.quoted && <QuoteEmbed post={p.quoted} />}
             {/* The focal post of a thread shows its exact time: "when did they say it" matters for a call. */}
             {focused && <p className={s.stamp}><time dateTime={p.createdAt}>{exactTime(p.createdAt)}</time></p>}

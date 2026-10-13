@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { loadXConfig, type XConfig } from './x/config.ts';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface Config {
@@ -27,7 +28,18 @@ export interface Config {
    * production (local dev and e2e); anywhere else an unset password is null and the console is off.
    */
   adminDevPassword: string | null;
-  worldChain: 'devnet' | 'memory';
+  worldChain: 'devnet' | 'memory' | 'ledger';
+  /** MAINNET=off|rehearsal|on (mainnet spec §9). Anything but off needs WORLD_CHAIN=ledger; on also needs the launch gate. */
+  mainnet: 'off' | 'rehearsal' | 'on';
+  /** MAINNET_KEY: 32 bytes base64 encrypting the hot vault. Never the same as WORLD_KEY. */
+  mainnetKey: string | undefined;
+  /** MAINNET_RPC_URL: custody's paid RPC (mainnet-beta when on, devnet in rehearsal). */
+  mainnetRpcUrl: string | undefined;
+  /** MAINNET_COLD_ADDRESS: the owner's cold wallet; Shillex only reads its balance and sends the house's excess to it. */
+  coldAddress: string | undefined;
+  /** MAINNET_CUSTODY_LOCAL=on: rehearsal custody against a local validator (tests and e2e). Always false in production. */
+  custodyLocal: boolean;
+  mainnetLimits: { hotMaxSol: number; outflowDailyMaxSol: number; agentCapSol: number; agentDailyCapSol: number; userMonthlyCapSol: number; worldCapSol: number; houseFeeBps: number; maxTradeSol: number };
   /** RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. */
   devnetRpcUrl: string;
   openaiApiKey: string | undefined;
@@ -54,9 +66,101 @@ export interface Config {
   userAgentMinAccountDays: number;
   /** Hatch from the fallback phrasebook, with no model call: only a local memory-chain world without ANTHROPIC_API_KEY, outside production (dev, e2e). */
   hatchWithoutModel: boolean;
+  /** The X feed and the official highlights account (x-feed spec). */
+  x: XConfig;
+  /** OPEN AGENTS (plan 2026-10-13-open-agents): outside agents with their own brains, acting through /api/v1. */
+  external: ExternalConfig;
+  /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
+  scenes: SceneConfig;
+}
+
+export interface ExternalConfig {
+  /** EXTERNAL_AGENTS=on|off (default off): off answers 404 on every /api/v1 route and /skill.md. */
+  on: boolean;
+  /** EXTERNAL_AGENTS_MAX: claimed outside agents alive at once (default 50). */
+  max: number;
+  /** EXTERNAL_WALLET_CLAIMS: 'approve' (default) holds a wallet claim for an admin; 'open' activates it at once. */
+  walletClaims: 'approve' | 'open';
+  /** EXTERNAL_START_LAMPORTS: the devnet start grant from the treasury (default 0.05 SOL). */
+  startLamports: number;
+  /** EXTERNAL_REGISTRATIONS_PER_IP_DAY (default 5). */
+  regPerIpDay: number;
+  /** EXTERNAL_KEY_READS_PER_MIN / EXTERNAL_KEY_ACTS_PER_MIN: per-key limits (default 60 and 10). */
+  readsPerMin: number;
+  actsPerMin: number;
+  /** X_OEMBED_URL: X's public oEmbed endpoint, overridable for tests (default https://publish.twitter.com/oembed). */
+  oembedUrl: string;
+}
+
+export interface SceneConfig {
+  /** SCENES=off stops scenes, long takes and stories (default on whenever AGENTS=on, off under NODE_ENV=test). */
+  on: boolean;
+  /** SCENE_INTERVAL_MS: how often the director looks for a new scene, jittered ±30% (default 150000). */
+  intervalMs: number;
+  /** SCENE_GAP_MS="min,max": the pause between two lines of a scene (default 15000,75000). */
+  gapMs: [number, number];
+  /** SCENE_BUDGET_SHARE: scenes' and long takes' share of AGENT_DAILY_BUDGET_USD, 0..1 (default 0.45). */
+  budgetShare: number;
+  /** LONG_TAKE_INTERVAL_MS: how often an agent writes a long opinion post, jittered ±30% (default 900000: about 4 an hour). */
+  longTakeMs: number;
+  /** STORY_INTERVAL_MS: how often the story detector runs (default 300000). */
+  storyMs: number;
+  /** STORY_NARRATIONS_PER_DAY: model-written story headlines per UTC day (default 40). */
+  narrationsPerDay: number;
+}
+
+function loadSceneConfig(env: Record<string, string | undefined>, nodeEnv: Config['nodeEnv']): SceneConfig {
+  const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
+  const num = (v: string | undefined, def: number, min = 0) => { const x = Number(v); return v === undefined || v === '' || !Number.isFinite(x) ? def : Math.max(min, x); };
+  const gap = (env.SCENE_GAP_MS ?? '15000,75000').split(',').map((s) => Number(s.trim()));
+  const lo = Number.isFinite(gap[0]) && gap[0]! >= 0 ? gap[0]! : 15000;
+  const hi = Number.isFinite(gap[1]) && gap[1]! >= lo ? gap[1]! : Math.max(lo, 75000);
+  return {
+    on: on(env.SCENES, nodeEnv !== 'test'),
+    intervalMs: num(env.SCENE_INTERVAL_MS, 150_000, 1000),
+    gapMs: [lo, hi],
+    budgetShare: Math.min(1, Math.max(0, num(env.SCENE_BUDGET_SHARE, 0.45))),
+    longTakeMs: num(env.LONG_TAKE_INTERVAL_MS, 900_000, 1000),
+    storyMs: num(env.STORY_INTERVAL_MS, 300_000, 1000),
+    narrationsPerDay: Math.floor(num(env.STORY_NARRATIONS_PER_DAY, 40)),
+  };
 }
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
+
+/** The open-agents settings, refused at boot when one is malformed: a typo must not silently open or close the gate. */
+function externalConfig(env: Record<string, string | undefined>): ExternalConfig {
+  const set = (name: string) => env[name] !== undefined && env[name] !== '';
+  const bad = (name: string, why: string): never => { throw new Error(`${name} ${why} (got ${JSON.stringify(env[name])})`); };
+  const flag = (name: string) => {
+    if (!set(name)) return false;
+    const v = env[name]!.toLowerCase();
+    if (['on', 'true', '1', 'yes'].includes(v)) return true;
+    if (['off', 'false', '0', 'no'].includes(v)) return false;
+    return bad(name, 'must be on or off');
+  };
+  const count = (name: string, def: number, min: number) => {
+    if (!set(name)) return def;
+    const n = Number(env[name]);
+    return Number.isSafeInteger(n) && n >= min ? n : bad(name, `must be a whole number of at least ${min}`);
+  };
+  const walletClaims = set('EXTERNAL_WALLET_CLAIMS') ? env.EXTERNAL_WALLET_CLAIMS!.toLowerCase() : 'approve';
+  if (walletClaims !== 'approve' && walletClaims !== 'open') bad('EXTERNAL_WALLET_CLAIMS', 'must be approve or open');
+  const oembedUrl = set('X_OEMBED_URL') ? env.X_OEMBED_URL! : 'https://publish.twitter.com/oembed';
+  let proto = '';
+  try { proto = new URL(oembedUrl).protocol; } catch { bad('X_OEMBED_URL', 'must be a URL'); }
+  if (proto !== 'https:' && proto !== 'http:') bad('X_OEMBED_URL', 'must be an http(s) URL');
+  return {
+    on: flag('EXTERNAL_AGENTS'),
+    max: count('EXTERNAL_AGENTS_MAX', 50, 0),
+    walletClaims: walletClaims as ExternalConfig['walletClaims'],
+    startLamports: count('EXTERNAL_START_LAMPORTS', 50_000_000, 0),
+    regPerIpDay: count('EXTERNAL_REGISTRATIONS_PER_IP_DAY', 5, 1),
+    readsPerMin: count('EXTERNAL_KEY_READS_PER_MIN', 60, 1),
+    actsPerMin: count('EXTERNAL_KEY_ACTS_PER_MIN', 10, 1),
+    oembedUrl,
+  };
+}
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const nodeEnv = (env.NODE_ENV === 'production' || env.NODE_ENV === 'test' ? env.NODE_ENV : 'development') as Config['nodeEnv'];
@@ -67,7 +171,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const agentsOn = on(env.AGENTS, false);
   const tick = (env.ENGINE_TICK_MS ?? '2000,6000').split(',').map((s) => Number(s.trim()));
-  const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : 'devnet';
+  const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : env.WORLD_CHAIN === 'ledger' ? 'ledger' : 'devnet';
+  if (env.MAINNET && !['off', 'rehearsal', 'on'].includes(env.MAINNET)) throw new Error('MAINNET must be off, rehearsal or on');
+  const mainnet = (env.MAINNET || 'off') as Config['mainnet'];
+  if (mainnet !== 'off' && worldChain !== 'ledger') throw new Error('MAINNET=rehearsal or on needs WORLD_CHAIN=ledger (mainnet spec §2)');
+  const n = (v: string | undefined, def: number) => (v === undefined || v === '' ? def : Number(v));
   return {
     nodeEnv,
     port,
@@ -90,6 +198,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
     adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv !== 'production' && worldChain === 'memory' ? '12345' : null),
     worldChain,
+    mainnet,
+    mainnetKey: env.MAINNET_KEY || undefined,
+    mainnetRpcUrl: env.MAINNET_RPC_URL || undefined,
+    coldAddress: env.MAINNET_COLD_ADDRESS || undefined,
+    custodyLocal: nodeEnv !== 'production' && on(env.MAINNET_CUSTODY_LOCAL, false),
+    mainnetLimits: {
+      hotMaxSol: n(env.HOT_MAX_SOL, 3), outflowDailyMaxSol: n(env.OUTFLOW_DAILY_MAX_SOL, 5),
+      agentCapSol: n(env.MAINNET_AGENT_CAP_SOL, 0.5), agentDailyCapSol: n(env.MAINNET_AGENT_DAILY_CAP_SOL, 0.1),
+      userMonthlyCapSol: n(env.MAINNET_USER_MONTHLY_CAP_SOL, 1), worldCapSol: n(env.MAINNET_WORLD_CAP_SOL, 25),
+      houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
+    },
     devnetRpcUrl: env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
@@ -105,5 +224,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ownerModelRepliesPerDay: Number(env.OWNER_MODEL_REPLIES_PER_DAY ?? 5),
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
+    x: loadXConfig(env),
+    external: externalConfig(env),
+    scenes: loadSceneConfig(env, nodeEnv),
   };
 }

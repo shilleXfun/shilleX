@@ -135,7 +135,8 @@ export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => numbe
     const pool = v.phrasebook.memeCaptions.filter((m) => m.situation === situation);
     if (!pool.length) return null;
     // Act's own slots, without usernames: a caption never names a person, and a caption whose slot can't be filled is skipped.
-    const slots = slotsFor(v, c, {});
+    // A news post's topic can fill a caption's {topic} (x-feed item 8); nothing else from c.slots reaches a caption.
+    const slots = { ...slotsFor(v, c, {}), ...(typeof c.slots?.topic === 'string' ? { topic: c.slots.topic } : {}) };
     const tried = new Set<string>();
     for (let attempt = 0; attempt < 5; attempt++) {
       const tpl = await pickTemplate(db, situation, d.now(), tried);
@@ -180,7 +181,8 @@ export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => numbe
       const m = await tryMeme(v, situation, c);
       if (m) return m;
     } catch (e) { console.error('[agents] meme failed, using a data card', (e as Error).message); }
-    const fallback = fallbackCard(v);
+    // A P&L or chart card says nothing about news from X: a news post without a meme goes out as text.
+    const fallback = situation === 'news' ? null : fallbackCard(v);
     return fallback ? attach(v, fallback) : null;
   }
 

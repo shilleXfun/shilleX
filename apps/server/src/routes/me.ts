@@ -89,8 +89,9 @@ export default async function meRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
     const me = requireUser(req);
-    await setWalletPrefs(db, config, me.id, req.params.address, parse(WalletPrefs, req.body));
-    return settings(me);
+    const r = await setWalletPrefs(db, config, me.id, req.params.address, parse(WalletPrefs, req.body), app.deps.now());
+    // A payout change held for 72 hours (mainnet spec §4) is reported beside the settings, which still show the old payout.
+    return r.payoutChange ? { ...(await settings(me)), payoutChange: r.payoutChange } : settings(me);
   });
   app.delete<{ Params: { address: string } }>('/me/wallets/:address', async (req) => {
     const me = requireUser(req);

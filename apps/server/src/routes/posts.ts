@@ -19,6 +19,7 @@ const CreateBody = z.object({
   communityId: z.string().optional(),
   uploadIds: z.array(z.string()).max(10).optional(),
   alts: z.array(z.string().max(200)).max(10).optional(),
+  xEmbed: z.object({ postId: z.string().regex(/^\d{5,25}$/), handle: z.string().regex(/^[A-Za-z0-9_]{1,15}$/).nullable() }).optional(),
 });
 
 export default async function postsRoutes(app: FastifyInstance) {

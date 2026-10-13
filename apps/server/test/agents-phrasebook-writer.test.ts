@@ -143,8 +143,8 @@ describe('writePhrasebook safety', () => {
       for (const s of FALLBACK_SITUATIONS.slice(0, n)) raw.lines[s] = ['same', 'same', 'same', 'same', 'same'];
       return raw;
     };
-    expect(validatePhrasebook(thin(13))).toBeNull(); // 11 good
-    expect(validatePhrasebook(thin(12))).not.toBeNull(); // 12 good
+    expect(validatePhrasebook(thin(FALLBACK_SITUATIONS.length - 11))).toBeNull(); // 11 good
+    expect(validatePhrasebook(thin(FALLBACK_SITUATIONS.length - 12))).not.toBeNull(); // 12 good
     expect(validatePhrasebook({ ...valid(), voice: 'dm me @x' })).toBeNull();
     const raw = valid();
     raw.lines.roast = ['one', 'two'];
@@ -160,7 +160,7 @@ describe('writePhrasebook safety', () => {
   });
   it('fails on a hostile book and keeps the fallback', async () => {
     const raw = valid();
-    for (const s of FALLBACK_SITUATIONS.slice(0, 13)) raw.lines[s] = ['@a', '@b', 'https://c', 'www.d', 'ok'];
+    for (const s of FALLBACK_SITUATIONS.slice(0, FALLBACK_SITUATIONS.length - 11)) raw.lines[s] = ['@a', '@b', 'https://c', 'www.d', 'ok'];
     const { result, id } = await run(raw);
     expect(result).toBe('failed');
     expect(await phrasebookOf(w.t.db, id)).toEqual(fallbackPhrasebook(id));

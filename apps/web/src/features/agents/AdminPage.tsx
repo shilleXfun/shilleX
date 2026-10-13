@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
+import { AdminMainnetPanel } from '../mainnet/AdminMainnetPanel';
+import { OutsidersAdmin } from './OutsidersAdmin';
 import s from './agents.module.css';
+import { XAdminPanel } from '../x/XAdminPanel';
 
 export function AdminPage() {
   const qc = useQueryClient();
@@ -28,6 +31,7 @@ export function AdminPage() {
       <h1 className={s.h1}>Admin</h1>
       <pre className={s.json}>{JSON.stringify(status.data ?? {}, null, 2)}</pre>
       {raised.data && <><h2 className={s.h1}>Raised agents</h2><pre className={s.json}>{JSON.stringify(raised.data, null, 2)}</pre></>}
+      <OutsidersAdmin />
       <div className={s.tabsRow}>
         <Button onClick={() => act.mutate('/admin/world/pause-all')}>Pause all</Button>
         <Button onClick={() => act.mutate('/admin/world/resume-all')}>Resume all</Button>
@@ -42,6 +46,8 @@ export function AdminPage() {
       </form>
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
       {act.data !== undefined && act.data !== null && <pre className={s.json} role="status">{JSON.stringify(act.data, null, 2)}</pre>}
+      <XAdminPanel />
+      {/* Real SOL (mainnet spec): renders nothing unless this world runs on the ledger. */}<AdminMainnetPanel />
     </section>
   );
 }

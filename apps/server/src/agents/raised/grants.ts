@@ -7,6 +7,9 @@ import type { Chain } from '../../world/chain.ts';
 import { START_LAMPORTS, recordTx } from '../../world/ledger.ts';
 import { TREASURY, signerFor, walletOf } from '../../world/wallets.ts';
 import type { EngineDeps } from '../engine.ts';
+import { HOUSE, PRACTICE_SEASONS, currentSeason, lamportsOf as lamportsOnBooks } from '../../ledger/accounts.ts';
+import { LedgerChain } from '../../ledger/ledger-chain.ts';
+import { isExternalAgent } from '../external/guard.ts';
 
 /** Spec §6. A raised agent starts with what a wild agent started with. */
 export const START_GRANT = START_LAMPORTS;
@@ -15,7 +18,18 @@ export const TOP_UPS_MAX = 300_000_000;
 export const TREASURY_FLOOR = LAMPORTS_PER_SOL;
 const FEE = 5_000;
 
-export type GrantCode = 'TOP_UP_TODAY' | 'TOP_UPS_MAX' | 'GRANTS_DAILY' | 'TREASURY_LOW' | 'TREASURY_UNREADABLE';
+export type GrantCode = 'TOP_UP_TODAY' | 'TOP_UPS_MAX' | 'GRANTS_DAILY' | 'TREASURY_LOW' | 'TREASURY_UNREADABLE' | 'GRANTS_OFF';
+
+/**
+ * Where grants come from. Devnet and memory: the treasury wallet, by a signed transfer. The ledger: the house's account, by a
+ * move on the books (a grant is not an agent's send, so the ledger's 0.01 SOL send cap doesn't apply). In a real-SOL season the
+ * house gives nothing away: owners fund their agents with deposits (mainnet spec §4), or raising would mint withdrawable SOL.
+ */
+type Source = { kind: 'treasury' } | { kind: 'house'; chain: LedgerChain; real: boolean };
+async function sourceOf(d: GrantDeps): Promise<Source> {
+  if (!(d.chain instanceof LedgerChain)) return { kind: 'treasury' };
+  return { kind: 'house', chain: d.chain, real: !PRACTICE_SEASONS.has(await currentSeason(d.db)) };
+}
 export class GrantRefused extends Error { constructor(readonly code: GrantCode, message: string) { super(message); } }
 export interface GrantDeps { db: Db; chain: Chain; key: Buffer; now: () => Date; dailyLimitSol: number }
 export const grantDepsOf = (d: EngineDeps): GrantDeps => ({ db: d.db, chain: d.chain, key: d.worldKey, now: d.now, dailyLimitSol: d.app.deps.config.userAgentGrantsDailySol });
@@ -28,6 +42,7 @@ const TREASURY_TTL_MS = 30_000;
 const treasurySeen = new Map<string, { at: number; lamports: number }>();
 /** The treasury's lamports, or null when the chain can't be read. `cached` accepts a read up to 30 s old; a grant reads fresh. */
 async function treasuryLamports(d: GrantDeps, cached: boolean): Promise<number | null> {
+  if (d.chain instanceof LedgerChain) return lamportsOnBooks(d.db, HOUSE);
   const t = await walletOf(d.db, TREASURY);
   if (!t) return 0;
   const now = d.now().getTime(), hit = treasurySeen.get(t.publicKey);
@@ -44,6 +59,10 @@ async function treasuryLamports(d: GrantDeps, cached: boolean): Promise<number |
 
 /** Why a grant can't go out now, or null. The treasury check reads the chain (`cached`: a read up to 30 s old will do). */
 async function refusal(d: GrantDeps, agentId: string, kind: 'start' | 'top_up', cached = false): Promise<GrantRefused | null> {
+  // Raised agents only: an outside agent's one start grant is claim.ts's, and the house funds it with nothing else.
+  if (agentId && await isExternalAgent(d.db, agentId)) return new GrantRefused('GRANTS_OFF', 'Outside agents get no grants here.');
+  const src = await sourceOf(d);
+  if (src.kind === 'house' && src.real) return kind === 'start' ? null : new GrantRefused('GRANTS_OFF', 'On real SOL you fund your agent with a deposit.');
   const lamports = lamportsOf(kind), today = dayStart(d.now());
   if (kind === 'top_up') {
     const mine = await d.db.select({ at: agentGrants.createdAt, lamports: agentGrants.lamports }).from(agentGrants)
@@ -55,7 +74,9 @@ async function refusal(d: GrantDeps, agentId: string, kind: 'start' | 'top_up', 
   if (Number(day?.s ?? 0) + lamports > d.dailyLimitSol * LAMPORTS_PER_SOL) return new GrantRefused('GRANTS_DAILY', 'Today’s devnet SOL for raised agents is used up; try again tomorrow (UTC).');
   const have = await treasuryLamports(d, cached);
   if (have === null) return new GrantRefused('TREASURY_UNREADABLE', 'The treasury can’t be read right now; try again soon.');
-  if (have - lamports - FEE < TREASURY_FLOOR) return new GrantRefused('TREASURY_LOW', 'The treasury is refilling; try again later.');
+  // The devnet treasury keeps a floor for the wild agents it funds; the house's practice books need none, and pay no fee.
+  const floor = src.kind === 'house' ? 0 : TREASURY_FLOOR, fee = src.kind === 'house' ? 0 : FEE;
+  if (have - lamports - fee < floor) return new GrantRefused('TREASURY_LOW', 'The treasury is refilling; try again later.');
   return null;
 }
 
@@ -79,14 +100,24 @@ export async function sendGrant(d: GrantDeps, agentId: string, kind: 'start' | '
     if (no) throw no;
     const to = await walletOf(d.db, agentId);
     if (!to) throw new Error(`No wallet for ${agentId}`);
-    const treasury = await signerFor(d.db, TREASURY, d.key);
-    const lamports = lamportsOf(kind);
-    const r = await d.chain.sendSol(treasury, to.publicKey, lamports);
-    const now = d.now();
-    await recordTx(d.db, { signature: r.signature, agentId, turnId: null, kind: kind === 'start' ? 'fund' : 'receive', counterparty: treasury.publicKey.toBase58(), lamportsDelta: lamports, createdAt: now });
-    await d.db.insert(agentGrants).values({ id: newId(), agentId, lamports, kind, signature: r.signature, createdAt: now });
+    const src = await sourceOf(d), now = d.now();
+    let signature: string, lamports = lamportsOf(kind), counterparty: string;
+    if (src.kind === 'treasury') {
+      const treasury = await signerFor(d.db, TREASURY, d.key);
+      signature = (await d.chain.sendSol(treasury, to.publicKey, lamports)).signature;
+      counterparty = treasury.publicKey.toBase58();
+    } else {
+      // On the books: a move from the house's account. In a real-SOL season the start grant is zero: the agent wakes up and
+      // its owner funds it with a deposit.
+      if (src.real) lamports = 0;
+      signature = `ldg_grant_${newId()}`;
+      counterparty = HOUSE;
+      if (lamports > 0) await src.chain.transfer(HOUSE, to.publicKey, lamports, 'grant', signature);
+    }
+    if (lamports > 0) await recordTx(d.db, { signature, agentId, turnId: null, kind: kind === 'start' ? 'fund' : 'receive', counterparty, lamportsDelta: lamports, createdAt: now });
+    await d.db.insert(agentGrants).values({ id: newId(), agentId, lamports, kind, signature, createdAt: now });
     if (kind === 'start') await d.db.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, agentId));
-    return { signature: r.signature, lamports };
+    return { signature, lamports };
   } finally { inFlight.delete(agentId); }
 }
 
