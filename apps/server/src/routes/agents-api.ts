@@ -10,6 +10,7 @@ import { claimByWallet, claimByX, claimChallenge, claimView, retryStartGrants, t
 import { agentForKey, bearerOf, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
 import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
 import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
+import { meView, readAs } from '../agents/external/read.ts';
 
 export interface AgentsApiDeps {
   handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer'>;
@@ -80,6 +81,36 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       const h = await holder(req, reply, 'act', { anyState: true });
       const body = parse(Rotate, req.body);
       return { api_key: await rotateKey(db, h.agent.id, now(), body?.label || null) };
+    });
+
+    // ── Reading (Task 5): Bearer, the read bucket; everything through the real routes as the agent. ──
+    type Q = { Querystring: Record<string, string | undefined> };
+    const page = (q: Record<string, string | undefined>) => ({ cursor: q.cursor, limit: q.limit ? String(Math.min(50, Math.max(1, Number(q.limit) || 20))) : undefined });
+    r.get('/v1/agent/me', async (req, reply) => meView({ db, chain: deps.handles.chain, config, now }, await holder(req, reply, 'read', { anyState: true })));
+    r.get<Q>('/v1/agent/feed', async (req, reply) => {
+      const h = await holder(req, reply, 'read');
+      const tab = req.query.tab === 'following' ? 'following' : 'live';
+      return readAs(app, h, '/api/feed', { tab, ...page(req.query) });
+    });
+    r.get<Q>('/v1/agent/notifications', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/notifications', page(req.query)));
+    r.get('/v1/agent/coins', async (req, reply) => { await holder(req, reply, 'read'); return { coins: await deps.handles.indexer.coins() }; });
+    r.get<{ Params: { mint: string } }>('/v1/agent/coins/:mint', async (req, reply) => {
+      await holder(req, reply, 'read');
+      const coin = await deps.handles.indexer.coin(req.params.mint);
+      if (!coin) throw errors.notFound('Coin');
+      return { coin, trades: await deps.handles.indexer.trades({ mint: coin.mint, limit: 50 }), holders: await deps.handles.indexer.holders(coin.mint) };
+    });
+    r.get<{ Params: { handle: string } }>('/v1/agent/profiles/:handle', async (req, reply) =>
+      readAs(app, await holder(req, reply, 'read'), `/api/users/${encodeURIComponent(req.params.handle.replace(/^@/, ''))}`));
+    r.get<{ Params: { id: string } }>('/v1/agent/posts/:id', async (req, reply) => readAs(app, await holder(req, reply, 'read'), `/api/posts/${encodeURIComponent(req.params.id)}`));
+    // Its own conversations only (the real routes check membership); each says hasOutsider, as the banner does.
+    r.get('/v1/agent/dms', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/conversations'));
+    r.get<{ Params: { id: string } } & Q>('/v1/agent/dms/:id', async (req, reply) => {
+      const h = await holder(req, reply, 'read');
+      const id = encodeURIComponent(req.params.id);
+      const { conversation } = await readAs(app, h, `/api/conversations/${id}`);
+      const messages = await readAs(app, h, `/api/conversations/${id}/messages`, { before: req.query.before, limit: req.query.limit ? String(Math.min(50, Math.max(1, Number(req.query.limit) || 40))) : undefined });
+      return { conversation, messages };
     });
   }, { prefix: '/api' });
 
