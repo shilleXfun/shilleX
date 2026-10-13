@@ -61,15 +61,18 @@ export function accountProblem(e: unknown): string | null {
  * The one guarded way to open a turn for an agent outside the engine (Phase 4 handlers that seal their own receipt use it too):
  * not while the engine or another moment holds the agent, never for a paused agent, never on top of an unsealed turn.
  * `busy` must be the set the engine uses (EngineDeps.busy, else the app's default).
+ * Open agents: an outside agent brings its own brain, so no engine, moment or depth turn is ever opened for one ('external');
+ * `external: true` is the API's own way in (agents/external/act.ts), and opens a turn for an outside agent only ('not_external').
  */
-export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'>, agentId: string, fn: () => Promise<T>):
-  Promise<{ ran: true; value: T } | { ran: false; reason: 'busy' | 'inactive' | 'running' }> {
+export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'>, agentId: string, fn: () => Promise<T>, opts: { external?: boolean } = {}):
+  Promise<{ ran: true; value: T } | { ran: false; reason: 'busy' | 'inactive' | 'running' | 'external' | 'not_external' }> {
   const busy = d.busy ?? busyFor(d.app);
   // has+add with no await in between: atomic on Node's one thread.
   if (busy.has(agentId)) return { ran: false, reason: 'busy' };
   busy.add(agentId);
   try {
-    const [a] = await d.db.select({ status: agents.status }).from(agents).where(eq(agents.userId, agentId));
+    const [a] = await d.db.select({ status: agents.status, origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
+    if (a && (a.origin === 'external') !== (opts.external === true)) return { ran: false, reason: a.origin === 'external' ? 'external' : 'not_external' };
     if (a?.status !== 'active') return { ran: false, reason: 'inactive' };
     // After a crash a turn can be left running until boot seals it; nothing may chain onto it before that.
     const [last] = await d.db.select({ status: agentTurns.status }).from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(desc(agentTurns.seq)).limit(1);
@@ -140,6 +143,14 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       humanSpent += Number(r?.s ?? 0);
     } catch (e) { console.error('[agents] could not load the human reply spend of today', e); }
   })();
+  // Open agents: no moment is ever written for an outside agent. enqueue refuses the ones this set knows; the set is re-read
+  // before a drain, which drops any moment for an outsider that got in first (and exclusiveTurn refuses them anyway).
+  let outsiders = new Set<string>();
+  const loadOutsiders = async () => {
+    try { outsiders = new Set((await d.db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'external'))).map((r) => r.id)); }
+    catch (e) { console.error('[agents] could not read the outside agents', e); }
+  };
+  void loadOutsiders();
   let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
   let bounced = false, runningHuman = 0;
@@ -313,12 +324,13 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
 
   async function drainLoop() {
     const later: Moment[] = [];
+    if (queue.length) await loadOutsiders();
     while (queue.length && open()) {
       queue.sort((a, b) => PRIORITY.indexOf(a.kind) - PRIORITY.indexOf(b.kind) || a.at.getTime() - b.at.getTime());
       const m = queue.shift()!;
       keys.delete(keyOf(m));
       const h = handlerOf(m.kind);
-      if (!h) continue;
+      if (!h || outsiders.has(m.agentId)) continue;
       bounced = false;
       let answered = false, threw = false, paid = false;
       const track: ModelTurnRunner = async (a, o) => {
@@ -351,7 +363,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     enqueue(m) {
       // False tells the caller to fall back to the phrasebook.
       if (!open() || !affordable(worstOf(m.kind)) || queue.length >= MAX_QUEUE || !handlerOf(m.kind)) return false;
-      if (keys.has(keyOf(m))) return false;
+      if (keys.has(keyOf(m)) || outsiders.has(m.agentId)) return false;
       if (m.kind === 'human_reply') {
         rollHuman();
         const queuedHuman = queue.filter((x) => x.kind === 'human_reply').length + runningHuman;
