@@ -226,7 +226,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
         const rugMin = v.limits?.rugMinShare ?? RUG_MIN_SHARE, cap = v.limits?.maxCreatorSaleShare ?? 1;
         const share = Math.min(cap, rugMin + (1 - rugMin) * t.greed);
         const raw = Math.min(free, Math.floor(p.raw * cap), Math.max(Math.ceil(p.raw * rugMin), Math.floor(p.raw * share)));
-        if (raw >= RAW_PER_TOKEN) add({ kind: 'rug', score: (0.6 * t.greed + 0.4 * t.pettiness) * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
+        // A rug is at least rugMin of the bag in one sale: while vesting leaves less than that free, the creator waits.
+        if (raw >= RAW_PER_TOKEN && raw >= Math.ceil(p.raw * rugMin)) add({ kind: 'rug', score: (0.6 * t.greed + 0.4 * t.pettiness) * Math.min(1, pnl) * (c.holders >= 3 ? 1 : 0.3), raw, situation: 'rugged_someone', target: { mint: p.mint },
           reason: `dumped my own $${p.symbol}: ${pct(pnl)} on it, ${c.holders} holders, greed ${f2(t.greed)}` });
       }
       continue;
