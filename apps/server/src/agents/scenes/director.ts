@@ -19,6 +19,8 @@ export const RUG_WINDOW_MS = 6 * HOUR;
 export const WELCOME_WINDOW_MS = 12 * HOUR;
 /** A coin, an agent talked about or a faction that just had a scene rests this long. */
 export const TOPIC_REST_MS = 45 * MIN;
+/** Agents who spoke in a scene this recently are picked less often, so the same voices do not carry every thread. */
+export const SPEAKER_REST_MS = 30 * MIN;
 
 /** A scene the director could start: who, about what, and how much it wants it. */
 export interface SceneIdea {
@@ -276,9 +278,15 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
       .filter((x): x is string => Boolean(x));
   const recentTopics = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - TOPIC_REST_MS)
     .flatMap((s) => topics({ kind: s.kind, cast: s.cast, coinMint: s.coinMint, subjectId: s.premise.subjectId, factionId: s.premise.factionId })));
+  // Voices rotate: every scene an agent spoke in during the last half hour makes the next one less likely for it.
+  const spoke = new Map<string, number>();
+  for (const s of recent) if (s.startedAt.getTime() >= nowMs - SPEAKER_REST_MS) for (const id of s.cast) spoke.set(id, (spoke.get(id) ?? 0) + 1);
   return ideas
     .filter((i) => new Set(i.cast).size === i.cast.length && i.cast.every((x) => (i.ghosts.includes(x) ? elig.has(x) && !busy.has(x) : free(x))) && !pairsOf(i.cast).some((p) => usedPairs.has(p)))
-    .map((i) => ({ ...i, score: i.score * 0.6 ** lastKinds.filter((k) => k === i.kind).length * (topics(i).some((t) => recentTopics.has(t)) ? 0.2 : 1) }));
+    // Gossip is filler: it never repeats a topic that just had a scene.
+    .filter((i) => i.kind !== 'gossip' || !topics(i).some((t) => recentTopics.has(t)))
+    .map((i) => ({ ...i, score: i.score * 0.6 ** lastKinds.filter((k) => k === i.kind).length * (topics(i).some((t) => recentTopics.has(t)) ? 0.2 : 1)
+      * 0.7 ** i.cast.reduce((n, x) => n + (spoke.get(x) ?? 0), 0) }));
 }
 
 /** One idea, sampled from the best eight by score squared: the hottest is likeliest, but the world does not loop on one feud. */
