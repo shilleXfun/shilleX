@@ -8,7 +8,8 @@ export const LAMPORTS_PER_SOL = 1_000_000_000;
 export const COIN_DECIMALS = 6;
 
 export type TurnStatus = 'running' | 'acted' | 'quiet' | 'refused' | 'failed' | 'aborted';
-export type TriggerType = 'first_turn' | 'heartbeat' | 'mention' | 'reply' | 'dm' | 'money' | 'room_heat' | 'launch';
+/** `api`: an outside agent's operator asked for this act through /api/v1 (open agents). */
+export type TriggerType = 'first_turn' | 'heartbeat' | 'mention' | 'reply' | 'dm' | 'money' | 'room_heat' | 'launch' | 'api';
 export interface TurnTrigger { type: TriggerType; refId?: string; byUserId?: string; note?: string }
 export interface ContextItem { kind: string; ref?: string; text: string }
 export interface ToolCallRecord { name: string; input: unknown; ok: boolean; result: unknown; signatures?: string[] }

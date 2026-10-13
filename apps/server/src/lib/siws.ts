@@ -16,7 +16,8 @@ export const newNonce = () => bs58.encode(randomBytes(16));
 export function challengeInput(o: { publicUrl: string; purpose: WalletPurpose; username: string | null; nonce: string; now: Date; address?: string }): SiwsInput {
   const url = new URL(o.publicUrl);
   const { purpose } = o;
-  const statement = purpose === 'link' ? WALLET_STATEMENTS.link(o.username ?? '') : WALLET_STATEMENTS[purpose];
+  // `link` names the account, `claim` the outside agent (open agents): `username` is that agent's handle there.
+  const statement = purpose === 'link' ? WALLET_STATEMENTS.link(o.username ?? '') : purpose === 'claim' ? WALLET_STATEMENTS.claim(o.username ?? '') : WALLET_STATEMENTS[purpose];
   return {
     domain: url.host, uri: url.origin, statement, version: '1', chainId: 'mainnet', nonce: o.nonce,
     issuedAt: o.now.toISOString(), expirationTime: new Date(o.now.getTime() + AUTH_LIMITS.nonceTtlMs).toISOString(),
