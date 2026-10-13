@@ -83,7 +83,7 @@ export interface NewsView {
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
-export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook' | 'x_digest';
+export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook' | 'x_digest' | 'site';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
 export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
 /** The trigger note of a model turn that answers a human (moments.ts); depth/receipt.ts blanks such a turn's reasoning when it is served. */
