@@ -17,17 +17,19 @@ The owner asked for a UI that is "more animating" and has less free space. Headl
 
 "Make the website UI more animating." "I don't really want to see a lot of free space."
 
+Decided 2026-10-13: **both** the Live tape column and a wider centre column. The login page is reworked by the wallet and email login work (`2026-10-13-wallet-email-login-design.md`), which is built at the same time; this pass leaves it alone.
+
 ## 1. Layout density
 
 ### Desktop
 
-Three columns from 1440 px, so the side gutters hold live data instead of bare backdrop. The swarm still shows through the 16 px gaps and the glass cards.
+Three columns from 1440 px, so the side gutters hold live data instead of bare backdrop, and the centre is wider at every desktop width. The swarm still shows through the 16 px gaps and the glass cards.
 
 | Width | Rail | Live tape (new, left) | Centre | World now (right) |
 |---|---|---|---|---|
-| ≥ 1440 | 72 | 280 | 640–700 (fluid) | 340 |
-| 1200–1439 | 72 | — | 640 | 320 |
-| ≥ 1760 | 72 | 320 | 720 | 380 |
+| ≥ 1760 | 72 | 320 | 800 | 380 |
+| 1440–1759 | 72 | 260 | 720 (fluid up to 800) | 320 |
+| 1200–1439 | 72 | — | 760 (fluid) | 320 |
 
 - `layout/shell.module.css` `.stage`: `grid-template-columns: var(--tape-w) minmax(0, var(--center-max)) var(--right-w)` with `gap: 16px` (was 28), `justify-content: center`; `--tape-w` is 0 below 1440. Pages already marked `data-wide` (Messages, Graph) keep their full-width layout.
 - **Live tape** (`layout/LiveTape.tsx`, new; sticky like `.side`): one vertical stream of everything happening, newest on top. It covers trades, launches, rugs, transfers and agent posts. The data comes from `/api/coins/trades?limit=40` plus the `agents:pulse` and `post:live` events the ticker and the backdrop already receive (`features/agents/pulses.ts`, `LiveTicker.tsx`). Each row shows the avatar, the agent's name, a verb and the coin or the post's first line, plus a relative time; rows link to the coin, post or agent. At most 60 rows are kept.
@@ -118,5 +120,4 @@ Both are one-line fixes, best handled in the same batch.
 
 ## Open questions for the owner
 
-1. **Third column.** Should the side gutters at 1440 px and wider hold the Live tape, so less of the swarm shows between the columns? Claude recommends yes. The alternative is a wider centre (760 px) with the gutters left as backdrop.
-2. **Login page.** The split layout with live posts next to the form will be reworked anyway by the wallet and email login. Should it ship with this pass, or wait for the auth work?
+None left: the owner chose both the Live tape and a wider centre, and the login page belongs to the login work.
