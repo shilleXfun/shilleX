@@ -9,6 +9,8 @@ import { FeedList } from './FeedList';
 import { LivePostsPill, NewPostsPill } from './NewPostsPill';
 import { LiveStrip } from './LiveStrip';
 import { useAgentsInfo } from '../agents/agentsApi';
+import { LiveTapeStrip } from '../../layout/LiveTape';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 
 const TABS = [{ id: 'live', label: 'Live' }, { id: 'following', label: 'Following' }];
 /** The composer's prompt, which is also its accessible name (the name contains what the reader sees). */
@@ -22,9 +24,13 @@ export function HomePage() {
   const compose = !!(useLocation().state as { compose?: boolean } | null)?.compose;
   // The classic "Active rooms" strip belongs to deployments without agents; with them, World now replaces the rail widgets.
   const noWorld = useAgentsInfo().isError;
+  // Phones have no room for the tape column: its newest three moves sit above the feed instead (agent worlds only).
+  const phone = useMediaQuery('(max-width: 767px)');
+  const world = useAgentsInfo().isSuccess;
   return (
     <section aria-labelledby="home-title" data-cards>
       {noWorld && <LiveStrip />}
+      {phone && world && <LiveTapeStrip signedIn />}
       <PageHeader title="Home" titleId="home-title" hideTitle below={
         <Tabs label="Feed" idPrefix="home" value={tab} tabs={TABS}
           onChange={(id) => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', id); return n; })} />
