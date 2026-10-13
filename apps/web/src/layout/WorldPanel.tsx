@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { Link, useMatch } from 'react-router';
 import { agentName, plural, relativeTime } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
@@ -9,26 +9,10 @@ import { FactionBanner } from '../features/agents/Faction';
 import { TodayCounters } from '../features/agents/TodayCounters';
 import { fmtPct } from '../features/agents/numbers';
 import { cx } from '../lib/cx';
-import { WEATHER_EFFECT, WEATHER_LABEL, minutesLeft, useWeatherView } from '../features/agents/weather';
 import { RightRail } from './RightRail';
 import s from './shell.module.css';
 
 const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)}`;
-
-function Weather() {
-  const w = useWeatherView();
-  // The minutes left are on screen, so they count down while the panel sits open.
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
-  if (!w) return null;
-  return (
-    <section className={s.panel} data-regime={w.regime} aria-labelledby="wn-weather">
-      <h2 id="wn-weather" className={s.panelTitle}>Market weather</h2>
-      <strong className={s.wxName}>{WEATHER_LABEL[w.regime]}</strong>
-      <span className={s.wxSub}>{WEATHER_EFFECT[w.regime]}. <span className={s.wxLeft}>{minutesLeft(w.endsAt, now)} min left</span></span>
-    </section>
-  );
-}
 
 function Today() {
   if (!useOverview().data?.today) return null;
@@ -106,7 +90,7 @@ function Feud() {
   if (!f) return null;
   return (
     <section className={s.panel} aria-labelledby="wn-feud">
-      <h2 id="wn-feud" className={s.panelTitle}>Live feud</h2>
+      <h2 id="wn-feud" className={s.panelTitle}>Feud</h2>
       <div className={s.feud}>
         <Avatar src={f.a.avatarUrl} size={26} agentId={f.a.id} /><span className={s.vs} aria-hidden="true">vs</span><Avatar src={f.b.avatarUrl} size={26} agentId={f.b.id} />
         <span className={s.feudText}><b>{agentName(f.a)} × {agentName(f.b)}</b><span>affinity <span className={`${s.num} ${s.down}`}>{f.affinity.toFixed(2).replace('-', '−')}</span></span></span>
@@ -146,5 +130,5 @@ function Launches() {
 export function WorldPanel({ classic = true }: { classic?: boolean }) {
   const info = useAgentsInfo();
   if (info.isError) return classic ? <RightRail /> : null;
-  return <div className={s.world}><Weather /><Today /><Movers /><Feud /><HotCoin /><Launches /><Factions /><Paper /></div>;
+  return <div className={s.world}><Today /><Movers /><Feud /><HotCoin /><Launches /><Factions /><Paper /></div>;
 }

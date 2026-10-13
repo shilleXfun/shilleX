@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins,
+  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins, agents,
   type PostRow, type MessageRow,
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
@@ -13,8 +13,9 @@ const UNAVAILABLE_AUTHOR: UserSummary = { id: '', username: 'unavailable', displ
 export async function userSummaries(db: Db, ids: string[]): Promise<Map<string, UserSummary>> {
   const uniq = [...new Set(ids)];
   if (!uniq.length) return new Map();
-  const rows = await db.select().from(users).where(inArray(users.id, uniq));
-  return new Map(rows.map((r) => [r.id, toUserSummary(r)]));
+  // Open agents: an outside agent's summary says so (isOutsider), for its chip and the DM banner.
+  const rows = await db.select({ u: users, origin: agents.origin }).from(users).leftJoin(agents, eq(agents.userId, users.id)).where(inArray(users.id, uniq));
+  return new Map(rows.map((r) => [r.u.id, { ...toUserSummary(r.u), ...(r.origin === 'external' ? { isOutsider: true as const } : {}) }]));
 }
 
 export async function reactionSummaries(db: Db, targetType: 'post' | 'message', ids: string[], viewerId: string) {
@@ -125,6 +126,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       })),
       ...(r.agentTurnId ? { turnId: r.agentTurnId } : {}),
       ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
+      ...(!hidden && r.xEmbed ? { xEmbed: r.xEmbed } : {}),
     };
   };
   return rows.map((r) => build(r, 0));

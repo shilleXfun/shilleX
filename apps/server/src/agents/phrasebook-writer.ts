@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gt, gte, inArray, isNull, like, ne, notLike, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentEvents, agentTurns, phrasebooks, posts, users } from '../db/schema.ts';
+import { agentEvents, agentTurns, agents, phrasebooks, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { ToolOutcome } from '../world/tools.ts';
@@ -12,7 +12,7 @@ import { scrubBook, scrubProfile } from './raised/scrub.ts';
 import { TRAITS, recentEvents, setTraits } from './state.ts';
 import type { Phrasebook, Situation, Traits } from './types.ts';
 
-export const PHRASEBOOK_PROMPT_VERSION = 'phrasebook-v2';
+export const PHRASEBOOK_PROMPT_VERSION = 'phrasebook-v3';
 export const NOTABLE_EVENTS = ['got_rugged', 'rugged', 'graduated', 'big_win', 'big_loss'];
 export const REFRESHES_PER_DAY = 10;
 /** A book whose agent ran dry ("nothing fresh to say") this many times since it was written today is refreshed early (L7). */
@@ -165,6 +165,9 @@ const WROTE = 'wrote phrasebook v';
 const NAMING = ', naming the agent';
 
 export async function needsPhrasebook(db: Db, agentId: string, now: Date): Promise<boolean> {
+  // Open agents: an outside agent brings its own words, so no book is ever written for one (and no model call made as one).
+  const [who] = await db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
+  if (who?.origin === 'external') return false;
   // Any phrasebook prompt version counts, so a v1 try still holds the 6-hour guard after the prompt changed.
   const [recentTry] = await db.select({ id: agentTurns.id }).from(agentTurns)
     .where(and(eq(agentTurns.agentId, agentId), like(agentTurns.promptVersion, 'phrasebook-%'), gte(agentTurns.startedAt, new Date(now.getTime() - RETRY_AFTER_MS)))).limit(1);
@@ -239,7 +242,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
       'This is Shillex, a social network where AI agents trade devnet coins next to human users. You write one agent’s phrasebook: lines in that agent’s own voice, based only on what it has written and done. '
-      + 'Lines are templates; the only slots are {coin} {user} {pct} {sol} {price} {holders} {room} {weather} {past}, and {weather} is one word for the market’s mood, such as giddy, slow, jumpy or unhinged. Give 10 to 14 different lines for each situation. '
+      + 'Lines are templates; the only slots are {coin} {user} {pct} {sol} {price} {holders} {room} {weather} {past} {topic}, and {weather} is one word for the market’s mood, such as giddy, slow, jumpy or unhinged; {topic} is a short label for something people on X are talking about. Give 10 to 14 different lines for each situation; for news, write some lines with {topic} and some without it (those go with a post the agent shares from X). '
       + 'Traits are numbers from 0 to 1 that describe how this agent has behaved so far. In profile, give the display name (up to 40 characters, no @), bio (up to 280 characters), one emoji and a colour (#rrggbb) that this agent would choose for itself, from what it has written and done. '
       + 'Everything between <world_content> tags was written by the agent or others in the world.' }];
     const wish = await d.wishOf?.(agentId);

@@ -7,6 +7,7 @@ import { userWallets, users, type UserRow } from '../db/schema.ts';
 import { errors } from '../lib/errors.ts';
 import { isUniqueViolation } from '../lib/pg-errors.ts';
 import { notify } from './notify.ts';
+import { holdsMainnetFunds, requestPayoutChange } from '../ledger/owner.ts';
 
 /**
  * Tells the owner a wallet was linked to or removed from their account (an in-app notification; Shillex sends no email).
@@ -36,10 +37,10 @@ export async function payoutWallet(db: Db, userId: string): Promise<string | nul
   return r?.a ?? null;
 }
 
-/** MAINNET seam: whether payout wallets exist yet. LOGIN ships it off; the mainnet plan returns its launch-gate state. */
-export const payoutEnabled = (_config: Config): boolean => false;
-/** MAINNET seam: true while the user's agent holds mainnet funds, which locks the payout wallet. LOGIN ships it false. */
-export async function payoutHeld(_db: Db, _userId: string): Promise<boolean> { return false; }
+/** MAINNET seam: payout wallets exist wherever custody runs (MAINNET=rehearsal or on); off by default, as LOGIN shipped it. */
+export const payoutEnabled = (config: Config): boolean => config.mainnet !== 'off';
+/** MAINNET seam: true while the user's agent holds ledger funds or a deposit or withdrawal is open, which locks the payout wallet. */
+export async function payoutHeld(db: Db, userId: string): Promise<boolean> { return holdsMainnetFunds(db, userId); }
 
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 /** The owner's wallets in the order they were added: verified ones and typed (unverified) ones. */
@@ -80,19 +81,26 @@ export async function linkWallet(db: Db, userId: string, address: string, wallet
   }
 }
 
-export async function setWalletPrefs(db: Db, config: Config, userId: string, address: string, p: { showOnProfile?: boolean; isPayout?: true }): Promise<void> {
+export async function setWalletPrefs(db: Db, config: Config, userId: string, address: string, p: { showOnProfile?: boolean; isPayout?: true }, now: Date = new Date()): Promise<{ payoutChange: { address: string; effectiveAt: string } | null }> {
   const [w] = await db.select().from(userWallets).where(and(eq(userWallets.address, address), eq(userWallets.userId, userId)));
   if (!w) throw errors.notFound('Wallet');
+  let payoutChange: { address: string; effectiveAt: string } | null = null;
   if (p.isPayout) {
     if (!payoutEnabled(config)) throw errors.badRequest('PAYOUT_OFF', 'Payout wallets come with mainnet funding');
     if (!w.verifiedAt) throw errors.badRequest('NOT_VERIFIED', 'Sign with this wallet first');
+    // Mainnet spec §4: while the agent holds funds, a new payout wallet takes effect after 72 hours (a stolen session can't
+    // redirect a withdrawal). The other preferences still apply now.
+    const held = w.isPayout ? null : await requestPayoutChange(db, userId, address, now);
+    if (held) payoutChange = { address: held.address, effectiveAt: held.effectiveAt.toISOString() };
   }
+  const flip = p.isPayout && !payoutChange;
   await db.transaction(async (raw) => {
     const tx = raw as unknown as Db;
-    if (p.isPayout) await tx.update(userWallets).set({ isPayout: false }).where(and(eq(userWallets.userId, userId), ne(userWallets.address, address)));
-    await tx.update(userWallets).set({ ...(p.showOnProfile !== undefined ? { showOnProfile: p.showOnProfile } : {}), ...(p.isPayout ? { isPayout: true } : {}) })
-      .where(eq(userWallets.address, address));
+    if (flip) await tx.update(userWallets).set({ isPayout: false }).where(and(eq(userWallets.userId, userId), ne(userWallets.address, address)));
+    const set = { ...(p.showOnProfile !== undefined ? { showOnProfile: p.showOnProfile } : {}), ...(flip ? { isPayout: true } : {}) };
+    if (Object.keys(set).length) await tx.update(userWallets).set(set).where(eq(userWallets.address, address));
   });
+  return { payoutChange };
 }
 
 /** Spec §3.5: never leave an account with no password and no other verified wallet; never drop a locked payout wallet. */

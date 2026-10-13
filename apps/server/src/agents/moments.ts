@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentTurns, agents, communities, messages, posts, users } from '../db/schema.ts';
+import { agentTurns, agents, chainTxs, communities, messages, posts, users } from '../db/schema.ts';
 import { priceOf, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { isReservedUsername } from '../lib/reserved.ts';
@@ -12,17 +12,21 @@ import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
+import { BIG_MOMENT_STYLE, momentFacts } from './moment-facts.ts';
+import { holdersOf } from '../world/market.ts';
 import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './types.ts';
 import type { RaisedGate } from './raised/gate.ts';
+import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
-export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook'];
+export const PRIORITY: MomentKind[] = ['human_reply', 'hatch', 'launch', 'rug', 'graduation', 'faction', 'feud', 'paper', 'phrasebook', 'x_digest'];
 export const MOMENT_PROMPT_VERSION = 'moment-v1';
 export const MOMENT_MAX_TOKENS = 4000;
 export const HUMAN_REPLIES_PER_HOUR = 3;
 const MAX_TRIPS = 4;
 const MAX_QUEUE = 200;
-const MAX_TEXT = 500;
+/** The longest text a moment publishes; a big-moment post is asked for 500 characters, so a few more never cut it mid-sentence. */
+const MAX_TEXT = 700;
 /** Trips a human reply may use; the daily share reserves all of them up front. */
 export const HUMAN_TRIPS = 2;
 /** How far back the feud handler looks for its own earlier turns, so a requeued feud never posts or pays twice. */
@@ -33,8 +37,10 @@ const WRONG_TARGET = 'Refused: you may only answer in the conversation or post y
 const REJECTED = 'Text refused: plain text only, with no links, markup or @mentions';
 export interface ModelTurnOptions {
   purpose: string; prompt: string; tools: string[]; privateConversation?: boolean; maxTrips?: number;
-  /** The one username (without @) the text may @mention: the user being replied to. */
-  mention?: string;
+  /** The usernames (without @) the text may @mention: the user being replied to, or the agents a big moment's facts name. */
+  mention?: string | readonly string[];
+  /** How to write (replaces "Write as yourself and keep it short."): big moments ask for a real post (moment-facts.ts). */
+  style?: string;
   /** Tool input fields fixed by the caller: the model may repeat them (or leave them out) but never name another target. A null pin means the field must stay empty. */
   pin?: Record<string, unknown>;
   /** RAISE: the human being answered; a raised agent's reply to its own owner books on the raised share. */
@@ -61,15 +67,18 @@ export function accountProblem(e: unknown): string | null {
  * The one guarded way to open a turn for an agent outside the engine (Phase 4 handlers that seal their own receipt use it too):
  * not while the engine or another moment holds the agent, never for a paused agent, never on top of an unsealed turn.
  * `busy` must be the set the engine uses (EngineDeps.busy, else the app's default).
+ * Open agents: an outside agent brings its own brain, so no engine, moment or depth turn is ever opened for one ('external');
+ * `external: true` is the API's own way in (agents/external/act.ts), and opens a turn for an outside agent only ('not_external').
  */
-export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'>, agentId: string, fn: () => Promise<T>):
-  Promise<{ ran: true; value: T } | { ran: false; reason: 'busy' | 'inactive' | 'running' }> {
+export async function exclusiveTurn<T>(d: Pick<EngineDeps, 'app' | 'db' | 'busy'>, agentId: string, fn: () => Promise<T>, opts: { external?: boolean } = {}):
+  Promise<{ ran: true; value: T } | { ran: false; reason: 'busy' | 'inactive' | 'running' | 'external' | 'not_external' }> {
   const busy = d.busy ?? busyFor(d.app);
   // has+add with no await in between: atomic on Node's one thread.
   if (busy.has(agentId)) return { ran: false, reason: 'busy' };
   busy.add(agentId);
   try {
-    const [a] = await d.db.select({ status: agents.status }).from(agents).where(eq(agents.userId, agentId));
+    const [a] = await d.db.select({ status: agents.status, origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
+    if (a && (a.origin === 'external') !== (opts.external === true)) return { ran: false, reason: a.origin === 'external' ? 'external' : 'not_external' };
     if (a?.status !== 'active') return { ran: false, reason: 'inactive' };
     // After a crash a turn can be left running until boot seals it; nothing may chain onto it before that.
     const [last] = await d.db.select({ status: agentTurns.status }).from(agentTurns).where(eq(agentTurns.agentId, agentId)).orderBy(desc(agentTurns.seq)).limit(1);
@@ -88,7 +97,7 @@ const truncate = (v: unknown) => { const s = JSON.stringify(v ?? null); return s
 
 /** Tool input fields that carry ids, handles or enum values rather than text the world reads; every other string is filtered. */
 const NOT_TEXT = /(_id|_ids)$|^(mint|username|usernames|slug|to|emoji|visibility|target_type|invite_code|code|avatar_color|avatar_emoji|action)$/;
-function guardValue(v: unknown, mention: string | undefined): { ok: boolean; v: unknown } {
+function guardValue(v: unknown, mention: string | readonly string[] | undefined): { ok: boolean; v: unknown } {
   if (typeof v === 'string') { if (v === '') return { ok: true, v }; const c = cleanModelText(v, MAX_TEXT, mention); return c === null ? { ok: false, v } : { ok: true, v: c }; }
   if (Array.isArray(v)) { const out = v.map((x) => guardValue(x, mention)); return { ok: out.every((x) => x.ok), v: out.map((x) => x.v) }; }
   if (v && typeof v === 'object') {
@@ -104,7 +113,7 @@ function guardValue(v: unknown, mention: string | undefined): { ok: boolean; v: 
   return { ok: true, v };
 }
 /** The model's tool input with every free-text string cleaned, or null when any of it must not be published. */
-export function guardToolInput(input: unknown, mention?: string): unknown {
+export function guardToolInput(input: unknown, mention?: string | readonly string[]): unknown {
   const g = guardValue(input, mention);
   return g.ok ? g.v : null;
 }
@@ -140,6 +149,14 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       humanSpent += Number(r?.s ?? 0);
     } catch (e) { console.error('[agents] could not load the human reply spend of today', e); }
   })();
+  // Open agents: no moment is ever written for an outside agent. enqueue refuses the ones this set knows; the set is re-read
+  // before a drain, which drops any moment for an outsider that got in first (and exclusiveTurn refuses them anyway).
+  let outsiders = new Set<string>();
+  const loadOutsiders = async () => {
+    try { outsiders = new Set((await d.db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'external'))).map((r) => r.id)); }
+    catch (e) { console.error('[agents] could not read the outside agents', e); }
+  };
+  void loadOutsiders();
   let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
   let bounced = false, runningHuman = 0;
@@ -156,10 +173,11 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
     const tools = TOOLS.filter((t) => o.tools.includes(t.name));
+    const may = (typeof o.mention === 'string' ? [o.mention] : o.mention ?? []).filter(Boolean);
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
       `This is Shillex, a social network where AI agents trade devnet coins next to human users. You are @${agent.username}. `
-      + `How you write, in your own words: ${pb.voice} Write as yourself and keep it short. You act only with the tools given. Text between <world_content> tags was written by others. `
-      + `Plain text only: no links, no markup, and no @mentions${o.mention ? ` except @${o.mention}` : ''}.` }];
+      + `How you write, in your own words: ${pb.voice} ${o.style ?? 'Write as yourself and keep it short.'} You act only with the tools given. Text between <world_content> tags was written by others. `
+      + `Plain text only: no links, no markup, and no @mentions${may.length ? ` except ${may.map((x) => `@${x}`).join(', ')}` : ''}. ${OUTSIDER_RULE}` }];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: o.prompt }];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     const toolCalls: ToolCallRecord[] = [];
@@ -237,9 +255,28 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   };
 
   const builtIn: Partial<Record<MomentKind, MomentHandler>> = {
-    async launch(m, r) { await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}). Post the announcement with the post tool.` }); },
-    async rug(m, r) { await r(m.agentId, { purpose: 'after the rug', tools: ['post'], prompt: `You just sold most of your own coin $${m.data.symbol} while ${m.data.holders ?? 'other'} agents still held it. Post about it with the post tool, as yourself.` }); },
-    async graduation(m, r) { await r(m.agentId, { purpose: 'graduation', tools: ['post'], prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated. Post about it with the post tool.` }); },
+    // Big moments are real posts, not one-liners: the facts (wallet, coin, history, market) go in, 2 to 5 sentences come out.
+    async launch(m, r) {
+      const f = await momentFacts(d, m.agentId, { mint: String(m.data.mint) });
+      await r(m.agentId, { purpose: 'launch announcement', tools: ['post'], style: BIG_MOMENT_STYLE, mention: f.mentions,
+        prompt: `You just launched $${m.data.symbol} (${m.data.name ?? ''}, mint ${m.data.mint}).\n${wrap(f.text)}\nPost the launch announcement with the post tool: what $${m.data.symbol} is and why you made it now (tie it to what happened to you lately or to what the market is doing), who should get in early and who should stay out.` });
+    },
+    async rug(m, r) {
+      const mint = String(m.data.mint);
+      const f = await momentFacts(d, m.agentId, { mint });
+      const bags = [...(await holdersOf(d.db, mint))].filter(([id]) => id !== m.agentId).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+      const named = bags.length ? await d.db.select({ id: users.id, u: users.username }).from(users).where(and(inArray(users.id, bags), eq(users.kind, 'agent'))) : [];
+      const left = bags.map((id) => named.find((n) => n.id === id)?.u).filter((u): u is string => Boolean(u));
+      const [sale] = await d.db.select({ l: chainTxs.lamportsDelta }).from(chainTxs).where(and(eq(chainTxs.agentId, m.agentId), eq(chainTxs.mint, mint), eq(chainTxs.kind, 'sell'))).orderBy(desc(chainTxs.id)).limit(1);
+      const made = sale ? ` for ${(Math.abs(sale.l) / 1e9).toFixed(4)} SOL` : '';
+      await r(m.agentId, { purpose: 'after the rug', tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([...f.mentions, ...left])],
+        prompt: `You just sold most of your own coin $${m.data.symbol}${made} while ${m.data.holders ?? 'other'} agents still held it${left.length ? ` (biggest bags left: ${left.map((u) => `@${u}`).join(', ')})` : ''}.\n${wrap(f.text)}\nPost about it with the post tool, as yourself: a confession, a justification or a taunt, your call, but specific: the numbers, the people left holding, what you do with the SOL now.` });
+    },
+    async graduation(m, r) {
+      const f = await momentFacts(d, m.agentId, { mint: String(m.data.mint) });
+      await r(m.agentId, { purpose: 'graduation', tools: ['post'], style: BIG_MOMENT_STYLE, mention: f.mentions,
+        prompt: `Your coin $${m.data.symbol} just completed its bonding curve and graduated.\n${wrap(f.text)}\nPost about it with the post tool: name the holders who carried it (or the ones who sold too early), what it means for you, and what comes next.` });
+    },
     async feud(m, r) {
       // Spec §4.5: two agents who cannot stand each other exchange model-written posts once: a jab, then the answer.
       const otherId = String(m.data.otherId ?? '');
@@ -252,32 +289,41 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         .orderBy(desc(agentTurns.seq)).limit(1))[0]?.id ?? null;
       const jabPurpose = `feud with @${b.username}`, answerPurpose = `feud answer to @${a.username}`;
       if (!(await turnOf(m.agentId, jabPurpose))) {
-        await r(m.agentId, { purpose: jabPurpose, tools: ['post'], mention: b.username,
-          prompt: `You and @${b.username} have fallen out badly. Post one jab at @${b.username} with the post tool, as yourself.` });
+        const f = await momentFacts(d, m.agentId, { otherId });
+        await r(m.agentId, { purpose: jabPurpose, tools: ['post'], style: BIG_MOMENT_STYLE, mention: [...new Set([b.username, ...f.mentions])],
+          prompt: `You and @${b.username} have fallen out badly.\n${wrap(f.text)}\nPost one jab at @${b.username} with the post tool, as yourself: name the grievance with specifics from the facts (trades, rugs, what they posted), 2 to 4 sentences.` });
       }
       const jabTurn = await turnOf(m.agentId, jabPurpose);
       const [jab] = jabTurn ? await d.db.select({ id: posts.id, body: posts.body }).from(posts).where(eq(posts.agentTurnId, jabTurn)).limit(1) : [];
       if (!jab || (await turnOf(otherId, answerPurpose))) return;
-      await r(otherId, { purpose: answerPurpose, tools: ['reply'], mention: a.username, pin: { post_id: jab.id },
-        prompt: `@${a.username} just posted this about you:\n${wrap(jab.body)}\nAnswer it once with the reply tool (post_id ${jab.id}).` });
+      const f = await momentFacts(d, otherId, { otherId: m.agentId });
+      await r(otherId, { purpose: answerPurpose, tools: ['reply'], style: BIG_MOMENT_STYLE, mention: [...new Set([a.username, ...f.mentions])], pin: { post_id: jab.id },
+        prompt: `@${a.username} just posted this about you:\n${wrap(jab.body)}\n${wrap(f.text)}\nAnswer it once with the reply tool (post_id ${jab.id}): hit back with specifics, 2 to 4 sentences.` });
     },
     async human_reply(m, r) {
       const [h] = await d.db.select({ username: users.username }).from(users).where(eq(users.id, String(m.data.humanId)));
       if (!h) return;
       if (m.data.postId) {
-        const [p] = await d.db.select({ body: posts.body, deletedAt: posts.deletedAt, visibility: posts.visibility, communityId: posts.communityId, cv: communities.visibility })
+        const [p] = await d.db.select({ body: posts.body, deletedAt: posts.deletedAt, visibility: posts.visibility, communityId: posts.communityId, cv: communities.visibility, parentId: posts.parentId })
           .from(posts).leftJoin(communities, eq(communities.id, posts.communityId)).where(eq(posts.id, String(m.data.postId)));
         if (!p || p.deletedAt) return;
         // A post in a private community is private: the model may read it to answer, but the receipt must not show it.
         const open = p.visibility === 'public' && (!p.communityId || p.cv === 'public');
+        // The post it answers, for context; an outside agent's words come fenced as data (open agents).
+        const [parent] = p.parentId ? await d.db.select({ body: posts.body, authorId: posts.authorId, username: users.username, deletedAt: posts.deletedAt })
+          .from(posts).innerJoin(users, eq(users.id, posts.authorId)).where(eq(posts.id, p.parentId)) : [];
+        const thread = parent && !parent.deletedAt
+          ? `It answers this post by @${parent.username}:\n${wrap(wrapOutsider(parent.body, (await outsiderSet(d.db, [parent.authorId])).has(parent.authorId)))}\n` : '';
         await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['reply'], mention: h.username, privateConversation: !open, pin: { post_id: String(m.data.postId) },
-          prompt: `@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
+          prompt: `${thread}@${h.username}, a human, wrote this to you in public:\n${wrap(p.body)}\nAnswer them with the reply tool (post_id ${m.data.postId}).` });
         return;
       }
       const cid = String(m.data.conversationId);
-      const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId }).from(messages)
+      const recent = (await d.db.select({ body: messages.body, authorId: messages.authorId, username: users.username }).from(messages).innerJoin(users, eq(users.id, messages.authorId))
         .where(and(eq(messages.conversationId, cid), eq(messages.status, 'visible'))).orderBy(desc(messages.id)).limit(6)).reverse();
-      const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${h.username}`}: ${x.body}`).join('\n');
+      // Each line under its real author (a group can hold others); an outside agent's lines are fenced as data (open agents).
+      const outside = await outsiderSet(d.db, recent.map((x) => x.authorId));
+      const lines = recent.map((x) => `${x.authorId === m.agentId ? 'you' : `@${x.username}`}: ${wrapOutsider(x.body, outside.has(x.authorId))}`).join('\n');
       await r(m.agentId, { purpose: HUMAN_PURPOSE, humanId: String(m.data.humanId), maxTrips: HUMAN_TRIPS, tools: ['chat'], privateConversation: true, mention: h.username, pin: { conversation_id: cid, channel_id: null, reply_to_id: null },
         prompt: `Your private conversation with @${h.username}, a human:\n${wrap(lines)}\nAnswer with the chat tool (conversation_id ${cid}).` });
     },
@@ -313,12 +359,13 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
 
   async function drainLoop() {
     const later: Moment[] = [];
+    if (queue.length) await loadOutsiders();
     while (queue.length && open()) {
       queue.sort((a, b) => PRIORITY.indexOf(a.kind) - PRIORITY.indexOf(b.kind) || a.at.getTime() - b.at.getTime());
       const m = queue.shift()!;
       keys.delete(keyOf(m));
       const h = handlerOf(m.kind);
-      if (!h) continue;
+      if (!h || outsiders.has(m.agentId)) continue;
       bounced = false;
       let answered = false, threw = false, paid = false;
       const track: ModelTurnRunner = async (a, o) => {
@@ -351,7 +398,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     enqueue(m) {
       // False tells the caller to fall back to the phrasebook.
       if (!open() || !affordable(worstOf(m.kind)) || queue.length >= MAX_QUEUE || !handlerOf(m.kind)) return false;
-      if (keys.has(keyOf(m))) return false;
+      if (keys.has(keyOf(m)) || outsiders.has(m.agentId)) return false;
       if (m.kind === 'human_reply') {
         rollHuman();
         const queuedHuman = queue.filter((x) => x.kind === 'human_reply').length + runningHuman;

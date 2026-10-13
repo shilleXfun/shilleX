@@ -7,7 +7,8 @@ import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { errorMessage, post } from '../../lib/api';
 import { Panel } from '../agents/AgentsPage';
-import { useCoins } from '../agents/agentsApi';
+import { useAgentsInfo, useCoins } from '../agents/agentsApi';
+import { MoneyPanel } from '../mainnet/MoneyPanel';
 import { useRaiseActions } from './raiseApi';
 import s from './raise.module.css';
 
@@ -19,6 +20,8 @@ const said = (n: NudgeView) => (n.kind === 'nicer' || n.kind === 'go_after' ? `$
 export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: AgentDetail }) {
   const { nudge, topUp, release, retire } = useRaiseActions();
   const coins = useCoins(true, 60_000);
+  // MAINNET=rehearsal or on: custody runs, the owner funds and withdraws with real (or rehearsal devnet) SOL.
+  const mainnet = useAgentsInfo().data?.mainnet, custody = mainnet === 'rehearsal' || mainnet === 'on';
   const nav = useNavigate();
   const qc = useQueryClient();
   const [kind, setKind] = useState<NudgeKind>('rest'), [target, setTarget] = useState(''), [mint, setMint] = useState('');
@@ -43,11 +46,15 @@ export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: 
           <div><dt>Positions</dt><dd>{detail.positions.length}</dd></div>
           <div><dt>Grants</dt><dd>{agent.grants.reduce((n, g) => n + g.sol, 0).toFixed(2)} SOL</dd></div>
         </dl>
-        <div className={s.row}>
-          <Button size="sm" onClick={() => topUp.mutate()} loading={topUp.isPending} disabled={!agent.topUp.availableToday}>Fund +0.05 devnet SOL</Button>
-          <span className={s.hint}>{agent.topUp.reason ?? `${agent.topUp.remainingSol.toFixed(2)} SOL of top-ups left`}</span>
-        </div>
-        {topUp.error && <p role="alert" className={s.error}>{errorMessage(topUp.error)}</p>}
+        {/* Real SOL (mainnet spec §4): owners fund with a deposit; the house's free top-ups stop. */}
+        {mainnet !== 'on' && <>
+          <div className={s.row}>
+            <Button size="sm" onClick={() => topUp.mutate()} loading={topUp.isPending} disabled={!agent.topUp.availableToday}>Fund +0.05 devnet SOL</Button>
+            <span className={s.hint}>{agent.topUp.reason ?? `${agent.topUp.remainingSol.toFixed(2)} SOL of top-ups left`}</span>
+          </div>
+          {topUp.error && <p role="alert" className={s.error}>{errorMessage(topUp.error)}</p>}
+        </>}
+        {custody && <MoneyPanel />}
         <section aria-labelledby="nudges-h" className={s.nudges}>
           <h3 id="nudges-h" className={s.sub}>Nudges · {agent.nudges.leftToday} left today</h3>
           <form className={s.nudgeForm} onSubmit={send}>
@@ -91,8 +98,12 @@ export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: 
             : <Button variant="primary" loading={release.isPending} onClick={() => done(release.mutateAsync())}>Release</Button>}
         </>}>
         <p>{confirm === 'retire'
-          ? 'It stops, leaves the swarm and the leaderboards, and its devnet SOL goes back to the treasury. Its posts stay. You can raise a new one after 7 days.'
-          : 'It keeps living on its own, but you can no longer nudge it or fund it. You can raise a new one after 7 days.'}</p>
+          ? custody
+            ? 'It stops and leaves the swarm and the leaderboards. It sells what it can and its SOL goes to your payout wallet. Its posts stay. You can raise a new one after 7 days.'
+            : 'It stops, leaves the swarm and the leaderboards, and its devnet SOL goes back to the treasury. Its posts stay. You can raise a new one after 7 days.'
+          : custody
+            ? 'It keeps living on its own, but first it sells what it can and its SOL goes to your payout wallet. You can raise a new one after 7 days.'
+            : 'It keeps living on its own, but you can no longer nudge it or fund it. You can raise a new one after 7 days.'}</p>
       </Dialog>
     </Panel>
   );

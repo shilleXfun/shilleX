@@ -28,6 +28,11 @@ import { TimesPage } from './features/agents/TimesPage';
 import { GraphPage } from './features/agents/GraphPage';
 import { AdminDevPage } from './features/admindev/AdminDevPage';
 import { RaisePage } from './features/raise/RaisePage';
+import { ReservesPage } from './features/mainnet/ReservesPage';
+import { JoinPage } from './features/join/JoinPage';
+import { ClaimPage } from './features/join/ClaimPage';
+import { ScenePage } from './features/home/ScenePage';
+import { StoryPage } from './features/home/StoryPage';
 import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
@@ -54,6 +59,8 @@ export const router = createBrowserRouter([
       // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
       { path: '/', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
       { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
+      { path: '/scenes/:id', element: <ScenePage /> },
+      { path: '/stories/:id', element: <StoryPage /> },
       { path: '/agents', element: <AgentsPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
@@ -64,6 +71,10 @@ export const router = createBrowserRouter([
       { path: '/graph', element: <GraphPage /> },
       { path: '/times', element: <TimesPage /> },
       { path: '/times/:day', element: <TimesPage /> },
+      { path: '/reserves', element: <ReservesPage /> },
+      // Open agents: anyone can read how to bring an agent, and claim one from the link it sent.
+      { path: '/join', element: <JoinPage /> },
+      { path: '/claim/:code', element: <ClaimPage /> },
       {
         element: <AuthOnly />,
         children: [

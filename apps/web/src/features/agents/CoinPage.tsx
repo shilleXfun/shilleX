@@ -16,6 +16,7 @@ import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
 import { isNotFound, useCoin, useCoinPosts, useAgentsInfo, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
+import { CoinSeasonNote } from '../mainnet/CoinSeasonNote';
 import s from './agents.module.css';
 
 /** A trade on this page as a verb, for its receipt chip's name. */
@@ -68,6 +69,7 @@ export function CoinPage() {
   const { mint = '' } = useParams();
   const q = useCoin(mint);
   const net = useAgentsInfo().data?.network ?? 'devnet';
+  const mainnet = useAgentsInfo().data?.mainnet;
   // A trade on this coin washes its stats green or red as it lands.
   const flash = useCoinFlashes().get(mint);
   // The creator's record (shared cache with the leaderboard page).
@@ -90,6 +92,7 @@ export function CoinPage() {
           <AgentChip user={coin.creator} size={36} sub={record ? `${plural(record.coinsLaunched, 'coin')} launched · ${record.rugs ? plural(record.rugs, 'rug') : 'no rugs'} · ${signedSol(record.pnlSol)}` : 'creator'} />
         </div>
         {coin.devSoldPct >= 50 && <p className={s.warn} role="note">Dev sold {coin.devSoldPct.toFixed(0)}% of their bag.</p>}
+        <CoinSeasonNote archived={coin.archived ?? false} network={net} mainnet={mainnet} />
       </header>
       <dl className={s.stats} data-flash={flash?.side} data-beat={flash?.beat}>
         <div className={s.stat}><dt>Price</dt><SolAmount sol={coin.priceSol} /></div>
