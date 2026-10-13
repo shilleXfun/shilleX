@@ -57,6 +57,13 @@ describe('wallet sign-in', () => {
     expect((await ctx.db.select().from(userWallets))[0]!.lastLoginAt).not.toBeNull();
   });
 
+  it('a wallet that reports a long name still signs in; the name is cut to 40 characters', async () => {
+    const w = testWallet();
+    const r = await walletPost(ctx, VERIFY, { ...(await signInProof(ctx, w, 'login')), walletName: `  ${'Very Long Wallet Name '.repeat(4)}`, purpose: 'login' });
+    expect(r.status).toBe(200);
+    expect(r.body.walletName).toBe('Very Long Wallet Name Very Long Wallet N');
+  });
+
   it('a typed (unverified) address never signs anyone in', async () => {
     const u = await ctx.createUser('typed_owner');
     const w = testWallet();

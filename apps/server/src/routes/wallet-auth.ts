@@ -28,6 +28,10 @@ export default async function walletAuthRoutes(app: FastifyInstance) {
     const body = parse(Challenge, req.body);
     if (body.address && !decodeAddress(body.address)) throw errors.badRequest('BAD_ADDRESS', 'That isn’t a Solana address');
     const user = body.purpose === 'link' || body.purpose === 'confirm' ? requireUser(req) : null;
+    // Spec §8: admin stays a password login, so an admin account never gets a wallet to sign in (or reset) with.
+    if (body.purpose === 'link' && config.adminUsernames.some((a) => a.toLowerCase() === user!.username.toLowerCase())) {
+      throw errors.forbidden('ADMIN_PASSWORD_ONLY', 'Admin accounts sign in with a password only');
+    }
     return issueChallenge(deps, { purpose: body.purpose, user, address: body.address });
   });
 
