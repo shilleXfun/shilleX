@@ -1,4 +1,5 @@
 import type { CallStatus, NotificationType, ReactionEmoji } from './constants.ts';
+import type { ProfileWallet, SignInView } from './auth.ts';
 
 export type Iso = string;
 export type CommunityVisibility = 'public' | 'private' | 'invite';
@@ -19,7 +20,8 @@ export interface UserProfile extends UserSummary {
   bannerUrl: string | null; bio: string; links: { label: string; url: string }[]; createdAt: Iso;
   followers: number; following: number;
   isSelf: boolean; isFollowing: boolean; followsYou: boolean; isMuted: boolean; isBlocked: boolean;
-  wallet: { address: string; showHoldings: boolean; verified: false } | null;
+  /** Signed wallets the owner chose to show (LOGIN). Typed, unverified addresses never appear. */
+  wallets: ProfileWallet[];
 }
 export interface MeView extends UserSummary { unreadNotifications: number; createdAt: Iso; mutedWords: string[] }
 
@@ -142,7 +144,8 @@ export interface NotificationPref { type: NotificationType; enabled: boolean }
 
 export interface SettingsView {
   profile: { displayName: string; bio: string; links: { label: string; url: string }[]; avatarUrl: string; bannerUrl: string | null };
-  wallet: { address: string; displayWallet: boolean; displayHoldings: boolean; verified: false } | null;
+  /** LOGIN: how this account signs in. Only its owner ever sees it (the email included). */
+  signIn: SignInView;
   notificationPrefs: NotificationPref[];
   mutedWords: string[];
 }

@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
 import { generatedBannerUrl, type Page, type PostView, type UserProfile, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { users, follows, mutes, blocks, posts, walletLinks, callUpdates, type UserRow } from '../db/schema.ts';
+import { users, follows, mutes, blocks, posts, callUpdates, type UserRow } from '../db/schema.ts';
+import { profileWallets } from '../services/wallets.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
@@ -41,20 +42,19 @@ export default async function usersRoutes(app: FastifyInstance) {
   app.get<{ Params: { username: string } }>('/users/:username', async (req) => {
     const me = requireUser(req);
     const u = await loadUserByUsername(db, req.params.username);
-    const [followers, following, iFollow, theyFollow, muted, blocked, wallet] = await Promise.all([
+    const [followers, following, iFollow, theyFollow, muted, blocked, wallets] = await Promise.all([
       count(db, follows.followeeId, u.id), count(db, follows.followerId, u.id),
       db.select().from(follows).where(and(eq(follows.followerId, me.id), eq(follows.followeeId, u.id))).limit(1),
       db.select().from(follows).where(and(eq(follows.followerId, u.id), eq(follows.followeeId, me.id))).limit(1),
       db.select().from(mutes).where(and(eq(mutes.userId, me.id), eq(mutes.targetId, u.id))).limit(1),
       db.select().from(blocks).where(and(eq(blocks.userId, me.id), eq(blocks.targetId, u.id))).limit(1),
-      db.select().from(walletLinks).where(eq(walletLinks.userId, u.id)).limit(1),
+      profileWallets(db, u.id),
     ]);
-    const w = wallet[0];
     const profile: UserProfile = {
       ...toUserSummary(u), bannerUrl: u.bannerUrl ?? generatedBannerUrl(u.id), bio: u.bio, links: u.links,
       createdAt: u.createdAt.toISOString(), followers, following, isSelf: u.id === me.id,
       isFollowing: iFollow.length > 0, followsYou: theyFollow.length > 0, isMuted: muted.length > 0, isBlocked: blocked.length > 0,
-      wallet: w && w.displayWallet ? { address: w.address, showHoldings: w.displayHoldings, verified: false } : null,
+      wallets,
     };
     return { profile };
   });
