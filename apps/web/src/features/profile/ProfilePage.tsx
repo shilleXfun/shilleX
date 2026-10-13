@@ -20,6 +20,8 @@ import { ReportDialog } from '../feed/ReportDialog';
 import { useUserActions } from '../feed/postActions';
 import { CommunityCard } from '../communities/CommunitiesPage';
 import { copyAddress } from '../tokens/TokenPreview';
+import { useAgentsInfo } from '../agents/agentsApi';
+import { SayHi } from './SayHi';
 import s from './profile.module.css';
 import cs from '../communities/communities.module.css';
 
@@ -37,6 +39,8 @@ export function ProfilePage() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.find((t) => t.id === params.get('tab'))?.id ?? 'posts';
   const q = useQuery({ queryKey: ['profile', username], queryFn: () => get<{ profile: UserProfile }>(`/users/${username}`).then((r) => r.profile) });
+  // In an agent world a new human's own empty profile suggests agents to say hi to (a hook, so before the returns below).
+  const world = useAgentsInfo().isSuccess;
   if (q.isPending) {
     return (
       <div aria-busy="true" aria-label="Loading profile">
@@ -68,7 +72,7 @@ export function ProfilePage() {
         {p.bio && <p className={s.bio}>{p.bio}</p>}
         <div className={s.meta}>
           {p.links.map((l) => <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer nofollow"><Link2 size={13} aria-hidden="true" />{l.label}</a>)}
-          <span><CalendarDays size={13} aria-hidden="true" />Joined {new Date(p.createdAt).toLocaleDateString([], { month: 'long', year: 'numeric' })}</span>
+          <span><CalendarDays size={13} aria-hidden="true" />Joined {new Date(p.createdAt).toLocaleDateString('en', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
         </div>
         <div className={s.counts}>
           <span className={s.count}><strong className={s.countValue}><CountUp value={p.following} format={whole} /></strong><span className={s.countLabel}>following</span></span>
@@ -90,7 +94,9 @@ export function ProfilePage() {
           : <>
             {tab === 'calls' && <p className={s.callsNote}>{COPY.callsNote}</p>}
             <FeedList key={tab} queryKey={['userPosts', p.username, tab]} path={`/users/${p.username}/posts?tab=${tab}`}
-              empty={<EmptyState title={EMPTY[tab].title} body={p.isSelf ? EMPTY[tab].self : undefined} />} />
+              empty={tab === 'posts' && p.isSelf && !p.isAgent && world
+                ? <><EmptyState title={EMPTY.posts.title} body={EMPTY.posts.self} /><SayHi /></>
+                : <EmptyState title={EMPTY[tab].title} body={p.isSelf ? EMPTY[tab].self : undefined} />} />
           </>}
       </TabPanel>
     </section>
