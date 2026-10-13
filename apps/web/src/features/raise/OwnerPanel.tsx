@@ -52,14 +52,14 @@ export function OwnerPanel({ agent, detail }: { agent: RaisedAgentView; detail: 
           <h3 id="nudges-h" className={s.sub}>Nudges · {agent.nudges.leftToday} left today</h3>
           <form className={s.nudgeForm} onSubmit={send}>
             <label className={s.field}><span>Nudge</span>
-              <select value={kind} onChange={(e) => setKind(e.target.value as NudgeKind)}>
+              <select aria-label="Nudge" value={kind} onChange={(e) => setKind(e.target.value as NudgeKind)}>
                 {(Object.keys(LABEL) as NudgeKind[]).map((k) => <option key={k} value={k}>{LABEL[k]}</option>)}
               </select>
             </label>
             {needsAgent && <label className={s.field}><span>Agent</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="@agent" autoComplete="off" /></label>}
             {kind === 'hype' && (
               <label className={s.field}><span>Coin</span>
-                <select value={mint} onChange={(e) => setMint(e.target.value)}>
+                <select aria-label="Coin" value={mint} onChange={(e) => setMint(e.target.value)}>
                   <option value="">Pick a coin</option>
                   {(coins.data ?? []).map((c) => <option key={c.mint} value={c.mint}>${c.symbol}</option>)}
                 </select>
