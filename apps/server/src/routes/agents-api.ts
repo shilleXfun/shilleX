@@ -2,11 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { WorldEvents } from '../world/events.ts';
 import type { WorldHandles } from '../world/boot.ts';
-import { AppError, sendNotFound } from '../lib/errors.ts';
+import { AppError, errors, sendNotFound } from '../lib/errors.ts';
+import { decodeAddress } from '../lib/siws.ts';
 import { parse } from '../lib/validate.ts';
+import { WalletProofBody } from '../services/wallet-auth.ts';
+import { claimByWallet, claimByX, claimChallenge, claimView, retryStartGrants, type ClaimDeps } from '../agents/external/claim.ts';
 import { agentForKey, bearerOf, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
 import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
-import { clientIp, expireRegistrations, registerAgent } from '../agents/external/register.ts';
+import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
 
 export interface AgentsApiDeps {
   handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer'>;
@@ -20,6 +23,8 @@ export const SWEEP_MS = 10 * 60_000;
 
 const Register = z.object({ handle: z.string().max(40), name: z.string().max(400).optional(), bio: z.string().max(2000).optional(), look: z.unknown().optional() });
 const Rotate = z.object({ label: z.string().trim().max(40).optional() }).optional();
+const ClaimX = z.object({ claim_code: z.string().max(40), post_url: z.string().max(400) });
+const ClaimChallenge = z.object({ claim_code: z.string().max(40), address: z.string().min(32).max(44).optional() });
 
 /**
  * The open API (plan 2026-10-13-open-agents): outside agents register, get claimed, then read and act as themselves under
@@ -27,6 +32,7 @@ const Rotate = z.object({ label: z.string().trim().max(40).optional() }).optiona
  */
 export async function registerAgentsApiRoutes(app: FastifyInstance, deps: AgentsApiDeps): Promise<{ stop(): void }> {
   const { db, config, now } = app.deps;
+  const claimDeps: ClaimDeps = { db, config, now, chain: deps.handles.chain, key: deps.handles.key };
   const limits = new KeyLimits((kind) => (kind === 'read' ? config.external.readsPerMin : config.external.actsPerMin));
 
   /** The key's agent, after its per-key limit. 429 SLOW_DOWN carries retry-after. */
@@ -55,6 +61,20 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       });
     });
 
+    // ── Claiming (Task 4): public routes, the claim code is the secret. ──
+    r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max, walletClaims: config.external.walletClaims }));
+    r.get<{ Params: { code: string } }>('/v1/agents/claim/:code', perIp(60), async (req) => claimView(db, req.params.code, now()));
+    r.post('/v1/agents/claim/x', perIp(10), async (req) => {
+      const body = parse(ClaimX, req.body);
+      return claimByX(claimDeps, body, req.user);
+    });
+    r.post('/v1/agents/claim/wallet/challenge', perIp(30), async (req) => {
+      const body = parse(ClaimChallenge, req.body);
+      if (body.address && !decodeAddress(body.address)) throw errors.badRequest('BAD_ADDRESS', 'That isn’t a Solana address');
+      return claimChallenge(claimDeps, body);
+    });
+    r.post('/v1/agents/claim/wallet/verify', perIp(10), async (req) => claimByWallet(claimDeps, parse(WalletProofBody, req.body), req.user));
+
     // A leaked key is replaced and stops at once; works in any state, so a key can be replaced before the claim too.
     r.post('/v1/agent/keys/rotate', async (req, reply) => {
       const h = await holder(req, reply, 'act', { anyState: true });
@@ -66,6 +86,8 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
   const sweep = async () => {
     const expired = await expireRegistrations(db, now());
     if (expired) console.log(`[agents-api] ${expired} unclaimed registrations expired`);
+    const granted = await retryStartGrants(claimDeps);
+    if (granted) console.log(`[agents-api] ${granted} owed start grants sent`);
   };
   const timer = setInterval(() => { void sweep().catch((e) => console.error('[agents-api] sweep failed', e)); }, SWEEP_MS);
   timer.unref?.();
