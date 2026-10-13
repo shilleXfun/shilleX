@@ -7,7 +7,7 @@ import { ApiError, errorMessage, post as apiPost, uploadImage } from '../../lib/
 import { useImageDrop } from '../../lib/useImageDrop';
 import { useDraft } from '../../lib/drafts';
 import { AltTextButton } from '../../components/ui/AltTextButton';
-import { patchPost, prependToFeed } from '../../lib/cache';
+import { addReplyToThread, patchPost, prependThread, prependToFeed } from '../../lib/cache';
 import { useRequiredMe } from '../../lib/useMe';
 import { cx } from '../../lib/cx';
 import { dur, ease, spring } from '../../lib/motion';
@@ -94,11 +94,14 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
       primeTokens(qc, r.tokens);
       if (mode === 'reply' && parent) {
         qc.setQueriesData<ThreadView>({ queryKey: ['thread'] }, (t) => t && (t.post.id === parent.id ? { ...t, replies: [...t.replies, r.post] } : t));
+        // Into its timeline thread first, so the count below also reaches the parent shown there as context.
+        addReplyToThread(qc, r.post, parent);
         patchPost(qc, parent.id, (p) => ({ ...p, counts: { ...p.counts, replies: p.counts.replies + 1 } }));
       } else if (communitySlug) {
         prependToFeed(qc, ['communityThreads', communitySlug], r.post);
       } else {
         prependToFeed(qc, ['feed', 'following'], r.post); prependToFeed(qc, ['feed', 'live'], r.post);
+        prependThread(qc, r.post);
         if (quote) patchPost(qc, quote.id, (p) => ({ ...p, counts: { ...p.counts, quotes: p.counts.quotes + 1 } }));
       }
       void qc.invalidateQueries({ queryKey: ['userPosts', me.username] });
@@ -118,7 +121,7 @@ export function Composer({ mode, parent, quote, communityId, communitySlug, auto
   return (
     <div ref={root} className={cx(s.composer, inDialog && s.inDialog, expanded && s.active)} data-drop={drop.over || undefined} {...drop.handlers}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) leave(); }}>
-      <Avatar src={me.avatarUrl} size={inDialog ? 36 : 42} me />
+      <Avatar src={me.avatarUrl} size={inDialog ? 36 : 40} me />
       <div className={s.main}>
         {/* Grows on focus (min-height springs open); the auto-size effect handles longer text. */}
         <motion.textarea ref={area} className={s.textarea} value={text} onChange={(e) => { setText(e.target.value); setError(null); }} onKeyDown={onKey}

@@ -95,6 +95,14 @@ export function useSceneIndex(): ReadonlyMap<string, SceneView> {
 /** A scene is still being written while the server has not ended it and messages are still to come. */
 export const sceneRunning = (s: SceneView) => !s.endedAt && s.messages.length < s.total;
 
+/** The conversation to show as "Talking now": the newest one still being written, else the newest. */
+export function pickTalking(scenes: readonly SceneView[]): SceneView | null {
+  const ordered = [...scenes].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  return ordered.find(sceneRunning) ?? ordered[0] ?? null;
+}
+/** The home's scenes hold the running ones first (at most four), so they are enough to find the one being written. */
+export const useTalkingNow = () => pickTalking(useHome().data?.scenes ?? []);
+
 // ── Live updates ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function withMessage(s: SceneView, m: SceneMessageView): SceneView {
