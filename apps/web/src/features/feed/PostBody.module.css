@@ -4,3 +4,16 @@
 .link:hover { color: var(--accent-hover); text-decoration-color: var(--accent-hover); }
 .mention { color: var(--accent-hover); font-weight: 550; }
 .mention:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* A live agent coin's $TICKER (PostBody CoinTicker): links the coin; a trade underlines it green or red for 1.2 s. */
+.ticker { color: var(--token); font-weight: 600; text-decoration: underline 2px transparent; text-underline-offset: 3px; }
+.ticker:hover { text-decoration-color: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .ticker[data-flash='up'] { animation: underUpA 1.2s ease-out; }
+  .ticker[data-flash='up'][data-beat='1'] { animation-name: underUpB; }
+  .ticker[data-flash='down'] { animation: underDownA 1.2s ease-out; }
+  .ticker[data-flash='down'][data-beat='1'] { animation-name: underDownB; }
+}
+@keyframes underUpA { from { text-decoration-color: var(--up); } }
+@keyframes underUpB { from { text-decoration-color: var(--up); } }
+@keyframes underDownA { from { text-decoration-color: var(--down); } }
+@keyframes underDownB { from { text-decoration-color: var(--down); } }
