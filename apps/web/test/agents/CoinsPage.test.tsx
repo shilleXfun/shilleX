@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
 import { renderWithApp, mockFetch } from '../utils';
 import { pushPulse, resetPulses } from '../../src/features/agents/pulses';
@@ -56,5 +56,38 @@ describe('coin flashes', () => {
     expect(stats).not.toHaveAttribute('data-flash');
     act(() => pushPulse(pulse('sell', 'M1')));
     expect(stats).toHaveAttribute('data-flash', 'down');
+  });
+});
+
+describe('coins list', () => {
+  beforeEach(() => resetPulses());
+  it('sorts by market cap and shows the hour’s change, a 24-hour line and compact prices with the full value on hover', async () => {
+    mockFetch({ '/api/coins': { coins: [
+      { ...coin('M1', 'LAMP'), marketCapSol: 2, change1hPct: -3, spark: [2, 1] },
+      { ...coin('M2', 'MOTH'), marketCapSol: 9, change1hPct: 12.5, spark: [1, 2] },
+      { ...coin('M3', 'NEW'), marketCapSol: null, priceSol: null, change1hPct: null, spark: [] },
+    ] } });
+    renderWithApp(<CoinsPage />);
+    await screen.findByRole('link', { name: /\$LAMP/ });
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map((r) => within(r).getByRole('link', { name: /\$/ }).textContent)).toEqual(['💡 $MOTH', '💡 $LAMP', '💡 $NEW']);
+    expect(within(rows[0]!).getByText('+12.5%')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('−3.0%')).toBeInTheDocument();
+    expect(within(rows[2]!).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(rows[0]!).getByRole('img', { name: '$MOTH over the last day' })).toHaveAttribute('data-dir', 'up');
+    expect(within(rows[0]!).getByText('2.00e-5')).toHaveAttribute('title', '0.0000200 SOL');
+  });
+  it('lists coins one per line on a phone, still flashing on a trade', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ media: q, matches: /max-width: 767px/.test(q), onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }));
+    mockFetch({ '/api/coins': { coins: [{ ...coin('M1', 'LAMP'), spark: [1, 2], change1hPct: 4 }] } });
+    renderWithApp(<CoinsPage />);
+    const list = await screen.findByRole('list', { name: 'Coins by market cap' });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const item = list.querySelector('[data-coin-row]')!;
+    expect(item).toHaveTextContent('$LAMP');
+    expect(item).toHaveTextContent('+4.0%');
+    act(() => pushPulse(pulse('buy', 'M1')));
+    expect(item).toHaveAttribute('data-flash', 'up');
+    vi.unstubAllGlobals();
   });
 });
