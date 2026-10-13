@@ -9,6 +9,11 @@ import { useMyRaised } from '../../features/raise/raiseApi';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { buildSwarm, type SwarmModel } from './model';
 import { createRenderer, LITE_QUERY, type Renderer } from './renderer';
+
+/** WebGL is there (and not the software kind that would crawl): the 3D world can run. */
+function canGL(): boolean {
+  try { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
+}
 import { swarm } from './bus';
 import s from './swarm.module.css';
 
@@ -27,6 +32,7 @@ export function SwarmBackdrop() {
   const renderer = useRef<Renderer | null>(null);
   const reduced = useReducedMotion() ?? false;
   const lite = useMediaQuery(LITE_QUERY);
+  const gl = useMemo(() => !lite && canGL(), [lite]);
   const graph = useAgentGraph();
   // Coins only once the graph proves there is an agent world (a demo deployment has no /coins route), and once a minute.
   const coins = useCoins(Boolean(graph.data), 60_000);
@@ -64,32 +70,41 @@ export function SwarmBackdrop() {
   useEffect(() => {
     const el = canvas.current;
     if (!el) return;
-    const r = createRenderer(el, { reduced, lite });
-    renderer.current = r;
-    if (!r) return;
-    // The CSS box is the truth (a phone's innerHeight moves with its URL bar; the canvas is sized to the large viewport).
-    // A phone's pixel ratio stops at 1.5.
-    const size = () => r.resize(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1));
-    size();
-    r.setModel(latest.current.model);
-    r.setRegime(latest.current.regime);
-    const off = swarm.on((e) => r.event(e));
-    // The overlays (speech bubbles, sparks, touchable lights) find lights through the bus; the stage and focus come back through it.
-    swarm.setLocator((id) => r.locate(id));
-    const offStage = swarm.onStage((st) => r.setStage(st));
-    const offFocus = swarm.onFocus((id) => r.setFocus(id));
-    const vis = () => (document.hidden ? r.stop() : r.start());
-    window.addEventListener('resize', size);
-    document.addEventListener('visibilitychange', vis);
-    if (!document.hidden) r.start();
-    if (import.meta.env.DEV) (window as unknown as { __swarmStats?: () => { drawMs: number } }).__swarmStats = () => r.stats();
-    return () => {
-      off(); offStage(); offFocus(); swarm.setLocator(null);
-      window.removeEventListener('resize', size); document.removeEventListener('visibilitychange', vis); r.destroy(); renderer.current = null;
+    let cancelled = false, undo: (() => void) | null = null;
+    const boot = (r: Renderer | null) => {
+      if (cancelled || !r) return;
+      renderer.current = r;
+      // The CSS box is the truth (a phone's innerHeight moves with its URL bar; the canvas is sized to the large viewport).
+      // A phone's pixel ratio stops at 1.5.
+      const size = () => r.resize(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1));
+      size();
+      r.setModel(latest.current.model);
+      r.setRegime(latest.current.regime);
+      const off = swarm.on((e) => r.event(e));
+      // The overlays (speech bubbles, sparks, touchable lights) find lights through the bus; the stage and focus come back through it.
+      swarm.setLocator((id) => r.locate(id));
+      const offStage = swarm.onStage((st) => r.setStage(st));
+      const offFocus = swarm.onFocus((id) => r.setFocus(id));
+      const vis = () => (document.hidden ? r.stop() : r.start());
+      window.addEventListener('resize', size);
+      document.addEventListener('visibilitychange', vis);
+      if (!document.hidden) r.start();
+      if (import.meta.env.DEV) (window as unknown as { __swarmStats?: () => { drawMs: number } }).__swarmStats = () => r.stats();
+      undo = () => {
+        off(); offStage(); offFocus(); swarm.setLocator(null);
+        window.removeEventListener('resize', size); document.removeEventListener('visibilitychange', vis); r.destroy(); renderer.current = null;
+      };
     };
-  }, [reduced, lite]);
+    // Desktop gets the world in 3D (WebGL, bloom, depth), loaded on demand; phones, and any browser without WebGL, the 2D canvas.
+    if (gl) {
+      void import('./glRenderer').then((m) => { if (!cancelled) boot(m.createGLRenderer(el, { reduced }) ?? createRenderer(el, { reduced, lite })); })
+        .catch(() => { if (!cancelled) boot(createRenderer(el, { reduced, lite })); });
+    } else boot(createRenderer(el, { reduced, lite }));
+    return () => { cancelled = true; undo?.(); };
+  }, [reduced, lite, gl]);
   useEffect(() => { renderer.current?.setModel(model); }, [model]);
   useEffect(() => { renderer.current?.setRegime(regime); }, [regime]);
 
-  return <canvas ref={canvas} className={s.canvas} aria-hidden="true" />;
+  // A canvas keeps the first kind of context it gave out: switching between 3D and 2D takes a fresh one.
+  return <canvas key={gl ? 'gl' : '2d'} ref={canvas} className={s.canvas} aria-hidden="true" />;
 }
