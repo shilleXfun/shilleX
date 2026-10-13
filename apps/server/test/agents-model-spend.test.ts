@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import Anthropic from '@anthropic-ai/sdk';
 import { and, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
 import { agentTurns, posts } from '../src/db/schema.ts';
@@ -50,6 +51,34 @@ describe('moment calls', () => {
     expect(b.spentToday()).toBeCloseTo(MOMENT_WORST, 12);
     expect(await afterRestart()).toBeCloseTo(MOMENT_WORST, 12);
   });
+  it('a call the API answers with an error status (529 overloaded) costs nothing: such a request is not billed', async () => {
+    quietErrors();
+    const a = w.agents[8]!;
+    const b = budget();
+    const overloaded = () => Anthropic.APIError.generate(529, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }, undefined, new Headers());
+    expect(overloaded().status).toBe(529);
+    const q = createMoments({ ...base(), brain: new FakeBrain(() => { throw overloaded(); }), budget: b });
+    expect(q.enqueue(launch(a.id))).toBe(true);
+    await q.drain();
+    const [t] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
+    expect(t).toMatchObject({ status: 'failed', costUsd: 0 });
+    expect(b.spentToday()).toBe(0);
+    expect(await afterRestart()).toBe(0);
+  });
+  it('a timeout or a dropped connection keeps its worst case: it may have been billed', async () => {
+    quietErrors();
+    for (const [i, fail] of [() => new Anthropic.APIConnectionTimeoutError(), () => new Anthropic.APIConnectionError({ message: 'socket hang up' })].entries()) {
+      const a = w.agents[9 + i]!;
+      const b = budget();
+      const q = createMoments({ ...base(), brain: new FakeBrain(() => { throw fail(); }), budget: b });
+      q.enqueue(launch(a.id));
+      await q.drain();
+      const [t] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
+      expect(t!.costUsd).toBeCloseTo(MOMENT_WORST, 12);
+      expect(b.spentToday()).toBeCloseTo(MOMENT_WORST, 12);
+    }
+    expect(await afterRestart()).toBeCloseTo(2 * MOMENT_WORST, 12);
+  });
   it('a crash after a call keeps its cost: the paid trip, and the trip still in flight at its worst case', async () => {
     const a = w.agents[1]!;
     const first = fakeReply.tools({ name: 'post', input: { body: 'introducing $MOTH. lamps only.' } });
@@ -90,6 +119,15 @@ describe('phrasebook calls', () => {
     void writePhrasebook({ db: w.t.db, brain: new FakeBrain(() => reply), budget: budget(), now: w.t.clock.now, tool: () => new Promise(() => {}) }, a.id);
     await until(async () => Math.abs(((await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id)))[0]?.costUsd ?? 0) - priced(reply)) < 1e-12);
     expect(await afterRestart()).toBeCloseTo(priced(reply), 12);
+  });
+  it('a call the API refuses with a status (429) costs nothing', async () => {
+    const a = w.agents[11]!;
+    const b = budget();
+    const limited = Anthropic.APIError.generate(429, { type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }, undefined, new Headers());
+    await expect(writePhrasebook({ db: w.t.db, brain: new FakeBrain(() => { throw limited; }), budget: b, now: w.t.clock.now }, a.id)).rejects.toThrow();
+    const [t] = await w.t.db.select().from(agentTurns).where(eq(agentTurns.agentId, a.id));
+    expect(t).toMatchObject({ status: 'failed', costUsd: 0 });
+    expect(b.spentToday()).toBe(0);
   });
   it('a call that throws counts its worst case', async () => {
     const a = w.agents[4]!;

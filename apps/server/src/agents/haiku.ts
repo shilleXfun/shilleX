@@ -16,17 +16,26 @@ async function addTurnCost(db: Db, turnId: string, usd: number): Promise<void> {
   await db.update(agentTurns).set({ costUsd: sql`${agentTurns.costUsd} + ${usd}` }).where(eq(agentTurns.id, turnId));
 }
 
+/** The API answered with an error status (400, 401, 403, 404, 413, 429, 5xx, 529): such a request is not billed. */
+const answeredWithError = (e: unknown) => e instanceof Anthropic.APIError && typeof e.status === 'number';
+
 /**
  * One model call that the daily cap survives (engine M1, server-rest M5). Its worst case is written to the turn's stored cost
- * before the call, so a crash mid-call still counts it after a restart; a call that throws keeps that worst case (it may have
- * been billed); a call that answers is settled to what it cost before the caller runs any tool. The budget in memory and
+ * before the call, so a crash mid-call still counts it after a restart; a call that answers is settled to what it cost before
+ * the caller runs any tool. A call that throws costs nothing when the API answered with an error status, and keeps its worst
+ * case otherwise (a network error, a timeout, an abort or a dropped response may have been billed). The budget in memory and
  * `spent` (the turn's total, for its receipt) get the same figure.
  */
 export async function billedCall(x: { db: Db; budget: ModelBudget; turnId: string; worstUsd: number; spent: { usd: number } }, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   await addTurnCost(x.db, x.turnId, x.worstUsd);
   let res: BrainResponse;
   try { res = await call(); }
-  catch (e) { x.budget.add(x.worstUsd); x.spent.usd += x.worstUsd; throw e; }
+  catch (e) {
+    if (!answeredWithError(e)) { x.budget.add(x.worstUsd); x.spent.usd += x.worstUsd; }
+    // If the reservation cannot be taken back, it stays: the cap errs safe.
+    else await addTurnCost(x.db, x.turnId, -x.worstUsd).catch((err) => console.error('[agents] could not release a model call reservation', x.turnId, err));
+    throw e;
+  }
   const cost = priceOf(HAIKU, res.usage);
   x.budget.add(cost);
   x.spent.usd += cost;
