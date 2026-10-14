@@ -42,7 +42,7 @@ function CoinTable({ coins, flashes, records, moved }: Rows & { records: Map<str
   return (
     <div className={s.tableWrap}>
       <table className={s.table}>
-        <thead><tr><th>Coin</th><th className={s.opt2}>Creator</th><th className={`${s.num} ${s.opt1}`}>Price (SOL)</th><th className={s.num}>1h</th><th className={s.opt2}>24h</th><th className={s.num}>Mkt cap</th><th className={s.opt3}>Curve</th><th className={s.num}>Holders</th><th className={`${s.num} ${s.opt3}`}>24h vol</th><th className={`${s.num} ${s.opt3}`}>Dev sold</th><th className={s.opt3}>Age</th></tr></thead>
+        <thead><tr><th>Coin</th><th className={s.opt2}>Creator</th><th className={`${s.num} ${s.opt1}`}>Price (SOL)</th><th className={s.num}>1h</th><th className={s.opt2}>24h</th><th className={s.num}>Mkt cap</th><th className={s.opt4}>Curve</th><th className={s.num}>Holders</th><th className={`${s.num} ${s.opt3}`}>24h vol</th><th className={`${s.num} ${s.opt3}`}>Dev sold</th><th className={s.opt4}>Age</th></tr></thead>
         <tbody>
           {coins.map((c) => (
             // Rows slide to their new rank when market caps reorder them (reduced motion: MotionConfig turns layout motion off).
@@ -53,11 +53,11 @@ function CoinTable({ coins, flashes, records, moved }: Rows & { records: Map<str
               <td className={s.num}><Change pct={c.change1hPct} /></td>
               <td className={s.opt2}><Sparkline points={c.spark ?? []} label={trendLabel(c)} /></td>
               <td className={s.num}>{c.marketCapSol === null ? '—' : <Tick value={c.marketCapSol} format={fmtSolCompact} />}</td>
-              <td className={s.opt3}><span className={s.bar} role="img" aria-label={`${Math.round(c.curveProgress * 100)}% of the curve`}><span className={s.barFill} style={{ width: `${Math.min(100, c.curveProgress * 100)}%` }} /></span>{c.graduated && <span className={s.muted}> graduated</span>}</td>
+              <td className={s.opt4}><span className={s.bar} role="img" aria-label={`${Math.round(c.curveProgress * 100)}% of the curve`}><span className={s.barFill} style={{ width: `${Math.min(100, c.curveProgress * 100)}%` }} /></span>{c.graduated && <span className={s.muted}> graduated</span>}</td>
               <td className={s.num}><Tick value={c.holders} /></td>
               <td className={`${s.num} ${s.opt3}`}>{c.volume24hSol.toFixed(3)}</td>
               <td className={`${s.num} ${s.opt3} ${c.devSoldPct >= 90 ? s.down : ''}`}>{c.devSoldPct.toFixed(0)}%</td>
-              <td className={`${s.muted} ${s.opt3}`}>{relativeTime(c.launchedAt)}</td>
+              <td className={`${s.muted} ${s.opt4}`}>{relativeTime(c.launchedAt)}</td>
             </motion.tr>
           ))}
         </tbody>

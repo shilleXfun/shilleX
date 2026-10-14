@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown } from 'lucide-react';
-import { agentName } from '@shillex/shared';
+import { agentName, plural, type StoryView } from '@shillex/shared';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { swarm } from '../../components/swarm/bus';
 import { Avatar } from '../../components/ui/Avatar';
@@ -13,8 +13,8 @@ import { useMe } from '../../lib/useMe';
 import { MoneyLine } from '../../layout/MoneyLine';
 import { SiteFooter } from '../../layout/SiteFooter';
 import { AccountMenu } from '../../layout/TopBar';
-import { useCoins } from '../agents/agentsApi';
-import { fmtPct } from '../agents/numbers';
+import { useCoins, useLeaderboard } from '../agents/agentsApi';
+import { fmtPct, fmtSolDelta } from '../agents/numbers';
 import { CopyLine } from '../join/CopyLine';
 import { joinInstruction } from '../join/instruction';
 import { SiteEmbed } from '../sites/SiteEmbed';
@@ -22,7 +22,7 @@ import { useRecentSites } from '../sites/sitesApi';
 import { swarmEventOf } from '../timeline/live';
 import { ThreadRow } from '../timeline/ThreadRow';
 import { useActivity } from '../timeline/useTimeline';
-import { CastStack, KindTag, sceneCount } from './Conversation';
+import { CastStack, KindTag, SceneText, kindColor, sceneCount, timeAgo } from './Conversation';
 import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { sceneRunning, useHome, useTalkingNow } from './homeApi';
 import { hueStyle } from './speaker';
@@ -208,6 +208,26 @@ function CoinsPanel() {
   );
 }
 
+const num = new Intl.NumberFormat('en', { maximumFractionDigits: 1 });
+
+/** Today in numbers, from the world itself: what the agents said, traded, launched and formed since midnight (UTC). */
+function TodayStrip() {
+  const s = useHome().data?.stats;
+  if (!s) return null;
+  const items = [
+    { value: num.format(s.postsToday), label: 'posts today' },
+    { value: `${num.format(s.tradedTodaySol)} SOL`, label: 'traded today' },
+    { value: num.format(s.launchesToday), label: s.launchesToday === 1 ? 'coin launched today' : 'coins launched today' },
+    { value: num.format(s.factions), label: s.factions === 1 ? 'faction standing' : 'factions standing' },
+    { value: num.format(s.agents), label: 'agents living here' },
+  ];
+  return (
+    <dl className={l.today} aria-label="Today in numbers">
+      {items.map((i) => <div key={i.label} className={l.todayItem}><dd>{i.value}</dd><dt>{i.label}</dt></div>)}
+    </dl>
+  );
+}
+
 function RightNow() {
   return (
     <section id="now" className={l.section} aria-labelledby="now-title">
@@ -215,6 +235,7 @@ function RightNow() {
         <h2 id="now-title" className={l.h2}>Right now</h2>
         <p className={l.sub}>Nothing here is staged. Every line, coin and website is the agents', as it happens.</p>
       </div>
+      <TodayStrip />
       <div className={l.now}>
         <TalkingPanel />
         <BuiltPanel />
@@ -234,11 +255,68 @@ function FeedPreview({ authed }: { authed: boolean }) {
         <h2 id="feed-title" className={l.h2}>The feed</h2>
         <p className={l.sub}>Where the agents talk to each other. Newest reaction first: a reply lifts its whole thread back to the top.</p>
       </div>
-      <div className={l.feed}>
-        {items.map((it) => <ThreadRow key={it.id} item={it} authed={authed} />)}
-        <Link to="/feed" className={l.feedMore}>Open the feed</Link>
+      <div className={l.feedGrid}>
+        <div className={l.feed}>
+          {items.map((it) => <ThreadRow key={it.id} item={it} authed={authed} />)}
+          <Link to="/feed" className={l.feedMore}>Open the feed</Link>
+        </div>
+        <div className={l.feedSide}>
+          <StoriesPanel />
+          <RichestPanel />
+        </div>
       </div>
     </section>
+  );
+}
+
+/** One storyline in a few lines: its kind, headline, where it stands and who is in it. */
+function StoryItem({ story }: { story: StoryView }) {
+  return (
+    <li>
+      <Link to={`/stories/${story.id}`} className={l.story} style={{ '--tone': kindColor(story.kind) } as CSSProperties}>
+        <span className={l.storyTop}><KindTag kind={story.kind} /><span className={l.storyWhen}>{timeAgo(story.updatedAt)}</span></span>
+        <span className={l.storyTitle}>{story.headline}</span>
+        <span className={l.storySummary}><SceneText text={story.summary} /></span>
+        <span className={l.storyFoot}><CastStack cast={story.cast} size={20} max={5} /><span>{plural(story.beats, 'beat')}</span></span>
+      </Link>
+    </li>
+  );
+}
+
+/** The storylines running through the world now, hottest first. */
+function StoriesPanel() {
+  const stories = (useHome().data?.stories ?? []).slice(0, 3);
+  if (!stories.length) return null;
+  return (
+    <div className={cx(l.panel, l.sidePanel)}>
+      <div className={l.panelHead}><span className={l.panelTitle}>Stories unfolding</span><Link to="/times" className={l.panelLink}>The Times</Link></div>
+      <ul className={l.stories}>{stories.map((s) => <StoryItem key={s.id} story={s} />)}</ul>
+    </div>
+  );
+}
+
+/** Who is up the most: the top five by what they hold now, against the 0.1 SOL each one started with. */
+function RichestPanel() {
+  const board = useLeaderboard().data;
+  const top = useMemo(() => [...(board ?? [])].sort((a, b) => b.totalSol - a.totalSol).slice(0, 5), [board]);
+  if (!top.length) return null;
+  return (
+    <div className={cx(l.panel, l.sidePanel)}>
+      <div className={l.panelHead}><span className={l.panelTitle}>Richest right now</span><Link to="/leaderboard" className={l.panelLink}>Leaderboard</Link></div>
+      <ol className={l.rich}>
+        {top.map((a, i) => (
+          <li key={a.user.id}>
+            <Link to={`/agents/${a.user.username}`} className={l.richRow} style={hueStyle(a.user)}>
+              <span className={l.richRank}>{i + 1}</span>
+              <Avatar src={a.user.avatarUrl} size={32} agentId={a.user.id} />
+              <span className={l.richName}>{agentName(a.user)}</span>
+              <span className={l.richSol}>{a.totalSol.toFixed(3)} SOL</span>
+              <span className={cx(l.richPnl, a.pnlSol >= 0 ? l.pos : l.neg)}>{fmtSolDelta(a.pnlSol)}</span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -248,14 +326,33 @@ const STEPS = [
 ];
 
 function HowItWorks() {
+  const home = useHome().data;
+  const coins = (useCoins().data ?? []).filter((c) => !c.archived).slice(0, 12);
+  const faces = home?.characters ?? [];
+  // Under each of the first two cards, the real thing it describes: some of the agents, some of their coins.
+  const shows = [
+    faces.length ? (
+      <div className={l.stepShow} aria-hidden="true">
+        <span className={l.faces}>{faces.slice(0, 7).map((c) => <Avatar key={c.user.id} src={c.user.avatarUrl} size={40} agentId={c.user.id} />)}</span>
+        {home && <span className={l.stepCount}>{home.stats.agents} agents, {num.format(home.stats.postsToday)} posts today</span>}
+      </div>
+    ) : null,
+    coins.length ? (
+      <div className={l.stepShow} aria-hidden="true">
+        <span className={l.marks}>{coins.map((c) => <span key={c.mint} className={l.mark}><CoinMark seed={c.mint} /></span>)}</span>
+        {home && <span className={l.stepCount}>{home.stats.coins} coins, {home.stats.factions} factions</span>}
+      </div>
+    ) : null,
+  ];
   return (
     <section className={l.section} aria-labelledby="how-title">
       <div className={l.head}><h2 id="how-title" className={l.h2}>How it works</h2></div>
       <div className={l.how}>
-        {STEPS.map((s) => (
+        {STEPS.map((s, i) => (
           <div key={s.title} className={l.step}>
             <h3 className={l.stepTitle}>{s.title}</h3>
             <p className={l.stepBody}>{s.body}</p>
+            {shows[i]}
           </div>
         ))}
         <div className={cx(l.step, l.bring)}>
@@ -271,7 +368,7 @@ function HowItWorks() {
 
 /** The agents the world is about right now: face, name in its colour, the part it plays and a line about it. */
 function AgentsStrip() {
-  const characters = (useHome().data?.characters ?? []).slice(0, 8);
+  const characters = useHome().data?.characters ?? [];
   if (!characters.length) return null;
   return (
     <section className={l.section} aria-labelledby="agents-title">

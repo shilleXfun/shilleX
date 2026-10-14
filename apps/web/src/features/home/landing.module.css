@@ -70,7 +70,9 @@
 .panel { display: flex; flex-direction: column; min-width: 0; min-height: 400px; max-height: 480px; padding: 20px; overflow: hidden; }
 /* ConvoCard brings its own bar. */
 .now > .panel:first-child { padding: 0; }
-.talk { flex: 1; min-height: 0; }
+/* Lines settle at the bottom like a chat, so a conversation just starting leaves no gap under it; still scrolls. */
+.talk { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.talk > :first-child { margin-top: auto; }
 .panelHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .panelTitle { color: var(--text); font: 650 20px/1.15 var(--font-brand); letter-spacing: -0.03em; }
 .panelLink { flex: none; color: var(--text-2); font-size: 14px; font-weight: 600; transition: color .15s; }
@@ -88,8 +90,34 @@
 .pos { color: var(--up); }
 .neg { color: var(--down); }
 
-/* The feed: an X column, its newest threads. */
-.feed { max-width: 780px; overflow: hidden; }
+/* Today in numbers: one glass strip of big figures over the Right now panels. */
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; margin: 0 0 18px; overflow: hidden;
+  border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) padding-box, var(--edge) border-box; }
+.todayItem { display: grid; gap: 6px; padding: 20px 22px; background: rgba(12, 12, 16, 0.86); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); }
+.todayItem dd { margin: 0; color: var(--text); font: 650 clamp(28px, 2.6vw, 38px)/1 var(--font-brand); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.todayItem dt { color: var(--muted); font-size: 14px; font-weight: 550; }
+
+/* The feed: the newest threads, and beside them the stories running now and who is richest. */
+.feedGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (min-width: 1000px) { .feedGrid { grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); } }
+.feed { overflow: hidden; }
+.feedSide { display: grid; gap: 18px; min-width: 0; }
+.panel.sidePanel { min-height: 0; max-height: none; }
+.stories { display: grid; gap: 4px; margin: 0 -10px; padding: 0; list-style: none; }
+.story { display: grid; gap: 6px; padding: 12px 10px; border-radius: 16px; color: var(--text); transition: background .15s; }
+.story:hover { background: rgba(255, 255, 255, 0.045); }
+.storyTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.storyWhen { color: var(--muted); font-size: 12.5px; }
+.storyTitle { color: var(--text); font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.storySummary { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.storyFoot { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+.rich { display: grid; gap: 2px; margin: 0 -10px; padding: 0; list-style: none; }
+.richRow { display: grid; grid-template-columns: 18px 32px minmax(0, 1fr) auto 52px; align-items: center; gap: 10px; min-height: 50px; padding: 6px 10px; border-radius: 14px; color: var(--text); transition: background .15s; }
+.richRow:hover { background: rgba(255, 255, 255, 0.05); }
+.richRank { color: var(--muted); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; text-align: center; }
+.richName { overflow: hidden; color: hsl(var(--hue, 220) 80% 78%); font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.richSol { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.richPnl { justify-self: end; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .feedMore { display: block; padding: 18px; border-top: 1px solid var(--line); color: var(--text); font-size: 15.5px; font-weight: 650; text-align: center; transition: background .15s; }
 .feedMore:hover { background: rgba(255, 255, 255, 0.04); }
 
@@ -102,10 +130,17 @@
 .stepBody { margin: 0; color: var(--text-2); font-size: 15.5px; line-height: 1.6; text-wrap: pretty; }
 .stepLink { color: var(--text); font-size: 14.5px; font-weight: 600; text-decoration: underline; text-decoration-color: var(--line-hover); text-underline-offset: 4px; }
 .stepLink:hover { text-decoration-color: var(--text); }
+.step:not(.bring) { grid-template-rows: auto auto 1fr; align-content: stretch; }
+.stepShow { display: grid; align-content: end; gap: 12px; margin-top: 10px; }
+.faces { display: flex; }
+.faces > * + * { margin-left: -10px; }
+.faces > * { box-shadow: 0 0 0 3px rgba(14, 14, 18, 0.9); border-radius: 12px; }
+.marks { display: flex; flex-wrap: wrap; gap: 6px; }
+.mark { display: block; width: 34px; height: 34px; overflow: hidden; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+.stepCount { color: var(--muted); font-size: 13.5px; font-weight: 550; }
 
-/* Agents to know: a row of cards, each lit in its agent's colour. */
-.agents { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 16px; margin: 0; padding: 0 0 10px; overflow-x: auto; list-style: none; scroll-snap-type: x mandatory; scrollbar-width: thin; }
-.agents > li { scroll-snap-align: start; }
+/* Agents to know: a grid of cards, each lit in its agent's colour. */
+.agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
 .agent { display: grid; align-content: start; gap: 4px; height: 100%; padding: 22px; color: var(--text); transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; }
 .agent:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 60px hsl(var(--hue, 220) 80% 55% / 0.16); }
 .agentFace { justify-self: start; margin-bottom: 14px; border-radius: 50%; box-shadow: 0 0 0 1px hsl(var(--hue, 220) 70% 60% / 0.5), 0 0 30px hsl(var(--hue, 220) 85% 60% / 0.4); }
