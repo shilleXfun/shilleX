@@ -36,7 +36,7 @@
 .hued { color: var(--text); }
 .handle, .dot, .time { flex: none; color: var(--muted); font-size: 14px; line-height: 20px; }
 .handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.time { }
+.time { font-variant-numeric: tabular-nums; }
 .time:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .more { flex: none; margin: -7px -8px -7px auto; align-self: center; }
 .moreBtn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); transition: background .12s, color .12s; }
@@ -62,7 +62,7 @@
 /* The action row: spread like X's, icons first, counts beside them. */
 /* Grouped at the left; the receipt (margin-left: auto) sits at the row's right edge however wide the page is. */
 .actions { display: flex; align-items: center; gap: clamp(10px, 2.4vw, 30px); margin: 6px 0 -6px -9px; color: var(--muted); }
-.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); white-space: nowrap; transition: background .12s, color .12s; }
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; transition: background .12s, color .12s; }
 @media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
 .actionIcon { display: inline-grid; place-items: center; }
@@ -87,7 +87,7 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
 .quote .tombstone { margin-top: 0; }
 
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; font: 500 13px var(--font-ui); color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
+.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; font: 500 13px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
 .reaction:hover { border-color: var(--accent-line); color: var(--text); }
 .reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); }
 .reactionEmoji { display: inline-block; font-size: 15px; line-height: 1; }
@@ -183,24 +183,3 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
   .action { padding: 0 7px; }
   .callLabel { display: none; }
 }
-
-/* The post's on-chain moment (PostMoment.tsx): a launch as the coin's birth notice, a trade as a slip, a payment as a line. */
-.launch { display: flex; align-items: center; gap: 14px; min-width: 0; margin-top: 12px; padding: 14px 16px; border: 1px solid var(--accent-line); border-radius: var(--radius-card); background: linear-gradient(90deg, var(--accent-wash), transparent 70%), var(--panel); transition: border-color var(--dur-1); }
-.launch:hover { border-color: var(--accent); }
-.launchMark { display: grid; flex: none; width: 48px; height: 48px; }
-.launchText { display: grid; flex: 1; min-width: 0; }
-.launchWhat { color: var(--accent); font-size: 12.5px; font-weight: 650; }
-.launchText b { color: var(--text); font-size: 20px; font-weight: 750; letter-spacing: -0.015em; }
-.launchName { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
-.launchNow { display: grid; justify-items: end; gap: 4px; flex: none; }
-.launchNow em, .slip em { font-size: 12.5px; font-style: normal; font-weight: 600; }
-.slip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 10px; padding: 7px 12px; border-radius: var(--radius-sm); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font-size: 14px; }
-.slip b { color: var(--text); font-weight: 650; }
-.slipBuy { box-shadow: inset 3px 0 0 var(--up), inset 0 0 0 1px var(--line-strong); }
-.slipBuy > svg { color: var(--up); }
-.slipSell { box-shadow: inset 3px 0 0 var(--down), inset 0 0 0 1px var(--line-strong); }
-.slipSell > svg { color: var(--down); }
-a.slip:hover { background: var(--hover); }
-.up { color: var(--up); }
-.down { color: var(--down); }
-@media (max-width: 480px) { .launchNow svg { display: none; } }

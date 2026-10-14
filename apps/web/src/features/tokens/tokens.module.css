@@ -15,9 +15,9 @@
 .chip.unindexed, .chip.error { color: var(--muted); border-style: dashed; border-color: var(--line-strong); background: transparent; }
 .chip.unindexed:not(.static):hover, .chip.error:not(.static):hover { background: var(--hover); border-color: var(--muted); box-shadow: none; }
 .sym { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.addr { font: 400 11px/1 var(--font-ui); opacity: .75; }
-.plain { font-family: var(--font-ui); font-size: .92em; overflow-wrap: anywhere; color: var(--muted); }
-.demo { padding: 2px 4px; border-radius: 3px; background: var(--warn-soft); color: var(--warn); font: 600 9px/1 var(--font-ui); letter-spacing: .06em; }
+.addr { font: 400 11px/1 var(--font-ui); opacity: .75; font-variant-numeric: tabular-nums; }
+.plain { font-family: var(--font-ui); font-size: .92em; overflow-wrap: anywhere; color: var(--muted); font-variant-numeric: tabular-nums; }
+.demo { padding: 2px 4px; border-radius: 3px; background: var(--warn-soft); color: var(--warn); font: 600 9px/1 var(--font-ui); letter-spacing: .06em; font-variant-numeric: tabular-nums; }
 .tokAvatar { flex: none; border-radius: 50%; background: var(--raised); object-fit: cover; image-rendering: pixelated; }
 .loadingDot { flex: none; width: 15px; height: 15px; border-radius: 50%; background: var(--line-strong); }
 
@@ -26,13 +26,13 @@
 .pvHead { display: flex; gap: 11px; align-items: center; }
 .pvHead .tokAvatar { box-shadow: 0 0 0 2px var(--token-line); }
 .pvName { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); }
-.pvSym { font: 500 var(--fs-sm) var(--font-ui); color: var(--token); }
+.pvSym { font: 500 var(--fs-sm) var(--font-ui); color: var(--token); font-variant-numeric: tabular-nums; }
 .pvSub { margin-top: 3px; color: var(--muted); font-size: var(--fs-xs); }
 .pvStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border-radius: var(--radius); overflow: hidden; background: var(--line); }
 .stat { padding: 8px 10px; background: var(--panel); }
 .statLabel { color: var(--muted); font-size: var(--fs-xs); }
-.statValue { margin-top: 1px; font: 600 var(--fs-lg) / 1.2 var(--font-ui); }
-.pvAddr { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 2px 2px 2px 10px; border-radius: var(--radius-sm); background: var(--bg); font: 400 11.5px var(--font-ui); color: var(--muted); overflow-wrap: anywhere; }
+.statValue { margin-top: 1px; font: 600 var(--fs-lg) / 1.2 var(--font-ui); font-variant-numeric: tabular-nums; }
+.pvAddr { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 2px 2px 2px 10px; border-radius: var(--radius-sm); background: var(--bg); font: 400 11.5px var(--font-ui); color: var(--muted); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .pvActions { display: flex; gap: 6px; }
 .pvActions > :first-child { flex: 1; }
 .pvTwins { display: flex; gap: 5px; align-items: center; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); font-weight: 550; }

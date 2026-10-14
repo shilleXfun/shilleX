@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { faceLook, LAMPORTS_PER_SOL, type AgentDepthView, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
 import { agentAffinity, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
@@ -102,7 +102,6 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
           id: a.id, username: a.username, displayName: a.displayName, avatarUrl: a.avatarUrl, netWorthSol: cards.get(a.id)?.totalSol ?? 0,
           mood: states.get(a.id)?.mood ?? 0, ghost: Boolean(states.get(a.id)?.ghostSince), reputation: repOf(a.id),
           factionId: fBy.get(a.id)?.id ?? null, factionColour: fBy.get(a.id)?.colour ?? null,
-          look: faceLook(states.get(a.id)?.traits ?? seededTraits(a.id)),
         })),
         edges, generatedAt: now().toISOString(),
       };

@@ -1,27 +1,27 @@
 /* Buttons: 10px radius. Press scale comes from PressScale (motion); colours transition here. */
-.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); background: var(--raised); font-weight: 600; font-size: 14.5px; white-space: nowrap; transition: background var(--dur-1), border-color var(--dur-1), color var(--dur-1); }
-.btn:hover:not(:disabled) { background: var(--hover); border-color: var(--line-hover); }
+.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 16px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); font-weight: 600; font-size: 14.5px; letter-spacing: -0.005em; white-space: nowrap; transition: background .15s, border-color .15s, color .15s, box-shadow .2s; }
+.btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); border-color: var(--line-hover); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn[aria-busy='true'] { opacity: .85; cursor: progress; }
 .btnSlot { display: inline-grid; place-items: center; }
-.sm { height: 30px; padding: 0 11px; font-size: 13.5px; gap: 6px; }
-.primary { background: var(--press); color: var(--press-ink); border-color: transparent; font-weight: 650; }
-.primary:hover:not(:disabled) { background: var(--press-hover); border-color: transparent; }
+.sm { height: 30px; padding: 0 13px; font-size: 13.5px; gap: 6px; }
+.primary { background: var(--press); color: var(--press-ink); border-color: transparent; font-weight: 650; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); }
+.primary:hover:not(:disabled) { background: var(--press-hover); border-color: transparent; box-shadow: var(--glow-press); }
 .primary .spinner { border-color: color-mix(in srgb, var(--bg) 25%, transparent); border-top-color: var(--press-ink); }
-.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); }
 .ghost:hover:not(:disabled) { color: var(--text); background: var(--hover); border-color: transparent; }
 .danger { color: var(--down); }
 .danger:hover:not(:disabled) { background: var(--down-soft); border-color: color-mix(in srgb, var(--down) 40%, transparent); }
-.iconBtn { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 0; background: transparent; color: var(--muted); transition: background var(--dur-1), color var(--dur-1); }
+.iconBtn { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 0; background: transparent; color: var(--muted); transition: background .12s, color .12s; }
 .iconBtn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .iconBtn:disabled { opacity: .4; cursor: not-allowed; }
 .iconBtn[aria-pressed='true'] { color: var(--accent); }
 
-/* Avatars: agents are their face (packages/shared face.ts), people their photo; the ring sits outside the image. */
+/* Avatars: agents are their neuron (a lit SVG), people their photo; the ring sits outside the image. */
 .avatar { position: relative; display: inline-block; flex: none; vertical-align: middle; border-radius: 50%; background: var(--raised); box-shadow: 0 0 0 1px var(--line-strong); }
 .avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
-/* Agents: a squircle, the shape of their tile on the Wall, so an agent reads as an agent on every page. */
-.avatarAgent { border-radius: 28%; }
+/* Agents: square-ish (radius 10 at row size, never rounder than the size allows). */
+.avatarAgent { border-radius: 50%; }
 .avatarMe { box-shadow: 0 0 0 2px var(--accent); }
 .avatarOnline { box-shadow: 0 0 0 2px var(--up); }
 .presence { position: absolute; right: -2px; bottom: -2px; width: 28%; height: 28%; min-width: 8px; min-height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 2px var(--panel); }
@@ -29,69 +29,72 @@
   .avatarOnline::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; box-shadow: 0 0 0 2px var(--up); animation: ring 2.4s ease-out infinite; pointer-events: none; }
 }
 @keyframes ring { 0% { opacity: .7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.35); } }
-/* An agent acting right now: an ember ring over whatever ring the avatar wears for the acting window. In full motion a
-   second ring ripples outward once as the agent starts; under reduced motion the ring just sits there. */
+/* An agent acting right now: an amber ring over whatever ring the avatar wears (faction, mood) for the acting window.
+   In full motion a second ring ripples outward once as the agent starts; under reduced motion the ring just sits there. */
 .avatarActing { z-index: 1; } /* above overlapping neighbours (stacked avatars), so the ring shows whole */
-.acting { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 2px var(--accent); pointer-events: none; }
+.acting { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 2px var(--accent), 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) {
   .acting::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 2px var(--accent); animation: acting .6s cubic-bezier(.16, 1, .3, 1) both; }
 }
-@keyframes acting { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.5); } }
+@keyframes acting { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.55); } }
 
-/* Tabs: a segmented control on a panel; the selected tab's plate is a shared-layout element that slides between tabs. */
-.tabs { display: inline-flex; max-width: 100%; gap: 2px; padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel); overflow-x: auto; scrollbar-width: none; }
-.tab { position: relative; isolation: isolate; flex: none; padding: 7px 14px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-weight: 600; font-size: 14px; transition: color var(--dur-1); }
+/* Tabs (Lumen): a glass segmented control; the selected tab's pill is a shared-layout element that slides between tabs. */
+.tabs { display: inline-flex; max-width: 100%; gap: 2px; padding: 4px; border: 1px solid transparent; border-radius: var(--radius-pill); background: linear-gradient(rgba(16, 16, 20, 0.6), rgba(16, 16, 20, 0.6)) padding-box, var(--edge) border-box; overflow-x: auto; scrollbar-width: none; }
+.tab { position: relative; isolation: isolate; flex: none; padding: 8px 16px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font-weight: 600; font-size: 14px; letter-spacing: -0.005em; transition: color .15s; }
 .tab:hover { color: var(--text); }
 .tab[aria-selected='true'] { color: var(--text); }
-.tabLine { position: absolute; inset: 0; z-index: -1; border-radius: 7px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.tabCount { margin-left: 6px; color: var(--muted); font-family: var(--font-ui); font-size: 12px; }
+.tabLine { position: absolute; inset: 0; z-index: -1; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.tabCount { margin-left: 6px; color: var(--muted); font-family: var(--font-ui); font-size: 12px; font-variant-numeric: tabular-nums; }
 .tabPanel { position: relative; overflow-x: clip; }
 
-/* Skeleton: a faint sweep that travels across, transform-only. */
+/* Skeleton: a sweep that travels across, transform-only. */
 .skeleton { position: relative; display: block; overflow: hidden; border-radius: var(--radius-chip); background: var(--raised); }
 @media (prefers-reduced-motion: no-preference) {
-  .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05) 50%, transparent); animation: sweep 1.5s cubic-bezier(.4, 0, .2, 1) infinite; }
+  .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent) 45%, color-mix(in srgb, var(--text) 7%, transparent) 55%, transparent); animation: sweep 1.5s cubic-bezier(.4, 0, .2, 1) infinite; }
 }
 @keyframes sweep { to { transform: translateX(100%); } }
 
-/* Empty and error states: the headline carries it. */
+/* Empty and error states: the headline is the type moment. */
 .state { display: grid; justify-items: center; gap: 10px; padding: 56px 24px; text-align: center; color: var(--muted); }
-.stateBody { max-width: 44ch; }
-.stateIcon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: 28%; background: var(--raised); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.stateTitle { color: var(--text); font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.02em; max-width: 22ch; text-wrap: balance; overflow-wrap: anywhere; }
+.stateBody { max-width: 42ch; }
+.stateIcon { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 4px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.stateTitle { color: var(--text); font: 700 var(--fs-2xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; max-width: 18ch; text-wrap: balance; overflow-wrap: anywhere; }
 
-/* Badges: small chips. Only DEMO is upper case (its text already is). */
-.badge { display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px; border-radius: 5px; font: 650 11px/1 var(--font-ui); letter-spacing: .01em; }
+/* Badges: 4px chips. Only DEMO is upper case (its text already is). */
+.badge { display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px; border-radius: var(--radius-chip); font: 650 11px/1 var(--font-ui); letter-spacing: .01em; }
 .badge_demo, .badge_promoted { color: var(--warn); background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn-line); }
 .badge_demo { letter-spacing: .08em; }
 .badge_accent { color: var(--accent-hover); background: var(--accent-soft); }
 .badge_muted { color: var(--muted); background: var(--raised); }
 
-/* Floating surfaces: menus, popovers, dialogs and toasts share one recipe, a raised solid panel with a hairline. */
-.menu { position: fixed; z-index: 60; min-width: 210px; padding: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: var(--raised); box-shadow: var(--shadow-pop); }
-.menuItem { display: flex; width: 100%; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 7px; background: none; text-align: left; font-size: 14.5px; font-weight: 500; transition: background var(--dur-1); }
+/* Floating surfaces: 14px radius, glassy, elevated. */
+/* Floating glass (Lumen): menus, popovers, dialogs and toasts share one recipe, a luminous edge over deep blur. */
+.menu { position: fixed; z-index: 60; min-width: 200px; padding: 6px; border: 1px solid transparent; border-radius: 16px; background: linear-gradient(rgba(18, 18, 23, 0.86), rgba(18, 18, 23, 0.86)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
+.menuItem { display: flex; width: 100%; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; font-size: 14.5px; font-weight: 550; transition: background .12s; }
 .menuItem svg { color: var(--muted); }
-.menuItem:hover, .menuItem:focus-visible { background: rgba(255, 255, 255, 0.06); outline: none; box-shadow: none; }
+.menuItem:hover, .menuItem:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; box-shadow: none; }
 .menuItem:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line); }
 .menuDanger, .menuDanger svg { color: var(--down); }
 .menuDanger:hover, .menuDanger:focus-visible { background: var(--down-soft); }
-.dialog { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); color: var(--text); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6); }
-.dialog::backdrop { background: rgba(10, 10, 12, 0.72); }
+.dialog { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(16, 16, 21, 0.94), rgba(16, 16, 21, 0.94)) padding-box, var(--edge) border-box; color: var(--text); box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.dialog::backdrop { background: rgba(2, 2, 4, 0.66); backdrop-filter: blur(8px); }
 @media (prefers-reduced-motion: no-preference) {
-  .dialog[open] { animation: dialogIn var(--dur-2) var(--ease); }
-  .dialog[open]::backdrop { animation: scrimIn .2s ease-out; }
+  .dialog[open] { animation: dialogIn .4s cubic-bezier(.16, 1, .3, 1); }
+  .dialog[open]::backdrop { animation: scrimIn .22s ease-out; }
 }
-@keyframes dialogIn { from { opacity: 0; transform: translateY(8px); } }
+@keyframes dialogIn { from { opacity: 0; transform: scale(.96) translateY(6px); } }
 @keyframes scrimIn { from { opacity: 0; } }
-.dialogHead { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 12px 20px; border-bottom: 1px solid var(--line); font: 650 19px / 1.15 var(--font-brand); letter-spacing: -0.015em; }
-.dialogBody { padding: 20px; }
-.dialogFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
-.popover { position: fixed; z-index: 70; border: 1px solid var(--line-strong); border-radius: var(--radius-pop); background: var(--raised); box-shadow: var(--shadow-pop); }
+.dialogHead { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 14px 22px; border-bottom: 1px solid var(--line); font: 650 21px / 1.1 var(--font-brand); letter-spacing: -0.03em; }
+.dialogBody { padding: 20px 22px; }
+.dialogFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line); }
+.popover { position: fixed; z-index: 70; border: 1px solid transparent; border-radius: 18px; background: linear-gradient(rgba(18, 18, 23, 0.9), rgba(18, 18, 23, 0.9)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
 
 .toasts { position: fixed; z-index: 90; left: 50%; bottom: calc(var(--tabbar-total) + 16px); transform: translateX(-50%); display: grid; justify-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
 @media (min-width: 768px) { .toasts { bottom: 24px; } }
-.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--raised); box-shadow: var(--shadow-pop); font-weight: 550; touch-action: pan-y; cursor: grab; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border: 1px solid transparent; border-radius: var(--radius-pill); background: linear-gradient(rgba(20, 20, 26, 0.9), rgba(20, 20, 26, 0.9)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); font-weight: 550; touch-action: pan-y; cursor: grab; }
 .toastIcon { flex: none; color: var(--accent); }
+/* A browser without color-mix (Safari before 16.2, Chrome before 111) drops those translucent backgrounds and leaves the text over the page: they go solid instead. */
+@supports not (background: color-mix(in srgb, red 50%, blue)) { .menu, .popover, .toast { background: var(--raised); } }
 .toast_error .toastIcon { color: var(--down); }
 .toast_success .toastIcon { color: var(--up); }
 
@@ -99,7 +102,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Odometer */
-.odometer { display: inline-flex; }
+.odometer { display: inline-flex; font-variant-numeric: tabular-nums; }
 /* pre: a space in the formatted text ("0.064 SOL") is its own flex item and would otherwise collapse to nothing. */
 .odoTrack { display: inline-flex; white-space: pre; }
 /* Every character sits on the same 1.2em line as the digit columns, so a sign or a point never drops below the digits
@@ -109,17 +112,17 @@
 .odoStrip { display: flex; flex-direction: column; }
 .odoStrip > span { height: 1.2em; }
 
-/* List arrival: clip while the row grows from zero; the mark is an inset edge so the clip never cuts it. */
+/* List arrival: clip while the row grows from zero; the glow is an inset wash so the clip never cuts it. */
 .arrival { position: relative; overflow: clip; }
 .arrivalGlow { position: absolute; inset: 0; pointer-events: none; }
-.glow_accent { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); }
-.glow_token { background: rgba(255, 255, 255, 0.03); box-shadow: inset 2px 0 0 var(--line-hover); }
-.glow_heat { background: var(--heat-soft); box-shadow: inset 2px 0 0 var(--heat); }
+.glow_accent { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 24px color-mix(in srgb, var(--accent) 25%, transparent); }
+.glow_token { background: color-mix(in srgb, var(--token) 7%, transparent); box-shadow: inset 3px 0 0 var(--token), inset 0 0 24px color-mix(in srgb, var(--token) 22%, transparent); }
+.glow_heat { background: color-mix(in srgb, var(--heat) 9%, transparent); box-shadow: inset 3px 0 0 var(--heat); }
 .tray { display: flex; gap: 2px; min-width: 0; border-radius: var(--radius-pill); }
 .tray .menuItem { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; }
 
 /* CountUp: colour flash on change (transition back over 600 ms). */
-.countUp { display: inline-flex; align-items: baseline; gap: 4px; transition: color .6s ease-out; }
+.countUp { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; transition: color .6s ease-out; }
 .flash_up { color: var(--up); transition: none; }
 .flash_down { color: var(--down); transition: none; }
 .flashArrow { font-size: .45em; }
@@ -134,6 +137,6 @@
 .spark { display: block; flex: none; overflow: visible; }
 .sparkEmpty { display: inline-block; flex: none; border-bottom: 1px dashed var(--line-strong); }
 /* A row's rank change, shown for 3 s after it moved (FlipList.tsx). */
-.rank { display: inline-grid; place-items: center; min-width: 14px; margin-right: 4px; font: 600 9px/1 var(--font-ui); }
+.rank { display: inline-grid; place-items: center; min-width: 14px; margin-right: 4px; font: 600 9px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 .rank[data-dir='up'] { color: var(--up); }
 .rank[data-dir='down'] { color: var(--down); }

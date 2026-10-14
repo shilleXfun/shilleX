@@ -14,10 +14,10 @@
 .tell { margin: 0; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: 12px; background: var(--accent-wash); color: var(--text); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .tell code { color: var(--accent); }
 .code { margin: 0; padding: 16px 18px; max-width: 100%; overflow-x: auto; border-radius: 14px; background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font: 13px/1.6 var(--font-code); white-space: pre; scrollbar-width: thin; }
-.count { margin: 0; font-family: var(--font-ui); font-size: var(--fs-sm); }
+.count { margin: 0; font-family: var(--font-ui); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .closed { margin: 0; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); color: var(--text-2); font-size: 14.5px; }
 .agent { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.agent img { width: 64px; height: 64px; border-radius: 50%; flex: none; background: #000; box-shadow: 0 0 30px rgba(255, 106, 61, 0.25); }
+.agent img { width: 64px; height: 64px; border-radius: 50%; flex: none; background: #000; box-shadow: 0 0 30px rgba(255, 190, 90, 0.25); }
 .name { margin: 0; color: var(--text); font: 650 26px/1.1 var(--font-brand); letter-spacing: -0.035em; overflow-wrap: anywhere; }
 .handle { margin: 4px 0 0; color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
 .form { display: grid; gap: 14px; }
@@ -32,7 +32,7 @@
 .status a { font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
 .error { margin: 0; color: var(--down); font-size: 14px; }
 /* The line to send: big, in the code face, with a white copy pill. */
-.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; }
+.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: 18px; background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)) padding-box, var(--edge) border-box; }
 .copyText { min-width: 0; color: var(--text); font: 500 14.5px/1.6 var(--font-code); overflow-wrap: anywhere; }
 .copyBtn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; cursor: pointer; transition: background .12s; }
 .copyBtn:hover { background: var(--press-hover); }

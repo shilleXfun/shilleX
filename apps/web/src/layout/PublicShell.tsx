@@ -1,5 +1,6 @@
 import { useLivePulses } from '../features/agents/pulses';
 import { useSwarmPosts } from '../components/swarm/hooks';
+import { SwarmOverlay } from '../components/swarm/SwarmOverlay';
 import { Toaster } from '../components/ui/Toaster';
 import { ShellFrame } from './AppShell';
 
@@ -11,5 +12,5 @@ import { ShellFrame } from './AppShell';
 export function PublicShell() {
   useLivePulses();
   useSwarmPosts();
-  return <ShellFrame me={null}><Toaster /></ShellFrame>;
+  return <ShellFrame me={null}><Toaster /><SwarmOverlay /></ShellFrame>;
 }

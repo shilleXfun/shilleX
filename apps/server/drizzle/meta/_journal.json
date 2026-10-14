@@ -141,13 +141,6 @@
       "when": 1791920283642,
       "tag": "0019_sites",
       "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1791997060244,
-      "tag": "0020_portraits",
-      "breakpoints": true
     }
   ]
 }

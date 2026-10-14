@@ -1,40 +1,43 @@
-/* The card system every page shares: solid panels with one hairline edge, card titles, a page hero, stat tiles, rows
-   and pill links. A page root that lays out these cards carries data-cards, so the shell drops its sheet; the cards sit
-   in .page under the PageHeader. (The file keeps its old name; nothing in it is glass.) */
-.page { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 18px var(--row-px) 32px; container-type: inline-size; }
-.card { position: relative; min-width: 0; padding: 20px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--edge-top); }
-/* A hero card: the page's subject. Its colour (--glow) runs as a thin line along the top edge, never as a wash. */
-.hero { isolation: isolate; overflow: hidden; display: grid; gap: 16px; padding: 24px; }
-.hero::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 2px; background: var(--glow, var(--line-strong)); pointer-events: none; }
+/* Lumen building blocks the redesigned pages share: a page of glass cards over the world, card titles, a hero with a
+   soft glow, stat tiles, rows and pill links. A page root that lays out these cards carries data-cards, so the shell
+   drops its sheet; the cards sit in .page under the PageHeader. */
+.page { display: grid; align-content: start; gap: 16px; min-width: 0; padding: 20px var(--row-px) 32px; container-type: inline-size; }
+.card { position: relative; min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+/* A hero card: the page's subject, with a glow in its colour (--glow) from the top left. */
+.hero { isolation: isolate; overflow: hidden; display: grid; gap: 16px; padding: 26px; }
+.hero::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(70% 120% at 0% 0%, color-mix(in srgb, var(--glow, #ffffff) 15%, transparent), transparent 70%); pointer-events: none; }
 .head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 14px; }
-.title { display: inline-flex; align-items: baseline; gap: 10px; margin: 0; color: var(--text); font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.012em; }
-.count { color: var(--muted); font: 500 14px var(--font-ui); letter-spacing: 0; }
-.note { color: var(--muted); font-size: 14px; }
-.bigTitle { margin: 0; color: var(--text); font: 700 clamp(28px, 3.2vw, 40px)/1.08 var(--font-brand); letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
-.lede { margin: 0; max-width: 66ch; color: var(--text-2); font-size: 16px; line-height: 1.6; text-wrap: pretty; }
+.title { display: inline-flex; align-items: baseline; gap: 10px; margin: 0; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.count { color: var(--muted); font: 550 14px var(--font-ui); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.note { color: var(--muted); font-size: 13.5px; }
+.bigTitle { margin: 0; color: var(--text); font: 650 clamp(28px, 3.4vw, 42px)/1.06 var(--font-brand); letter-spacing: -0.04em; text-wrap: balance; overflow-wrap: anywhere; }
+.lede { margin: 0; max-width: 64ch; color: var(--text-2); font-size: 16.5px; line-height: 1.6; text-wrap: pretty; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-width: 0; color: var(--muted); font-size: 14px; }
-/* What a thing is (a story's kind, a scene's), as a chip in its tone. */
-.tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-chip); background: color-mix(in srgb, var(--tone, var(--accent)) 12%, transparent); color: color-mix(in srgb, var(--tone, var(--accent)) 70%, var(--text)); font-size: 13px; font-weight: 600; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--line); overflow: hidden; }
-.stat { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 14px 16px; background: var(--panel); }
-.stat dt { color: var(--muted); font-size: 13px; font-weight: 500; }
-.stat dd { margin: 0; color: var(--text); font: 700 24px/1.15 var(--font-brand); letter-spacing: -0.02em; overflow-wrap: anywhere; }
-.stat dd small { color: var(--muted); font: 500 13px var(--font-ui); letter-spacing: 0; }
-.rows { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
-.row { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; margin: 0 -10px; padding: 6px 10px; border-radius: var(--radius-sm); color: inherit; transition: background var(--dur-1); }
-a.row:hover, .row:has(a:hover) { background: rgba(255, 255, 255, 0.035); }
-.pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font-size: 13.5px; font-weight: 600; white-space: nowrap; transition: background var(--dur-1), color var(--dur-1), box-shadow var(--dur-1); }
-.pill:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line-hover); }
+/* What a thing is (a story's kind, a scene's), as a pill in its tone. */
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--tone, var(--accent)) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, var(--accent)) 30%, transparent); font-size: 13.5px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0; }
+.stat { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line); }
+.stat dt { color: var(--muted); font-size: 13px; font-weight: 550; }
+.stat dd { margin: 0; color: var(--text); font: 650 24px/1.15 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat dd small { color: var(--muted); font: 550 13px var(--font-ui); letter-spacing: 0; }
+.rows { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.row { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; margin: 0 -10px; padding: 6px 10px; border-radius: 14px; color: inherit; transition: background .15s; }
+a.row:hover, .row:has(a:hover) { background: rgba(255, 255, 255, 0.045); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font-size: 13.5px; font-weight: 600; white-space: nowrap; transition: background .15s, color .15s, box-shadow .15s; }
+.pill:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24); }
 .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 @container (min-width: 620px) { .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .empty { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
-a.card { transition: border-color var(--dur-1); }
-a.card:hover { border-color: var(--line-hover); }
-/* Phones: cards run nearly edge to edge. */
+/* A card that is a link lifts under a real pointer. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  a.card { transition: transform .18s ease-out, box-shadow .18s; }
+  a.card:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); }
+}
+/* Phones: cards run nearly edge to edge and drop the blur (cost). */
 @media (max-width: 767px) {
-  .page { gap: 10px; padding: 10px 10px 24px; }
-  .card { padding: 16px; }
-  .hero { padding: 18px; }
+  .page { gap: 12px; padding: 12px 12px 24px; }
+  .card { padding: 18px; border-radius: 20px; -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; }
+  .hero { padding: 20px; }
   .lede { font-size: 15.5px; }
 }

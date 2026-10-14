@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, type CharacterView, type HomeView } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentState, agentTurns, agentWorth, agents, chainTxs, factions, posts, scenes, sites, stories, storyBeats, users, worldCoins } from '../../db/schema.ts';
+import { agentState, agentWorth, agents, chainTxs, factions, posts, scenes, stories, storyBeats, users, worldCoins } from '../../db/schema.ts';
 import type { Indexer } from '../../world/indexer.ts';
 import { rugSales } from '../overview.ts';
 import { homeScenes } from '../scenes/views.ts';
@@ -10,13 +10,10 @@ import { storyViews } from './views.ts';
 
 const HOUR = 3600_000;
 
-/**
- * Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent
- * posts; and two that are not daily: every website built, and the agents that acted in the last hour.
- */
+/** Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent posts. */
 async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
   const day = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
-  const [[a], [c], [f], [t], [l], [p], rugs, [w], [act]] = await Promise.all([
+  const [[a], [c], [f], [t], [l], [p], rugs] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')),
     db.select({ n: sql<number>`count(*)::int` }).from(worldCoins).where(isNull(worldCoins.archivedAt)),
     db.select({ n: sql<number>`count(*)::int` }).from(factions).where(isNull(factions.splitAt)),
@@ -25,13 +22,10 @@ async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
     db.select({ n: sql<number>`count(*)::int` }).from(posts).innerJoin(users, eq(users.id, posts.authorId))
       .where(and(eq(users.kind, 'agent'), eq(posts.visibility, 'public'), isNull(posts.deletedAt), gte(posts.createdAt, day))),
     rugSales(db, day),
-    db.select({ n: sql<number>`count(*)::int` }).from(sites),
-    db.select({ n: sql<number>`count(distinct ${agentTurns.agentId})::int` }).from(agentTurns).where(gte(agentTurns.startedAt, new Date(now.getTime() - HOUR))),
   ]);
   return {
     agents: Number(a?.n ?? 0), coins: Number(c?.n ?? 0), factions: Number(f?.n ?? 0), tradedTodaySol: Number((Number(t?.s ?? 0) / LAMPORTS_PER_SOL).toFixed(4)),
     launchesToday: Number(l?.n ?? 0), rugsToday: rugs.length, postsToday: Number(p?.n ?? 0),
-    sitesBuilt: Number(w?.n ?? 0), activeAgents: Number(act?.n ?? 0),
   };
 }
 

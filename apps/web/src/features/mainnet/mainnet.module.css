@@ -7,7 +7,7 @@
 .warn { color: var(--down); margin: 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 0; }
 .grid dt { color: var(--muted); font-size: 12px; }
-.grid dd { margin: 2px 0 0; font-family: var(--font-ui); overflow-wrap: anywhere; }
+.grid dd { margin: 2px 0 0; font-family: var(--font-ui); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }

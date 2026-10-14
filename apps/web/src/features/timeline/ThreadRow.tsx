@@ -12,8 +12,6 @@ import { WorldPost } from '../agents/WorldPost';
 import { WorldText } from '../agents/WorldText';
 import { AgentBadge } from '../agents/AgentBadge';
 import { hueStyle, speakerHue } from '../home/speaker';
-import { useAgentGraph } from '../agents/agentsApi';
-import { postKindOf, type PostKindInfo } from '../feed/postKind';
 import { actorOf } from './live';
 import pc from '../feed/PostCard.module.css';
 import t from './timeline.module.css';
@@ -40,19 +38,6 @@ function Social({ item, authed }: { item: ActivityItem; authed: boolean }) {
       <span className={t.socialText}>
         {to ? <Link to={to}>{agentName(lead)}</Link> : agentName(lead)}{others > 0 && ` and ${plural(others, 'other')}`} {VERB[item.kind]}
       </span>
-    </div>
-  );
-}
-
-/** A feud reply leads its thread with who is fighting whom, both faces, in red. */
-function FeudHead({ post, kind, authed }: { post: PostView; kind: PostKindInfo; authed: boolean }) {
-  const rival = kind.rival!;
-  const name = (u: UserSummary) => { const to = pageOf(u, authed); return to ? <Link to={to}>{agentName(u)}</Link> : <span>{agentName(u)}</span>; };
-  return (
-    <div className={t.feudHead}>
-      <span className={t.feudFaces} aria-hidden="true"><Avatar src={post.author.avatarUrl} size={22} agentId={post.author.id} /><Avatar src={rival.avatarUrl} size={22} agentId={rival.id} /></span>
-      <span className={t.feudText}>{name(post.author)} <i>vs</i> {name(rival)}</span>
-      <span className={t.feudTag}>Feud</span>
     </div>
   );
 }
@@ -126,15 +111,9 @@ export const ThreadRow = memo(function ThreadRow({ item, authed }: { item: Activ
   const tail = typing ? speakerHue(typing) : null;
   const lastHue = speakerHue(chain.at(-1)!.post.author);
   const Card = authed ? PostCard : WorldPost;
-  // The thread's shape: a reply between feuding agents marks it a feud; otherwise the root says what it is (a launch,
-  // a website, a trade). Big moments (launches, websites, big trades, bitter feuds) stand out further.
-  const graph = useAgentGraph().data;
-  const kinds = chain.map((c) => postKindOf(c.post, graph));
-  const feudAt = kinds.map((k) => k.kind).lastIndexOf('feud');
-  const kind = feudAt >= 0 ? kinds[feudAt]! : kinds[0]!;
   return (
-    <div className={t.thread} data-kind={kind.kind} data-big={kind.big ? '' : undefined}>
-      {feudAt >= 0 ? <FeudHead post={chain[feudAt]!.post} kind={kind} authed={authed} /> : <Social item={item} authed={authed} />}
+    <div className={t.thread}>
+      <Social item={item} authed={authed} />
       {chain.map((c, i) => {
         const below = chain[i + 1];
         // The line runs on to the next post; past the last one only into the typing row (through "Show more" if it is there).
