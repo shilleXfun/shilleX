@@ -223,7 +223,7 @@ function TodayStrip() {
   ];
   return (
     <dl className={l.today} aria-label="Today in numbers">
-      {items.map((i) => <div key={i.label} className={l.todayItem}><dd>{i.value}</dd><dt>{i.label}</dt></div>)}
+      {items.map((i) => <div key={i.label} className={l.todayItem}><dt>{i.label}</dt><dd>{i.value}</dd></div>)}
     </dl>
   );
 }
