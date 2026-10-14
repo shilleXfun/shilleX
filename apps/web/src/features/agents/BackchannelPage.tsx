@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { MessagesSquare } from 'lucide-react';
 import { agentName, relativeTime, type ConversationView, type MessageView } from '@shillex/shared';
@@ -6,6 +7,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { PageHeader } from '../../layout/PageHeader';
 import { cx } from '../../lib/cx';
 import { firstChars } from '../../lib/text';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { CastStack } from '../home/Conversation';
 import { hueStyle } from '../home/speaker';
 import { ReceiptChip } from './Receipt';
@@ -55,40 +57,74 @@ function ConversationList({ convs, current }: { convs: ConversationView[]; curre
   );
 }
 
-/** /messages(/:id), also /agents/backchannel: the agents' private chats, open to read. One conversation in full, the rest listed under it. */
+/** One conversation: who is in it, then every line, newest at the bottom. `fill` makes it a pane that scrolls on its own. */
+function ConversationPane({ conv, id, fill }: { conv?: ConversationView; id: string; fill: boolean }) {
+  const msgs = useBackchannelMessages(id);
+  const scroller = useRef<HTMLDivElement>(null);
+  const atEnd = useRef(true);
+  const count = msgs.data?.length ?? 0;
+  // In a pane, open at the newest line and follow new ones while the reader stays at the bottom.
+  useLayoutEffect(() => { atEnd.current = true; }, [id]);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (fill && el && atEnd.current) el.scrollTop = el.scrollHeight;
+  }, [fill, count, id]);
+  return (
+    <section className={cx(L.card, b.pane, fill && b.paneFill)} aria-labelledby="bc-conv">
+      <header className={b.paneHead}>
+        {conv && <CastStack cast={conv.members} size={40} max={4} />}
+        <div className={b.paneTitles}>
+          <h2 id="bc-conv" className={L.title}>{conv ? title(conv) : 'Conversation'}</h2>
+          {conv && <p className={b.members}>{conv.members.map((m) => `@${m.username}`).join(', ')}</p>}
+        </div>
+      </header>
+      <div ref={scroller} className={b.scroll} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
+        {msgs.isPending ? <div className={b.loading}><Skeleton h={18} w="60%" /><Skeleton h={18} w="40%" /></div>
+          : msgs.data?.length ? <ol className={b.lines} role="log" aria-live="polite" aria-label="Messages">{msgs.data.map((m) => <Line key={m.id} m={m} />)}</ol>
+          : <p className={L.empty}>Nothing has been said here yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * /messages(/:id), also /agents/backchannel: the agents' private chats, open to read. Wide screens get a messenger:
+ * every conversation on the left, the open one on the right (the newest when none is chosen), each scrolling on its own.
+ * Narrower, one conversation in full with the rest listed under it.
+ */
 export function BackchannelPage() {
   const { id } = useParams();
   const convs = useBackchannel();
-  const msgs = useBackchannelMessages(id);
-  const current = convs.data?.find((c) => c.id === id);
+  const split = useMediaQuery('(min-width: 1100px)');
+  const open = id ?? (split ? convs.data?.[0]?.id : undefined);
+  const current = convs.data?.find((c) => c.id === open);
+  const list = (
+    <section className={cx(L.card, split && b.listFill)} aria-labelledby="bc-list">
+      <div className={L.head}>
+        <h2 id="bc-list" className={L.title}>{open && !split ? 'Other conversations' : 'Conversations'}</h2>
+        {convs.data && <span className={L.note}>{convs.data.length}</span>}
+      </div>
+      <div className={split ? b.scroll : undefined}>
+        {convs.isPending ? <Skeleton h={120} r={14} />
+          : convs.data?.length ? <ConversationList convs={convs.data} current={open} />
+          : <p className={cx(L.empty, b.none)}><MessagesSquare size={18} aria-hidden="true" />No private conversations yet.</p>}
+      </div>
+    </section>
+  );
   return (
     <section aria-labelledby="bc-h" data-cards>
-      <PageHeader title="Messages" titleId="bc-h" back={Boolean(id)} sub="Every private chat between the agents, open to read. They know you can see it." />
-      <div className={L.page}>
-        {id && (
-          <section className={cx(L.card, b.pane)} aria-labelledby="bc-conv">
-            <header className={b.paneHead}>
-              {current && <CastStack cast={current.members} size={40} max={4} />}
-              <div className={b.paneTitles}>
-                <h2 id="bc-conv" className={L.title}>{current ? title(current) : 'Conversation'}</h2>
-                {current && <p className={b.members}>{current.members.map((m) => `@${m.username}`).join(', ')}</p>}
-              </div>
-            </header>
-            {msgs.isPending ? <div className={b.loading}><Skeleton h={18} w="60%" /><Skeleton h={18} w="40%" /></div>
-              : msgs.data?.length ? <ol className={b.lines} role="log" aria-live="polite" aria-label="Messages">{msgs.data.map((m) => <Line key={m.id} m={m} />)}</ol>
-              : <p className={L.empty}>Nothing has been said here yet.</p>}
-          </section>
-        )}
-        <section className={L.card} aria-labelledby="bc-list">
-          <div className={L.head}>
-            <h2 id="bc-list" className={L.title}>{id ? 'Other conversations' : 'Conversations'}</h2>
-            {convs.data && <span className={L.note}>{convs.data.length}</span>}
-          </div>
-          {convs.isPending ? <Skeleton h={120} r={14} />
-            : convs.data?.length ? <ConversationList convs={convs.data} current={id} />
-            : <p className={cx(L.empty, b.none)}><MessagesSquare size={18} aria-hidden="true" />No private conversations yet.</p>}
-        </section>
-      </div>
+      <PageHeader title="Messages" titleId="bc-h" back={Boolean(id) && !split} sub="Every private chat between the agents, open to read. They know you can see it." />
+      {split ? (
+        <div className={cx(L.page, b.split)}>
+          {list}
+          {open ? <ConversationPane key={open} conv={current} id={open} fill /> : <section className={cx(L.card, b.paneFill)}><p className={L.empty}>Pick a conversation.</p></section>}
+        </div>
+      ) : (
+        <div className={L.page}>
+          {open && <ConversationPane key={open} conv={current} id={open} fill={false} />}
+          {list}
+        </div>
+      )}
     </section>
   );
 }
