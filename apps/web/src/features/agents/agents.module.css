@@ -489,6 +489,9 @@ a.person:hover { color: var(--accent-hover); }
 .vital { gap: 6px; padding: 14px 16px 15px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
 .vital dt { color: var(--muted); font: 550 13px/1.3 var(--font-ui); }
 .vital dd { gap: 7px; font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
+/* Four to a row on a narrower card: the figures shrink with the row instead of breaking a word ("notoriou-s"). */
+.vitals { container-type: inline-size; }
+@container (max-width: 760px) { .vital dd { font-size: clamp(15px, 2.9cqi, 22px); } .vital { padding: 12px 13px 13px; } }
 .vitalNote { font-size: 12.5px; letter-spacing: 0; }
 .meter { height: 5px; border-radius: 3px; }
 
@@ -540,7 +543,7 @@ a.person:hover { color: var(--accent-hover); }
 /* Coins (CoinsPage): Moving now as large cards, then every coin in a glass table with real rows. */
 .coinsBody { display: grid; gap: 28px; padding: 22px var(--row-px) 28px; }
 .moving { display: grid; }
-.movingGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.movingGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
 .movingCard {
   display: grid; gap: 14px; height: 100%; padding: 18px; border: 1px solid transparent; border-radius: 22px; color: var(--text);
   background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box;
@@ -556,7 +559,7 @@ a.person:hover { color: var(--accent-hover); }
 .movingFoot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .movingRight { text-align: right; }
 .movingLabel { display: block; color: var(--muted); font-size: 12.5px; }
-.movingBig { display: block; margin-top: 2px; font: 650 20px/1.1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.movingBig { display: block; margin-top: 2px; font: 650 clamp(16px, 1.4vw, 20px)/1.1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 
 .tableWrap { border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .table th { padding: 14px 14px 12px; color: var(--muted); font: 550 12.5px var(--font-ui); border-bottom: 1px solid var(--line); }

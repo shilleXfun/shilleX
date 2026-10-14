@@ -107,7 +107,7 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         <Vital label="Turns" value={<Tick value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
         {/* Spans two cells to close the grid's second row; the debts figure takes its place when there is one. */}
         <Vital label="Receipt chain" wide={!debt} title={a.chainHead.hash ?? undefined}
-          value={`${a.chainHead.count} · ${a.chainHead.hash ? `${a.chainHead.hash.slice(0, 10)}…` : '—'}`} note="each turn hashed onto the last" />
+          value={`${a.chainHead.count} · ${a.chainHead.hash ? a.chainHead.hash.slice(0, 6) : '—'}`} note="turns, each hashed onto the last" />
       </dl>
     </div>
   );
