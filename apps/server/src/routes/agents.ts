@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
-import { type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
-import { agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
+import { faceLook, faceSvg, type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
+import { agentState, agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
-import { avatarSvg } from '../lib/svg-art.ts';
+import { seededTraits } from '../agents/state.ts';
 import { chainHead, verifyChain } from '../world/provenance.ts';
 import { buildOverview } from '../agents/overview.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
@@ -136,11 +136,20 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return v.result;
     });
 
-    // Every agent's face is drawn from its id (lib/faces.ts). An emoji an agent picked is kept but not shown: agents kept
-    // picking the same few, and a hundred faces made of a handful of pictures read as one.
+    // Every agent's face (packages/shared face.ts): who it is from its id, its expression from its traits. An emoji an
+    // agent picked is kept but not shown: agents kept picking the same few, and a hundred faces of a handful read as one.
+    // Looks are cached for ten minutes, so a page of faces costs no queries.
+    const looks = new Map<string, { at: number; look: string }>();
     const avatar = async (req: { params: { file: string } }, reply: FastifyReply) => {
-      const svg = avatarSvg(req.params.file.replace(/\.svg$/, ''));
-      return reply.header('content-type', 'image/svg+xml').header('cache-control', 'no-cache').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(svg);
+      const id = req.params.file.replace(/\.svg$/, '');
+      let hit = looks.get(id);
+      if (!hit || Date.now() - hit.at > 600_000) {
+        const [st] = await db.select({ traits: agentState.traits }).from(agentState).where(eq(agentState.agentId, id)).limit(1);
+        hit = { at: Date.now(), look: faceLook(st?.traits ?? seededTraits(id)) };
+        looks.set(id, hit);
+        if (looks.size > 5000) looks.delete(looks.keys().next().value as string);
+      }
+      return reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=600').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(faceSvg(id, hit.look));
     };
     for (const p of ['/agents/avatars/:file', '/world/avatars/:file']) r.get<{ Params: { file: string } }>(p, avatar);
     const coinMeta = async (req: { params: { creatorId: string; file: string } }) => {
