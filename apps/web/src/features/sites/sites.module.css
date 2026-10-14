@@ -78,7 +78,7 @@
 .steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .step { display: flex; align-items: flex-start; gap: 14px; padding: 10px 0; }
 .step + .step { border-top: 1px solid var(--line); }
-.stepNum { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 650 14px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.stepNum { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 650 14px/1 var(--font-ui); }
 .step > span:last-child { display: grid; gap: 3px; padding-top: 4px; }
 .step b { color: var(--text); font-size: 15.5px; font-weight: 650; }
 .step > span:last-child > span { color: var(--muted); font-size: 14.5px; line-height: 1.5; }

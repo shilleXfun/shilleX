@@ -17,7 +17,6 @@ html, body, #root { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 400 var(--fs-md) / var(--lh) var(--font-ui);
-  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }

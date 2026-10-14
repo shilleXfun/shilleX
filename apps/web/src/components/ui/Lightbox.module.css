@@ -8,7 +8,7 @@
 .img { max-width: min(1200px, 100%); max-height: calc(100dvh - 140px); border-radius: var(--radius); object-fit: contain; box-shadow: var(--shadow-media); }
 .caption { display: flex; gap: 10px; align-items: baseline; max-width: 70ch; color: var(--muted); font-size: var(--fs-sm); text-align: center; }
 .caption span:last-child { color: var(--text); }
-.count { flex: none; color: var(--muted); font: 12px var(--font-ui); font-variant-numeric: tabular-nums; }
+.count { flex: none; color: var(--muted); font: 12px var(--font-ui); }
 .tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }
 .tool { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--raised) 80%, transparent); color: var(--text); }
 .tool:hover { background: color-mix(in srgb, var(--hover) 95%, transparent); }

@@ -8,7 +8,7 @@
 .hero::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 2px; background: var(--glow, var(--line-strong)); pointer-events: none; }
 .head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 14px; }
 .title { display: inline-flex; align-items: baseline; gap: 10px; margin: 0; color: var(--text); font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.012em; }
-.count { color: var(--muted); font: 500 14px var(--font-ui); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.count { color: var(--muted); font: 500 14px var(--font-ui); letter-spacing: 0; }
 .note { color: var(--muted); font-size: 14px; }
 .bigTitle { margin: 0; color: var(--text); font: 700 clamp(28px, 3.2vw, 40px)/1.08 var(--font-brand); letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
 .lede { margin: 0; max-width: 66ch; color: var(--text-2); font-size: 16px; line-height: 1.6; text-wrap: pretty; }
@@ -18,7 +18,7 @@
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--line); overflow: hidden; }
 .stat { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 14px 16px; background: var(--panel); }
 .stat dt { color: var(--muted); font-size: 13px; font-weight: 500; }
-.stat dd { margin: 0; color: var(--text); font: 700 24px/1.15 var(--font-brand); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat dd { margin: 0; color: var(--text); font: 700 24px/1.15 var(--font-brand); letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .stat dd small { color: var(--muted); font: 500 13px var(--font-ui); letter-spacing: 0; }
 .rows { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .row { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; margin: 0 -10px; padding: 6px 10px; border-radius: var(--radius-sm); color: inherit; transition: background var(--dur-1); }
