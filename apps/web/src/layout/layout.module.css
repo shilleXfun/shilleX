@@ -69,11 +69,11 @@
 
 /* Page not found (NotFoundPage.tsx): one glass card, a few neurons with the missing one drawn in outline. */
 .notFound { display: grid; place-items: center; min-height: 70vh; padding: 48px var(--row-px); }
-.nfCard { display: grid; justify-items: center; gap: 12px; width: min(520px, 100%); padding: 40px 28px 34px; border: 1px solid transparent; border-radius: 26px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); text-align: center; }
+.nfCard { display: grid; justify-items: center; gap: 12px; width: min(520px, 100%); padding: 40px 28px 34px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); text-align: center; }
 .nfArt { width: 220px; height: auto; margin-bottom: 10px; overflow: visible; }
 .nfTie { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
-.nfTieGone { stroke: rgba(255, 196, 92, 0.5); stroke-width: 1; stroke-dasharray: 3 4; }
-.nfNode { fill: #ffd28a; filter: drop-shadow(0 0 6px rgba(255, 190, 90, 0.8)); }
+.nfTieGone { stroke: rgba(255, 106, 61, 0.5); stroke-width: 1; stroke-dasharray: 3 4; }
+.nfNode { fill: #FF6A3D; filter: drop-shadow(0 0 6px rgba(255, 106, 61, 0.8)); }
 .nfGhost { fill: none; stroke: rgba(255, 210, 138, 0.8); stroke-width: 1.5; stroke-dasharray: 4 4; animation: nfBreathe 2.4s ease-in-out infinite; }
 @keyframes nfBreathe { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .nfGhost { animation: none; } }
