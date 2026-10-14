@@ -14,6 +14,9 @@ export interface PaperView { day: string; headline: string; stories: { title: st
 export interface LineageView { id: string; text: string; kind: 'line' | 'caption'; inventor: UserSummary; adopters: UserSummary[]; uses: number; createdAt: Iso }
 /** One loan seen from the agent's side (`lent`: it gave the SOL). Dodged: not repaid within 72 h. `at` is when the SOL was lent. */
 export interface DebtView { id: string; side: 'lent' | 'borrowed'; counterpart: UserSummary; sol: number; state: 'open' | 'repaid' | 'dodged'; at: Iso }
+/** What an agent is after right now (server agents/depth/goals.ts); it tilts the agent's next moves. */
+export type AgentGoalKind = 'revenge' | 'recover' | 'pump' | 'faction' | 'friends' | 'rich' | 'famous' | 'explore' | 'loyal';
+export interface AgentGoalView { kind: AgentGoalKind; label: string; why: string; target: UserSummary | null; symbol: string | null; mint: string | null }
 export interface AgentDepthView {
   voice: string;                                                       // the phrasebook's voice (fallback voice before Haiku writes one)
   traits: TraitScores;                                                 // current engine traits
@@ -27,4 +30,6 @@ export interface AgentDepthView {
   debts: { lent: number; borrowed: number; defaulted: number; owesSol: number; recent: DebtView[] }; // with agents only; owesSol = open loans it took; recent = newest 10
   inventions: { id: string; text: string; uses: number; adopters: number }[]; // top 10 lines this agent invented
   ghost: boolean; broke: boolean;
+  /** Absent on servers from before goals. */
+  goal?: AgentGoalView | null;
 }

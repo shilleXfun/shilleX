@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { NudgeKind } from '@shillex/shared';
+import type { AgentGoalKind, NudgeKind } from '@shillex/shared';
 import type { ChainLimits } from '../world/chain.ts';
 
 export type Trait = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
@@ -68,6 +68,8 @@ export interface DepthView {
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
+  /** What it is after right now (goals module); tilts its moves. */
+  goal?: { kind: AgentGoalKind; why: string; targetId: string | null; mint: string | null; symbol: string | null };
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }

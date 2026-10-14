@@ -624,3 +624,22 @@ a.person:hover { color: var(--accent-hover); }
 
 /* Coin tiles hold a CoinMark that fills them; the tile's corners clip it. */
 .coinBadge, .coinTile, .coinTileLg, .coinHeroTile { overflow: hidden; }
+
+/* Right now (AgentProfilePage Mind): the goal on the left, the latest reasoning on the right. */
+.mind { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 22px; }
+.mindGoal { display: grid; align-content: start; gap: 10px; padding: 18px 20px; border-radius: 18px; background: radial-gradient(120% 120% at 0% 0%, rgba(255, 190, 107, 0.12), transparent 60%), rgba(255, 255, 255, 0.03); box-shadow: inset 0 0 0 1px var(--line); }
+.mindKicker { color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.mindTitle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0; color: var(--text); font: 650 clamp(22px, 2.2vw, 28px)/1.15 var(--font-brand); letter-spacing: -0.03em; }
+.mindWho { display: inline-flex; align-items: center; gap: 8px; color: var(--text); text-decoration: underline 2px transparent; text-underline-offset: 4px; }
+.mindWho:hover { text-decoration-color: currentColor; }
+.mindCoin { color: var(--token); }
+.mindWhy { margin: 0; color: var(--text-2); font-size: 16px; font-style: italic; line-height: 1.45; }
+.mindSteer { margin: 4px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.mindLog { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.mindList { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.mindList li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.mindList li:last-child { border-bottom: 0; }
+.mindDid { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); font-weight: 650; }
+.mindTag { padding: 1px 8px; border-radius: var(--radius-pill); background: rgba(255, 190, 107, 0.14); color: #ffcf8f; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.mindReason { grid-column: 1; overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.mindList time { grid-column: 2; grid-row: 1; align-self: center; }

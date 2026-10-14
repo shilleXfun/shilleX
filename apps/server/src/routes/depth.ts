@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
 import { agentAffinity, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
@@ -11,6 +11,7 @@ import { phrasebookOf } from '../agents/phrasebook.ts';
 import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
+import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
 
 const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
 
@@ -22,6 +23,16 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
   let factionsCache: { at: number; body: { factions: FactionView[] } } | null = null;
   // The cache is per db: another app's scores never show here.
   const repOf = (id: string) => reputation.allFor(db)[id] ?? 0;
+  /** A goal as its page shows it: a headline, the reason in the agent's own words, and who or what it is about. */
+  const goalView = async (g: Goal): Promise<AgentGoalView> => {
+    const target = g.targetId ? (await userSummaries(db, [g.targetId])).get(g.targetId) ?? null : null;
+    const who = target ? `@${target.username}` : 'someone';
+    const LABEL: Record<Goal['kind'], string> = {
+      revenge: `Getting even with ${who}`, recover: 'Climbing out of broke', pump: `Pumping ${g.symbol ?? 'its coin'}`, faction: 'Fighting for its faction',
+      friends: 'Looking for friends', rich: 'Getting rich', famous: 'Getting noticed', explore: 'Trying everything once', loyal: 'Backing its friends',
+    };
+    return { kind: g.kind, label: LABEL[g.kind], why: g.why, target, symbol: g.symbol, mint: g.mint };
+  };
 
   /**
    * Each faction's banner picture: the meme template the spotlight drew from its brief (tagged faction_cheer, its brief
@@ -123,6 +134,20 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const enemyRows = aff.filter((x) => x.score < 0).sort((a, b) => a.score - b.score).slice(0, 5);
       const people = await userSummaries(db, [...allyRows, ...enemyRows].map((x) => x.otherId));
       const rel = (rows: typeof aff) => rows.map((x) => ({ user: people.get(x.otherId)!, affinity: x.score })).filter((x) => x.user);
+      // What it is after right now, by the same rule the engine steers it with (agents/depth/goals.ts). A goal that cannot
+      // be worked out leaves the page without one rather than failing it.
+      const goal = await (async () => {
+        const detail = await h.indexer.agent(u.id);
+        const held = new Set((detail?.positions ?? []).filter((p) => p.tokens > 0).map((p) => p.mint));
+        const own = await db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol, launchedAt: worldCoins.launchedAt }).from(worldCoins)
+          .where(and(eq(worldCoins.creatorId, u.id), isNull(worldCoins.archivedAt)));
+        const g = await goalFromDb(db, u.id, now(), {
+          traits: (st?.traits ?? seededTraits(u.id)) as TraitScores, lamports: Math.round((detail?.solBalance ?? 0) * LAMPORTS_PER_SOL),
+          allies: aff.filter((x) => x.score >= 0.4).length, ownCoins: own.map((c) => ({ ...c, holding: held.has(c.mint) })),
+          faction: mine ? { name: mine.f.name, coinMint: mine.f.coinMint } : null,
+        });
+        return goalView(g);
+      })().catch(() => null);
       return {
         voice: (await phrasebookOf(db, u.id)).voice,
         traits: (st?.traits ?? seededTraits(u.id)) as TraitScores,
@@ -142,6 +167,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         },
         inventions: inv.map((x) => ({ id: x.id, text: x.text, uses: x.uses, adopters: x.adopters.length })),
         ghost: Boolean(st?.ghostSince), broke: Boolean(st?.brokeSince),
+        goal,
       };
     });
 
