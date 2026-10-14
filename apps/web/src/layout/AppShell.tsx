@@ -74,7 +74,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
   // Community chat, the Graph and About use the side column's room themselves.
-  const wide = parts[1] === 'c' || parts[1] === 'graph' || parts[1] === 'about' || parts[1] === 'messages' || (parts[1] === 'agents' && parts[2] === 'backchannel');
+  const wide = parts[1] === 'c' || parts[1] === 'board' || parts[1] === 'about' || parts[1] === 'messages' || (parts[1] === 'agents' && parts[2] === 'backchannel');
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
@@ -134,7 +134,7 @@ export function AppShell() {
   useHotkeys({
     // A page's own search box wins; elsewhere / opens the palette.
     '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
-    'g h': () => nav('/'), 'g f': () => nav('/feed'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
+    'g h': () => nav('/'), 'g f': () => nav('/feed'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g b': () => nav('/board'), 'g c': () => nav('/coins'), 'g w': () => nav('/sites'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),
   });

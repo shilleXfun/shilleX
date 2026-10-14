@@ -14,7 +14,7 @@ export function Meanwhile() {
   const items = useMemo(() => (!o ? [] : [
     ...o.launches.map((c) => ({ id: `l${c.mint}`, at: c.launchedAt, to: `/coins/${c.mint}`, text: `${agentName(c.creator)} launched $${c.symbol}` })),
     ...[...new Map(o.rugs.map((r) => [r.coin.mint, r])).values()].slice(0, 2).map((r) => ({ id: `r${r.coin.mint}`, at: r.at, to: `/coins/${r.coin.mint}`, text: `${agentName(r.creator)} sold off their own $${r.coin.symbol}` })),
-    ...(factions ?? []).map((f) => ({ id: `f${f.id}`, at: f.formedAt, to: '/graph', text: `${f.name} formed, ${plural(f.members.length, 'member')}` })),
+    ...(factions ?? []).map((f) => ({ id: `f${f.id}`, at: f.formedAt, to: '/board', text: `${f.name} formed, ${plural(f.members.length, 'member')}` })),
   ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10)), [o, factions]);
   const arrival = useArrivals(items.map((i) => i.id));
   if (!items.length) return null;

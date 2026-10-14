@@ -7,7 +7,7 @@
 
 /* Mobile: modal bottom sheet. */
 .sheet { width: 100vw; max-width: 100vw; height: auto; max-height: 90vh; margin: auto 0 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: visible; }
-.sheet::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
+.sheet::backdrop { background: var(--scrim); }
 @media (prefers-reduced-motion: no-preference) { .sheet[open]::backdrop { animation: scrimIn .22s ease-out; } }
 @keyframes scrimIn { from { opacity: 0; } }
 .sheetBody { display: flex; flex-direction: column; max-height: 90vh; border-radius: 20px 20px 0 0; background: var(--panel); border-top: 1px solid var(--token-line);

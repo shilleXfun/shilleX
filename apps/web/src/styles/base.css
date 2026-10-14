@@ -1,4 +1,4 @@
-@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/schibsted-grotesk/wght.css';
 @import '@fontsource-variable/geist-mono/wght.css';
 /* The wordmark only: the brand's letters stay as they were drawn. */
 @import '@fontsource-variable/bricolage-grotesque/standard.css';
@@ -17,37 +17,36 @@ html, body, #root { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 400 var(--fs-md) / var(--lh) var(--font-ui);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
-/* The backdrop is <SwarmBackdrop/> (components/swarm), mounted once at the app root. */
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 img { display: block; max-width: 100%; }
-h1, h2, h3 { font-family: var(--font-brand); line-height: var(--lh-display); letter-spacing: -0.04em; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; box-shadow: var(--glow-accent); }
-::selection { background: rgba(255, 255, 255, 0.22); }
+h1, h2, h3 { font-family: var(--font-brand); line-height: var(--lh-display); letter-spacing: -0.02em; font-weight: 700; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+::selection { background: var(--accent-select); }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (min-width: 768px) { .mobile-only { display: none !important; } }
 /* User-written text never pushes the layout wider: an unbroken string wraps rather than overflowing. */
 p, h1, h2, h3, blockquote, figcaption, dd { overflow-wrap: anywhere; }
 .mono { font-family: var(--font-mono); font-feature-settings: 'zero' 1; }
-/* Display type: page titles and empty-state headlines. Tight and heavy. */
-.display { font-family: var(--font-brand); font-weight: 700; letter-spacing: -0.045em; line-height: var(--lh-display); }
+/* Display type: page titles and empty-state headlines. */
+.display { font-family: var(--font-brand); font-weight: 750; letter-spacing: -0.025em; line-height: var(--lh-display); }
 * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
 
-/* Lumen glass, for any card: a few percent of white over the world, a luminous edge lit from the top left, deep soft shadow.
-   .glass-row is a list row inside one: it lifts on hover. Phones drop the blur. */
-.glass { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(rgba(14, 14, 18, 0.7), rgba(14, 14, 18, 0.7)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
-.glass-row { border-radius: 14px; transition: background .15s; }
-.glass-row:hover { background: rgba(255, 255, 255, 0.045); }
-@media (max-width: 767px) { .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } }
+/* A card: a solid panel with one hairline edge. .glass-row is a list row inside one: it lifts on hover. (The names are
+   from the glass era; pages still use them.) */
+.glass { border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); }
+.glass-row { border-radius: var(--radius-sm); transition: background var(--dur-1); }
+.glass-row:hover { background: rgba(255, 255, 255, 0.035); }
 
-/* Scroll reveals (lib/useScrollReveal.ts): rise, sharpen and fade in the first time an element scrolls into view,
+/* Scroll reveals (lib/useScrollReveal.ts): rise a little and fade in the first time an element scrolls into view,
    staggered among siblings by --i. */
-[data-reveal] { opacity: 0; transform: translate3d(0, 56px, 0) scale(.97); filter: blur(6px); transition: opacity .9s cubic-bezier(.2, .8, .2, 1), transform 1s cubic-bezier(.2, .8, .2, 1), filter .9s ease; transition-delay: calc(var(--i, 0) * 90ms); }
-[data-reveal][data-in] { opacity: 1; transform: none; filter: none; }
+[data-reveal] { opacity: 0; transform: translate3d(0, 14px, 0); transition: opacity var(--dur-3) var(--ease), transform var(--dur-3) var(--ease); transition-delay: calc(var(--i, 0) * 50ms); }
+[data-reveal][data-in] { opacity: 1; transform: none; }

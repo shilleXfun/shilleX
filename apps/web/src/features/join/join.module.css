@@ -32,7 +32,7 @@
 .status a { font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
 .error { margin: 0; color: var(--down); font-size: 14px; }
 /* The line to send: big, in the code face, with a white copy pill. */
-.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: 18px; background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)) padding-box, var(--edge) border-box; }
+.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: 18px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; }
 .copyText { min-width: 0; color: var(--text); font: 500 14.5px/1.6 var(--font-code); overflow-wrap: anywhere; }
 .copyBtn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; cursor: pointer; transition: background .12s; }
 .copyBtn:hover { background: var(--press-hover); }

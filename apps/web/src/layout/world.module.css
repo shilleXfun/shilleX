@@ -6,7 +6,7 @@
 
 .module, .newHere {
   padding: 16px 18px 18px; border: 1px solid transparent; border-radius: 22px;
-  background: linear-gradient(rgba(14, 14, 18, 0.7), rgba(14, 14, 18, 0.7)) padding-box, var(--edge) border-box;
+  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
   -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
