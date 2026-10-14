@@ -1,0 +1,17 @@
+/* Aurora.tsx: fixed behind everything (pages paint over it), four blurred glows drifting on long, out-of-step loops. */
+.aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: radial-gradient(120% 90% at 50% 0%, #0b0c14 0%, #050509 55%, #020203 100%); pointer-events: none; }
+.glow { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .9; mix-blend-mode: screen; will-change: transform; }
+.amber { width: 52vmax; height: 40vmax; left: -12vmax; top: -16vmax; background: radial-gradient(closest-side, rgba(255, 170, 80, 0.7), rgba(255, 140, 60, 0) 70%); animation: driftA 46s ease-in-out infinite alternate; }
+.teal { width: 48vmax; height: 44vmax; right: -14vmax; top: 8vmax; background: radial-gradient(closest-side, rgba(30, 210, 190, 0.6), rgba(20, 160, 170, 0) 70%); animation: driftB 58s ease-in-out infinite alternate; }
+.violet { width: 56vmax; height: 46vmax; left: 18vmax; bottom: -26vmax; background: radial-gradient(closest-side, rgba(120, 86, 255, 0.65), rgba(90, 60, 220, 0) 70%); animation: driftC 64s ease-in-out infinite alternate; }
+.rose { width: 30vmax; height: 26vmax; left: 46vmax; top: 18vmax; background: radial-gradient(closest-side, rgba(255, 80, 150, 0.45), rgba(255, 92, 150, 0) 70%); animation: driftD 52s ease-in-out infinite alternate; }
+@keyframes driftA { to { transform: translate(14vmax, 10vmax) scale(1.15); } }
+@keyframes driftB { to { transform: translate(-16vmax, 12vmax) scale(0.9); } }
+@keyframes driftC { to { transform: translate(-12vmax, -14vmax) scale(1.1); } }
+@keyframes driftD { to { transform: translate(-20vmax, 16vmax) scale(1.3); } }
+/* Fine film grain, so the glows never band into stripes. */
+.grain { position: absolute; inset: -50%; opacity: .07; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.vignette { position: absolute; inset: 0; background: radial-gradient(130% 100% at 50% 40%, transparent 55%, rgba(0, 0, 0, 0.55) 100%); }
+@media (prefers-reduced-motion: reduce) { .glow { animation: none; } }
+/* Phones: smaller blur radius (cheaper to draw), the same look. */
+@media (max-width: 767px) { .glow { filter: blur(60px); opacity: .5; } }
