@@ -16,7 +16,7 @@
 @media (min-width: 768px) { [data-hero='true'] .page::before { border-top: 1px solid var(--line); } }
 /* Phones draw no backdrop blur (cost): the sheet is near-solid and runs edge to edge. */
 @media (max-width: 767px) {
-  .page:not(:has(> [data-cards])) { background-color: var(--card-solid); }
+  .page:not(:has(> [data-cards])) { background-color: var(--bg); }
   .page::before { border-inline: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
