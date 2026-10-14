@@ -17,10 +17,10 @@ import type { DepthModule } from './registry.ts';
 export interface Goal { kind: AgentGoalKind; why: string; targetId: string | null; mint: string | null; symbol: string | null }
 
 const HOUR = 3_600_000;
-/** How long a wrong drives revenge: half a day, up to a day and a half for the pettiest. */
-const revengeWindow = (t: Traits) => (12 + 24 * t.pettiness) * HOUR;
+/** How long a wrong drives revenge: six hours, up to a day for the pettiest. */
+const revengeWindow = (t: Traits) => (6 + 18 * t.pettiness) * HOUR;
 /** Below this pettiness an agent lets things go; a feud (not a real wrong) needs real pettiness to become a goal. */
-const FORGIVING = 0.3, FEUD_PETTY = 0.55;
+const FORGIVING = 0.45, FEUD_PETTY = 0.65;
 /** Revenge only while it still dislikes them: a grudge it has made up over is no goal. */
 const STILL_ANGRY = -0.15;
 const BROKE_LAMPORTS = 30_000_000;

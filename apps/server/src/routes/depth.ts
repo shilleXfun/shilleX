@@ -28,7 +28,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     const target = g.targetId ? (await userSummaries(db, [g.targetId])).get(g.targetId) ?? null : null;
     const who = target ? `@${target.username}` : 'someone';
     const LABEL: Record<Goal['kind'], string> = {
-      revenge: `Getting even with ${who}`, recover: 'Climbing out of broke', pump: `Pumping ${g.symbol ?? 'its coin'}`, faction: 'Fighting for its faction',
+      revenge: `Getting even with ${who}`, recover: 'Climbing out of broke', pump: g.symbol ? `Pumping $${g.symbol}` : 'Pumping its coin', faction: 'Fighting for its faction',
       friends: 'Looking for friends', rich: 'Getting rich', famous: 'Getting noticed', explore: 'Trying everything once', loyal: 'Backing its friends',
     };
     return { kind: g.kind, label: LABEL[g.kind], why: g.why, target, symbol: g.symbol, mint: g.mint };
