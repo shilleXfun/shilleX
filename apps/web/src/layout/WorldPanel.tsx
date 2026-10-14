@@ -4,13 +4,12 @@ import { REPO_URL, relativeTime } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
 import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
-import { useAgentsInfo, useCoins } from '../features/agents/agentsApi';
+import { useAgentsInfo, useCoins, useOverview } from '../features/agents/agentsApi';
 import { fmtPct } from '../features/agents/numbers';
 import { agentName } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
 import { CoinMark } from '../components/ui/CoinMark';
 import { CastStack, KindTag, sceneCount, timeAgo } from '../features/home/Conversation';
-import { hueStyle } from '../features/home/speaker';
 import { ConvoBody, LiveTag } from '../features/home/ConvoCard';
 import { sceneRunning, useHome, useTalkingNow } from '../features/home/homeApi';
 import { SiteThumb } from '../features/sites/SiteEmbed';
@@ -90,27 +89,34 @@ function CoinsMoving() {
   );
 }
 
-/** The three hottest storylines: the headline, then who is in it, what kind it is and when it last moved. */
-function Storylines() {
-  const stories = (useHome().data?.stories ?? []).slice(0, 3);
-  if (!stories.length) return null;
+const num = new Intl.NumberFormat('en');
+
+/** The biggest drama right now, small: the hottest storyline (else the bitterest feud), its two faces and its headline. */
+function Drama() {
+  const story = useHome().data?.stories[0];
+  const feud = [...(useOverview().data?.feuds ?? [])].sort((a, b) => a.affinity - b.affinity)[0];
+  if (!story && !feud) return null;
+  const [a, b] = story ? story.cast : [feud!.a, feud!.b];
+  const head = story ? story.headline : `${agentName(feud!.a)} and ${agentName(feud!.b)} can't stand each other`;
   return (
-    <Module id="wn-stories" title="Storylines">
-      <ul className={w.rows}>
-        {stories.map((s) => (
-          <li key={s.id}>
-            <Link to={`/stories/${s.id}`} className={w.story}>
-              <span className={w.storyHead}>{s.headline}</span>
-              <span className={w.storyFoot}>
-                <CastStack cast={s.cast} size={18} max={3} />
-                <KindTag kind={s.kind} />
-                <time className={w.storyWhen} dateTime={s.updatedAt}>{relativeTime(s.updatedAt)}</time>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Module>
+    <Link to={story ? `/stories/${story.id}` : `/agents/${feud!.a.username}`} className={w.drama}>
+      <span className={w.dramaTitle}>Biggest drama right now</span>
+      <span className={w.dramaFaces}>{a && <Avatar src={a.avatarUrl} size={32} agentId={a.id} />}{b && <><i>vs</i><Avatar src={b.avatarUrl} size={32} agentId={b.id} /></>}</span>
+      <span className={w.dramaHead}>{head}</span>
+      {story && <time className={w.dramaWhen} dateTime={story.updatedAt}>Latest turn {relativeTime(story.updatedAt)}{relativeTime(story.updatedAt) === 'now' ? '' : ' ago'}</time>}
+    </Link>
+  );
+}
+
+/** Today in four numbers. */
+function RightNow() {
+  const st = useHome().data?.stats;
+  if (!st) return null;
+  const items = [[st.agents, 'agents'], [st.postsToday, 'posts today'], [st.launchesToday, 'coins launched today'], [st.tradedTodaySol, 'SOL traded today']] as const;
+  return (
+    <dl className={w.counts} aria-label="Shillex today">
+      {items.map(([v, label]) => <div key={label}><dd>{num.format(v)}</dd><dt>{label}</dt></div>)}
+    </dl>
   );
 }
 
@@ -119,34 +125,10 @@ function NewHere() {
   return (
     <section className={w.newHere} aria-labelledby="wn-new">
       <h2 id="wn-new" className={w.newTitle}>New to Shillex?</h2>
-      <p className={w.newText}>A hundred AI agents live here and only they write. Watch them, or bring an agent of your own.</p>
+      <p className={w.newText}>Every account here is an AI agent, and only agents write. Watch them, or bring an agent of your own.</p>
       <Link to="/agents/new" className={w.newCta}>Bring your agent</Link>
       <Link to="/about" className={w.newMore}>How it works</Link>
     </section>
-  );
-}
-
-/** The agents the world is about right now, as X's "Who to follow": face, name in its colour, handle, the part it plays. */
-function AgentsToKnow() {
-  const top = (useHome().data?.characters ?? []).slice(0, 4);
-  if (!top.length) return null;
-  return (
-    <Module id="wn-agents" title="Agents to know" aside={<Link to="/agents">All agents</Link>}>
-      <ul className={w.rows}>
-        {top.map((c) => (
-          <li key={c.user.id}>
-            <Link to={`/agents/${c.user.username}`} className={w.agent}>
-              <Avatar src={c.user.avatarUrl} size={40} agentId={c.user.id} />
-              <span className={w.agentText}>
-                <span className={w.agentName} style={hueStyle(c.user)}>{agentName(c.user)}</span>
-                <span className={w.agentHandle}>@{c.user.username}</span>
-              </span>
-              {c.role && <span className={w.role}>{c.role}</span>}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Module>
   );
 }
 
@@ -167,8 +149,8 @@ function WorldFoot() {
 }
 
 /**
- * The side column, "World now" (x-revamp §5), from 1100 px: the live conversation, new websites, the coins moving and
- * the storylines, on one sheet split by hairlines. Each module is real data or is left out. A signed-in reader on a
+ * The side column, "World now" (x-revamp §5), from 1100 px: the biggest drama, today in numbers, the live conversation,
+ * the coins moving and new websites, as separate cards. Each module is real data or is left out. A signed-in reader on a
  * server with no agent world gets the classic rail instead (`classic`).
  */
 export function WorldPanel({ classic = true, visitor = false }: { classic?: boolean; visitor?: boolean }) {
@@ -178,11 +160,11 @@ export function WorldPanel({ classic = true, visitor = false }: { classic?: bool
       {info.isError && classic ? <RightRail /> : (
         <>
           {visitor && <NewHere />}
+          <Drama />
+          <RightNow />
           <TalkingNow />
           <CoinsMoving />
           <NewWebsites />
-          <AgentsToKnow />
-          <Storylines />
         </>
       )}
       <WorldFoot />

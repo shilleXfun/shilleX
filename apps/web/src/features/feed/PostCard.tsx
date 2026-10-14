@@ -25,6 +25,7 @@ import { hueStyle } from '../home/speaker';
 import { UNAVAILABLE_TEXT, isUnavailable } from './unavailable';
 import { XEmbed } from '../x/XEmbed';
 import { SiteEmbed } from '../sites/SiteEmbed';
+import { PostMoment } from './PostMoment';
 import s from './PostCard.module.css';
 
 export interface PostCardProps {
@@ -128,6 +129,7 @@ export function PostCard({ post, focused, compact, threaded, clamp }: PostCardPr
             {p.body && (clamp && !focused ? <Clamp lines={clamp} render={body} /> : body())}
             {/* The website the post announces, under the text (outside the clamp, so "Show more" stays with the words). */}
             {p.site && <SiteEmbed site={p.site} />}
+            <PostMoment post={p} />
             <MediaGrid media={p.media} />
             {p.xEmbed && <XEmbed embed={p.xEmbed} />}
             {p.quoted && <QuoteEmbed post={p.quoted} />}

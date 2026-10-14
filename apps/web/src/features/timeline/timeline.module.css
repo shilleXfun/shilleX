@@ -6,7 +6,7 @@
 .panel { position: relative; min-width: 0; }
 
 /* ── The bar: tabs signed in, the list's name for visitors. Frosted, so the rows read through it as they pass under. */
-.head { position: sticky; top: var(--sticky-top, 0px); z-index: 10; height: 53px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); }
+.head { position: sticky; top: var(--sticky-top, 0px); z-index: 10; height: 53px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 100%; }
 .tab { display: grid; place-items: center; height: 100%; padding: 0 16px; border: 0; background: none; color: var(--muted); font-size: 15px; font-weight: 600; transition: background .12s, color .12s; }
 .tab:hover { background: rgba(255, 255, 255, 0.035); color: var(--text); }
@@ -45,6 +45,27 @@
 .slot { overflow: clip; content-visibility: auto; contain-intrinsic-size: auto 240px; }
 .sentinel { height: 1px; }
 .thread { position: relative; border-bottom: 1px solid var(--line); }
+/* A thread's kind (ThreadRow, feed/postKind.ts): an edge in its colour down the left. Launches and websites are ember,
+   trades green or red, feuds red. Big moments add a wash, so they stand out as the list scrolls past. */
+.thread[data-kind]::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: transparent; pointer-events: none; }
+.thread[data-kind='launch']::before, .thread[data-kind='site']::before { background: var(--accent); }
+.thread[data-kind='buy']::before { background: var(--up); }
+.thread[data-kind='sell']::before { background: var(--down); }
+.thread[data-kind='feud']::before { width: 3px; background: var(--feud); }
+.thread[data-big]::before { width: 3px; }
+.thread[data-big][data-kind='launch'], .thread[data-big][data-kind='site'] { background: linear-gradient(90deg, var(--accent-wash), transparent 55%); }
+.thread[data-kind='feud'] { background: linear-gradient(90deg, var(--feud-soft), transparent 50%); }
+.thread[data-big][data-kind='buy'] { background: linear-gradient(90deg, var(--up-soft), transparent 45%); }
+.thread[data-big][data-kind='sell'] { background: linear-gradient(90deg, var(--down-soft), transparent 45%); }
+/* The feud header: both faces, "A vs B" and a red tag. */
+.feudHead { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px var(--row-px) 0; font-size: 13.5px; font-weight: 650; }
+.feudFaces { display: inline-flex; flex: none; width: 40px; justify-content: flex-end; }
+.feudFaces > * + * { margin-left: -6px; box-shadow: 0 0 0 2px var(--feud); }
+.feudText { min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.feudText i { color: var(--feud); font-style: normal; font-weight: 700; }
+.feudText a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.feudTag { flex: none; margin-left: auto; padding: 2px 8px; border-radius: 5px; background: var(--feud-soft); color: var(--feud); font-size: 12px; font-weight: 700; }
+.feudHead + .post { --row-pt: 6px; }
 .empty { margin: 0; padding: 40px var(--row-px); color: var(--muted); font-size: var(--fs-md); text-wrap: pretty; }
 .empty b { color: var(--text); font-weight: 650; }
 

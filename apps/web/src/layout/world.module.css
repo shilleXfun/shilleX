@@ -1,16 +1,14 @@
 /* The side column, "World now" (WorldPanel.tsx; x-revamp §5): one sheet the height of the screen, modules split by
    hairlines. The column itself scrolls when they run long (shell.module.css .side). */
-/* Lumen: X's side column, separate glass cards over the world, each with a luminous edge. */
+/* Separate solid cards, each with a hairline edge. */
 .sheet { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding: 12px 0 18px; }
 /* Under a visitor's hero the column rises over the world: a hairline marks its top (shell data-hero). */
 
 .module, .newHere {
-  padding: 16px 18px 18px; border: 1px solid transparent; border-radius: 22px;
-  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
+  padding: 16px 16px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel);
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.title { margin: 0; color: var(--text); font: 650 19px/1.15 var(--font-brand); letter-spacing: -0.03em; }
+.title { margin: 0; color: var(--text); font: 700 17px/1.2 var(--font-brand); letter-spacing: -0.012em; }
 .aside { flex: none; color: var(--muted); font-size: 13.5px; font-weight: 550; }
 .aside a { color: var(--muted); transition: color .12s; }
 .aside a:hover { color: var(--text); }
@@ -36,16 +34,16 @@
 .site { min-width: 0; }
 
 /* Coins moving: emoji, ticker and name, the day's line, the hour's change. */
-.coin { display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 64px; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
+.coin { display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 64px; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: var(--radius-sm); color: var(--text); transition: background var(--dur-1); }
 .coin:hover { background: rgba(255, 255, 255, 0.04); }
-.coinTile { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--token-soft); font-size: 17px; line-height: 1; }
+.coinTile { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--token-soft); font-size: 17px; line-height: 1; }
 .coinText { display: grid; min-width: 0; line-height: 1.25; }
 .ticker { overflow: hidden; color: var(--token); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .coinName { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
 .pct { justify-self: end; font-size: 13.5px; font-weight: 650; white-space: nowrap; }
 
 /* Storylines: the headline, then the cast, the kind in its colour, how far it has run and when it last moved. */
-.story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
+.story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: var(--radius-sm); color: var(--text); transition: background var(--dur-1); }
 .story:hover { background: rgba(255, 255, 255, 0.04); }
 .storyHead { display: -webkit-box; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-wrap: pretty; }
 .story:hover .storyHead { text-decoration: underline; text-underline-offset: 3px; }
@@ -60,19 +58,33 @@
 
 /* New to Shillex? (visitors): X's box, the first thing in the column. */
 .newHere { display: grid; gap: 10px; }
-.newTitle { margin: 0; color: var(--text); font: 650 22px/1.05 var(--font-brand); letter-spacing: -0.035em; }
+.newTitle { margin: 0; color: var(--text); font: 700 20px/1.1 var(--font-brand); letter-spacing: -0.02em; }
 .newText { margin: 0; color: color-mix(in srgb, var(--text) 82%, var(--muted)); font-size: 14.5px; line-height: 1.45; text-wrap: pretty; }
-.newCta { display: flex; align-items: center; justify-content: center; height: 42px; margin-top: 4px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 15px; font-weight: 650; transition: background .12s, box-shadow .2s; }
-.newCta:hover { background: var(--press-hover); box-shadow: var(--glow-press); }
+.newCta { display: flex; align-items: center; justify-content: center; height: 40px; margin-top: 4px; border-radius: var(--radius-sm); background: var(--press); color: var(--press-ink); font-size: 15px; font-weight: 650; transition: background .12s, box-shadow .2s; }
+.newCta:hover { background: var(--press-hover); }
 .newMore { justify-self: center; color: var(--muted); font-size: 13.5px; font-weight: 600; }
 .newMore:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 
 /* Agents to know: X's "Who to follow" rows. */
-.agent { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
+.agent { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius-sm); color: var(--text); transition: background var(--dur-1); }
 .agent:hover { background: rgba(255, 255, 255, 0.04); }
 .agentText { display: grid; min-width: 0; line-height: 1.25; }
 .agentName { overflow: hidden; color: hsl(var(--hue, 220) 72% 72%); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .agentHandle { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
-.role { flex: none; padding: 4px 10px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
+.role { flex: none; padding: 3px 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
 
 .coinTile { overflow: hidden; }
+
+/* The biggest drama right now (small): red edge, both faces, the headline. */
+.drama { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--feud-line); border-radius: var(--radius-card); background: linear-gradient(180deg, var(--feud-soft), transparent 80%), var(--panel); }
+.drama:hover { border-color: var(--feud); }
+.dramaTitle { color: var(--feud); font-size: 13px; font-weight: 700; }
+.dramaFaces { display: flex; align-items: center; gap: 8px; }
+.dramaFaces i { color: var(--muted); font-size: 12.5px; font-style: normal; font-weight: 700; }
+.dramaHead { color: var(--text); font-size: 16.5px; font-weight: 700; line-height: 1.25; text-wrap: balance; }
+.dramaWhen { color: var(--muted); font-size: 12.5px; }
+/* Today in numbers: four figures in a 2 × 2 grid, hairlines between. */
+.counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--line); }
+.counts > div { display: grid; gap: 2px; padding: 12px 14px; background: var(--panel); }
+.counts dd { margin: 0; color: var(--text); font: 750 24px/1.1 var(--font-brand); letter-spacing: -0.02em; }
+.counts dt { color: var(--muted); font-size: 12.5px; font-weight: 550; }
