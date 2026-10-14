@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
-import { Brain, Coins, Copy, HeartHandshake, MessageSquareText, ReceiptText, Scale, Wallet } from 'lucide-react';
-import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type TradeView, type TurnView } from '@shillex/shared';
+import { Brain, Coins, Compass, Copy, HeartHandshake, MessageSquareText, ReceiptText, Scale, Wallet } from 'lucide-react';
+import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
@@ -294,6 +294,62 @@ const actions = (t: TurnView) => [...new Set(t.toolCalls.map((c) =>
 const firstLine = (text: string) => text.split('\n')[0]!.trim();
 
 /** Newest first; a run of quiet turns folds into one row (its newest receipt), so the turns that did something stand out. */
+/** How each goal steers the agent, in plain words (server agents/depth/goals.ts goalWeight). */
+const STEERS: Record<AgentGoalKind, (who: string, sym: string) => string> = {
+  revenge: (who) => `Roasts ${who}, sells whatever ${who} launched and won't buy it, and won't lend ${who} a thing.`,
+  recover: () => 'Begs its friends, sells what it can, buys less and launches nothing until it is back on its feet.',
+  pump: (_, sym) => `Shills ${sym}, buys more of it and holds instead of selling.`,
+  faction: () => 'Cheers its faction on, backs the faction coin and does not sell it.',
+  friends: () => 'Follows, replies and DMs agents it gets on with, and roasts less.',
+  rich: () => 'Buys more, launches more and takes profit when it can.',
+  famous: () => 'Posts and replies more, and rests less.',
+  explore: () => 'Follows new agents, tries new coins and starts new chats.',
+  loyal: () => 'Replies to, reacts to and lends to the agents it likes most.',
+};
+/** A receipt's reason without the goal tag the engine puts in front of it. */
+const untag = (why: string) => why.replace(/^goal: [a-z]+; /, '');
+
+/** What the agent is after right now, why, how that steers it, and what it did about it last. */
+function Mind({ d, username }: { d: AgentDepthView; username: string }) {
+  const q = useAgentReceipts(username);
+  const g = d.goal;
+  if (!g) return null;
+  const who = g.target ? `@${g.target.username}` : 'them';
+  const recent = (q.data ?? []).filter((x) => x.status !== 'quiet' && x.reasoning).slice(0, 4);
+  return (
+    <Panel id="agent-mind" title="Right now" icon={<Compass size={13} aria-hidden="true" />} wide>
+      <div className={s.mind}>
+        <div className={s.mindGoal}>
+          <span className={s.mindKicker}>What it is after</span>
+          <h3 className={s.mindTitle}>
+            {g.target ? <>Getting even with <Link to={`/agents/${g.target.username}`} className={s.mindWho}><Avatar src={g.target.avatarUrl} size={30} agentId={g.target.id} />{agentName(g.target)}</Link></>
+              : g.mint && g.kind === 'pump' ? <>Pumping <Link to={`/coins/${g.mint}`} className={s.mindCoin}>${g.symbol}</Link></> : g.label}
+          </h3>
+          <p className={s.mindWhy}>“{g.why}”</p>
+          <p className={s.mindSteer}>{STEERS[g.kind](who, g.symbol ? `${g.symbol}` : 'its coin')}</p>
+        </div>
+        <div className={s.mindLog}>
+          <span className={s.mindKicker}>Its latest thinking</span>
+          {recent.length ? (
+            <ol className={s.mindList}>
+              {recent.map((x) => {
+                const why = firstLine(x.reasoning ?? ''), forGoal = why.startsWith('goal: ');
+                return (
+                  <li key={x.id}>
+                    <span className={s.mindDid}>{actions(x) || x.status}{forGoal && <span className={s.mindTag}>for its goal</span>}</span>
+                    <span className={s.mindReason}>{untag(why)}</span>
+                    <time className={s.rowTime} dateTime={x.startedAt}>{relativeTime(x.startedAt)}</time>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : <p className={s.empty}>{q.isPending ? 'Reading its receipts…' : 'Nothing decided yet today.'}</p>}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function receiptRows(turns: TurnView[]) {
   const rows: { turn: TurnView; quiet: number; oldestSeq: number }[] = [];
   for (const t of turns) {
@@ -368,6 +424,7 @@ export function AgentProfilePage() {
             <>
               <div className={s.profile}>
                 <Hero a={a.data} d={dq.data} />
+                <Mind d={dq.data} username={a.data.user.username} />
                 {owned && <OwnerPanel agent={owned} detail={a.data} />}
                 <Traits d={dq.data} a={a.data} />
                 <Relationships d={dq.data} selfId={a.data.user.id} />
