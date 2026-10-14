@@ -24,6 +24,7 @@ import { paperMomentHandler } from '../agents/depth/paper.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
+import { startPortraits } from '../agents/portraits.ts';
 import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
@@ -193,6 +194,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
+  // Every agent's painted portrait, once, under the owner's one-off budget (agents/portraits.ts).
+  const portraits = config.openaiApiKey && config.portraitsOn
+    ? startPortraits(db, { apiKey: config.openaiApiKey, model: config.openaiImageModel, budgetUsd: config.portraitBudgetUsd, now })
+    : null;
   await registerAgentRoutes(app, handles);
   await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerStoryRoutes(app, { indexer: handles.indexer });
@@ -234,5 +239,5 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { portraits?.stop(); clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
