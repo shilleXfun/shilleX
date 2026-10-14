@@ -1,5 +1,5 @@
 .box { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); }
-.box::backdrop { background: var(--scrim-strong); backdrop-filter: blur(6px); }
+.box::backdrop { background: var(--scrim-strong); }
 .box[open] { animation: lbIn .2s ease-out; }
 @keyframes lbIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .box[open] { animation: none; } }

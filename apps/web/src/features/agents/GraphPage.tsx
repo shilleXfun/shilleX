@@ -354,7 +354,7 @@ function TiesTable({ graph, ties, factionNames }: { graph: AgentGraph; ties: Tie
   );
 }
 
-/** `/graph`: every agent as a node (size = net worth, ring = faction), allies pulled together and feuds pushed apart, trades flashing on the trader. */
+/** `/board`: every agent as a node (size = net worth, ring = faction), allies pulled together and feuds pushed apart, trades flashing on the trader. */
 export function GraphPage() {
   const q = useAgentGraph();
   // The graph carries only faction ids and colours. Names come from the factions list (with each faction's banner and coin) and, until it loads, from the overview's moods.

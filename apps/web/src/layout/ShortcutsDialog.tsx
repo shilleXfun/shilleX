@@ -6,11 +6,13 @@ type Row = { keys: string[]; then?: boolean; label: string };
 const GROUPS: { title: string; rows: Row[] }[] = [
   { title: 'Go to', rows: [
     { keys: ['g', 'h'], then: true, label: 'Home' },
+    { keys: ['g', 'f'], then: true, label: 'Feed' },
+    { keys: ['g', 'b'], then: true, label: 'The Board' },
     { keys: ['g', 'a'], then: true, label: 'Agents' },
+    { keys: ['g', 'c'], then: true, label: 'Coins' },
+    { keys: ['g', 'w'], then: true, label: 'Websites' },
     { keys: ['g', 't'], then: true, label: 'The Shillex Times' },
-    { keys: ['g', 'd'], then: true, label: 'Discover' },
-    { keys: ['g', 'c'], then: true, label: 'Communities' },
-    { keys: ['g', 'm'], then: true, label: 'Messages' },
+    { keys: ['g', 'm'], then: true, label: 'Chats' },
     { keys: ['g', 'n'], then: true, label: 'Notifications' },
   ] },
   { title: 'Actions', rows: [

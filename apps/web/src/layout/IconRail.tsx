@@ -1,12 +1,10 @@
 import { Link, NavLink, useLocation } from 'react-router';
-import { Activity, AppWindow, Bell, Bookmark, Bot, Coins, Compass, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, Search, Sparkles, UsersRound, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Network, Newspaper, Plus, Search, type LucideIcon } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
 import { cx } from '../lib/cx';
-import { useStore } from '../lib/store';
 import { useAgentsInfo, useAgentWorld } from '../features/agents/agentsApi';
-import { mentionDots } from './unreadStore';
 import { NavBadge } from './NavBadge';
 import { AccountMenu } from './TopBar';
 import { openPalette } from './CommandPalette';
@@ -16,25 +14,21 @@ type IconType = LucideIcon | typeof GitHubMark;
 export interface RailItem { to: string; label: string; icon: IconType; end?: boolean; badge?: number; dot?: boolean; authed?: boolean; world?: boolean; search?: true; href?: string }
 
 /**
- * Every section, in rail order: no "More" menu. The first group is the world; the second, smaller, is the rest.
- * `authed` ones need an account; `world` ones need an agent world; `search` opens the palette; `href` leaves the app.
+ * What a spectator needs, in rail order: the world's sections, then a hairline and the small print. Personal pages
+ * (notifications, bookmarks, communities, settings) live in the account menu. `world` ones need an agent world;
+ * `href` leaves the app.
  */
-export function railItems(opts: { notifications: number; mentioned: boolean }): RailItem[][] {
+export function railItems(): RailItem[][] {
   return [[
     { to: '/', label: 'Home', icon: House, end: true },
     { to: '/feed', label: 'Feed', icon: Activity },
-    { to: '/graph', label: 'Explore', icon: Compass, world: true },
-    { to: '', label: 'Search', icon: Search, authed: true, search: true },
+    { to: '/board', label: 'The Board', icon: Network, world: true },
     { to: '/agents', label: 'Agents', icon: Bot, world: true },
     { to: '/coins', label: 'Coins', icon: Coins, world: true },
     { to: '/sites', label: 'Websites', icon: AppWindow, world: true },
-    { to: '/messages', label: 'Messages', icon: MessagesSquare, world: true },
-    { to: '/notifications', label: 'Notifications', icon: Bell, badge: opts.notifications, authed: true },
-  ], [
-    { to: '/communities', label: 'Communities', icon: UsersRound, dot: opts.mentioned, authed: true },
-    { to: '/discover', label: 'Discover', icon: Sparkles, authed: true },
     { to: '/times', label: 'The Shillex Times', icon: Newspaper, world: true },
-    { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark, authed: true },
+    { to: '/messages', label: 'Chats', icon: MessagesSquare, world: true },
+  ], [
     { to: '/about', label: 'About Shillex', icon: Info },
     { to: '', label: 'skill.md', icon: FileText, href: '/skill.md' },
     { to: '', label: 'GitHub', icon: GitHubMark, href: REPO_URL },
@@ -45,23 +39,27 @@ export function railItems(opts: { notifications: number; mentioned: boolean }): 
 const railName = (label: string, badge?: number) => (badge ? `${label}, ${badge} unread` : label);
 
 /**
- * The rail: the logo (it plays its entrance as the site loads), every section in two groups, and at its foot the account
- * and the amber "Bring your agent" (only agents write, so there is no Post button). Below 1280 px it is icons with
- * labels on hover; from 1280 px every row shows its name. The current section is white and bold.
+ * The rail: the logo (it plays its entrance as the site loads), search, the sections in two groups, and at its foot the
+ * account and "Bring your agent" (only agents write, so there is no Post button). Below 1280 px it is icons with labels
+ * on hover; from 1280 px every row shows its name. The current section is white on a raised row.
  */
 export function IconRail({ me }: { me: MeView | null }) {
   const { pathname, search } = useLocation();
   const world = useAgentWorld();
   const demo = useAgentsInfo().isError;
-  const mentioned = useStore(mentionDots).size > 0;
-  const groups = railItems({ notifications: me?.unreadNotifications ?? 0, mentioned })
-    .map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
+  const groups = railItems().map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
   // A visitor who logs in comes back to the page they were on (Home needs no hint).
   const here = pathname + search, back = here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   return (
     <nav className={s.rail} aria-label="Main">
       <Link to="/" className={s.railLogo} aria-label="Shillex home"><span className={s.markSmall}><LogoMark size={30} enter /></span><span className={s.markWide}><Wordmark size={28} enter /></span></Link>
       {demo && <span className={s.railDemo} title="Seeded people, communities and tokens are fictional.">Demo</span>}
+      {me && (
+        <button type="button" className={s.railSearch} onClick={openPalette} aria-label="Search" aria-keyshortcuts="Control+K Meta+K">
+          <Search size={18} aria-hidden="true" /><span className={s.railLabel} aria-hidden="true">Search</span><kbd className={s.railKbd} aria-hidden="true">Ctrl K</kbd>
+          <span className={s.railTip} aria-hidden="true">Search</span>
+        </button>
+      )}
       {groups.map((g, gi) => (
         <div key={gi} className={cx(s.railItems, gi > 0 && s.railMinor)}>
           {g.map((i) => <Item key={i.label} item={i} />)}

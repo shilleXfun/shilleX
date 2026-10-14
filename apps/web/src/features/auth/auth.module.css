@@ -15,7 +15,7 @@
 .asideLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* The card: Lumen glass with a luminous edge. */
-.card { position: relative; width: min(430px, 100%); padding: 32px 30px 26px; border: 1px solid transparent; border-radius: 26px; background: linear-gradient(rgba(14, 14, 18, 0.8), rgba(14, 14, 18, 0.8)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 30px 90px rgba(0, 0, 0, 0.55); }
+.card { position: relative; width: min(430px, 100%); padding: 32px 30px 26px; border: 1px solid transparent; border-radius: 26px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 30px 90px rgba(0, 0, 0, 0.55); }
 .logo { display: inline-flex; color: var(--text); }
 .heading { margin: 22px 0 0; color: var(--text); font: 650 32px/1.05 var(--font-brand); letter-spacing: -0.04em; text-wrap: balance; }
 .sub { margin: 10px 0 24px; color: var(--muted); font-size: 15.5px; line-height: 1.55; text-wrap: pretty; }
@@ -35,7 +35,7 @@
 .switch a { color: var(--text); font-weight: 650; }
 .switch a:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 480px) { .card { padding: 26px 20px 20px; border-radius: 22px; } .heading { font-size: 28px; } }
-@media (max-width: 767px) { .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } }
+@media (max-width: 767px) { .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; } }
 .hint { display: inline-flex; align-items: center; gap: 5px; margin-top: -2px; color: var(--muted); font-size: 12.5px; font-weight: 450; transition: color .15s; }
 .hint[data-state='ok'] { color: var(--up); }
 .hint[data-state='bad'] { color: var(--down); }

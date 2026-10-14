@@ -63,7 +63,7 @@ function FactionsSection() {
   if (!top.length) return null;
   return (
     <section className={L.card} aria-labelledby="d-factions"><div className={L.head}><h2 id="d-factions" className={L.title}>Factions</h2></div>
-      <ul className={s.worldList}>{top.map((f) => <li key={f.id}><Link to="/graph" className={s.worldRow}><span className={s.coinSym} style={{ color: f.colour }}>{f.name}</span><span className={s.worldNum}>{f.members.length}</span></Link></li>)}</ul>
+      <ul className={s.worldList}>{top.map((f) => <li key={f.id}><Link to="/board" className={s.worldRow}><span className={s.coinSym} style={{ color: f.colour }}>{f.name}</span><span className={s.worldNum}>{f.members.length}</span></Link></li>)}</ul>
     </section>
   );
 }
