@@ -17,13 +17,19 @@ import type { DepthModule } from './registry.ts';
 export interface Goal { kind: AgentGoalKind; why: string; targetId: string | null; mint: string | null; symbol: string | null }
 
 const HOUR = 3_600_000;
-/** How long a wrong drives revenge: a day and a half, up to three days for a petty agent. */
-const revengeWindow = (t: Traits) => (36 + 36 * t.pettiness) * HOUR;
+/** How long a wrong drives revenge: half a day, up to a day and a half for the pettiest. */
+const revengeWindow = (t: Traits) => (12 + 24 * t.pettiness) * HOUR;
+/** Below this pettiness an agent lets things go; a feud (not a real wrong) needs real pettiness to become a goal. */
+const FORGIVING = 0.3, FEUD_PETTY = 0.55;
+/** Revenge only while it still dislikes them: a grudge it has made up over is no goal. */
+const STILL_ANGRY = -0.15;
 const BROKE_LAMPORTS = 30_000_000;
 const PUMP_WINDOW = 48 * HOUR;
 
 export interface GoalInput {
   traits: Traits; lamports: number; allies: number; now: Date;
+  /** How it feels about others, -1..1. */
+  affinity: Record<string, number>;
   events: { kind: string; data: Record<string, unknown>; at: Date }[];
   ownCoins: { mint: string; symbol: string; launchedAt: Date; holding: boolean }[];
   faction: { name: string; coinMint: string | null } | null;
@@ -36,7 +42,11 @@ export const grudgeIds = (events: GoalInput['events']) => [...new Set(events.fla
 /** What the agent is after right now, first match wins: revenge, recover, pump, faction, friends, then its strongest want. */
 export function deriveGoal(i: GoalInput): Goal {
   const none = { targetId: null, mint: null, symbol: null };
-  const wrong = i.events.filter((e) => GRUDGES[e.kind] && e.data[GRUDGES[e.kind]!] && i.now.getTime() - e.at.getTime() < revengeWindow(i.traits))
+  const target = (e: GoalInput['events'][number]) => String(e.data[GRUDGES[e.kind]!] ?? '');
+  const wrong = i.traits.pettiness < FORGIVING ? undefined : i.events.filter((e) => GRUDGES[e.kind] && target(e)
+    && i.now.getTime() - e.at.getTime() < revengeWindow(i.traits)
+    && (e.kind !== 'feud' || i.traits.pettiness >= FEUD_PETTY)
+    && (i.affinity[target(e)] ?? 0) < STILL_ANGRY)
     .sort((a, b) => b.at.getTime() - a.at.getTime())[0];
   if (wrong) {
     const text = eventText(wrong, i.names, i.now);
@@ -102,7 +112,7 @@ export const goalsModule: DepthModule = {
     const created = new Map(v.coins.map((c) => [c.mint, c]));
     const ownCoins = v.wallet.positions.filter((p) => p.createdByMe).map((p) => ({ mint: p.mint, symbol: p.symbol, holding: p.raw > 0, launchedAt: new Date(created.get(p.mint)?.launchedAt ?? 0) }));
     v.depth.goal = await goalFromDb(d.db, v.agent.id, d.now(), {
-      traits: v.state.traits, lamports: v.wallet.lamports, allies: v.depth.agentAllies.length, ownCoins,
+      traits: v.state.traits, lamports: v.wallet.lamports, affinity: v.affinity, allies: v.depth.agentAllies.length, ownCoins,
       faction: v.depth.faction ? { name: v.depth.faction.name, coinMint: v.depth.faction.coinMint } : null,
     });
   },
