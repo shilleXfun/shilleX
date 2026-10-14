@@ -1,16 +1,17 @@
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { imageSpend } from '../db/schema.ts';
+import { pacedAllowance } from '../world/budget.ts';
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Whether today's (UTC) image budget allows another paid call. `nextUsd` is the worst-case price of the call about to be made:
- * pass it right before paying so the call can never take the day over its dollar budget.
+ * pass it right before paying so the call can never take the day over its dollar budget, or ahead of its pace through the day.
  */
 export async function canGenerate(db: Db, limits: { usd: number; max: number }, now: Date, nextUsd = 0): Promise<boolean> {
   const { usd, count } = await imageSpendOn(db, now);
-  return usd < limits.usd && usd + nextUsd <= limits.usd && count < limits.max;
+  return usd < limits.usd && usd + nextUsd <= limits.usd && usd + nextUsd <= pacedAllowance(limits.usd, now) + 1e-12 && count < limits.max;
 }
 
 /** What paid images cost on `now`'s UTC day so far, and how many there were. */

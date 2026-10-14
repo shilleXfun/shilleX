@@ -113,7 +113,7 @@ async function feudSpots(db: Db, since: Date): Promise<Spot[]> {
 }
 
 /** Coin mascots are paid pictures: only for coins people hold or trade, at most this many a day, after the paper and banners (L8). */
-export const COIN_MASCOTS_PER_DAY = 5;
+export const COIN_MASCOTS_PER_DAY = 12;
 export const MASCOT_HOLDERS = 5;
 export const MASCOT_VOLUME_LAMPORTS = 300_000_000;
 /** A coin may take a few days to earn its mascot. */
