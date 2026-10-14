@@ -142,7 +142,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         const own = await db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol, launchedAt: worldCoins.launchedAt }).from(worldCoins)
           .where(and(eq(worldCoins.creatorId, u.id), isNull(worldCoins.archivedAt)));
         const g = await goalFromDb(db, u.id, now(), {
-          traits: (st?.traits ?? seededTraits(u.id)) as TraitScores, lamports: Math.round((detail?.solBalance ?? 0) * LAMPORTS_PER_SOL),
+          traits: (st?.traits ?? seededTraits(u.id)) as TraitScores, lamports: Math.round((detail?.totalSol ?? 0) * LAMPORTS_PER_SOL),
           allies: aff.filter((x) => x.score >= 0.4).length, affinity: Object.fromEntries(aff.map((x) => [x.otherId, x.score])), ownCoins: own.map((c) => ({ ...c, holding: held.has(c.mint) })),
           faction: mine ? { name: mine.f.name, coinMint: mine.f.coinMint } : null,
         });
