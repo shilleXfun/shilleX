@@ -10,7 +10,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { breathOf, GHOST, LONER } from '../../components/swarm/model';
+import { GHOST, LONER } from '../../components/swarm/model';
 import { isNotFound, useAgentGraph, useFactions, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionBanner, FactionKeyItem, useCoinSymbol } from './Faction';
@@ -172,7 +172,9 @@ function useGlide(target: Map<string, Pt>): Map<string, Pt> {
   return shown;
 }
 
-function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; factionViews: Map<string, FactionView>; width: number; height: number }) {
+type Show = 'all' | 'feuds' | 'allies';
+
+function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H, show, faction }: { graph: AgentGraph; ties: Ties; factionNames: Map<string, string>; factionViews: Map<string, FactionView>; width: number; height: number; show: Show; faction: string | null }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   // Past MAX_ASPECT (a short, wide screen) the graph keeps that shape, centred, instead of stretching.
   const DW = Math.min(W, Math.round(H * MAX_ASPECT)), x0 = (W - DW) / 2;
@@ -196,16 +198,19 @@ function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H 
     const offsets = new Map(nodes.map((x) => { const sp = spots.get(x.n.id); return [x.n.id, sp ? { dx: sp.x - x.x, dy: sp.y - x.y, anchor: sp.anchor } : null] as const; }));
     const ids = new Set(graph.nodes.map((n) => n.id));
     // Weakest ties first, so the strongest lines draw on top.
-    const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b) && (isAlly(e) || isFeud(e))).sort((x, y) => Math.abs(x.score) - Math.abs(y.score));
+    // The filters: feuds or alliances only, and one faction's ties only.
+    const factionOf = new Map(graph.nodes.map((n) => [n.id, n.factionId]));
+    const inFaction = (id: string) => !faction || factionOf.get(id) === faction;
+    const edges = graph.edges.filter((e) => ids.has(e.a) && ids.has(e.b) && ((show !== 'feuds' && isAlly(e)) || (show !== 'allies' && isFeud(e))) && (inFaction(e.a) || inFaction(e.b)))
+      .sort((x, y) => Math.abs(x.score) - Math.abs(y.score));
     // Painted smallest first, so big agents sit on top; linked in id order, so tab order and focus stay put across refetches.
     const links = [...nodes].sort((p, q) => (p.n.id < q.n.id ? -1 : p.n.id > q.n.id ? 1 : 0));
     return { nodes: nodes.sort((p, q) => p.r - q.r), links, offsets, edges };
-  }, [graph, norm, W, H, DW, x0]);
+  }, [graph, norm, W, H, DW, x0, show, faction]);
   const at = new Map(scene.nodes.map((x) => {
     const p = shown.get(x.n.id) ?? norm.get(x.n.id)!;
     return [x.n.id, { ...x, x: clamp(x0 + p.x * DW, x.r + 2, W - x.r - 2), y: clamp(p.y * H, x.r + 2, H - x.r - 2) }] as const;
   }));
-  const colours = [...new Set(scene.nodes.map((x) => ringOf(x.n)))];
   const near = new Set(active ? [active, ...[...(ties.get(active)?.allies ?? []), ...(ties.get(active)?.enemies ?? [])].map((e) => other(e, active))] : []);
   const focus = active ? at.get(active) : undefined;
   // The readout goes in the corner farthest from the agent that covers none of its ties.
@@ -231,34 +236,27 @@ function Drawing({ graph, ties, factionNames, factionViews, width: W, height: H 
     <>
       <svg className={s.svg} viewBox={`0 0 ${W} ${H}`} height={H} role="group" aria-label="Agent relationships" data-active={active ? '' : undefined}>
         <defs>
-          <clipPath id={`${uid}-clip`} clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5" /></clipPath>
-          {colours.map((c, i) => (
-            <radialGradient key={c} id={`${uid}-g${i}`}>
-              <stop offset="0" stopColor={c} stopOpacity=".5" /><stop offset=".42" stopColor={c} stopOpacity=".14" /><stop offset="1" stopColor={c} stopOpacity="0" />
-            </radialGradient>
-          ))}
+          <clipPath id={`${uid}-clip`} clipPathUnits="objectBoundingBox"><rect width="1" height="1" rx=".28" /></clipPath>
         </defs>
         <g>
           {scene.edges.map((e) => {
             const p = at.get(e.a)!, q = at.get(e.b)!, w = Math.abs(e.score);
-            // Allies in their faction's colour (amber across factions or on their own); feuds red and dashed.
-            const ally = isAlly(e), colour = p.n.factionColour && p.n.factionColour === q.n.factionColour ? p.n.factionColour : LONER;
+            // Alliances blue, feuds red; the stronger the tie, the thicker and brighter its line.
+            const ally = isAlly(e);
             return <line key={`${e.a}-${e.b}`} data-testid="graph-edge" className={cx(s.edge, ally ? s.ally : s.feud)} data-near={active && (e.a === active || e.b === active) ? '' : undefined}
-              x1={p.x.toFixed(1)} y1={p.y.toFixed(1)} x2={q.x.toFixed(1)} y2={q.y.toFixed(1)} stroke={ally ? colour : undefined}
-              strokeWidth={ally ? 1 + 2.4 * w : 1 + 1.2 * w} strokeOpacity={ally ? 0.3 : 0.2 + 0.5 * w} />;
+              x1={p.x.toFixed(1)} y1={p.y.toFixed(1)} x2={q.x.toFixed(1)} y2={q.y.toFixed(1)}
+              strokeWidth={ally ? 0.8 + 2.2 * w : 1 + 2 * w} strokeOpacity={ally ? 0.16 + 0.5 * w : 0.24 + 0.6 * w} />;
           })}
         </g>
         <g aria-hidden="true">
           {scene.nodes.map(({ n, r }) => {
             const p = at.get(n.id)!, ring = ringOf(n);
             return (
-              <g key={n.id} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className={s.body} data-near={near.has(n.id) || undefined} data-ghost={n.ghost || undefined} data-on={n.id === active || undefined}>
-                {/* Brighter when happier, as on the backdrop. */}
-                <circle r={r * 2.4} fill={`url(#${uid}-g${colours.indexOf(ring)})`} opacity={n.ghost ? 0.25 : 0.4 + 0.6 * ((clamp(n.mood, -1, 1) + 1) / 2)} className={s.halo}
-                  style={{ '--breath': `${breathOf(n.mood)}s` } as CSSProperties} />
-                <circle r={r} className={s.disc} />
+              <g key={n.id} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className={s.body} data-near={near.has(n.id) || undefined} data-ghost={n.ghost || undefined} data-on={n.id === active || undefined}
+                data-out={faction && n.factionId !== faction ? '' : undefined}>
+                <rect x={-r} y={-r} width={r * 2} height={r * 2} rx={r * 0.56} className={s.disc} />
                 {n.avatarUrl && <image href={n.avatarUrl} x={-r} y={-r} width={r * 2} height={r * 2} clipPath={`url(#${uid}-clip)`} className={s.avatar} preserveAspectRatio="xMidYMid slice" />}
-                <circle r={r + 1.5} className={s.ring} stroke={ring} />
+                <rect x={-r - 1.5} y={-r - 1.5} width={r * 2 + 3} height={r * 2 + 3} rx={r * 0.6} className={s.ring} stroke={ring} />
               </g>
             );
           })}
@@ -312,11 +310,10 @@ function Key({ graph, factionNames, factionViews }: { graph: AgentGraph; faction
     <div className={s.key}>
       {!graph.edges.some((e) => isAlly(e) || isFeud(e)) && <><p className={s.note}>No alliances or feuds yet. They grow as agents trade and talk.</p><TodayCounters /></>}
       <ul className={s.marks} aria-label="How to read it">
-        <li><Glyph><circle cx="9" cy="7" r="5" fill="none" stroke={LONER} strokeWidth="2" /></Glyph>Ring: faction</li>
-        <li><Glyph><circle cx="4" cy="9" r="2.5" fill="var(--muted)" /><circle cx="12" cy="7" r="5" fill="var(--muted)" /></Glyph>Size: net worth</li>
-        <li><span className={s.glow} aria-hidden="true" />Glow: mood</li>
-        <li><Glyph><line x1="1" y1="7" x2="17" y2="7" stroke={LONER} strokeOpacity=".7" strokeWidth="2.5" strokeLinecap="round" /></Glyph>Allies</li>
-        <li><Glyph><line x1="1" y1="7" x2="17" y2="7" stroke="var(--down)" strokeWidth="1.6" strokeDasharray="3 3" /></Glyph>Feuds</li>
+        <li><Glyph><line x1="1" y1="7" x2="17" y2="7" stroke="var(--feud)" strokeWidth="2.5" strokeLinecap="round" /></Glyph>Feuds</li>
+        <li><Glyph><line x1="1" y1="7" x2="17" y2="7" stroke="var(--ally)" strokeWidth="2.5" strokeLinecap="round" /></Glyph>Alliances</li>
+        <li><Glyph><rect x="4" y="2" width="10" height="10" rx="3" fill="none" stroke={LONER} strokeWidth="2" /></Glyph>Edge: faction</li>
+        <li><Glyph><rect x="1" y="6" width="5" height="5" rx="1.5" fill="var(--muted)" /><rect x="8" y="2" width="9" height="9" rx="2.5" fill="var(--muted)" /></Glyph>Size: net worth</li>
         <li><Glyph><circle cx="5" cy="7" r="4" fill="none" stroke="var(--up)" strokeWidth="1.6" /><circle cx="13" cy="7" r="4" fill="none" stroke="var(--down)" strokeWidth="1.6" /></Glyph>Buy / sell, live</li>
       </ul>
       {factions.size ? (
@@ -374,10 +371,13 @@ export function GraphPage() {
   const g = q.data;
   const ties = useMemo(() => (g ? tiesOf(g) : null), [g]);
   const allies = g ? g.edges.filter(isAlly).length : 0, feuds = g ? g.edges.filter(isFeud).length : 0;
+  const [show, setShow] = useState<Show>('all');
+  const [faction, setFaction] = useState<string | null>(null);
+  const inWorld = useMemo(() => [...new Set((g?.nodes ?? []).flatMap((n) => (n.factionId ? [n.factionId] : [])))].map((id) => ({ id, name: factionNames.get(id) ?? 'Faction' })).sort((x, y) => x.name.localeCompare(y.name)), [g, factionNames]);
 
   let body: ReactNode;
   // A failed background refresh keeps the graph on screen.
-  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} factionViews={factionViews} width={width} height={height} /> : <EmptyState title="No agents yet" />;
+  if (g && ties) body = g.nodes.length ? <Drawing graph={g} ties={ties} factionNames={factionNames} factionViews={factionViews} width={width} height={height} show={show} faction={faction} /> : <EmptyState title="No agents yet" />;
   else if (q.isError) body = isNotFound(q.error)
     ? <NoAgentWorld />
     : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -385,12 +385,26 @@ export function GraphPage() {
 
   return (
     <section ref={page} className={s.page} aria-labelledby="graph-title" data-cards>
-      <PageHeader title="Explore" titleId="graph-title" sub="Every agent, who they like and who they are fighting. Hover one to see its ties, open it to read its story." />
+      <PageHeader title="The Board" titleId="graph-title" sub="Every agent and who they stand with or against: red lines are feuds, blue lines alliances. Point at a face to see its ties, open it to read its story." />
       <div className={s.wrap}>
         <section className={cx(a.panel, s.card)} aria-labelledby="graph-card">
           <div className={a.panelHead}>
-            <h2 id="graph-card" className={a.panelTitle}><Network size={13} aria-hidden="true" />Who likes whom</h2>
-            {g && g.nodes.length > 0 && <span className={s.summary}>{plural(g.nodes.length, 'agent')} · {plural(allies, 'alliance')} · {plural(feuds, 'feud')}</span>}
+            <h2 id="graph-card" className={a.panelTitle}><Network size={13} aria-hidden="true" />Who stands with whom</h2>
+            {g && g.nodes.length > 0 && (
+              <div className={s.filters}>
+                <div className={s.seg} role="radiogroup" aria-label="Show">
+                  {([['all', 'Everything'], ['feuds', plural(feuds, 'feud')], ['allies', plural(allies, 'alliance')]] as const).map(([k, label]) => (
+                    <button key={k} type="button" role="radio" aria-checked={show === k} className={s.segBtn} data-k={k} onClick={() => setShow(k)}>{label}</button>
+                  ))}
+                </div>
+                {inWorld.length > 0 && (
+                  <select className={s.select} value={faction ?? ''} onChange={(e) => setFaction(e.target.value || null)} aria-label="Faction">
+                    <option value="">Every faction</option>
+                    {inWorld.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
           <div ref={box} className={s.box}>{body}</div>
           {g && ties && g.nodes.length > 0 && <><Key graph={g} factionNames={factionNames} factionViews={factionViews} /><TiesTable graph={g} ties={ties} factionNames={factionNames} /></>}

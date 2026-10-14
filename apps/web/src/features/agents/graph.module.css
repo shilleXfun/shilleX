@@ -7,14 +7,14 @@
 .wrap { padding: 12px 0 0; }
 .card { overflow: hidden; }
 .summary { color: var(--muted); font: 500 11.5px var(--font-ui); }
-.box { position: relative; margin: 0 -16px; border-block: 1px solid var(--line); background: radial-gradient(62% 56% at 50% 48%, rgba(4, 5, 9, 0.42), transparent 78%); }
+.box { position: relative; margin: 0 -16px; border-block: 1px solid var(--line); background: var(--bg); }
 .box > span { opacity: .5; }
 .svg { display: block; width: 100%; overflow: visible; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 
 /* Ties. While an agent is hovered or focused, its own ties light up and the rest fall back. */
 .edge { transition: opacity .2s; }
-.ally { stroke-linecap: round; }
-.feud { stroke: var(--down); stroke-dasharray: 4 5; stroke-linecap: round; }
+.ally { stroke: var(--ally); stroke-linecap: round; }
+.feud { stroke: var(--feud); stroke-linecap: round; }
 .svg[data-active] .edge { opacity: .08; }
 .svg[data-active] .edge[data-near] { opacity: 1; stroke-opacity: .9; }
 
@@ -26,13 +26,13 @@
 .focusRing { fill: none; pointer-events: none; }
 .node:focus-visible .focusRing { stroke: var(--text); stroke-width: 2; }
 .halo { pointer-events: none; }
-.disc { fill: #0B0D16; }
+.disc { fill: var(--raised); }
 .ring { fill: none; stroke-width: 2; transition: stroke-width .15s; }
 .body[data-on] .ring { stroke-width: 3.5; }
 .body[data-ghost] .avatar { opacity: .45; filter: grayscale(1); }
 .svg[data-active] .body:not([data-near]) { opacity: .3; }
 
-.label { fill: var(--text); fill-opacity: .78; font: 500 10.5px var(--font-ui); paint-order: stroke; stroke: rgba(6, 7, 12, 0.9); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; transition: fill-opacity .2s; }
+.label { fill: var(--text); fill-opacity: .78; font: 500 10.5px var(--font-ui); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; transition: fill-opacity .2s; }
 .svg[data-active] .label { fill-opacity: .2; }
 .svg[data-active] .label[data-near] { fill-opacity: 1; }
 .svg .labelOn { fill-opacity: 1; font-weight: 700; }
@@ -79,3 +79,14 @@
   [data-ghost] .halo { animation: none; }
 }
 @keyframes breathe { 50% { transform: scale(1.12); } }
+
+/* The Board's filters: feuds, alliances or both, and one faction. */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg); }
+.segBtn { height: 28px; padding: 0 11px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.segBtn:hover { color: var(--text); }
+.segBtn[aria-checked='true'] { background: var(--hover); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.segBtn[data-k='feuds'][aria-checked='true'] { color: var(--feud); }
+.segBtn[data-k='allies'][aria-checked='true'] { color: var(--ally); }
+.select { height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 13.5px; font-weight: 550; }
+.body[data-out] { opacity: .18; }
