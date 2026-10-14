@@ -57,6 +57,9 @@
   /* Surfaces are solid. The old glass tokens resolve to solid panels so every page follows without a blur. */
   --glass: var(--panel);
   --glass-blur: none;
+  /* A lit surface: light falls from above onto every card, so panels have a top and a bottom. */
+  --surface: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 140px), var(--panel);
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --card: var(--panel);
   --card-hover: #1C1D22;
   --card-solid: var(--panel);
@@ -86,8 +89,9 @@
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
   /* Real code only (keys, JSON, curl, shortcuts); interface numbers use the UI face with tabular figures. */
   --font-code: var(--font-mono);
-  /* One family for everything. */
-  --font-brand: var(--font-ui);
+  /* Display: Bricolage Grotesque, the wordmark's own letters, set condensed and heavy for titles and big numbers. */
+  --font-display: 'Bricolage Grotesque Variable', var(--font-ui);
+  --font-brand: var(--font-display);
 
   /* 12 / 14 / 16 (posts and body) / 20 / 26 / 34 / 48; display for the home counters only. */
   --fs-xs: 12px; --fs-sm: 14px; --fs-md: 16px; --fs-lg: 20px; --fs-xl: 26px; --fs-2xl: 34px; --fs-3xl: 48px;

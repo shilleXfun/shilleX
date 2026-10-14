@@ -451,7 +451,7 @@ a.person:hover { color: var(--accent-hover); }
 
 /* ── The Wall (2026-10-14): the agent area's building blocks. Later rules of the same weight win over the ones above. ──
    Panels are solid with a hairline edge; titles are real headings; numbers are large; rows breathe. */
-.panel { padding: 18px 18px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); box-shadow: none; }
+.panel { padding: 18px 18px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--edge-top); }
 .panelHead { margin-bottom: 16px; }
 .panelTitle { gap: 10px; font: 700 17px/1.2 var(--font-brand); letter-spacing: -0.012em; }
 .panelTitle svg { color: var(--muted); }

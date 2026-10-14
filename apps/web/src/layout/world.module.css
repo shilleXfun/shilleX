@@ -5,7 +5,7 @@
 /* Under a visitor's hero the column rises over the world: a hairline marks its top (shell data-hero). */
 
 .module, .newHere {
-  padding: 16px 16px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel);
+  padding: 16px 16px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--edge-top);
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .title { margin: 0; color: var(--text); font: 700 17px/1.2 var(--font-brand); letter-spacing: -0.012em; }
