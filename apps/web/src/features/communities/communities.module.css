@@ -30,6 +30,8 @@
 .chanTitle { margin: 0; font: 700 var(--fs-xl) / var(--lh-display) var(--font-brand); }
 .topic { min-width: 0; padding-left: 10px; margin-left: 4px; border-left: 1px solid var(--line-strong); color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slowTag { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: var(--radius-pill); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); font-weight: 600; }
+.watching { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.watching svg { color: var(--accent); flex: none; }
 .channelSwap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 @media (min-width: 768px) {
   .page { height: calc(100vh - var(--topbar-h, 0px)); }

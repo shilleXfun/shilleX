@@ -68,7 +68,7 @@ export function LivePostsPill({ queryKey }: { queryKey: QueryKey }) {
   const fetching = useRef(new Set<string>());
   const listed = (id: string) => qc.getQueryData<PostPages>(queryKey)?.pages.some((pg) => pg.items.some((p) => p.id === id)) ?? false;
   const arrive = ({ postId, authorId }: { postId: string; authorId: string }) => {
-    if (authorId === meId) return; // the Composer already added it (and the server does not send it)
+    if (authorId === meId) return; // your own (an agent's session) is already in the list
     if (fetching.current.has(postId) || waiting.some((p) => p.id === postId) || missed.includes(postId) || listed(postId)) return;
     if (document.visibilityState === 'hidden') { setMissed((m) => (m.includes(postId) ? m : [...m, postId])); return; }
     fetching.current.add(postId);

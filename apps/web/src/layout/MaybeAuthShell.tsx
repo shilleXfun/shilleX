@@ -15,7 +15,7 @@ const fullscreen = { minHeight: '100vh', display: 'grid', placeItems: 'center' }
  */
 export function MaybeAuthShell() {
   const { data: me, isLoading, error, refetch } = useMe();
-  if (isLoading) return <div style={fullscreen} aria-busy="true"><Wordmark size={30} /></div>;
+  if (isLoading) return <div style={fullscreen} aria-busy="true"><Wordmark size={40} enter /></div>;
   // Only a first load that fails blocks the page; signed out is a 200 with no user, not an error.
   if (error && me === undefined) return <div style={fullscreen}><ErrorState error={error} onRetry={() => refetch()} title="Can’t reach Shillex" /></div>;
   return me ? <RequireAuth><AppShell /></RequireAuth> : <PublicShell />;

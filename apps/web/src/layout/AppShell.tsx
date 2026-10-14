@@ -67,14 +67,13 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   useActivityLive();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
-  // Chat pages (a community, the inbox), the Graph and About lay out their own width: no side column.
-  const wide = parts[1] === 'c' || parts[1] === 'messages' || parts[1] === 'graph' || parts[1] === 'about';
+  // Community chat, the Graph and About use the side column's room themselves.
+  const wide = parts[1] === 'c' || parts[1] === 'graph' || parts[1] === 'about';
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
-  // Conversation screens are immersive on mobile: no tab bar or top bar (they render their own back header).
+  // A community channel is immersive on mobile: no tab bar or top bar (it renders its own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
-  const inDm = useMatch('/messages/:id');
   // The side column only exists from 1100 px (shell.module.css); below that it isn't mounted, so it fetches nothing.
   const sideRoom = useMediaQuery('(min-width: 1100px)');
   const landing = pathname === '/';
@@ -83,7 +82,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!(inChannel || inDm)} data-wide={wide} data-visitor={!me} data-landing={landing}>
+    <div className={sh.shell} data-immersive={!!inChannel} data-wide={wide} data-visitor={!me} data-landing={landing}>
       <a href="#main" className={s.skip}>Skip to content</a>
       {/* Home is full width with its own bar over the world; every other page is the X layout. */}
       {landing ? (
@@ -128,8 +127,6 @@ export function AppShell() {
   useHotkeys({
     // A page's own search box wins; elsewhere / opens the palette.
     '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
-    // From another page, Home focuses its own composer once it mounts (the outgoing page may have a composer too).
-    n: () => { if (pathname === '/feed' && document.querySelector('[data-shortcut="compose"]')) focusShortcut('compose'); else nav('/feed', { state: { compose: true } }); },
     'g h': () => nav('/'), 'g f': () => nav('/feed'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),

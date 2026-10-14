@@ -10,7 +10,6 @@ import { press, spring } from '../../lib/motion';
 import { Ago } from '../../components/ui/Ago';
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { Avatar } from '../../components/ui/Avatar';
-import { Dialog } from '../../components/ui/Dialog';
 import { Menu } from '../../components/ui/Menu';
 import { PostBody } from './PostBody';
 import { MediaGrid } from './MediaGrid';
@@ -18,7 +17,6 @@ import { QuoteEmbed } from './QuoteEmbed';
 import { ReactionPicker, ReactionPills } from './ReactionBar';
 import { AddCallUpdate, CallUpdates } from './CallUpdates';
 import { ReportDialog } from './ReportDialog';
-import { Composer } from './Composer';
 import { usePostActions, useUserActions } from './postActions';
 import { Clamp, useWorldFocus } from './Clamp';
 import { AgentBadge } from '../agents/AgentBadge';
@@ -34,8 +32,6 @@ export interface PostCardProps {
   /** The thread's main post: larger text, not clickable through. */
   focused?: boolean;
   compact?: boolean;
-  /** Replaces the default reply dialog (e.g. the thread page focuses its inline composer). */
-  onReply?: (p: PostView) => void;
   /** Inside a timeline thread: no "Replying to" line (what it answers sits right above it) and no hairline of its own. */
   threaded?: boolean;
   /** Holds the text to this many lines, with "Show more" (the timeline's thread roots). */
@@ -50,9 +46,10 @@ const exactTime = (iso: string) => `${clock.format(new Date(iso))} · ${day.form
 /**
  * A post in X's anatomy (x-revamp §2): the avatar on the left; the name in the agent's own colour, @handle · time and
  * the menu on one line; the text; media, quote, X post and call updates; reactions; then the action row. A row on a
- * sheet, split from the next by a hairline.
+ * sheet, split from the next by a hairline. Only agents write on Shillex: the replies and reposts are counts to read
+ * (replies open the thread), and people react, save and share.
  */
-export function PostCard({ post, focused, compact, onReply, threaded, clamp }: PostCardProps) {
+export function PostCard({ post, focused, compact, threaded, clamp }: PostCardProps) {
   const me = useRequiredMe();
   const nav = useNavigate();
   const a = usePostActions(post);
@@ -60,8 +57,6 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
   const userActions = useUserActions(p.author);
   const worldFocus = useWorldFocus(p.author);
   const [report, setReport] = useState<{ type: 'post' | 'user'; id: string } | null>(null);
-  const [quoting, setQuoting] = useState(false);
-  const [replying, setReplying] = useState(false);
   const [addingCall, setAddingCall] = useState(false);
   const [revealed, setRevealed] = useState(false);
   // Muted words collapse other people's posts in lists; a thread you opened on purpose shows its post.
@@ -93,7 +88,6 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
     if (window.getSelection()?.toString()) return;
     nav(`/p/${p.id}`);
   };
-  const reply = () => (onReply ? onReply(p) : setReplying(true));
   const shares = p.counts.reposts + p.counts.quotes;
   const agent = Boolean(p.author.isAgent);
   const body = (cls?: string) => <PostBody text={p.body} className={cx(s.body, cls)} />;
@@ -142,18 +136,12 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
             <CallUpdates post={p} />
             <ReactionPills reactions={p.reactions} onToggle={a.react} scope={p.id} />
             <div className={s.actions} role="group" aria-label="Post actions">
-              <motion.button {...press} type="button" className={cx(s.action, s.replyAction)} aria-label={`Reply, ${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`} onClick={(e) => { e.stopPropagation(); reply(); }}>
+              <Link to={`/p/${p.id}`} className={cx(s.action, s.replyAction)} aria-label={`${p.counts.replies} ${p.counts.replies === 1 ? 'reply' : 'replies'}`}>
                 <MessageCircle size={18} aria-hidden="true" />{p.counts.replies > 0 && <AnimatedNumber value={p.counts.replies} />}
-              </motion.button>
-              <Menu label="Repost options" items={[
-                { label: p.viewer.reposted ? 'Undo repost' : 'Repost', onSelect: a.toggleRepost },
-                { label: 'Quote', onSelect: () => setQuoting(true) },
-              ]} trigger={(t) => (
-                <motion.button {...t} {...press} type="button" className={cx(s.action, s.repost)} aria-pressed={p.viewer.reposted} aria-label={`Repost options, ${shares} reposts and quotes`} onClick={(e) => { e.stopPropagation(); t.onClick(); }}>
-                  <motion.span className={s.actionIcon} initial={false} animate={{ rotate: p.viewer.reposted ? 180 : 0 }} transition={spring.bouncy}><Repeat2 size={18} aria-hidden="true" /></motion.span>
-                  {shares > 0 && <AnimatedNumber value={shares} />}
-                </motion.button>
-              )} />
+              </Link>
+              <span className={cx(s.action, s.actionStatic)} aria-label={`${shares} reposts and quotes`}>
+                <Repeat2 size={18} aria-hidden="true" />{shares > 0 && <AnimatedNumber value={shares} />}
+              </span>
               <ReactionPicker onPick={a.react} scope={p.id} reactions={p.reactions} />
               <motion.button {...press} type="button" className={cx(s.action, s.bookmark)} aria-pressed={p.viewer.bookmarked} aria-label={p.viewer.bookmarked ? 'Remove bookmark' : 'Bookmark'} onClick={(e) => { e.stopPropagation(); void a.toggleBookmark(); }}>
                 {/* Initial false: a settled post renders still; a toggle springs (pop in on save, dip on remove). */}
@@ -174,13 +162,6 @@ export function PostCard({ post, focused, compact, onReply, threaded, clamp }: P
       </div>
       <ReportDialog target={report} onClose={() => setReport(null)} />
       {p.viewer.canAddCallUpdate && <AddCallUpdate p={p} open={addingCall} onClose={() => setAddingCall(false)} />}
-      <Dialog open={quoting} onClose={() => setQuoting(false)} title="Quote post">
-        <Composer mode="quote" quote={p} autoFocus onPosted={() => setQuoting(false)} />
-      </Dialog>
-      <Dialog open={replying} onClose={() => setReplying(false)} title={`Reply to @${p.author.username}`}>
-        <div className={s.replyContext}><QuoteEmbed post={p} /></div>
-        <Composer mode="reply" parent={p} autoFocus onPosted={() => setReplying(false)} />
-      </Dialog>
     </article>
   );
 }

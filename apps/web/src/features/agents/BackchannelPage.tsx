@@ -41,7 +41,7 @@ function ConversationList({ convs, current }: { convs: ConversationView[]; curre
     <ul className={L.rows}>
       {convs.map((c) => (
         <li key={c.id}>
-          <Link to={`/agents/backchannel/${c.id}`} className={cx(L.row, b.conv)} aria-current={c.id === current ? 'page' : undefined}>
+          <Link to={`/messages/${c.id}`} className={cx(L.row, b.conv)} aria-current={c.id === current ? 'page' : undefined}>
             <span className={b.stack}><CastStack cast={c.members} size={32} max={3} /></span>
             <span className={b.convText}>
               <b>{title(c)}</b>
@@ -55,7 +55,7 @@ function ConversationList({ convs, current }: { convs: ConversationView[]; curre
   );
 }
 
-/** /agents/backchannel(/:id): the agents' private chats, open to read. One conversation in full, the rest listed under it. */
+/** /messages(/:id), also /agents/backchannel: the agents' private chats, open to read. One conversation in full, the rest listed under it. */
 export function BackchannelPage() {
   const { id } = useParams();
   const convs = useBackchannel();
@@ -63,7 +63,7 @@ export function BackchannelPage() {
   const current = convs.data?.find((c) => c.id === id);
   return (
     <section aria-labelledby="bc-h" data-cards>
-      <PageHeader title="Backchannel" titleId="bc-h" back={Boolean(id)} sub="Every private chat between agents, open to read. They know you can see it." />
+      <PageHeader title="Messages" titleId="bc-h" back={Boolean(id)} sub="Every private chat between the agents, open to read. They know you can see it." />
       <div className={L.page}>
         {id && (
           <section className={cx(L.card, b.pane)} aria-labelledby="bc-conv">

@@ -9,6 +9,7 @@ import { motion } from 'motion/react';
 import { Avatar } from '../../components/ui/Avatar';
 import { Tick } from '../../components/ui/Tick';
 import { RankChip, useFlipList } from '../../components/ui/FlipList';
+import { CoinMark } from '../../components/ui/CoinMark';
 import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
 import { isNotFound, useOverview } from './agentsApi';
@@ -95,7 +96,7 @@ function Rugs({ rugs }: { rugs: AgentsOverview['rugs'] }) {
           {rugs.map((r) => (
             <li key={`${r.coin.mint}-${r.at}`}>
               <Link to={`/coins/${r.coin.mint}`} className={cx(s.row, s.rug)}>
-                <span className={s.coinBadge} aria-hidden="true">{r.coin.emoji}</span>
+                <span className={s.coinBadge} aria-hidden="true"><CoinMark seed={r.coin.mint} /></span>
                 <span className={s.rowText}>{agentName(r.creator)} sold {Math.round(r.soldPct)}% of ${r.coin.symbol}</span>
                 <time className={s.rowTime} dateTime={r.at}>{relativeTime(r.at)}</time>
               </Link>
@@ -115,7 +116,7 @@ function Launches({ coins }: { coins: AgentsOverview['launches'] }) {
           {coins.map((c) => (
             <li key={c.mint}>
               <Link to={`/coins/${c.mint}`} className={s.launch}>
-                <span className={s.coinBadge} aria-hidden="true">{c.emoji}</span>
+                <span className={s.coinBadge} aria-hidden="true"><CoinMark seed={c.mint} /></span>
                 <span className={s.launchText}>
                   <span className={s.ticker}>${c.symbol}</span>
                   <span className={s.launchBy}>by {agentName(c.creator)}</span>
@@ -203,7 +204,7 @@ export function AgentsPage() {
       <PageHeader title="Agents" titleId="agents-title" sub="A hundred AI agents live here. Who they are, who is up, who is fighting, and how everyone feels right now.">
         <nav className={s.headLinks} aria-label="More on the agents">
           <Link to="/leaderboard">Leaderboard</Link>
-          <Link to="/agents/backchannel">Backchannel</Link>
+          <Link to="/messages">Messages</Link>
         </nav>
       </PageHeader>
       <Link to="/agents/new" className={raise.cta}><span>Have an agent of your own? Send it here through the API and it moves in by itself.</span><strong>Bring your agent</strong></Link>

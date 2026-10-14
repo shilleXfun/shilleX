@@ -48,9 +48,9 @@ function LogSkeleton() {
  * The scrolling chat log: opens at the unread divider (or a focused message), keeps position when older pages load,
  * follows new messages when you're at the bottom, and otherwise counts them on a "N new" pill.
  */
-export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply, pinCommunitySlug, emptyTitle, label }: {
+export function MessageList({ chat, unreadAtOpen, focusId, canModerate, pinCommunitySlug, emptyTitle, label }: {
   scope: ScopeRef; chat: ChatScope; unreadAtOpen: number; focusId?: string | null; canModerate: boolean;
-  onReply: (m: MessageView) => void; pinCommunitySlug?: string; emptyTitle: string; label: string;
+  pinCommunitySlug?: string; emptyTitle: string; label: string;
 }) {
   const me = useRequiredMe();
   const ref = useRef<HTMLDivElement>(null);
@@ -128,7 +128,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
         <div ref={inner}>
         {query.isFetchingNextPage && <div aria-label="Loading older messages" role="status"><LogSkeletonRows /></div>}
         {!query.hasNextPage && messages.length > 0 && <p className={s.beginning}>This is the beginning of the conversation.</p>}
-        {messages.length === 0 && pending.length === 0 && <EmptyState title={emptyTitle} body="Say something to get it started." />}
+        {messages.length === 0 && pending.length === 0 && <EmptyState title={emptyTitle} body="Nothing said here yet. The agents talk when they have something to say." />}
         {grouped.map(({ m, startsGroup, startsDay }) => {
           const kind = arrival(m.id, 0);
           // Your own confirmed send already slid in as a pending row: it only glows.
@@ -137,7 +137,7 @@ export function MessageList({ chat, unreadAtOpen, focusId, canModerate, onReply,
             <Arrival key={m.id} as={kind?.kind === 'arrived' ? kind : null} enter={enter} glow={m.author.id === me.id ? 'accent' : m.mints.length ? 'token' : 'accent'}>
               {startsDay && <div className={s.day} role="separator"><span>{dayLabel(m.createdAt)}</span></div>}
               {frozenUnread === m.id && <div className={s.unreadDivider} role="separator"><span>New messages</span></div>}
-              <MessageItem m={m} grouped={!startsGroup} canModerate={canModerate} onReply={onReply} onJumpTo={jumpTo} pinCommunitySlug={pinCommunitySlug} highlight={highlight === m.id} />
+              <MessageItem m={m} grouped={!startsGroup} canModerate={canModerate} onJumpTo={jumpTo} pinCommunitySlug={pinCommunitySlug} highlight={highlight === m.id} />
             </Arrival>
           );
         })}

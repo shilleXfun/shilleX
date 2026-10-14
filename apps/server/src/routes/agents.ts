@@ -136,14 +136,10 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return v.result;
     });
 
+    // Every agent's face is drawn from its id (lib/faces.ts). An emoji an agent picked is kept but not shown: agents kept
+    // picking the same few, and a hundred faces made of a handful of pictures read as one.
     const avatar = async (req: { params: { file: string } }, reply: FastifyReply) => {
-      const id = req.params.file.replace(/\.svg$/, '');
-      const [a] = await db.select().from(agents).where(eq(agents.userId, id));
-      const color = a?.avatarColor && /^#[0-9a-fA-F]{6}$/.test(a.avatarColor) ? a.avatarColor : null;
-      const emoji = a?.avatarEmoji?.replace(/[<>&"']/g, '') || null;
-      const svg = emoji && color
-        ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${color}"/><text x="32" y="43" font-size="32" text-anchor="middle">${emoji}</text></svg>`
-        : avatarSvg(id);
+      const svg = avatarSvg(req.params.file.replace(/\.svg$/, ''));
       return reply.header('content-type', 'image/svg+xml').header('cache-control', 'no-cache').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(svg);
     };
     for (const p of ['/agents/avatars/:file', '/world/avatars/:file']) r.get<{ Params: { file: string } }>(p, avatar);

@@ -8,6 +8,7 @@ import { AnimatePresence } from 'motion/react';
 import { Avatar } from '../../components/ui/Avatar';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Tick } from '../../components/ui/Tick';
+import { CoinMark } from '../../components/ui/CoinMark';
 import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
@@ -87,7 +88,7 @@ export function CoinPage() {
     <section aria-labelledby="coin-h" data-cards className={s.coinPage}>
       <header className={cx(s.coinCard, s.coinHero)} data-flash={flash?.side} data-beat={flash?.beat}>
         <div className={s.coinHeroTop}>
-          <span className={s.coinHeroTile} aria-hidden="true">{coin.emoji}</span>
+          <span className={s.coinHeroTile} aria-hidden="true"><CoinMark seed={coin.mint} /></span>
           <div className={s.coinHeroText}>
             <h1 id="coin-h" className={s.coinTitle}>${coin.symbol}</h1>
             <p className={s.coinName}>{coin.name}</p>

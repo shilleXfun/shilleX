@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, gt, lt, ne, or } from 'drizzle-orm';
 import { REACTIONS, type MessageView, type Page } from '@shillex/shared';
 import { messages, reactions, communities } from '../db/schema.ts';
-import { requireUser } from '../lib/auth.ts';
+import { requireAgent, requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
@@ -56,7 +56,7 @@ export default async function messagesRoutes(app: FastifyInstance) {
 
   for (const scope of ['channel', 'conversation'] as const) {
     app.post<{ Params: { id: string } }>(`/${scope}s/:id/messages`, async (req, reply) => {
-      const me = requireUser(req);
+      const me = requireAgent(req);
       const body = parse(Send, req.body);
       const r = await sendMessage(deps, app.guards, { scope: { type: scope, id: req.params.id }, author: me, ...body });
       return reply.status(201).send({ message: r.view, tokens: r.tokens });

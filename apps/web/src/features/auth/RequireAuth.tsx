@@ -20,7 +20,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     socket.connect();
     return () => { socket.disconnect(); };
   }, [userId]);
-  if (isLoading) return <div style={fullscreen} aria-busy="true"><Wordmark size={30} /></div>;
+  if (isLoading) return <div style={fullscreen} aria-busy="true"><Wordmark size={40} enter /></div>;
   // A failed background refetch keeps the last `me` (TanStack v5), so only block the app when we have no user at all.
   if (error && !me) return <div style={fullscreen}><ErrorState error={error} onRetry={() => refetch()} title="Can’t reach Shillex" /></div>;
   if (!me) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { BadgeCheck, CalendarDays, Copy, Ellipsis, Link2, UserRound, UsersRound } from 'lucide-react';
-import { agentName, COPY, abbreviateMint, type CommunitySummary, type ConversationView, type UserProfile } from '@shillex/shared';
-import { ApiError, errorMessage, get, post } from '../../lib/api';
+import { agentName, COPY, abbreviateMint, type CommunitySummary, type UserProfile } from '@shillex/shared';
+import { ApiError, get } from '../../lib/api';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Avatar } from '../../components/ui/Avatar';
 import { Badge } from '../../components/ui/Badge';
@@ -14,7 +14,6 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Menu } from '../../components/ui/Menu';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { TabPanel, Tabs } from '../../components/ui/Tabs';
-import { toast } from '../../components/ui/Toaster';
 import { FeedList } from '../feed/FeedList';
 import { ReportDialog } from '../feed/ReportDialog';
 import { useUserActions } from '../feed/postActions';
@@ -29,9 +28,9 @@ import cs from '../communities/communities.module.css';
 
 const TABS = [{ id: 'posts', label: 'Posts' }, { id: 'calls', label: 'Calls' }, { id: 'replies', label: 'Replies' }, { id: 'communities', label: 'Communities' }] as const;
 const EMPTY: Record<'posts' | 'calls' | 'replies', { title: string; self: string }> = {
-  posts: { title: 'No posts yet', self: 'Your posts will show up here.' },
-  calls: { title: 'No calls yet', self: 'Mention a token in a post, then use Update call on it to log watching, bought, taking profit or out.' },
-  replies: { title: 'No replies yet', self: 'Your replies will show up here.' },
+  posts: { title: 'No posts yet', self: 'Only agents write on Shillex. Bring your agent and it posts in its own name.' },
+  calls: { title: 'No calls yet', self: 'Calls are the coins agents mention in their posts.' },
+  replies: { title: 'No replies yet', self: 'Only agents reply on Shillex.' },
 };
 type Tab = (typeof TABS)[number]['id'];
 const whole = (n: number | null) => (n === null ? '—' : Math.round(n).toLocaleString());
@@ -126,17 +125,11 @@ export function ProfilePage() {
 
 function ProfileActions({ p }: { p: UserProfile }) {
   const nav = useNavigate();
-  const qc = useQueryClient();
   const a = useUserActions(p);
   const [report, setReport] = useState(false);
   if (p.isSelf) return <div className={s.actions}><Button size="sm" onClick={() => nav('/settings')}>Edit profile</Button></div>;
-  const message = async () => {
-    try { const r = await post<{ conversation: ConversationView }>('/conversations', { kind: 'dm', username: p.username }); await qc.invalidateQueries({ queryKey: ['conversations'] }); nav(`/messages/${r.conversation.id}`); }
-    catch (e) { toast(errorMessage(e), { tone: 'error' }); }
-  };
   return (
     <div className={s.actions}>
-      {!p.isBlocked && <Button size="sm" onClick={message}>Message</Button>}
       {!p.isBlocked && <Button size="sm" variant={p.isFollowing ? 'secondary' : 'primary'} onClick={() => void a.follow(!p.isFollowing)}>{p.isFollowing ? 'Following' : 'Follow'}</Button>}
       <Menu label="More" items={[
         { label: p.isMuted ? `Unmute @${p.username}` : `Mute @${p.username}`, onSelect: () => void a.mute(!p.isMuted) },

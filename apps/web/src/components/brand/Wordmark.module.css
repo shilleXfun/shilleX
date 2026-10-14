@@ -1,3 +1,31 @@
 .wordmark { display: inline-flex; align-items: baseline; font-family: 'Bricolage Grotesque Variable', var(--font-brand); font-weight: 800; font-stretch: 80%; letter-spacing: -0.02em; line-height: 1; color: var(--text); }
 .letter { display: inline-block; }
-.x { display: block; transform: translateY(0.07em); margin-left: 0.02em; }
+.x { display: block; transform: translateY(0.07em); margin-left: 0.02em; overflow: visible; }
+.mark { display: inline-grid; place-items: center; }
+.xWrap { display: inline-block; transform-origin: 50% 60%; }
+
+/* The load moment (Wordmark.tsx): each part waits for its --at, then moves. Transforms and opacity only, so it runs on
+   the compositor. The letters hop up and overshoot; the X spins in from two-thirds of a turn while its white stroke
+   draws, then its amber one; then one soft amber glow. */
+.play .letter { animation: hop .75s cubic-bezier(.3, 1.55, .5, 1) var(--at) both; }
+.play .xWrap { animation: spin 1s cubic-bezier(.25, 1.45, .45, 1) var(--at) both; }
+.play .white, .play .amber { stroke-dasharray: 1; animation: draw .5s cubic-bezier(.16, 1, .3, 1) both; }
+.play .white { animation-delay: calc(var(--at) + .12s); }
+.play .amber { animation-delay: calc(var(--at) + .34s); }
+.play { animation: glow 1.6s ease-out 1.05s 1 both; }
+@keyframes hop { from { opacity: 0; transform: translateY(.8em) rotate(-14deg) scale(.9); } 40% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes spin { from { opacity: 0; transform: rotate(-240deg) scale(.2); } 35% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes draw { from { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes glow {
+  0% { filter: drop-shadow(0 0 0 rgba(255, 184, 107, 0)); }
+  35% { filter: drop-shadow(0 0 14px rgba(255, 184, 107, 0.75)) drop-shadow(0 0 3px rgba(255, 220, 170, 0.6)); }
+  100% { filter: drop-shadow(0 0 0 rgba(255, 184, 107, 0)); }
+}
+
+/* Hovering the logo tilts the X and lets it settle back. */
+:is(a, button):hover .wordmark .x, :is(a, button):hover .mark .x { animation: tilt .7s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes tilt { 30% { rotate: -16deg; scale: 1.12; } 60% { rotate: 7deg; } 100% { rotate: 0deg; scale: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .play, .play .letter, .play .xWrap, .play .white, .play .amber, :is(a, button):hover .wordmark .x, :is(a, button):hover .mark .x { animation: none; }
+}

@@ -12,6 +12,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { Tick } from '../../components/ui/Tick';
+import { CoinMark } from '../../components/ui/CoinMark';
 import { FeedList } from '../feed/FeedList';
 import { PublicFeed } from '../feed/PublicHome';
 import { Viewer } from '../../layout/MaybeAuthShell';
@@ -216,7 +217,7 @@ function Positions({ a }: { a: AgentDetail }) {
             return (
               <li key={x.mint}>
                 <Link to={`/coins/${x.mint}`} className={cx(s.row, s.position)}>
-                  <span className={s.coinBadge} aria-hidden="true">{x.emoji}</span>
+                  <span className={s.coinBadge} aria-hidden="true"><CoinMark seed={x.mint} /></span>
                   <span className={s.launchText}>
                     <span className={s.ticker}>${x.symbol}</span>
                     <span className={s.launchBy}>{formatCount(Math.round(x.tokens))} tokens · cost {x.costSol.toFixed(3)}</span>

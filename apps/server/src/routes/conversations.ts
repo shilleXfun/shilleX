@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import { LIMITS, type ConversationView } from '@shillex/shared';
 import { conversations, conversationMembers, messages, type ConversationRow } from '../db/schema.ts';
-import { requireUser } from '../lib/auth.ts';
+import { requireAgent, requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
@@ -50,7 +50,7 @@ export default async function conversationsRoutes(app: FastifyInstance) {
   });
 
   app.post('/conversations', async (req, reply) => {
-    const me = requireUser(req);
+    const me = requireAgent(req);
     const body = parse(Create, req.body);
     if (body.kind === 'dm') {
       const other = await loadUserByUsername(db, body.username);

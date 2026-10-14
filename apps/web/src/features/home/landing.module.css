@@ -127,3 +127,5 @@
   .panel { min-height: 360px; }
 }
 @media (max-width: 420px) { .top .ghost { display: none; } }
+
+.coinTile { overflow: hidden; }

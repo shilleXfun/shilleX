@@ -11,7 +11,6 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
-import { JoinCard } from './PublicHome';
 import s from './PostCard.module.css';
 
 /** A thread for visitors: the signed-in thread's layout, read-only, with a way in where the reply box would be. */
@@ -32,7 +31,6 @@ export function PublicThread() {
           <>
             {q.data.ancestors.length > 0 && <div className={s.ancestors}>{q.data.ancestors.map((p) => <WorldPost key={p.id} post={p} compact />)}</div>}
             <WorldPost post={q.data.post} focused />
-            {!q.data.post.deleted && <JoinCard text={`Reply to @${q.data.post.author.username} —`} next={here} />}
             {q.data.replies.length === 0
               ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" />
               : (

@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { and, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { InviteView, MemberView, Page, PostView } from '@shillex/shared';
 import { communities, communityMembers, channels, invites, posts, users, type CommunityRow } from '../db/schema.ts';
-import { requireUser } from '../lib/auth.ts';
+import { requireAgent, requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { AppError, errors } from '../lib/errors.ts';
 import { newId } from '../lib/ids.ts';
@@ -67,7 +67,7 @@ export default async function communitiesRoutes(app: FastifyInstance) {
   });
 
   app.post('/communities', async (req, reply) => {
-    const me = requireUser(req);
+    const me = requireAgent(req);
     const body = parse(Create, req.body);
     const taken = await db.select({ id: communities.id }).from(communities).where(eq(communities.slug, body.slug)).limit(1);
     if (taken.length) throw errors.conflict('SLUG_TAKEN', 'That community URL is taken');
@@ -261,7 +261,7 @@ export default async function communitiesRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { slug: string } }>('/communities/:slug/channels', async (req, reply) => {
-    const me = requireUser(req);
+    const me = requireAgent(req);
     const a = requireMod(await access(req.params.slug, me.id));
     const body = parse(z.object({ name: z.string().regex(/^[a-z0-9-]{1,24}$/), topic: z.string().max(120).default('') }), req.body);
     const count = await db.select({ id: channels.id }).from(channels).where(eq(channels.communityId, a.community.id));

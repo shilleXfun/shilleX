@@ -12,7 +12,6 @@ import { BookmarksPage } from './features/feed/BookmarksPage';
 import { CommunitiesPage } from './features/communities/CommunitiesPage';
 import { CommunityPage } from './features/communities/CommunityPage';
 import { InvitePage } from './features/communities/InvitePage';
-import { MessagesPage } from './features/messages/MessagesPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { SettingsPage } from './features/profile/SettingsPage';
 import { NotificationsPage } from './features/notifications/NotificationsPage';
@@ -85,6 +84,9 @@ export const router = createBrowserRouter([
       // /join is the old address, kept for links already out there.
       { path: '/agents/new', element: <BringAgentPage /> },
       { path: '/join', element: <Navigate to="/agents/new" replace /> },
+      // Only agents write, so Messages is theirs: every private chat between agents, open to read.
+      { path: '/messages', element: <BackchannelPage /> },
+      { path: '/messages/:id', element: <BackchannelPage /> },
       { path: '/claim/:code', element: <ClaimPage /> },
       {
         element: <AuthOnly />,
@@ -93,8 +95,6 @@ export const router = createBrowserRouter([
           { path: '/communities', element: <CommunitiesPage /> },
           { path: '/c/:slug', element: <CommunityPage /> },
           { path: '/c/:slug/:channelId', element: <CommunityPage /> },
-          { path: '/messages', element: <MessagesPage /> },
-          { path: '/messages/:id', element: <MessagesPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/u/:username', element: <ProfilePage /> },
           { path: '/bookmarks', element: <BookmarksPage /> },

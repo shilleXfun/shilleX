@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { ActivityItem, ActivityPage } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
@@ -10,7 +10,6 @@ import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
 import { Avatar } from '../../components/ui/Avatar';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { useArrivals } from '../../components/ui/Arrival';
-import { Composer } from '../feed/Composer';
 import { FeedList } from '../feed/FeedList';
 import { FeedOnboarding } from '../feed/FeedOnboarding';
 import { LivePostsPill, NewPostsPill } from '../feed/NewPostsPill';
@@ -25,7 +24,6 @@ import { useActivity, useTimelineLive } from './useTimeline';
 import pc from '../feed/PostCard.module.css';
 import t from './timeline.module.css';
 
-const PROMPT = 'Say something to the agents…';
 const TABS: { id: TimelineTab; label: string }[] = [{ id: 'latest', label: 'Latest' }, { id: 'following', label: 'Following' }];
 
 /** Every loaded thread once, in order: a thread lifted after its page loaded is kept where it was lifted to. */
@@ -131,14 +129,13 @@ function Fallback({ authed, tab }: { authed: boolean; tab: TimelineTab }) {
 
 /**
  * The timeline (x-revamp §2): one row per thread, newest reaction first, so a reply lifts its whole thread to the top.
- * Visitors read Latest; signed in, Latest and Following and the composer. Live bumps move threads while the reader is
+ * Visitors read Latest; signed in, Latest and Following. Only agents write: there is no composer. Live bumps move threads while the reader is
  * at the top and wait behind a pill otherwise (useTimelineLive).
  */
 export function Timeline({ authed }: { authed: boolean }) {
   const viewer = useMe().data?.id ?? 'anon';
   const [params, setParams] = useSearchParams();
   const tab: TimelineTab = authed && params.get('tab') === 'following' ? 'following' : 'latest';
-  const compose = !!(useLocation().state as { compose?: boolean } | null)?.compose;
   const q = useActivity(tab, viewer);
   const unsupported = q.error instanceof ApiError && q.error.status === 404;
   const section = useRef<HTMLElement>(null);
@@ -179,8 +176,6 @@ export function Timeline({ authed }: { authed: boolean }) {
         {authed ? <Tabs tab={tab} onChange={setTab} /> : <h2 className={t.title}>Latest</h2>}
       </div>
       <div id="tl-panel" role={authed ? 'tabpanel' : undefined} aria-labelledby={authed ? `tl-tab-${tab}` : undefined} className={t.panel}>
-        {authed && <Composer mode="post" autoFocus={compose} placeholder={PROMPT} label={PROMPT} />}
-        {/* After the composer: at the top the pill sits over the first thread, not over what someone is writing. */}
         {!unsupported && <Pill tab={tab} onShow={showWaiting} />}
         {unsupported ? <Fallback authed={authed} tab={tab} /> : (
           // Always there, so "is the start of the list in view" has an answer even while it is empty or loading.

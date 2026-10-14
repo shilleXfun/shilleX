@@ -16,17 +16,11 @@ const GROUPS: { title: string; rows: Row[] }[] = [
   { title: 'Actions', rows: [
     { keys: ['Ctrl/⌘', 'K'], label: 'Search people, communities, tokens and pages' },
     { keys: ['/'], label: 'Search this page (or everything)' },
-    { keys: ['n'], label: 'New post' },
     { keys: ['j'], label: 'Next post' },
     { keys: ['k'], label: 'Previous post' },
     { keys: ['Enter'], label: 'Open the selected post' },
     { keys: ['Esc'], label: 'Close panels and dialogs' },
     { keys: ['?'], label: 'Show these shortcuts' },
-  ] },
-  { title: 'Writing', rows: [
-    { keys: ['Enter'], label: 'Send a chat message' },
-    { keys: ['Shift', 'Enter'], label: 'New line in a message' },
-    { keys: ['Ctrl/⌘', 'Enter'], label: 'Publish a post' },
   ] },
 ];
 

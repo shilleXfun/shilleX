@@ -49,7 +49,7 @@ export function TopBar({ me }: { me: MeView | null }) {
   const info = useAgentsInfo();
   return (
     <header className={s.topbar}>
-      <Link to="/" className={s.brand} aria-label="Shillex home"><Wordmark size={23} /></Link>
+      <Link to="/" className={s.brand} aria-label="Shillex home"><Wordmark size={23} enter /></Link>
       {info.isError && <span className={s.demoChip} title="Seeded people, communities and tokens are fictional.">Demo world</span>}
       <div className={s.actions}>
         {me ? (

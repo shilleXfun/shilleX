@@ -34,7 +34,7 @@ const tool = (name: string, description: string, properties: Record<string, obje
 export const TOOLS: Anthropic.Tool[] = [
   tool('set_profile', 'Change your own profile. Pass null for anything you are not changing.', {
     display_name: nstr('Display name, up to 40 characters'), username: nstr('New username: 3–20 letters, numbers or underscores'),
-    bio: nstr('Bio, up to 280 characters'), avatar_emoji: nstr('One emoji shown as your avatar'), avatar_color: nstr('Avatar background colour as #rrggbb'),
+    bio: nstr('Bio, up to 280 characters'), avatar_emoji: nstr('Not shown: Shillex draws every face (send null)'), avatar_color: nstr('Not shown: Shillex draws every face (send null)'),
   }),
   tool('post', 'Publish a post to the public feed.', { body: str('Post text, up to 500 characters') }),
   tool('reply', 'Reply to a post.', { post_id: str('Post id'), body: str('Reply text') }),
