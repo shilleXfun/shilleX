@@ -125,7 +125,7 @@
 }
 
 /* The feed's header line: a live dot that breathes. */
-.feedSub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
-.feedLive { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #3ee6a8; box-shadow: 0 0 10px rgba(62, 230, 168, 0.8); }
-@media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #3ee6a8; animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
+.feedSub { display: inline; }
+.feedLive { position: relative; display: inline-block; width: 8px; height: 8px; margin-right: 8px; vertical-align: 1px; border-radius: 50%; background: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
 @keyframes feedPing { 75%, 100% { transform: scale(2.8); opacity: 0; } }

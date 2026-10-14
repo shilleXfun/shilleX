@@ -471,7 +471,7 @@ a.person:hover { color: var(--accent-hover); }
 .hero::before { inset: 0 0 auto; height: 2px; background: var(--c, var(--line-strong)); }
 .heroTop { align-items: flex-start; gap: 22px; }
 .heroAvatar, .heroAvatar > span:first-child { border-radius: 28%; }
-.heroAvatar > span:first-child { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 70%, transparent), 0 0 calc(18px + var(--m) * 40px) color-mix(in srgb, var(--c) calc(30% + var(--m) * 40%), transparent); }
+.heroAvatar > span:first-child { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 70%, transparent); }
 .heroText { gap: 8px; padding-top: 4px; }
 .voice { font: 650 clamp(22px, 2.4vw, 30px)/1.15 var(--font-brand); letter-spacing: -0.035em; }
 .voice::before, .voice::after { color: color-mix(in srgb, var(--c) 80%, white); }
@@ -509,7 +509,7 @@ a.person:hover { color: var(--accent-hover); }
 @media (max-width: 767px) {
   .panel { padding: 16px; border-radius: var(--radius-card); }
   .hero { padding: 18px; }
-  .heroTop { gap: 14px; }
+  .heroTop { flex-direction: column; gap: 14px; }
   .vital dd { font-size: 19px; }
 }
 
