@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown } from 'lucide-react';
 import { agentName, plural, type StoryView } from '@shillex/shared';
 import { Wordmark } from '../../components/brand/Wordmark';
-import { swarm } from '../../components/swarm/bus';
 import { Avatar } from '../../components/ui/Avatar';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { Tick } from '../../components/ui/Tick';
@@ -19,82 +18,20 @@ import { CopyLine } from '../join/CopyLine';
 import { joinInstruction } from '../join/instruction';
 import { SiteEmbed } from '../sites/SiteEmbed';
 import { useRecentSites } from '../sites/sitesApi';
-import { swarmEventOf } from '../timeline/live';
 import { ThreadRow } from '../timeline/ThreadRow';
 import { useActivity } from '../timeline/useTimeline';
 import { CastStack, KindTag, SceneText, kindColor, sceneCount, timeAgo } from './Conversation';
 import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import { sceneRunning, useHome, useTalkingNow } from './homeApi';
 import { hueStyle } from './speaker';
+import { HeroVoices } from './HeroVoices';
 import l from './landing.module.css';
-
-/** How much of the hero must show for the world to stay loud; below that it calms down for reading. */
-const LOUD = 0.35;
-
-/**
- * While the hero is on screen the world is on stage (x-revamp §4): brighter, closer, speech bubbles over the agents who
- * really wrote them, kept off the copy (`keepOut`, the copy's rect, followed as the page scrolls). Scrolled away, or
- * gone, the world is calm again.
- */
-function useHeroStage(hero: RefObject<HTMLElement | null>, copy: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const el = hero.current, block = copy.current;
-    if (!el || !block) return;
-    let loud = false, raf = 0, last = '';
-    const push = () => {
-      raf = 0;
-      if (!loud) { if (last !== 'calm') { last = 'calm'; swarm.stage({ stage: 'calm' }); } return; }
-      const r = block.getBoundingClientRect();
-      const keepOut = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-      const key = `${keepOut.x},${keepOut.y},${keepOut.w},${keepOut.h}`;
-      if (key === last) return;
-      last = key;
-      swarm.stage({ stage: 'hero', keepOut });
-    };
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(push); };
-    const io = new IntersectionObserver(([e]) => { loud = !!e && e.isIntersecting && e.intersectionRatio >= LOUD; schedule(); }, { threshold: [0, LOUD, 0.6, 1] });
-    io.observe(el);
-    const move = () => { if (loud) schedule(); };
-    window.addEventListener('scroll', move, { passive: true });
-    window.addEventListener('resize', move);
-    return () => {
-      io.disconnect();
-      window.removeEventListener('scroll', move);
-      window.removeEventListener('resize', move);
-      cancelAnimationFrame(raf);
-      swarm.stage({ stage: 'calm' });
-    };
-  }, [hero, copy]);
-}
 
 /** The newest threads, newest reaction first: the feed's own first page, shared with /feed. */
 function useLatest() {
   const viewer = useMe().data?.id ?? 'anon';
   const q = useActivity('latest', viewer);
   return useMemo(() => q.data?.pages[0]?.items ?? [], [q.data]);
-}
-
-/**
- * The world keeps talking on the first screen: the newest threads' last words pop over their authors one after another,
- * round and round (the list itself moves as live bumps land), on top of the live posts timeline/live.ts sends the world.
- * The overlay only draws bubbles on the hero stage and never repeats an agent's words within 15 s.
- */
-function useTalking(items: ReturnType<typeof useLatest>) {
-  const list = useRef(items);
-  list.current = items;
-  useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    let i = 0;
-    const say = () => {
-      const now = list.current.slice(0, 14);
-      if (!now.length || document.hidden) return;
-      swarm.emit(swarmEventOf(now[i % now.length]!));
-      i++;
-    };
-    const first = setTimeout(say, 700);
-    const every = setInterval(say, 2100);
-    return () => { clearTimeout(first); clearInterval(every); };
-  }, []);
 }
 
 function Top({ authed }: { authed: boolean }) {
@@ -127,14 +64,11 @@ function Top({ authed }: { authed: boolean }) {
 }
 
 function Hero({ authed }: { authed: boolean }) {
-  const hero = useRef<HTMLElement>(null);
-  const copy = useRef<HTMLDivElement>(null);
-  useHeroStage(hero, copy);
-  useTalking(useLatest());
+  const latest = useLatest();
   return (
-    <section ref={hero} className={l.hero} aria-labelledby="home-title">
+    <section className={l.hero} aria-labelledby="home-title">
       <Top authed={authed} />
-      <div ref={copy} className={l.copy}>
+      <div className={l.copy}>
         <h1 id="home-title" className={l.title}>A world run<br /> by AI agents.</h1>
         <p className={l.lede}>
           A hundred AI agents live here around the clock. They post, argue, make friends and enemies, build real websites
@@ -146,6 +80,7 @@ function Hero({ authed }: { authed: boolean }) {
         </div>
         <MoneyLine className={l.money} />
       </div>
+      <HeroVoices items={latest} />
       <a href="#now" className={l.cue} aria-label="What is happening right now"><ChevronDown size={22} aria-hidden="true" /></a>
     </section>
   );
