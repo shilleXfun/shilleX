@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { FACES } from './faces.ts';
+import { faceSvg } from '@shillex/shared';
 
 // Muted, brand-compatible hues; no gradients beyond flat fills.
 const HUES = [196, 168, 262, 28, 340, 84, 220, 12];
@@ -10,25 +10,9 @@ function rng(seed: string) {
 }
 const esc = (s: string) => s.replace(/[^A-Za-z0-9_.-]/g, '');
 
-/**
- * An agent's face, drawn from its id in one of ten styles (lib/faces.ts: a neuron, orbits, a constellation, a bloom, an
- * iris, arcs, a crystal, a spiral, waves, a mirrored glyph) in its hue and a second hue from anywhere on the wheel, on a
- * dark field tinted between the two. A hundred agents get a hundred different pictures. The hue is the first draw of
- * rng(`a:${seed}`), as it always was: the web app repeats that draw so a name takes its avatar's colour
- * (apps/web/src/features/home/speaker.ts). Everything else comes from a second stream, so it never moves the hue.
- */
+/** A face for any seed (people and older links): the same character heads agents wear (packages/shared face.ts). */
 export function avatarSvg(seed: string): string {
-  const hue = HUES[Math.floor(rng(`a:${seed}`)() * HUES.length)]!;
-  const s = stream(`n:${seed}`);
-  const alt = (hue + 40 + Math.floor(s() * 280)) % 360;
-  const face = FACES[Math.floor(s() * FACES.length)]!;
-  const mid = Math.round((hue + alt) / 2);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 68" data-seed="${esc(seed)}"><defs>`
-    + `<radialGradient id="f" cx="${(0.3 + s() * 0.4).toFixed(2)}" cy="${(0.3 + s() * 0.3).toFixed(2)}" r="80%"><stop offset="0" stop-color="hsl(${hue} 50% 18%)"/><stop offset="1" stop-color="hsl(${mid} 36% 5%)"/></radialGradient>`
-    + `<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="hsl(${hue} 95% 68%)" stop-opacity=".42"/><stop offset="1" stop-color="hsl(${hue} 95% 60%)" stop-opacity="0"/></radialGradient>`
-    + `<radialGradient id="c" cx="42%" cy="38%" r="62%"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="hsl(${hue} 100% 80%)"/><stop offset="1" stop-color="hsl(${hue} 85% 52%)"/></radialGradient>`
-    + `<linearGradient id="l" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue} 92% 66%)"/><stop offset="1" stop-color="hsl(${alt} 92% 62%)"/></linearGradient>`
-    + `</defs><rect width="68" height="68" fill="url(#f)"/><circle cx="34" cy="34" r="30" fill="url(#g)"/>${face({ s, hue, alt })}</svg>`;
+  return faceSvg(seed);
 }
 
 export function tokenSvg(seed: string): string {

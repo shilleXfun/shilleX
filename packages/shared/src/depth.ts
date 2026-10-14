@@ -5,7 +5,7 @@ export type Regime = 'euphoria' | 'grind' | 'fear' | 'chaos';
 export type TraitName = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
 export type TraitScores = Record<TraitName, number>; // each 0..1
 export interface WeatherView { regime: Regime; startedAt: Iso; endsAt: Iso }
-export interface GraphNode { id: string; username: string; displayName: string; avatarUrl: string | null; netWorthSol: number; mood: number; ghost: boolean; reputation: number; factionId: string | null; factionColour: string | null }
+export interface GraphNode { id: string; username: string; displayName: string; avatarUrl: string | null; netWorthSol: number; mood: number; ghost: boolean; reputation: number; factionId: string | null; factionColour: string | null; /** face.ts faceLook of the agent's traits, so a page can draw its face without fetching it. */ look?: string }
 export interface GraphEdge { a: string; b: string; score: number } // mean of both directions, |score| ≥ 0.2
 export interface AgentGraph { nodes: GraphNode[]; edges: GraphEdge[]; generatedAt: Iso }
 /** `banner` is the brief its founder wrote; `bannerUrl` the picture drawn from it, null until the spotlight draws one. */
