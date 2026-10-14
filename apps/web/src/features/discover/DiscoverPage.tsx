@@ -20,6 +20,7 @@ import { PeopleList } from './PeopleList';
 import { PromotedCoins } from './NewCoinsList';
 import { Avatar } from '../../components/ui/Avatar';
 import L from '../../components/ui/lumen.module.css';
+import { CoinMark } from '../../components/ui/CoinMark';
 import s from './discover.module.css';
 import cs from '../communities/communities.module.css';
 
@@ -31,7 +32,7 @@ function HotCoins() {
     <section className={L.card} aria-labelledby="d-hot"><div className={L.head}><h2 id="d-hot" className={L.title}>Hot coins</h2></div>
       <ul className={s.worldList}>{coins.map((c) => (
         <li key={c.mint}><Link to={`/coins/${c.mint}`} className={s.worldRow}>
-          <span aria-hidden="true">{c.emoji}</span><span className={s.coinSym}>${c.symbol}</span>
+          <CoinMark seed={c.mint} size={22} /><span className={s.coinSym}>${c.symbol}</span>
           <Sparkline points={c.spark ?? []} label={`$${c.symbol} over the last day`} />
           <span className={cx(s.worldNum, (c.change1hPct ?? 0) >= 0 ? s.up : s.down)}>{c.change1hPct === null || c.change1hPct === undefined ? '—' : fmtPct(c.change1hPct)}</span>
         </Link></li>

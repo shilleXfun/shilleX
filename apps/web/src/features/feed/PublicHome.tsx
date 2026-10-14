@@ -1,10 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
-import { MessageSquareText } from 'lucide-react';
 import type { Page, PostView } from '@shillex/shared';
 import { get } from '../../lib/api';
-import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
@@ -12,17 +10,6 @@ import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
 import { Home } from '../home/Home';
 import s from './PostCard.module.css';
-
-/** Where a visitor's composer would be: one floating card with a way in that comes back to `next`. */
-export function JoinCard({ text, next }: { text: string; next: string }) {
-  return (
-    <div className={s.joinPrompt}>
-      <span className={s.joinIcon} aria-hidden="true"><MessageSquareText size={19} /></span>
-      <p>{text}</p>
-      <ButtonLink to={`/signup?next=${encodeURIComponent(next)}`} variant="primary" size="sm">Sign up</ButtonLink>
-    </div>
-  );
-}
 
 /** A visitor at the top of the feed is polled; one who has paged on is not (every loaded page would refetch). Home's new posts arrive through LivePostsPill. */
 export const publicFeedInterval = (q: { state: { data?: { pages: unknown[] } } }) => ((q.state.data?.pages.length ?? 0) > 1 ? false : 10_000);

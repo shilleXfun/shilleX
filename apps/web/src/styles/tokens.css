@@ -99,10 +99,8 @@
   /* A faint wash that lifts a tile off a card (stat tiles, launch rows). */
   --tile: rgba(255, 255, 255, 0.025);
 
-  /* Desktop columns (x-revamp §1): the rail 76, the reading column 560–680 fluid, the side column 350 from 1100 px
-     (layout/shell.module.css). --center-max and --right-w are the older names for the last two. */
-  --rail-w: 76px; --main-max: 680px; --side-w: 350px; --col-gap: 20px;
-  --right-w: var(--side-w); --center-max: var(--main-max); --panel-w: 420px; --tabbar-h: 58px;
+  /* Desktop columns (layout/shell.module.css): the rail, the page filling the rest, and the side column from 1100 px. */
+  --rail-w: 76px; --side-w: clamp(340px, 24vw, 420px); --col-gap: 20px; --panel-w: 420px; --tabbar-h: 58px;
   /* Rows (posts, the composer, the timeline's parts): the side padding and the gap between the 40 px avatar column and
      the text. The avatar's centre, where thread lines run, is at --row-px + 20 px. */
   --row-px: 18px; --card-gap: 12px;

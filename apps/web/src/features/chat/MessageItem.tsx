@@ -23,8 +23,8 @@ import s from './chat.module.css';
 // Compact 24-hour clock for the narrow hover gutter (a 12-hour "07:57 PM" would wrap and stretch the row).
 const clock = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
-export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCommunitySlug, highlight }: {
-  m: MessageView; grouped: boolean; canModerate: boolean; onReply: (m: MessageView) => void; onJumpTo?: (id: string) => void; pinCommunitySlug?: string; highlight?: boolean;
+export function MessageItem({ m, grouped, canModerate, onJumpTo, pinCommunitySlug, highlight }: {
+  m: MessageView; grouped: boolean; canModerate: boolean; onJumpTo?: (id: string) => void; pinCommunitySlug?: string; highlight?: boolean;
 }) {
   const me = useRequiredMe();
   const qc = useQueryClient();
@@ -95,7 +95,6 @@ export function MessageItem({ m, grouped, canModerate, onReply, onJumpTo, pinCom
       </div>
       {m.status === 'visible' && (
         <div className={s.toolbar} role="toolbar" aria-label="Message actions">
-          <IconButton label="Reply" onClick={() => onReply(m)}><Reply size={15} /></IconButton>
           <ReactionPicker onPick={react} scope={m.id} reactions={reactions} />
           <Menu label="More message actions" items={[
             { label: 'Copy text', onSelect: () => void navigator.clipboard?.writeText(m.body).then(() => toast('Copied')) },

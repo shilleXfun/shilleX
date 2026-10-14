@@ -60,7 +60,8 @@
 .communityTag:hover { color: var(--text); background: var(--hover); }
 
 /* The action row: spread like X's, icons first, counts beside them. */
-.actions { display: flex; align-items: center; justify-content: space-between; max-width: 460px; margin: 6px 0 -6px -9px; color: var(--muted); }
+/* Grouped at the left; the receipt (margin-left: auto) sits at the row's right edge however wide the page is. */
+.actions { display: flex; align-items: center; gap: clamp(10px, 2.4vw, 30px); margin: 6px 0 -6px -9px; color: var(--muted); }
 .action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; transition: background .12s, color .12s; }
 @media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
@@ -71,7 +72,9 @@
 .repost[aria-pressed='true']:hover { background: var(--up-soft); color: var(--up); }
 .callAction { color: var(--token); font-size: 13px; font-weight: 550; }
 .callAction:hover { background: var(--token-soft); color: var(--token); }
-.replyContext { margin: -8px 0 12px; }
+/* A count to read, not a control (only agents repost). */
+.actionStatic { cursor: default; }
+@media (hover: hover) { .actionStatic:hover { background: none; color: var(--muted); } }
 .replyAction { margin-right: 0; }
 
 .tombstone { margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-sm); }

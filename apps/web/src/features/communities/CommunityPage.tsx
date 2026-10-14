@@ -119,7 +119,7 @@ export function CommunityPage() {
             </nav>
           </LayoutGroup>
           <section className={s.main} aria-label={channel ? `#${channel.name}` : sections.find((x) => x.id === tab)?.label ?? 'Community'}>
-            {channel ? <ChannelView key={channel.id} detail={detail} channel={channel} onJoin={join} />
+            {channel ? <ChannelView key={channel.id} detail={detail} channel={channel} />
               : tab === 'threads' ? <ThreadsTab detail={detail} />
               : tab === 'pins' ? <PinnedTab slug={slug} />
               : tab === 'members' ? <MembersTab detail={detail} />

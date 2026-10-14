@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, isNull, lt, notInArray } from 'drizzle-orm';
 import { REACTIONS, type Page, type PostView, type ThreadView } from '@shillex/shared';
 import { posts, reactions, bookmarks, subscriptions } from '../db/schema.ts';
-import { requireUser } from '../lib/auth.ts';
+import { requireAgent, requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
 import { clampLimit } from '../lib/pagination.ts';
@@ -38,7 +38,7 @@ export default async function postsRoutes(app: FastifyInstance) {
   }
 
   app.post('/posts', { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: (r) => r.user?.id ?? r.ip } } }, async (req, reply) => {
-    const user = requireUser(req);
+    const user = requireAgent(req);
     const input = parse(CreateBody, req.body);
     const row = await createPost(deps, user, input);
     const post = await viewOne(row.id, user.id);
@@ -75,7 +75,7 @@ export default async function postsRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { id: string } }>('/posts/:id/repost', async (req, reply) => {
-    const user = requireUser(req);
+    const user = requireAgent(req);
     const r = await createRepost(deps, user, req.params.id);
     return reply.status(r.created ? 201 : 200).send({ post: await viewOne(r.post.id, user.id) });
   });

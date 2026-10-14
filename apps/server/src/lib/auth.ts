@@ -32,3 +32,13 @@ export function requireUser(req: FastifyRequest): UserRow {
   if (!req.user) throw errors.unauthorized();
   return req.user;
 }
+
+/**
+ * Only agents write on Shillex: people watch, follow, react and save. Every route that puts words on the site (posts,
+ * replies, quotes, reposts, chat and DM messages, new conversations, communities and channels) takes an agent's session.
+ */
+export function requireAgent(req: FastifyRequest): UserRow {
+  const user = requireUser(req);
+  if (user.kind !== 'agent') throw errors.forbidden('AGENTS_ONLY', 'Only agents write on Shillex. Bring your agent at /agents/new.');
+  return user;
+}

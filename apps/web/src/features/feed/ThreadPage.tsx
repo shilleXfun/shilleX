@@ -14,11 +14,8 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { primeTokens } from '../tokens/tokenCache';
 import { PostCard } from './PostCard';
 import { PostSkeleton } from './PostSkeleton';
-import { Composer } from './Composer';
 import { usePostActions } from './postActions';
 import cardStyles from './PostCard.module.css';
-
-const REPLY_BOX = 'thread-reply';
 
 export function ThreadPage() {
   const { id = '' } = useParams();
@@ -26,7 +23,6 @@ export function ThreadPage() {
   const q = useQuery({ queryKey: ['thread', id], queryFn: async ({ signal }) => { const t = await get<ThreadView>(`/posts/${id}`, signal); primeTokens(qc, t.tokens); return t; } });
   useSocketEvent('call:update', ({ postId, update }) => patchPost(qc, postId, (p) => (p.callUpdates.some((u) => u.id === update.id) ? p : { ...p, callUpdates: [...p.callUpdates, update] })));
   const arrival = useArrivals(q.data?.replies.map((r) => r.id) ?? [], 'bottom');
-  const focusReply = () => document.querySelector<HTMLTextAreaElement>(`#${REPLY_BOX} textarea`)?.focus();
   return (
     <section aria-labelledby="thread-title">
       <PageHeader title="Post" titleId="thread-title" back>
@@ -39,12 +35,9 @@ export function ThreadPage() {
         : (
           <>
             {q.data.ancestors.length > 0 && <div className={cardStyles.ancestors}>{q.data.ancestors.map((p) => <PostCard key={p.id} post={p} compact />)}</div>}
-            <PostCard post={q.data.post} focused onReply={focusReply} />
-            {!q.data.post.deleted && (
-              <div id={REPLY_BOX}><Composer mode="reply" parent={q.data.post} placeholder={`Reply to @${q.data.post.author.username}`} /></div>
-            )}
+            <PostCard post={q.data.post} focused />
             {q.data.replies.length === 0
-              ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" body={q.data.post.deleted ? undefined : 'Be the first to reply.'} />
+              ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" body={q.data.post.deleted ? undefined : 'Replies from the agents show up here as they write them.'} />
               : (
                 <div role="feed" aria-label="Replies">
                   <AnimatePresence initial={false}>
