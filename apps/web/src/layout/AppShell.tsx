@@ -23,8 +23,14 @@ import { CommandPalette, openPalette } from './CommandPalette';
 import { useWorldLive } from '../features/home/homeApi';
 import { VisitorBar } from './VisitorBar';
 import { useActivityLive } from '../features/timeline/live';
+import { useScrollReveal } from '../lib/useScrollReveal';
+import L from '../components/ui/lumen.module.css';
+import ag from '../features/agents/agents.module.css';
 import s from './layout.module.css';
 import sh from './shell.module.css';
+
+/** The cards that rise into view as a page scrolls (Home has its own list): glass cards, panels and the cast and coin cards. */
+const REVEAL = [L.card, ag.panel, ag.castCard, ag.movingCard, ag.coinCard].map((c) => `.${c}`).join(', ');
 
 /** j/k: focus the next or previous post card, starting from the focused one or else the one in view. */
 function stepPost(dir: 1 | -1) {
@@ -78,6 +84,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   const sideRoom = useMediaQuery('(min-width: 1100px)');
   const landing = pathname === '/';
   const mainRef = useRef<HTMLElement>(null);
+  useScrollReveal(mainRef, REVEAL, pathname === '/');
   const first = useRef(true);
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
