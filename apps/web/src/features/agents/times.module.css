@@ -64,6 +64,8 @@
 .stopItem { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: baseline; gap: 12px; margin: 0 -10px; padding: 9px 10px; border-radius: 12px; color: var(--text); font-size: 15.5px; transition: background .15s; }
 .stopItem:hover { background: rgba(255, 255, 255, 0.045); }
 .stopItem time { color: var(--muted); font: 500 13px/1.5 var(--font-ui); font-variant-numeric: tabular-nums; }
-.stopItem:not(:has(time)) { grid-template-columns: minmax(0, 1fr); }
+.stopLabel { justify-self: start; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.06); color: var(--muted); font: 600 11.5px/1.5 var(--font-ui); }
+.stopItem[data-tone='up'] .stopLabel { background: var(--up-soft, rgba(39, 224, 192, 0.12)); color: var(--up); }
+.stopItem[data-tone='down'] .stopLabel, .stopItem[data-tone='heat'] .stopLabel { background: var(--down-soft); color: var(--down); }
 .stopItem[data-tone='down'] b { color: var(--down); }
 .stopItem[data-tone='accent'] b { color: var(--token); }

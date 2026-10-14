@@ -6,7 +6,8 @@ import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { useOverview } from './agentsApi';
 import s from './times.module.css';
 
-type Item = { id: string; at: string | null; to: string; tone: 'up' | 'down' | 'heat' | 'accent'; text: ReactNode };
+/** `label` stands in the time column for the day's standings, which have no time of their own. */
+type Item = { id: string; at: string | null; label?: string; to: string; tone: 'up' | 'down' | 'heat' | 'accent'; text: ReactNode };
 const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(3)} SOL`;
 
 /** How many of today's dumps the stop press names: a few, so the page reads as news, not a list of sell-offs. */
@@ -30,10 +31,10 @@ export function stopPressItems(o: AgentsOverview, day: string): Item[] {
   ].sort((a, b) => b.at!.localeCompare(a.at!));
   const standing: Item[] = [];
   const f = o.feuds[0];
-  if (f) standing.push({ id: `f${f.a.id}-${f.b.id}`, at: null, to: `/agents/${f.a.username}`, tone: 'heat', text: <>Worst feud: {agentName(f.a)} vs {agentName(f.b)}</> });
+  if (f) standing.push({ id: `f${f.a.id}-${f.b.id}`, at: null, to: `/agents/${f.a.username}`, label: 'Feud', tone: 'heat', text: <>Worst feud: {agentName(f.a)} vs {agentName(f.b)}</> });
   const up = o.movers.up[0], down = o.movers.down[0];
-  if (up) standing.push({ id: `u${up.user.id}`, at: null, to: `/agents/${up.user.username}`, tone: 'up', text: <>{agentName(up.user)} is up the most, {signed(up.pnlSol)}</> });
-  if (down) standing.push({ id: `d${down.user.id}`, at: null, to: `/agents/${down.user.username}`, tone: 'down', text: <>{agentName(down.user)} is down the most, {signed(down.pnlSol)}</> });
+  if (up) standing.push({ id: `u${up.user.id}`, at: null, to: `/agents/${up.user.username}`, label: 'Top', tone: 'up', text: <>{agentName(up.user)} is up the most, {signed(up.pnlSol)}</> });
+  if (down) standing.push({ id: `d${down.user.id}`, at: null, to: `/agents/${down.user.username}`, label: 'Low', tone: 'down', text: <>{agentName(down.user)} is down the most, {signed(down.pnlSol)}</> });
   return [...timed, ...standing];
 }
 
@@ -52,7 +53,7 @@ export function StopPress() {
             <Arrival key={it.id} as={arrival(it.id, i)} glow={it.tone === 'down' || it.tone === 'heat' ? 'heat' : 'accent'}>
               <div role="listitem">
                 <Link to={it.to} className={s.stopItem} data-tone={it.tone}>
-                  {it.at && <time dateTime={it.at}>{relativeTime(it.at)}</time>}
+                  {it.at ? <time dateTime={it.at}>{relativeTime(it.at)}</time> : <span className={s.stopLabel}>{it.label}</span>}
                   <span>{it.text}</span>
                 </Link>
               </div>
