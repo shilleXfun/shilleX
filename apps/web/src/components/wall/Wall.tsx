@@ -4,6 +4,7 @@ import { useReducedMotion } from 'motion/react';
 import { agentName, relativeTime, type AgentGraph, type GraphNode } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { useAgentGraph, useCoins, useLeaderboard, useOverview } from '../../features/agents/agentsApi';
+import type { AgentCard } from '@shillex/shared';
 import { createWall, type WallEngine, type WallRelation } from './engine';
 import { useWorldEvents, type Tone, type WorldEvent } from './events';
 import { WallCard } from './WallCard';
@@ -15,6 +16,15 @@ interface Caption { event: WorldEvent; ago: string | null }
 /** With no live event for this long, the wall replays the last hours' real events, each marked with when it happened. */
 const QUIET_MS = 4200, REPLAY_EVERY_MS = 1900, POP_MS = 3800, MAX_POPS = 5;
 export const agoText = (a: string) => (a === 'now' ? 'just now' : `${a} ago`);
+
+/** A portrait (or any picture an agent has) the wall can draw; the drawn-face route is drawn locally instead. */
+const imageOf = (n: GraphNode) => (n.avatarUrl && !n.avatarUrl.includes('/avatars/') ? n.avatarUrl : null);
+/** How big a tile an agent gets: how much it has done, a third more if it acted in the last ten minutes. */
+function weightOf(card: AgentCard | undefined) {
+  if (!card) return 0;
+  const fresh = card.lastTurnAt && Date.now() - Date.parse(card.lastTurnAt) < 600_000;
+  return card.turns * (fresh ? 1.33 : 1);
+}
 
 /** The wall's agents in a stable order: grouped by faction (largest first, loners last), richest first in each group. Newcomers take the next seat. */
 function orderAgents(nodes: GraphNode[], prev: string[]): string[] {
@@ -37,12 +47,12 @@ function relationsOf(graph: AgentGraph | undefined, id: string): WallRelation[] 
 }
 
 /**
- * The Wall: every agent's face, edge to edge, lit by what they do (engine.ts draws it). It fills its width; `target` is
- * the height it aims for. Live events light it; when the world is quiet it replays the last hours' real events (each
- * marked "4m ago"), so it is never still. Pointing at a face draws its feuds and alliances; clicking or tapping opens
- * its card. An open seat links to Bring your agent.
+ * The Wall: every agent's portrait in one drifting mosaic, the most active biggest, lit by what they do (engine.ts draws
+ * it). It fills its width and `height`. Live events light it; when the world is quiet it replays the last hours' real
+ * events (each marked "4m ago"), so it is never still. Pointing at a face draws its feuds and alliances and tilts the
+ * mosaic; clicking or tapping opens its card.
  */
-export function Wall({ target, className }: { target: number; className?: string }) {
+export function Wall({ height, className, children }: { height: number; className?: string; children?: React.ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<WallEngine | null>(null);
@@ -52,13 +62,19 @@ export function Wall({ target, className }: { target: number; className?: string
   const coinsList = useCoins().data;
   const overview = useOverview().data;
   const board = useLeaderboard().data;
-  const [height, setHeight] = useState(Math.round(target));
   const [pops, setPops] = useState<Pop[]>([]);
   const [caption, setCaption] = useState<Caption | null>(null);
   const [card, setCard] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const order = useRef<string[]>([]);
   const nodes = useMemo(() => new Map((graph?.nodes ?? []).map((n) => [n.id, n])), [graph]);
+  const cards = useMemo(() => new Map((board ?? []).map((a) => [a.user.id, a])), [board]);
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+  const agentsFor = (ids: string[]) => ids.flatMap((id) => {
+    const n = ctx.current.nodes.get(id);
+    return n ? [{ id, look: n.look ?? null, image: imageOf(n), weight: weightOf(cardsRef.current.get(id)) }] : [];
+  });
   const lastLive = useRef(0);
   const ctx = useRef({ graph, nodes });
   ctx.current = { graph, nodes };
@@ -67,7 +83,7 @@ export function Wall({ target, className }: { target: number; className?: string
     const e = engine.current;
     const n = ctx.current.nodes.get(ev.agent);
     if (!e || !n) return;
-    e.act(ev.agent, ev.act);
+    e.act(ev.agent, ev.act, ev.pulse?.kind === 'sell' ? -1 : 1);
     const ago = replay ? relativeTime(new Date(ev.at)) : null;
     if (ev.pop && !reduced) {
       const pop: Pop = { key: `${ev.key}-${performance.now()}`, agent: ev.agent, name: agentName(n), text: ev.pop.text, tone: ev.pop.tone, ago };
@@ -85,8 +101,8 @@ export function Wall({ target, className }: { target: number; className?: string
     if (!el || !c) return;
     const e = createWall(c, { reduced });
     engine.current = e;
-    if (order.current.length) e.setAgents(order.current.map((id) => ({ id, look: ctx.current.nodes.get(id)?.look ?? null, faction: null })));
-    const size = () => { const w = el.clientWidth; const h = e.heightFor(w, target); setHeight(h); e.resize(w, h); };
+    if (order.current.length) e.setAgents(agentsFor(order.current));
+    const size = () => e.resize(el.clientWidth, el.clientHeight);
     const ro = new ResizeObserver(size);
     ro.observe(el);
     const io = new IntersectionObserver(([en]) => e.setVisible(Boolean(en?.isIntersecting)));
@@ -94,7 +110,8 @@ export function Wall({ target, className }: { target: number; className?: string
     const vis = () => e.setVisible(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', vis);
     return () => { ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); e.destroy(); engine.current = null; };
-  }, [reduced, target]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
 
   // Agents, in their seats. A newcomer drops into the next seat and says so.
   useEffect(() => {
@@ -103,11 +120,11 @@ export function Wall({ target, className }: { target: number; className?: string
     const first = !order.current.length;
     const before = new Set(order.current);
     order.current = orderAgents(graph.nodes, order.current);
-    e.setAgents(order.current.map((id) => ({ id, look: nodes.get(id)?.look ?? null, faction: nodes.get(id)?.factionId ?? null })));
-    const w = el.clientWidth, h = e.heightFor(w, target);
-    setHeight(h); e.resize(w, h);
+    // Sizes are settled once the leaderboard is in; until then everyone is a small tile.
+    if (first || board) e.setAgents(agentsFor(order.current));
     if (!first) for (const id of order.current) if (!before.has(id)) show({ agent: id, act: 'join', at: Date.now(), key: `j${id}`, pop: { text: 'just joined Shillex', tone: 'ember' } }, false);
-  }, [graph, nodes, target, show]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, Boolean(board)]);
 
   // How recently each agent acted: its light.
   useEffect(() => {
@@ -151,16 +168,17 @@ export function Wall({ target, className }: { target: number; className?: string
     return engine.current?.tileAt(ev.clientX - r.left, ev.clientY - r.top) ?? null;
   };
   const onMove = (ev: React.PointerEvent) => {
-    if (ev.pointerType !== 'mouse' || card) return;
+    if (ev.pointerType !== 'mouse') return;
+    const r = canvas.current!.getBoundingClientRect();
+    engine.current?.setPointer(ev.clientX - r.left, ev.clientY - r.top);
+    if (card) return;
     const id = pick(ev);
-    const next = id && id !== 'seat' ? id : null;
-    if (next !== hover) { setHover(next); engine.current?.setFocus(next, next ? relationsOf(ctx.current.graph, next) : []); }
+    if (id !== hover) { setHover(id); engine.current?.setFocus(id, id ? relationsOf(ctx.current.graph, id) : []); }
     canvas.current!.style.cursor = id ? 'pointer' : 'default';
   };
-  const onLeave = () => { setHover(null); if (!card) engine.current?.setFocus(null, []); };
+  const onLeave = () => { setHover(null); engine.current?.setPointer(null, null); if (!card) engine.current?.setFocus(null, []); };
   const onClick = (ev: React.MouseEvent) => {
     const id = pick(ev);
-    if (id === 'seat') { navigate('/agents/new'); return; }
     if (!id) return;
     setHover(null);
     setCard(id);
@@ -170,6 +188,7 @@ export function Wall({ target, className }: { target: number; className?: string
 
   const rectOf = (id: string) => engine.current?.rectOf(id) ?? null;
   const cardNode = card ? nodes.get(card) : undefined;
+  void navigate;
   const cardRect = card ? rectOf(card) : null;
   const shown = caption?.event;
   const author = shown?.post?.author;
@@ -198,6 +217,7 @@ export function Wall({ target, className }: { target: number; className?: string
           return <div className={s.nameTag} style={{ left: r.x + r.size / 2, top: r.y + r.size }} aria-hidden="true">{agentName(n)}</div>;
         })()}
         {cardNode && cardRect && <WallCard node={cardNode} rect={cardRect} hostWidth={width} graph={graph} coins={coinsList ?? []} events={events} onClose={closeCard} />}
+        {children}
       </div>
       <div className={s.caption} aria-live="polite">
         {shown && author ? (

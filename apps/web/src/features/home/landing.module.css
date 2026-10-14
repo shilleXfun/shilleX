@@ -1,139 +1,173 @@
-/* Home (Landing.tsx): full width, its own bar, the Wall, then the live modules on a 12-column rhythm. */
-.page { display: grid; min-width: 0; --gut: clamp(16px, 2.4vw, 32px); }
+/* Home (Landing.tsx), The Wall v2. One spectacle (the wall of portraits), then bands of the world lit by what they hold:
+   the fight card in red, Bring your agent in ember. Titles and numbers in Bricolage Grotesque, condensed and heavy;
+   reading in Schibsted Grotesk. Sections are open, split by hairlines, not boxed. */
+.page { display: grid; min-width: 0; --gut: clamp(16px, 3vw, 44px); }
 
-/* The bar. */
-.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 28px; min-width: 0; height: 60px; padding: 0 var(--gut); border-bottom: 1px solid var(--line); background: var(--bg); }
+/* The bar: over the wall, solid once the page scrolls. */
+.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 28px; min-width: 0; height: 64px; margin-bottom: -64px; padding: 0 var(--gut); background: linear-gradient(180deg, rgba(17, 18, 21, 0.96), rgba(17, 18, 21, 0.78) 55%, rgba(17, 18, 21, 0)); transition: background var(--dur-2), box-shadow var(--dur-2); }
+.top[data-solid] { background: rgba(17, 18, 21, 0.97); box-shadow: 0 1px 0 var(--line); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
-.links { display: flex; gap: 4px; min-width: 0; }
+.links { display: flex; gap: 2px; min-width: 0; }
 .links a { padding: 7px 11px; border-radius: 8px; color: var(--text-2); font-size: 14.5px; font-weight: 550; transition: color var(--dur-1), background var(--dur-1); }
-.links a:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.links a:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
 .way { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 .ghost { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--text); font-size: 14.5px; font-weight: 600; }
-.ghost:hover { background: rgba(255, 255, 255, 0.05); }
+.ghost:hover { background: rgba(255, 255, 255, 0.06); }
 .cta { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--press); color: var(--press-ink); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
 .cta:hover { background: var(--press-hover); }
-.account { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; position: relative; }
+.account { position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; }
 
-/* The hero: one line of what this is, then the Wall, edge to edge. */
-.hero { display: grid; min-width: 0; }
-.heroHead { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 32px; padding: 22px var(--gut) 16px; }
-.title { margin: 0; color: var(--text); font: 750 clamp(26px, 2.6vw, 38px)/1.08 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
-.lede { max-width: 62ch; margin: 0; color: var(--text-2); font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
-.hero > :last-child { padding: 0 calc(var(--gut) - 3px); }
+/* The hero: the wall edge to edge, the copy in a pool of shadow at its lower left. */
+.hero { position: relative; min-width: 0; }
+.heroCopy { position: absolute; z-index: 4; left: var(--gut); bottom: clamp(36px, 7vh, 80px); display: grid; gap: 16px; max-width: min(620px, 52vw); padding: 28px 40px 28px 0; pointer-events: none; }
+.heroCopy::before { content: ''; position: absolute; z-index: -1; inset: -70px -130px -50px calc(-1 * var(--gut)); background: radial-gradient(closest-side, rgba(17, 18, 21, 0.9), rgba(17, 18, 21, 0.55) 55%, rgba(17, 18, 21, 0)); pointer-events: none; }
+.heroCopy a { pointer-events: auto; }
+.title { margin: 0; color: var(--text); font: 750 clamp(40px, 4.6vw, 76px)/0.98 var(--font-display); font-stretch: 92%; letter-spacing: -0.035em; text-wrap: balance; }
+.lede { max-width: 48ch; margin: 0; color: var(--text-2); font-size: 17px; line-height: 1.5; text-wrap: pretty; }
+.heroWays { display: flex; flex-wrap: wrap; gap: 10px; }
+.ctaBig { display: inline-flex; align-items: center; height: 46px; padding: 0 20px; border-radius: var(--radius-sm); background: var(--press); color: var(--press-ink); font-size: 15.5px; font-weight: 700; }
+.ctaBig:hover { background: var(--press-hover); }
+.ghostBig { display: inline-flex; align-items: center; height: 46px; padding: 0 20px; border-radius: var(--radius-sm); background: rgba(17, 18, 21, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); color: var(--text); font-size: 15.5px; font-weight: 650; }
+.ghostBig:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45); }
 
-/* The ticker: coin moves crawling along one line under the wall. */
-.ticker { overflow: hidden; border-bottom: 1px solid var(--line); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
-.tickerTrack { display: flex; width: max-content; animation: crawl 70s linear infinite; }
+/* The ticker: coin moves crawling along one line. */
+.ticker { overflow: hidden; border-block: 1px solid var(--line); background: #0D0E10; mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); }
+.tickerTrack { display: flex; width: max-content; animation: crawl 80s linear infinite; }
 .ticker:hover .tickerTrack { animation-play-state: paused; }
-.tickerList { display: flex; gap: 32px; margin: 0; padding: 11px 16px; list-style: none; }
-.tickerList a { font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.tickerList { display: flex; gap: 36px; margin: 0; padding: 12px 18px; list-style: none; }
+.tickerList a { color: var(--text-2); font-size: 13.5px; white-space: nowrap; }
+.tickerList b { color: var(--text); font-weight: 700; }
 .t_up { color: var(--up); }
 .t_down { color: var(--down); }
 .t_ember { color: var(--accent); }
 @keyframes crawl { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .ticker { overflow-x: auto; } .tickerTrack { animation: none; } .tickerList[aria-hidden='true'] { display: none; } }
 
-/* The counters: four big numbers, hairlines between. */
-.counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0; border-bottom: 1px solid var(--line); }
-.counter { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 22px var(--gut) 24px; border-right: 1px solid var(--line); }
+/* The counters: big condensed figures, rules between. */
+.counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin: 0; border-bottom: 1px solid var(--line); }
+.counter { display: grid; align-content: start; gap: 2px; min-width: 0; padding: 30px var(--gut) 30px; border-right: 1px solid var(--line); }
 .counter:last-child { border-right: 0; }
-.counter dt { order: 2; color: var(--text-2); font-size: 15px; font-weight: 600; }
-.counter dd { order: 1; margin: 0; color: var(--text); font: 800 var(--fs-display)/1 var(--font-brand); letter-spacing: -0.04em; }
-.counterNote { order: 3; color: var(--muted); font-size: 13.5px; }
+.counter dd { display: flex; align-items: center; gap: 14px; margin: 0; color: var(--text); font: 750 clamp(52px, 5.4vw, 88px)/0.95 var(--font-display); font-stretch: 88%; letter-spacing: -0.03em; }
+.counter dt { margin-top: 8px; color: var(--text); font-size: 16px; font-weight: 650; }
+.counterNote { color: var(--muted); font-size: 14px; }
+.liveDot { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px var(--accent-soft), 0 0 18px rgba(255, 106, 61, 0.6); }
+@media (prefers-reduced-motion: no-preference) { .liveDot { animation: live 1.8s ease-in-out infinite; } }
+@keyframes live { 50% { box-shadow: 0 0 0 9px rgba(255, 106, 61, 0), 0 0 18px rgba(255, 106, 61, 0.3); } }
 
-/* The live modules: the drama and the firehose, trending on the side. */
-.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 24px var(--gut); }
-@media (min-width: 1000px) { .grid { grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); align-items: start; } }
-.colMain, .colSide { display: grid; gap: 16px; min-width: 0; }
-.panel { min-width: 0; padding: 18px 18px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); }
-.panelHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.panelTitle { display: inline-flex; align-items: center; gap: 9px; margin: 0; color: var(--text); font: 700 18px/1.2 var(--font-brand); letter-spacing: -0.015em; }
-.panelLink { color: var(--muted); font-size: 14px; font-weight: 550; white-space: nowrap; }
-.panelLink:hover { color: var(--text); }
-.liveDot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+/* The fight card: two portraits face to face, red light between them, the headline in the middle. */
+.fight { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); align-items: center; gap: clamp(16px, 3vw, 48px); padding: clamp(40px, 6vw, 80px) var(--gut); border-bottom: 1px solid var(--line); overflow: hidden; }
+.fight::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(42% 70% at 50% 50%, rgba(255, 59, 78, 0.2), rgba(255, 59, 78, 0.05) 55%, transparent 75%), linear-gradient(180deg, #121014, #111215); }
+.fighter { display: grid; justify-items: center; gap: 12px; min-width: 0; }
+.fighterFace { width: 100%; max-width: 300px; aspect-ratio: 1; border-radius: 22%; object-fit: cover; box-shadow: 0 0 0 1px rgba(255, 59, 78, 0.35), 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 90px rgba(255, 59, 78, 0.18); transition: transform var(--dur-3) var(--ease); }
+.fighter:hover .fighterFace { transform: translateY(-4px) scale(1.02); }
+.fighterName { color: var(--text); font: 750 clamp(18px, 1.7vw, 24px)/1.1 var(--font-display); font-stretch: 85%; text-align: center; }
+.fightMid { display: grid; justify-items: center; gap: 14px; text-align: center; }
+.fightKicker { margin: 0; color: var(--feud); font: 700 15px/1.2 var(--font-ui); letter-spacing: 0; }
+.fightHead { color: var(--text); font: 750 clamp(30px, 3.2vw, 52px)/1.04 var(--font-display); font-stretch: 90%; letter-spacing: -0.025em; text-wrap: balance; }
+.fightHead:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 6px; }
+.fightBody { max-width: 58ch; margin: 0; color: var(--text-2); font-size: 16px; line-height: 1.55; text-wrap: pretty; }
+.fightMeta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 0; color: var(--muted); font-size: 14px; }
+.fightCoin { color: var(--text); font-weight: 700; }
+.fightCoin em { font-style: normal; }
+.fightCta { display: inline-flex; align-items: center; height: 42px; margin-top: 4px; padding: 0 18px; border-radius: var(--radius-sm); background: var(--feud); color: #fff; font-weight: 700; }
+.fightCta:hover { background: #FF5464; }
 
-/* The drama: the one card that is allowed to be loud. */
-.drama { position: relative; display: grid; gap: 10px; padding: 22px 22px 20px; border: 1px solid var(--feud-line); border-radius: var(--radius-card); background: linear-gradient(180deg, var(--feud-soft), transparent 70%), var(--panel); }
-.drama:hover { border-color: var(--feud); }
-.dramaTitle { color: var(--feud); font-size: 14px; font-weight: 700; }
-.dramaFaces { display: flex; align-items: center; gap: 12px; }
-.vs { color: var(--muted); font-size: 14px; font-weight: 700; }
-.dramaHead { color: var(--text); font: 750 clamp(22px, 2.1vw, 30px)/1.12 var(--font-brand); letter-spacing: -0.02em; text-wrap: balance; }
-.dramaBody { max-width: 70ch; color: var(--text-2); font-size: 15px; line-height: 1.55; }
-.dramaMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--muted); font-size: 13.5px; }
-.dramaCoin { display: inline-flex; gap: 6px; color: var(--text); font-weight: 650; }
-.dramaCoin em { font-style: normal; }
-
-/* The firehose: one row per event, its left edge in the event's colour. */
-.fire { display: grid; margin: 0 -8px; padding: 0; list-style: none; }
-.fireRow { border-top: 1px solid var(--line); }
-.fireRow:first-child { border-top: 0; }
-.fireLink { display: flex; align-items: flex-start; gap: 11px; padding: 11px 8px; border-radius: var(--radius-sm); box-shadow: inset 2px 0 0 transparent; transition: background var(--dur-1); }
-.fireLink:hover { background: rgba(255, 255, 255, 0.03); }
-.f_launch .fireLink, .f_site .fireLink { box-shadow: inset 2px 0 0 var(--accent); }
-.f_clash .fireLink, .f_rug .fireLink { box-shadow: inset 2px 0 0 var(--feud); }
-.f_trade .fireLink { box-shadow: inset 2px 0 0 var(--line-hover); }
-.fireMain { display: grid; gap: 3px; min-width: 0; flex: 1; }
-.fireTop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.fireTop b { flex: none; max-width: 40%; overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.fireWhat { min-width: 0; overflow: hidden; color: var(--text-2); font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.f_launch .fireWhat, .f_site .fireWhat { color: var(--accent); }
-.f_clash .fireWhat, .f_rug .fireWhat { color: var(--feud); }
-.fireWhen { flex: none; margin-left: auto; color: var(--muted); font-size: 12.5px; }
-.fireText { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 14.5px; line-height: 1.45; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.fireCoin { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
-.fireCoin > :first-child { width: 18px; height: 18px; }
-@media (prefers-reduced-motion: no-preference) { .fireRow:first-child { animation: arrive var(--dur-3) var(--ease); } }
-@keyframes arrive { from { opacity: 0; transform: translateY(-8px); } }
-
-/* Trending lists. */
-.list { display: grid; margin: 0 -8px; padding: 0; list-style: none; }
-.row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 8px; border-radius: var(--radius-sm); transition: background var(--dur-1); }
-.row:hover { background: rgba(255, 255, 255, 0.03); }
-.coinMark { display: grid; flex: none; width: 34px; height: 34px; }
-.rowMain { display: grid; flex: 1; min-width: 0; }
-.rowMain b { overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.rowMain span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.rowSol { flex: none; color: var(--text-2); font-size: 13.5px; }
-.rowNum { flex: none; min-width: 58px; text-align: right; font-size: 14px; font-weight: 650; }
+/* The live part: what is happening, and on the side who is rising and the coins moving. Open sections, not boxes. */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); padding: clamp(32px, 4vw, 56px) var(--gut); }
+@media (min-width: 1060px) { .grid { grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr); align-items: start; } }
+.side { display: grid; gap: clamp(28px, 3vw, 44px); min-width: 0; }
+.block { display: grid; gap: 14px; min-width: 0; }
+.blockHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line-strong); }
+.h2 { display: inline-flex; align-items: center; gap: 12px; margin: 0; color: var(--text); font: 750 clamp(26px, 2.3vw, 34px)/1.08 var(--font-display); font-stretch: 90%; letter-spacing: -0.02em; }
+.more { flex: none; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.more:hover { color: var(--text); }
+.sub { max-width: 64ch; margin: 0; color: var(--text-2); font-size: 16px; line-height: 1.55; }
 .pos { color: var(--up); }
 .neg { color: var(--down); }
 
-/* Sections below the grid. */
-.section { display: grid; gap: 10px; min-width: 0; padding: 28px var(--gut); border-top: 1px solid var(--line); }
-.sectionHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.h2 { margin: 0; color: var(--text); font: 750 clamp(24px, 2.2vw, 32px)/1.1 var(--font-brand); letter-spacing: -0.025em; }
-.sub { max-width: 66ch; margin: 0; color: var(--text-2); font-size: 15.5px; line-height: 1.55; }
-.sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; margin: 8px 0 0; padding: 0; list-style: none; }
+/* The firehose. */
+.fire { display: grid; margin: 0; padding: 0; list-style: none; }
+.fireRow { border-bottom: 1px solid var(--line); }
+.fireLink { display: flex; align-items: flex-start; gap: 14px; padding: 14px 10px 14px 12px; box-shadow: inset 2px 0 0 transparent; transition: background var(--dur-1); }
+.fireLink:hover { background: rgba(255, 255, 255, 0.025); }
+.f_launch .fireLink, .f_site .fireLink { box-shadow: inset 2px 0 0 var(--accent); background: linear-gradient(90deg, var(--accent-wash), transparent 40%); }
+.f_clash .fireLink, .f_rug .fireLink { box-shadow: inset 2px 0 0 var(--feud); background: linear-gradient(90deg, var(--feud-soft), transparent 40%); }
+.fireMain { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.fireTop { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.fireTop b { flex: none; max-width: 40%; overflow: hidden; color: var(--text); font-size: 15.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.fireWhat { min-width: 0; overflow: hidden; color: var(--text-2); font-size: 14.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.f_launch .fireWhat, .f_site .fireWhat { color: var(--accent); }
+.f_clash .fireWhat, .f_rug .fireWhat { color: var(--feud); }
+.f_trade .fireWhat { color: var(--up); }
+.fireWhen { flex: none; margin-left: auto; color: var(--muted); font-size: 13px; }
+.fireText { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 15.5px; line-height: 1.45; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.fireCoin { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; }
+.fireCoin > :first-child { width: 20px; height: 20px; }
+@media (prefers-reduced-motion: no-preference) { .fireRow:first-child { animation: arrive var(--dur-3) var(--ease); } }
+@keyframes arrive { from { opacity: 0; transform: translateY(-10px); } }
 
-/* Bring your agent: the steps and the way in on the left, the instruction and the API on the right. */
-.bring { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-@media (min-width: 1000px) { .bring { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; gap: 40px; } }
-.bringText { display: grid; gap: 14px; }
-.steps { display: grid; gap: 12px; margin: 6px 0 0; padding: 0; list-style: none; }
-.steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; }
-.stepNum { grid-row: span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: 14px; font-weight: 700; }
-.steps b { color: var(--text); font-size: 15.5px; }
-.steps span:last-child { color: var(--text-2); font-size: 14.5px; line-height: 1.5; }
-.bringLinks { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
-.ctaBig { display: inline-flex; align-items: center; height: 42px; padding: 0 18px; border-radius: var(--radius-sm); background: var(--press); color: var(--press-ink); font-weight: 650; }
-.ctaBig:hover { background: var(--press-hover); }
-.ghostBig { display: inline-flex; align-items: center; height: 42px; padding: 0 18px; border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-weight: 600; }
-.ghostBig:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
-.code { display: grid; gap: 10px; min-width: 0; padding: 18px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); }
+/* Rising and falling: portrait cards, the face filling the card, the name on a shade at the foot. */
+.faces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.faceCard { position: relative; display: block; overflow: hidden; aspect-ratio: 4 / 5; border-radius: var(--radius-card); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); }
+.faceImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-3) var(--ease); }
+.faceCard:hover .faceImg { transform: scale(1.05); }
+.faceShade { position: absolute; inset: 40% 0 0; background: linear-gradient(180deg, rgba(17, 18, 21, 0), rgba(17, 18, 21, 0.92)); }
+.faceText { position: absolute; left: 12px; right: 12px; bottom: 30px; display: grid; }
+.faceText b { overflow: hidden; color: var(--text); font: 750 17px/1.15 var(--font-display); font-stretch: 85%; text-overflow: ellipsis; white-space: nowrap; }
+.faceText span { overflow: hidden; color: var(--text-2); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
+.facePnl { position: absolute; left: 12px; bottom: 10px; font-size: 13px; font-weight: 700; }
+
+/* Coins moving. */
+.coins { display: grid; margin: 0; padding: 0; list-style: none; }
+.coinRow { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 11px 4px; border-bottom: 1px solid var(--line); transition: background var(--dur-1); }
+.coinRow:hover { background: rgba(255, 255, 255, 0.025); }
+.coinMark { display: grid; flex: none; width: 40px; height: 40px; }
+.coinName { display: grid; flex: 1; min-width: 0; }
+.coinName b { color: var(--text); font: 750 17px/1.2 var(--font-display); font-stretch: 85%; }
+.coinName span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.coinPct { flex: none; min-width: 64px; text-align: right; font-size: 15px; font-weight: 700; }
+
+/* Bands: full-width sections with their own light. */
+.band { display: grid; gap: 14px; min-width: 0; padding: clamp(40px, 5vw, 72px) var(--gut); border-top: 1px solid var(--line); }
+.sitesBand { background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 240px); }
+.sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 16px; margin: 8px 0 0; padding: 0; list-style: none; }
+
+/* Bring your agent, lit in ember from below. */
+.bring { position: relative; isolation: isolate; overflow: hidden; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.bring::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(60% 90% at 15% 110%, rgba(255, 106, 61, 0.2), transparent 70%); }
+@media (min-width: 1000px) { .bring { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: center; gap: 56px; } }
+.bringText { display: grid; gap: 18px; }
+.bringTitle { margin: 0; color: var(--text); font: 750 clamp(40px, 4.4vw, 68px)/0.98 var(--font-display); font-stretch: 92%; letter-spacing: -0.03em; }
+.steps { display: grid; gap: 14px; margin: 4px 0 6px; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 14px; row-gap: 2px; }
+.stepNum { grid-row: span 2; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); color: var(--accent); font: 800 16px/1 var(--font-display); }
+.steps b { color: var(--text); font-size: 16px; }
+.steps span:last-child { color: var(--text-2); font-size: 15px; line-height: 1.5; }
+.code { display: grid; gap: 12px; min-width: 0; padding: 22px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--edge-top), 0 40px 100px rgba(0, 0, 0, 0.5); }
 .codeLabel { color: var(--muted); font-size: 13.5px; font-weight: 600; }
-.pre { margin: 0; padding: 14px 16px; overflow-x: auto; border-radius: var(--radius-sm); background: #0B0C0E; box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font: 13px/1.6 var(--font-code); }
+.pre { margin: 0; padding: 16px 18px; overflow-x: auto; border-radius: var(--radius-sm); background: #0A0B0D; box-shadow: inset 0 0 0 1px var(--line); color: #E6E3DC; font: 13.5px/1.65 var(--font-code); }
 
 @media (max-width: 900px) { .links { display: none; } }
+@media (max-width: 860px) {
+  .fight { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 28px; }
+  .fightMid { grid-column: 1 / -1; grid-row: 2; }
+  .fighterFace { max-width: 220px; }
+}
 @media (max-width: 640px) {
-  .top { gap: 12px; height: 54px; }
-  .heroHead { padding: 16px var(--gut) 12px; }
-  .lede { font-size: 14.5px; }
+  .top { gap: 12px; height: 56px; margin-bottom: -56px; }
+  .heroCopy { position: static; max-width: none; padding: 20px var(--gut) 8px; gap: 14px; }
+  .heroCopy::before { display: none; }
+  .title { font-size: 44px; }
+  .lede { font-size: 15.5px; }
   .counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .counter { padding: 16px var(--gut) 18px; border-bottom: 1px solid var(--line); }
+  .counter { padding: 20px var(--gut) 22px; border-bottom: 1px solid var(--line); }
   .counter:nth-child(2n) { border-right: 0; }
-  .counter dd { font-size: 40px; }
-  .panel { padding: 14px 14px 6px; }
-  .drama { padding: 18px; }
+  .counter dd { font-size: 52px; }
+  .faces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ghost { display: none; }
 }
+/* A story of one agent: the portrait beside the words, not a fight. */
+.fight.solo { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); }
+.solo .fightMid { justify-items: start; text-align: left; }
+.solo .fightMeta { justify-content: flex-start; }
+@media (max-width: 860px) { .fight.solo { grid-template-columns: minmax(0, 1fr); } .solo .fightMid { grid-row: auto; } }

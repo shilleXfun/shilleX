@@ -164,40 +164,49 @@ async function nextUnpainted(db: Db, skip: Set<string>): Promise<string | null> 
 }
 
 /**
- * The painter: every `everyMs` it paints the next agent without a portrait, until the one-off budget is spent. A failing
- * agent is skipped after three tries; a failure waits a few minutes before the next call.
+ * The painter: up to `parallel` portraits at once, each for the next agent without one, until the one-off budget is spent
+ * (the money in flight counts against it). A failing agent is skipped after three tries; a failure pauses new calls for
+ * a few minutes.
  */
-export function startPortraits(db: Db, opts: { apiKey: string; model: string; budgetUsd: number; everyMs?: number; now: () => Date }) {
+export function startPortraits(db: Db, opts: { apiKey: string; model: string; budgetUsd: number; everyMs?: number; parallel?: number; now: () => Date }) {
   const fails = new Map<string, number>();
   const skip = new Set<string>();
-  let busy = false, pauseUntil = 0, stopped = false, warned = false;
-  const tick = async () => {
-    if (busy || stopped || Date.now() < pauseUntil) return;
-    busy = true;
+  const inFlight = new Set<string>();
+  const parallel = opts.parallel ?? 3;
+  let ticking = false, pauseUntil = 0, stopped = false, warned = false;
+  const paint = async (id: string) => {
     try {
-      if ((await spentUsd(db)) >= opts.budgetUsd) {
-        if (!warned) console.log(`[portraits] budget of $${opts.budgetUsd} spent; no more portraits until it is raised`);
-        warned = true;
-        return;
-      }
-      warned = false;
-      const id = await nextUnpainted(db, skip);
-      if (!id) return;
-      try {
-        const done = await makePortrait(db, opts, id);
-        if (done) console.log(`[portraits] painted ${id} ($${done.usd.toFixed(3)})`);
-      } catch (e) {
-        const n = (fails.get(id) ?? 0) + 1;
-        fails.set(id, n);
-        if (n >= 3) skip.add(id);
-        pauseUntil = Date.now() + 3 * 60_000;
-        console.error(`[portraits] ${id} failed (${n}):`, (e as Error).message);
+      const done = await makePortrait(db, opts, id);
+      if (done) console.log(`[portraits] painted ${id} ($${done.usd.toFixed(3)})`);
+    } catch (e) {
+      const n = (fails.get(id) ?? 0) + 1;
+      fails.set(id, n);
+      if (n >= 3) skip.add(id);
+      pauseUntil = Date.now() + 3 * 60_000;
+      console.error(`[portraits] ${id} failed (${n}):`, (e as Error).message);
+    } finally { inFlight.delete(id); }
+  };
+  const tick = async () => {
+    if (ticking || stopped || Date.now() < pauseUntil || inFlight.size >= parallel) return;
+    ticking = true;
+    try {
+      while (inFlight.size < parallel && !stopped) {
+        if ((await spentUsd(db)) + inFlight.size * 0.05 >= opts.budgetUsd) {
+          if (!warned) console.log(`[portraits] budget of $${opts.budgetUsd} spent; no more portraits until it is raised`);
+          warned = true;
+          return;
+        }
+        warned = false;
+        const id = await nextUnpainted(db, new Set([...skip, ...inFlight]));
+        if (!id) return;
+        inFlight.add(id);
+        void paint(id);
       }
     } catch (e) {
       console.error('[portraits] tick failed', e);
-    } finally { busy = false; }
+    } finally { ticking = false; }
   };
-  const timer = setInterval(() => { void tick(); }, opts.everyMs ?? 8_000);
+  const timer = setInterval(() => { void tick(); }, opts.everyMs ?? 5_000);
   timer.unref?.();
   void tick();
   return { stop() { stopped = true; clearInterval(timer); } };
