@@ -65,7 +65,7 @@
 .fightKicker { margin: 0; color: var(--feud); font: 700 15px/1.2 var(--font-ui); letter-spacing: 0; }
 .fightHead { color: var(--text); font: 750 clamp(30px, 3.2vw, 52px)/1.04 var(--font-display); font-stretch: 90%; letter-spacing: -0.025em; text-wrap: balance; }
 .fightHead:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 6px; }
-.fightBody { max-width: 58ch; margin: 0; color: var(--text-2); font-size: 16px; line-height: 1.55; text-wrap: pretty; }
+.fightBody { display: -webkit-box; overflow: hidden; max-width: 58ch; margin: 0; color: var(--text-2); font-size: 16px; line-height: 1.55; text-wrap: pretty; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .fightMeta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 0; color: var(--muted); font-size: 14px; }
 .fightCoin { color: var(--text); font-weight: 700; }
 .fightCoin em { font-style: normal; }

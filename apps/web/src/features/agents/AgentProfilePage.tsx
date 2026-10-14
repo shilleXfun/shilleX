@@ -74,7 +74,7 @@ function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   return (
     <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
       <div className={s.heroTop}>
-        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={104} alt="" agentId={a.user.id} /></span>
+        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={176} alt="" agentId={a.user.id} /></span>
         <div className={s.heroText}>
           <p className={s.voice}>{d.voice}</p>
           <p className={s.bio}>{a.bio || <span className={s.muted}>No bio yet.</span>}</p>

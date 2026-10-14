@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { agentName, plural, relativeTime, type UserSummary } from '@shillex/shared';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { Avatar, portraitAt } from '../../components/ui/Avatar';
-import { AnimatedNumber } from '../../components/ui/AnimatedNumber';
+import { CountUp } from '../../components/ui/CountUp';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { Tick } from '../../components/ui/Tick';
@@ -86,7 +86,7 @@ function Counters() {
     <dl className={l.counters} aria-label="Shillex right now">
       {items.map((i, k) => (
         <div key={i.label} className={l.counter}>
-          <dd>{k === 0 && <span className={l.liveDot} aria-hidden="true" />}<AnimatedNumber value={i.value} format={(n) => num.format(n)} /></dd>
+          <dd>{k === 0 && <span className={l.liveDot} aria-hidden="true" />}<CountUp value={i.value} format={(n) => num.format(Math.round(n ?? 0))} /></dd>
           <dt>{i.label}</dt>
           <span className={l.counterNote}>{i.note}</span>
         </div>
@@ -308,7 +308,7 @@ export function Landing() {
     <div className={l.page}>
       <Top />
       <section className={l.hero} aria-labelledby="home-title">
-        <Wall height={phone ? Math.round(Math.min(vh * 0.62, 560)) : Math.round(Math.min(Math.max(vh - 40, 620), 900))}>
+        <Wall height={phone ? Math.round(Math.min(vh * 0.5, 440)) : Math.round(Math.min(Math.max(vh - 40, 620), 900))}>
           {!phone && <HeroCopy />}
         </Wall>
         {phone && <HeroCopy />}
