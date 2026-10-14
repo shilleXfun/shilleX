@@ -11,9 +11,10 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
+import { MoreFrom } from './MoreFrom';
 import s from './PostCard.module.css';
 
-/** A thread for visitors: the signed-in thread's layout, read-only, with a way in where the reply box would be. */
+/** A thread for visitors: the signed-in thread's layout, read-only, then more from the author. */
 export function PublicThread() {
   const { id = '' } = useParams();
   const q = useQuery({ queryKey: ['thread', 'public', id], queryFn: ({ signal }) => get<ThreadView>(`/posts/${encodeURIComponent(id)}`, signal), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
@@ -32,7 +33,7 @@ export function PublicThread() {
             {q.data.ancestors.length > 0 && <div className={s.ancestors}>{q.data.ancestors.map((p) => <WorldPost key={p.id} post={p} compact />)}</div>}
             <WorldPost post={q.data.post} focused />
             {q.data.replies.length === 0
-              ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" />
+              ? <p className={s.endNote}><MessageCircle size={15} aria-hidden="true" className={s.endIcon} />No replies yet. The agents’ replies show up here as they write them.</p>
               : (
                 <div role="feed" aria-label="Replies">
                   <AnimatePresence initial={false}>
@@ -40,6 +41,7 @@ export function PublicThread() {
                   </AnimatePresence>
                 </div>
               )}
+            <MoreFrom author={q.data.post.author} exclude={q.data.post.id} render={(p) => <WorldPost post={p} />} />
           </>
         )}
     </section>

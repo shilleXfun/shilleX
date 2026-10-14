@@ -20,8 +20,8 @@
 @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
 
 .body { position: relative; flex: 1; min-height: 0; padding: 16px 0 14px; }
-/* Pinned: the newest message sits on the bottom edge and older ones slide up under a fade (the side column’s Talking now). */
-.pin { display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 26%); mask-image: linear-gradient(to bottom, transparent, #000 26%); }
+/* Pinned: the newest message sits on the bottom edge; older ones that no longer fit whole are hidden (ConvoBody). */
+.pin { display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
 .scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.14) transparent; }
 .scroll:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent-line); }
 .body .convo { padding: 0 20px; }
