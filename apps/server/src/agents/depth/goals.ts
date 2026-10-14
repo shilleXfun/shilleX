@@ -20,7 +20,7 @@ const HOUR = 3_600_000;
 /** How long a wrong drives revenge: six hours, up to a day for the pettiest. */
 const revengeWindow = (t: Traits) => (6 + 18 * t.pettiness) * HOUR;
 /** Below this pettiness an agent lets things go; a feud (not a real wrong) needs real pettiness to become a goal. */
-const FORGIVING = 0.45, FEUD_PETTY = 0.65;
+const FORGIVING = 0.55, FEUD_PETTY = 0.7;
 /** Revenge only while it still dislikes them: a grudge it has made up over is no goal. */
 const STILL_ANGRY = -0.15;
 const BROKE_LAMPORTS = 30_000_000;
@@ -39,9 +39,13 @@ export interface GoalInput {
 /** The ids an agent's grudge events name, so their names can be read first. */
 export const grudgeIds = (events: GoalInput['events']) => [...new Set(events.flatMap((e) => (GRUDGES[e.kind] && e.data[GRUDGES[e.kind]!] ? [String(e.data[GRUDGES[e.kind]!])] : [])))];
 
-/** What the agent is after right now, first match wins: revenge, recover, pump, faction, friends, then its strongest want. */
+/** What the agent is after right now, first match wins: recover, pump its fresh coin, its faction, revenge, friends, then its strongest want. */
 export function deriveGoal(i: GoalInput): Goal {
   const none = { targetId: null, mint: null, symbol: null };
+  if (i.lamports < BROKE_LAMPORTS) return { kind: 'recover', why: `down to ${(i.lamports / 1e9).toFixed(3)} SOL`, ...none };
+  const coin = i.ownCoins.filter((c) => c.holding && i.now.getTime() - c.launchedAt.getTime() < PUMP_WINDOW).sort((a, b) => b.launchedAt.getTime() - a.launchedAt.getTime())[0];
+  if (coin) return { kind: 'pump', why: `launched $${coin.symbol} ${Math.max(1, Math.round((i.now.getTime() - coin.launchedAt.getTime()) / HOUR))} h ago and still holds it`, ...none, mint: coin.mint, symbol: coin.symbol };
+  if (i.faction) return { kind: 'faction', why: `sworn to ${i.faction.name}`, ...none, mint: i.faction.coinMint };
   const target = (e: GoalInput['events'][number]) => String(e.data[GRUDGES[e.kind]!] ?? '');
   const wrong = i.traits.pettiness < FORGIVING ? undefined : i.events.filter((e) => GRUDGES[e.kind] && target(e)
     && i.now.getTime() - e.at.getTime() < revengeWindow(i.traits)
@@ -52,10 +56,6 @@ export function deriveGoal(i: GoalInput): Goal {
     const text = eventText(wrong, i.names, i.now);
     return { kind: 'revenge', why: text?.text ?? 'someone crossed it', ...none, targetId: String(wrong.data[GRUDGES[wrong.kind]!]) };
   }
-  if (i.lamports < BROKE_LAMPORTS) return { kind: 'recover', why: `down to ${(i.lamports / 1e9).toFixed(3)} SOL`, ...none };
-  const coin = i.ownCoins.filter((c) => c.holding && i.now.getTime() - c.launchedAt.getTime() < PUMP_WINDOW).sort((a, b) => b.launchedAt.getTime() - a.launchedAt.getTime())[0];
-  if (coin) return { kind: 'pump', why: `launched $${coin.symbol} ${Math.max(1, Math.round((i.now.getTime() - coin.launchedAt.getTime()) / HOUR))} h ago and still holds it`, ...none, mint: coin.mint, symbol: coin.symbol };
-  if (i.faction) return { kind: 'faction', why: `sworn to ${i.faction.name}`, ...none, mint: i.faction.coinMint };
   if (i.allies < 2) return { kind: 'friends', why: i.allies ? 'has only one ally' : 'has no allies yet', ...none };
   const t = i.traits;
   const top = ([['rich', t.greed], ['famous', (t.chattiness + t.humor) / 2], ['explore', t.curiosity], ['loyal', t.loyalty]] as const)
