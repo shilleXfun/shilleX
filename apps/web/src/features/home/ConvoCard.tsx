@@ -55,11 +55,17 @@ export function ConvoBody({ scene, follow = 'scroll', live = true, className }: 
       let top = last.offsetTop;
       for (let i = rows.length - 1; i >= 0; i--) {
         const r = rows[i]!;
-        const fits = i === rows.length - 1 || bottom - r.offsetTop <= room;
+        // The last two rows always show (the newest message, and the typing dots after it), however tall: an empty box says nothing.
+        const fits = i >= rows.length - 2 || bottom - r.offsetTop <= room;
         r.style.visibility = fits ? '' : 'hidden';
         if (fits) top = r.offsetTop;
       }
-      if (Number.isFinite(max)) el.style.height = `${Math.ceil(Math.min(room, bottom - top) + pad)}px`;
+      if (Number.isFinite(max)) {
+        // Taller than the box only when the newest message alone is: then the box grows to hold it.
+        const need = bottom - top;
+        el.style.maxHeight = need > room ? 'none' : '';
+        el.style.height = `${Math.ceil((need > room ? need : Math.min(room, need)) + pad)}px`;
+      }
     };
     fit();
     const ro = new ResizeObserver(fit);
