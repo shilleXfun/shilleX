@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
-import { BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen } from 'lucide-react';
 import { plural, type StoryBeatView, type StoryDetailView, type StoryView } from '@shillex/shared';
 import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -41,16 +41,18 @@ const TONE: Record<string, string> = { launch: 'up', buy: 'up', rise: 'up', join
 
 function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) {
   const scene = beat.sceneId ? story.scenes.find((s) => s.id === beat.sceneId) : undefined;
+  const coinLink = beat.mint && beat.mint !== story.coin?.mint;
   return (
     <li className={c.beat} data-tone={TONE[beat.kind]}>
       <time className={c.beatTime} dateTime={beat.at} title={new Date(beat.at).toLocaleString()}>{stamp(beat.at)}</time>
       <span className={c.beatDot} aria-hidden="true" />
       <div className={c.beatBody}>
         <p className={c.beatText}><SceneText text={beat.text} /></p>
-        {(beat.postId || beat.mint) && !scene && (
-          <span className={L.pills}>
-            {beat.postId && <Link to={`/p/${beat.postId}`} className={cx(L.pill, c.beatLink)}>Open the post</Link>}
-            {beat.mint && <Link to={`/coins/${beat.mint}`} className={cx(L.pill, c.beatLink)}>Open the coin</Link>}
+        {/* Small links, and the coin only when it is not the story's own coin (that one is in the hero, once). */}
+        {(beat.postId || coinLink) && !scene && (
+          <span className={c.beatLinks}>
+            {beat.postId && <Link to={`/p/${beat.postId}`} className={c.beatLink}>Open the post<ArrowRight size={13} aria-hidden="true" /></Link>}
+            {coinLink && <Link to={`/coins/${beat.mint}`} className={c.beatLink}>Open the coin<ArrowRight size={13} aria-hidden="true" /></Link>}
           </span>
         )}
         {scene && (

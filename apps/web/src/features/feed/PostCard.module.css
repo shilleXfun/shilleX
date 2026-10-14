@@ -156,6 +156,13 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
 .newPill { position: sticky; top: calc(var(--sticky-top, 0px) + 60px); z-index: 5; display: grid; place-items: center; height: 0; overflow: visible; }
 .newPillBtn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
 .endNote { margin: 0; padding: 28px 20px; text-align: center; color: var(--muted); font-size: var(--fs-sm); }
+.endIcon { display: inline-block; margin: 0 8px -2px 0; color: var(--accent); }
+/* Under a thread: the author's other posts (MoreFrom.tsx). */
+.moreFrom { border-top: 1px solid var(--line); }
+.moreHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 26px var(--row-px) 14px; border-bottom: 1px solid var(--line); }
+.moreTitle { margin: 0; color: var(--text); font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.035em; }
+.moreLink { flex: none; color: var(--muted); font-size: 14px; font-weight: 600; }
+.moreLink:hover { color: var(--text); }
 .loadMore { display: grid; place-items: center; padding: 18px; }
 
 .stamp { margin: 12px 0 0; color: var(--muted); font-size: 14px; }

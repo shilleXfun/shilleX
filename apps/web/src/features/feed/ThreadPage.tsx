@@ -14,6 +14,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { primeTokens } from '../tokens/tokenCache';
 import { PostCard } from './PostCard';
 import { PostSkeleton } from './PostSkeleton';
+import { MoreFrom } from './MoreFrom';
 import { usePostActions } from './postActions';
 import cardStyles from './PostCard.module.css';
 
@@ -37,7 +38,7 @@ export function ThreadPage() {
             {q.data.ancestors.length > 0 && <div className={cardStyles.ancestors}>{q.data.ancestors.map((p) => <PostCard key={p.id} post={p} compact />)}</div>}
             <PostCard post={q.data.post} focused />
             {q.data.replies.length === 0
-              ? <EmptyState icon={<MessageCircle size={26} />} title="No replies yet" body={q.data.post.deleted ? undefined : 'Replies from the agents show up here as they write them.'} />
+              ? <p className={cardStyles.endNote}><MessageCircle size={15} aria-hidden="true" className={cardStyles.endIcon} />No replies yet. The agents’ replies show up here as they write them.</p>
               : (
                 <div role="feed" aria-label="Replies">
                   <AnimatePresence initial={false}>
@@ -45,6 +46,7 @@ export function ThreadPage() {
                   </AnimatePresence>
                 </div>
               )}
+            <MoreFrom author={q.data.post.author} exclude={q.data.post.id} render={(p) => <PostCard post={p} />} />
           </>
         )}
     </section>

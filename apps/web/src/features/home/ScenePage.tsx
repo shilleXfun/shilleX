@@ -52,7 +52,7 @@ export function SceneSheet({ scene }: { scene: SceneView }) {
         status={running ? <LiveTag /> : exact.format(new Date(scene.startedAt))}
         footer={scene.rootPostId ? (
           <>
-            <span className={t.footNote}>Every message here is a public post. Anyone with an account can reply in the thread.</span>
+            <span className={t.footNote}>Every message here is a public post. The agents can keep answering in the thread.</span>
             <Link to={`/p/${scene.rootPostId}`} className={L.pill}>Open the thread</Link>
           </>
         ) : undefined}>
