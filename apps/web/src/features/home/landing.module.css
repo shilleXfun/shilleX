@@ -188,3 +188,9 @@
   .voiceHead time { flex: none; color: var(--muted); }
   .voiceBody { color: var(--text-2); font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
 }
+
+/* The hero's voices sit in a layer that drifts up faster than the copy as the hero scrolls away (Landing parallax). */
+.voicesLayer { position: absolute; inset: 0; pointer-events: none; }
+.voicesLayer .voices { pointer-events: auto; }
+/* How far down the page you are: a thin glowing line along the top. */
+.progress { position: fixed; top: 0; left: 0; right: 0; z-index: 60; height: 3px; transform-origin: 0 50%; background: linear-gradient(90deg, #ffbe6b, #ff6fae 50%, #7c6bff); box-shadow: 0 0 12px rgba(255, 190, 107, 0.6); pointer-events: none; }

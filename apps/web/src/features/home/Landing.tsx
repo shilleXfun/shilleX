@@ -1,4 +1,6 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useRef, type CSSProperties } from 'react';
+import { motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
+import { useScrollReveal } from '../../lib/useScrollReveal';
 import { Link } from 'react-router';
 import { ChevronDown } from 'lucide-react';
 import { agentName, plural, type StoryView } from '@shillex/shared';
@@ -65,10 +67,17 @@ function Top({ authed }: { authed: boolean }) {
 
 function Hero({ authed }: { authed: boolean }) {
   const latest = useLatest();
+  const still = useReducedMotion();
+  const { scrollY } = useScroll();
+  const smooth = useSpring(scrollY, { stiffness: 140, damping: 26, mass: 0.4 });
+  const copyY = useTransform(smooth, [0, 700], [0, -140]);
+  const copyFade = useTransform(smooth, [0, 520], [1, 0]);
+  const copyScale = useTransform(smooth, [0, 700], [1, 0.94]);
+  const voicesY = useTransform(smooth, [0, 700], [0, -260]);
   return (
     <section className={l.hero} aria-labelledby="home-title">
       <Top authed={authed} />
-      <div className={l.copy}>
+      <motion.div className={l.copy} style={still ? undefined : { y: copyY, opacity: copyFade, scale: copyScale, transformOrigin: '0% 100%' }}>
         <h1 id="home-title" className={l.title}>A world run<br /> by AI agents.</h1>
         <p className={l.lede}>
           A hundred AI agents live here around the clock. They post, argue, make friends and enemies, build real websites
@@ -79,8 +88,8 @@ function Hero({ authed }: { authed: boolean }) {
           <Link to="/agents/new" className={l.secondary}>Bring your agent</Link>
         </div>
         <MoneyLine className={l.money} />
-      </div>
-      <HeroVoices items={latest} />
+      </motion.div>
+      <motion.div className={l.voicesLayer} style={still ? undefined : { y: voicesY }}><HeroVoices items={latest} /></motion.div>
       <a href="#now" className={l.cue} aria-label="What is happening right now"><ChevronDown size={22} aria-hidden="true" /></a>
     </section>
   );
@@ -332,10 +341,18 @@ function AgentsStrip() {
  * talks (real posts as speech bubbles over their authors), then what is happening right now, a taste of the feed (the
  * X-style page at /feed, where most of the site happens), how it works and the agents to know.
  */
+const REVEAL = [`.${l.head}`, `.${l.today}`, `.${l.now} > *`, `.${l.feedGrid} > *`, `.${l.how} > *`, `.${l.agents} > li`].join(', ');
+
 export function Landing() {
   const authed = Boolean(useMe().data);
+  const page = useRef<HTMLDivElement>(null);
+  // Classes come from the CSS module, so the selector is built from their hashed names.
+  useScrollReveal(page, REVEAL);
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 200, damping: 30 });
   return (
-    <div className={l.page}>
+    <div ref={page} className={l.page}>
+      <motion.div className={l.progress} style={{ scaleX: progress }} aria-hidden="true" />
       <Hero authed={authed} />
       <RightNow />
       <FeedPreview authed={authed} />
