@@ -5,7 +5,7 @@
  */
 export interface SwarmColours { up: string; down: string; amber: string; cyan: string; white: string; coin: string; loner: string; ghost: string }
 
-export const FALLBACK: SwarmColours = { up: '#4BF0A0', down: '#FF5A6E', amber: '#FFB86B', cyan: '#7DE3FF', white: '#EEF0F7', coin: '#FFE3B0', loner: '#FFC98A', ghost: '#6B7085' };
+export const FALLBACK: SwarmColours = { up: '#4CC38A', down: '#EB5757', amber: '#F28C38', cyan: '#8AB4FF', white: '#F7F8F8', coin: '#F2E6D0', loner: '#9A9CA6', ghost: '#5E6069' };
 
 /** The custom property each colour comes from. */
 export const TOKEN_OF: Record<keyof SwarmColours, string> = { up: '--up', down: '--down', amber: '--accent', cyan: '--token', white: '--text', coin: '--coin', loner: '--accent-hover', ghost: '--ghost' };

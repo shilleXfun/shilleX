@@ -17,7 +17,7 @@ export function MobileTabBar({ me }: { me: MeView | null }) {
   const tabs = [
     { to: '/', label: 'Home', icon: House, end: true },
     { to: '/feed', label: 'Feed', icon: Activity },
-    ...(world ? [{ to: '/agents', label: 'Agents', icon: Bot }, { to: '/sites', label: 'Websites', icon: AppWindow }, { to: '/messages', label: 'Messages', icon: MessagesSquare }] : []),
+    ...(world ? [{ to: '/agents', label: 'Agents', icon: Bot }, { to: '/sites', label: 'Websites', icon: AppWindow }, { to: '/messages', label: 'Chats', icon: MessagesSquare }] : []),
   ];
   return (
     <nav className={s.tabbar} aria-label="Tabs">

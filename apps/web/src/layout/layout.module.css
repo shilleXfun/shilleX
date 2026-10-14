@@ -5,7 +5,7 @@
    is a ::before, because a backdrop-filter on the page itself would make it the backdrop for everything inside, and the
    sticky bars inside could no longer frost what scrolls under them. */
 .page { position: relative; z-index: 0; flex: 1 0 auto; min-width: 0; background-color: var(--sheet); }
-.page::before { content: ''; position: absolute; inset: 0; z-index: -1; border-inline: 1px solid var(--line); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); pointer-events: none; }
+.page::before { content: none; }
 .page:has(> [data-cards]) { background-color: transparent; }
 .page:has(> [data-cards])::before { display: none; }
 /* On the sheet a post row is clear: the sheet is already under it. */
@@ -22,10 +22,10 @@
 .skip { position: absolute; left: 8px; top: -40px; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); font-weight: 600; }
 .skip:focus { top: 8px; }
 
-.navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 700 11px/1 var(--font-ui); font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg); }
+.navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 700 11px/1 var(--font-ui); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Near-solid, so the page never reads through it; the page column pads its foot by the bar's height (shell.module.css). */
-.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 5px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgba(4, 6, 13, 0.96); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--line); }
+.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 5px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgba(8, 9, 10, 0.95); border-top: 1px solid var(--line); }
 .tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 14px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a > :not(.tabPill) { position: relative; }
 .tabbar a[aria-current='page'] { color: var(--text); }
@@ -39,17 +39,17 @@
 /* Sticky page header shared by top-level pages: frosted, so what scrolls under it blurs instead of reading through. */
 /* A page header (PageHeader.tsx, Lumen): a large title, one line under it, actions on the right, tabs below. It scrolls
    with the page; only the tabs a page puts in it stay in reach where the page asks for that. */
-.pageHeader { position: relative; z-index: 2; padding: 26px var(--row-px) 18px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent); }
+.pageHeader { position: sticky; top: var(--sticky-top, 0px); z-index: 12; padding: 14px var(--row-px) 12px; border-bottom: 1px solid var(--line); background: rgba(8, 9, 10, 0.86); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .pageHeaderRow { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
-.pageTitles { display: grid; gap: 8px; flex: 1; min-width: 0; }
-.pageTitle { margin: 0; color: var(--text); font: 650 clamp(30px, 3.4vw, 44px) / 1.02 var(--font-brand); letter-spacing: -0.045em; text-wrap: balance; }
-.pageSub { max-width: 62ch; margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
+.pageTitles { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.pageTitle { margin: 0; color: var(--text); font: 650 21px / 1.2 var(--font-brand); letter-spacing: -0.02em; text-wrap: balance; }
+.pageSub { max-width: 70ch; margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; text-wrap: pretty; }
 .pageActions { display: flex; align-items: center; gap: 8px; flex: none; padding-top: 4px; }
-.pageBelow { margin-top: 18px; }
-.back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-top: 1px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: linear-gradient(rgba(20, 20, 26, 0.6), rgba(20, 20, 26, 0.6)) padding-box, var(--edge) border-box; color: var(--text); transition: background .15s; }
-.back:hover { background: linear-gradient(rgba(40, 40, 50, 0.7), rgba(40, 40, 50, 0.7)) padding-box, var(--edge) border-box; }
+.pageBelow { margin: 10px calc(-1 * var(--row-px)) -12px; }
+.back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-top: 1px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--text); transition: background .15s; }
+.back:hover { background: linear-gradient(var(--raised), var(--raised)) padding-box, var(--edge) border-box; }
 @media (max-width: 767px) {
-  .pageHeader { padding: 18px var(--row-px) 14px; } .pageTitle { font-size: 30px; } .back { width: 36px; height: 36px; }
+  .pageHeader { padding: 12px var(--row-px) 10px; } .pageTitle { font-size: 19px; } .back { width: 36px; height: 36px; }
   /* Phones: the title and its line keep the width; actions wider than a single button wrap under them. */
   .pageHeaderRow { flex-wrap: wrap; row-gap: 12px; }
   .pageTitles { flex: 1 1 calc(100% - 64px); }
@@ -69,17 +69,17 @@
 /* 404: a short candle row with one missing, the gap breathing. */
 /* Page not found (NotFoundPage.tsx): one glass card, a few neurons with the missing one drawn in outline. */
 .notFound { display: grid; place-items: center; min-height: 70vh; padding: 48px var(--row-px); }
-.nfCard { display: grid; justify-items: center; gap: 12px; width: min(520px, 100%); padding: 40px 28px 34px; border: 1px solid transparent; border-radius: 26px; background: linear-gradient(rgba(14, 14, 18, 0.74), rgba(14, 14, 18, 0.74)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); text-align: center; }
+.nfCard { display: grid; justify-items: center; gap: 12px; width: min(520px, 100%); padding: 40px 28px 34px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); text-align: center; }
 .nfArt { width: 220px; height: auto; margin-bottom: 10px; overflow: visible; }
 .nfTie { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
-.nfTieGone { stroke: rgba(255, 196, 92, 0.5); stroke-width: 1; stroke-dasharray: 3 4; }
-.nfNode { fill: #ffd28a; filter: drop-shadow(0 0 6px rgba(255, 190, 90, 0.8)); }
+.nfTieGone { stroke: rgba(242, 140, 56, 0.5); stroke-width: 1; stroke-dasharray: 3 4; }
+.nfNode { fill: #F28C38; filter: drop-shadow(0 0 6px rgba(242, 140, 56, 0.8)); }
 .nfGhost { fill: none; stroke: rgba(255, 210, 138, 0.8); stroke-width: 1.5; stroke-dasharray: 4 4; animation: nfBreathe 2.4s ease-in-out infinite; }
 @keyframes nfBreathe { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .nfGhost { animation: none; } }
 .nfTitle { margin: 0; color: var(--text); font: 650 40px/1.05 var(--font-brand); letter-spacing: -0.045em; }
 .nfBody { max-width: 40ch; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
 .nfActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }
-@media (max-width: 767px) { .nfCard { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } .nfTitle { font-size: 32px; } }
+@media (max-width: 767px) { .nfCard { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; } .nfTitle { font-size: 32px; } }
 /* Over the world (a page of floating cards) a header's words carry a soft shadow, so the lines behind never cut through them. */
 [data-cards] > .pageHeader .pageTitle, [data-cards] > .pageHeader .pageSub { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 26px rgba(0, 0, 0, 0.95); }

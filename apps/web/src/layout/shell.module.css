@@ -1,88 +1,83 @@
-/* The layout over the world: the rail on the left edge, then the page filling every pixel to its right, the same on
-   every page (no centred column with empty gutters). From 1100 px the side column takes the right edge. Phones: the top
-   bar, one column and the tab bar. */
+/* X's layout, full width: the rail on the left edge, the page filling the rest, and from 1100 px the side column on the
+   right edge, the three split by hairlines. Phones: the top bar, one column and the tab bar. */
 .shell { --topbar-h: 0px; --sticky-top: 0px; min-height: 100%; }
-.frame { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); align-items: start; column-gap: var(--col-gap); min-width: 0; padding: 0 0 0 16px; }
-@media (min-width: 1100px) { .frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); padding-right: 16px; } }
+.frame { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); align-items: start; column-gap: 0; min-width: 0; padding: 0 0 0 12px; }
+@media (min-width: 1100px) { .frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); padding-right: 0; } }
 /* Chat pages, the Graph and About use the side column's room themselves. */
 .shell[data-wide='true'] .frame { grid-template-columns: var(--rail-w) minmax(0, 1fr); padding-right: 0; }
 
 /* Above the page's sticky bars (z 10), so a rail label never slides under them. */
-.railCol { position: sticky; top: 0; z-index: 20; height: 100vh; height: 100dvh; }
+.railCol { position: sticky; top: 0; z-index: 20; height: 100vh; height: 100dvh; border-right: 1px solid var(--line); }
 /* A flex column, so the page inside (layout.module.css .page) grows to the column's height. */
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; min-height: 100dvh; outline: none; }
 /* <main> takes focus on every page change (for screen readers); it is a landing spot, not a control, so no ring. */
 .main:focus-visible { outline: none; box-shadow: none; }
-.side { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.side { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0 16px 0 24px; border-left: 1px solid var(--line); }
 .side:hover, .side:focus-within { scrollbar-width: thin; }
 
 /* ── The rail ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
-/* No box of its own: the nav stands on the world. Every section is listed (no "More"): the world's sections, then a
-   hairline and the rest in smaller rows. Rows shrink with the window's height so the foot stays in view; a window too
-   short for all of them scrolls the rail. */
-.rail { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 12px 0 18px; scrollbar-width: none; }
+/* X's rail: the logo, the sections, a hairline and the small print; the account and Bring your agent at the foot. The
+   page you are on is bold white; a row under the pointer gets a soft pill. Rows shrink with the window's height so the
+   foot stays in view; a window too short for all of them scrolls the rail. */
+.rail { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 10px 0 18px; scrollbar-width: none; }
 .rail::-webkit-scrollbar { display: none; }
 .markWide, .railLabel, .ctaLabel { display: none; }
-.railLogo { display: grid; place-items: center; flex: none; width: 48px; height: 48px; margin-bottom: 8px; border-radius: 14px; color: var(--text); font-size: 30px; transition: background .12s; }
+.railLogo { display: grid; place-items: center; flex: none; width: 48px; height: 48px; margin-bottom: 8px; border-radius: var(--radius-pill); color: var(--text); font-size: 30px; transition: background var(--dur-1); }
 .railLogo:hover { background: rgba(255, 255, 255, 0.06); }
 .railDemo { flex: none; margin: -6px 0 10px; padding: 3px 6px; border-radius: var(--radius-chip); background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn-line); color: var(--warn); font-size: 11px; font-weight: 650; line-height: 1.2; }
 .railItems { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
-.railItem { position: relative; display: grid; place-items: center; flex: none; width: 48px; height: clamp(34px, 4.7vh, 46px); padding: 0; border: 0; border-radius: 14px; background: none; color: var(--muted); transition: color .12s, background .12s; }
+.railItem { position: relative; display: grid; place-items: center; flex: none; width: 50px; height: clamp(40px, 5.2vh, 50px); padding: 0; border: 0; border-radius: var(--radius-pill); background: none; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
 .railItem:hover, .railItem[aria-expanded='true'] { color: var(--text); background: rgba(255, 255, 255, 0.06); }
-/* The page you are on: white, a heavier stroke and a bar at the rail's edge. Amber stays for what you can do. */
 .railItem[aria-current='page'] { color: var(--text); }
-.railItem[aria-current='page']::before { content: ''; position: absolute; left: -14px; top: 50%; width: 3px; height: 22px; margin-top: -11px; border-radius: 0 3px 3px 0; background: var(--text); }
-.railItem .railBadge { position: absolute; top: 2px; right: -1px; min-width: 18px; height: 18px; padding: 0 4px; }
-.railDot { position: absolute; top: 8px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
-/* The second group: a hairline above, smaller rows and icons. */
+.railItem .railBadge { position: absolute; top: 4px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; }
+.railDot { position: absolute; top: 9px; right: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--token); box-shadow: 0 0 0 2px var(--bg); }
+/* The small print: a hairline above, smaller rows. */
 .railMinor { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-.railMinor .railItem { height: clamp(30px, 3.9vh, 38px); }
-.railMinor .railItem > svg { width: 19px; height: 19px; }
+.railMinor .railItem { height: clamp(32px, 4vh, 38px); color: var(--muted); }
+.railMinor .railItem > svg { width: 18px; height: 18px; }
 .railFoot { display: flex; flex-direction: column; align-items: center; gap: 12px; flex: none; margin-top: auto; padding-top: 12px; }
-.railAccount { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: none; transition: background .12s; }
+.railAccount { position: relative; display: grid; place-items: center; width: 50px; height: 50px; padding: 0; border: 0; border-radius: var(--radius-pill); background: none; transition: background var(--dur-1); }
 .railAccount:hover, .railAccount[aria-expanded='true'] { background: rgba(255, 255, 255, 0.06); }
-/* The amber button: Bring your agent (only agents write, so there is no Post button). */
-.railCta { position: relative; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--press); color: var(--press-ink); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); transition: background .15s, box-shadow .2s; }
-.railCta:hover { background: var(--press-hover); box-shadow: var(--glow-press); }
+.accountDot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--token); box-shadow: 0 0 0 2px var(--bg); }
+/* Bring your agent: the white button (only agents write, so there is no Post button). */
+.railCta { position: relative; display: grid; place-items: center; width: 50px; height: 50px; padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); transition: background var(--dur-1); }
+.railCta:hover { background: var(--press-hover); }
 /* The label, beside the icon on hover or keyboard focus. */
-.railTip { position: absolute; left: calc(100% + 16px); top: 50%; z-index: 45; padding: 7px 10px; border-radius: var(--radius-chip); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--text); font: 600 13px/1 var(--font-ui); white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-4px, -50%); transition: opacity .12s, transform .12s; }
+.railTip { position: absolute; left: calc(100% + 12px); top: 50%; z-index: 45; padding: 6px 10px; border-radius: var(--radius-chip); background: var(--raised); box-shadow: var(--shadow-pop); color: var(--text); font: 550 13px/1 var(--font-ui); white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-4px, -50%); transition: opacity var(--dur-1), transform var(--dur-1); }
 :is(.railItem, .railAccount, .railCta, .railLogo):is(:hover, :focus-visible) .railTip { opacity: 1; transform: translate(0, -50%); }
 @media (prefers-reduced-motion: reduce) { .railTip { transition: none; } }
-/* Narrow rail on a short window: it scrolls (the hover labels are clipped then; every row keeps its accessible name). */
 @media (max-height: 900px) { .rail { overflow-y: auto; overflow-x: hidden; } }
-/* Wide screens: an icon and its name on every row, the wordmark on top and the amber button as a full pill. */
+/* Wide screens: an icon and its name on every row, the wordmark on top and the button as a full pill. */
 @media (min-width: 1280px) {
-  .shell { --rail-w: 248px; }
-  .rail { align-items: stretch; padding: 8px 12px 18px 0; overflow-y: auto; overflow-x: hidden; }
-  .railLogo { justify-self: start; width: auto; height: 52px; padding: 0 14px; place-items: center start; }
+  .shell { --rail-w: 260px; }
+  .rail { align-items: stretch; padding: 8px 16px 18px 8px; overflow-y: auto; overflow-x: hidden; }
+  .railLogo { justify-self: start; width: auto; height: 52px; padding: 0 12px; place-items: center start; }
   .markSmall { display: none; }
   .markWide { display: block; }
   .railItems { align-items: stretch; }
-  .railItem { display: flex; align-items: center; justify-content: flex-start; gap: 18px; width: auto; padding: 0 16px 0 14px; border-radius: var(--radius-pill); color: var(--text); font-size: 18px; font-weight: 500; }
-  .railItem:hover, .railItem[aria-expanded='true'] { background: rgba(255, 255, 255, 0.07); }
-  .railItem[aria-current='page'] { font-weight: 750; }
-  .railItem[aria-current='page']::before { display: none; }
+  .railItem { display: flex; align-items: center; justify-content: flex-start; gap: 16px; width: auto; padding: 0 16px 0 12px; font-size: 17px; font-weight: 450; letter-spacing: -0.01em; }
+  .railItem > svg { width: 22px; height: 22px; }
+  .railItem[aria-current='page'] { font-weight: 650; }
   .railLabel { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .railItem .railBadge { top: 50%; left: 28px; right: auto; margin-top: -19px; }
-  .railDot { top: 50%; left: 30px; right: auto; margin-top: -14px; }
-  .railMinor { margin: 8px 0 0 14px; }
-  .railMinor .railItem { gap: 16px; margin-left: -14px; color: var(--muted); font-size: 15px; }
+  .railItem .railBadge { top: 50%; left: 26px; right: auto; margin-top: -19px; }
+  .railDot { top: 50%; left: 28px; right: auto; margin-top: -14px; }
+  .railMinor .railItem { gap: 16px; font-size: 14px; font-weight: 450; }
   .railMinor .railItem:hover, .railMinor .railItem[aria-current='page'] { color: var(--text); }
   .railTip { display: none; }
   .railFoot { align-items: stretch; }
-  .railCta { display: flex; align-items: center; justify-content: center; width: 100%; height: 50px; border-radius: var(--radius-pill); font-size: 17px; font-weight: 750; }
+  .railCta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; font-size: 15.5px; font-weight: 650; }
   .ctaIcon { display: none; }
   .ctaLabel { display: inline; }
-  .railAccount { width: auto; justify-content: start; padding: 0 10px; border-radius: var(--radius-pill); }
+  .railAccount { width: auto; justify-content: start; padding: 0 10px; }
+  .accountDot { left: 36px; right: auto; }
 }
-/* Short windows (a 720 px laptop with the browser's bars, a zoomed page): the logo and foot tighten too. */
 @media (max-height: 760px) {
-  .rail { padding: 8px 0 10px; }
+  .rail { padding: 6px 0 10px; }
   .railLogo { height: 40px; margin-bottom: 4px; }
   .railFoot { gap: 8px; padding-top: 8px; }
 }
-@media (max-height: 760px) and (max-width: 1279px) { .railAccount { width: 40px; height: 40px; } .railCta { width: 44px; height: 44px; } }
-@media (max-height: 760px) and (min-width: 1280px) { .railCta { height: 44px; } .railAccount { height: 44px; } }
+@media (max-height: 760px) and (max-width: 1279px) { .railAccount { width: 42px; height: 42px; } .railCta { width: 44px; height: 44px; } }
+@media (max-height: 760px) and (min-width: 1280px) { .railCta { height: 42px; } .railAccount { height: 44px; } }
 
 /* ── The top bar: phones only ─────────────────────────────────────────────────────────────────────────────────────── */
 .topbar { display: none; }
@@ -93,7 +88,7 @@
 .iconBtn:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
 .bellDot { position: absolute; top: 9px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
 .account { display: grid; place-items: center; width: 40px; height: 40px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: none; }
-.textBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--radius-pill); color: var(--text); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
+.textBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--radius-pill); color: var(--text); font-size: 14.5px; font-weight: 600; white-space: nowrap; }
 .textBtn:hover { background: rgba(255, 255, 255, 0.06); }
 .ctaBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
 .ctaBtn:hover { background: var(--press-hover); }
@@ -101,7 +96,7 @@
 @media (width < 1100px) { .side { display: none; } }
 @media (max-width: 767px) {
   .shell { --topbar-h: 52px; --sticky-top: var(--topbar-h); }
-  .topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 10px; min-width: 0; height: var(--topbar-h); padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); background: rgba(4, 6, 13, 0.88); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+  .topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 10px; min-width: 0; height: var(--topbar-h); padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); background: rgba(8, 9, 10, 0.92); }
   .frame, .shell[data-wide='true'] .frame { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: 0; }
   .railCol { display: none; }
   /* The padding keeps the last row clear of the tab bar; with it a short page still fills the screen exactly. */

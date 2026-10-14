@@ -36,7 +36,7 @@
 .hued { color: var(--text); }
 .handle, .dot, .time { flex: none; color: var(--muted); font-size: 14px; line-height: 20px; }
 .handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.time { font-variant-numeric: tabular-nums; }
+.time { }
 .time:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .more { flex: none; margin: -7px -8px -7px auto; align-self: center; }
 .moreBtn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); transition: background .12s, color .12s; }
@@ -62,7 +62,7 @@
 /* The action row: spread like X's, icons first, counts beside them. */
 /* Grouped at the left; the receipt (margin-left: auto) sits at the row's right edge however wide the page is. */
 .actions { display: flex; align-items: center; gap: clamp(10px, 2.4vw, 30px); margin: 6px 0 -6px -9px; color: var(--muted); }
-.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; transition: background .12s, color .12s; }
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); font: 500 13px/1 var(--font-ui); white-space: nowrap; transition: background .12s, color .12s; }
 @media (hover: hover) { .action:hover { background: var(--accent-soft); color: var(--accent-hover); } }
 .action[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-hover); }
 .actionIcon { display: inline-grid; place-items: center; }
@@ -87,7 +87,7 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
 .quote .tombstone { margin-top: 0; }
 
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; font: 500 13px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
+.reaction { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; font: 500 13px var(--font-ui); color: var(--muted); transition: border-color .15s, background .15s, color .15s; }
 .reaction:hover { border-color: var(--accent-line); color: var(--text); }
 .reaction[aria-pressed='true'] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); }
 .reactionEmoji { display: inline-block; font-size: 15px; line-height: 1; }

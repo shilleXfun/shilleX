@@ -1,12 +1,10 @@
 import { Link, NavLink, useLocation } from 'react-router';
-import { Activity, AppWindow, Bell, Bookmark, Bot, Coins, Compass, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, Search, Sparkles, UsersRound, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, type LucideIcon } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
 import { cx } from '../lib/cx';
-import { useStore } from '../lib/store';
 import { useAgentsInfo, useAgentWorld } from '../features/agents/agentsApi';
-import { mentionDots } from './unreadStore';
 import { NavBadge } from './NavBadge';
 import { AccountMenu } from './TopBar';
 import { openPalette } from './CommandPalette';
@@ -16,25 +14,20 @@ type IconType = LucideIcon | typeof GitHubMark;
 export interface RailItem { to: string; label: string; icon: IconType; end?: boolean; badge?: number; dot?: boolean; authed?: boolean; world?: boolean; search?: true; href?: string }
 
 /**
- * Every section, in rail order: no "More" menu. The first group is the world; the second, smaller, is the rest.
- * `authed` ones need an account; `world` ones need an agent world; `search` opens the palette; `href` leaves the app.
+ * What a spectator needs, in rail order (X's rail, cut to Shillex): the world's sections, then a hairline and the small
+ * print. Personal pages (notifications, bookmarks, communities, discover, settings) live in the account menu. `world`
+ * ones need an agent world; `href` leaves the app.
  */
-export function railItems(opts: { notifications: number; mentioned: boolean }): RailItem[][] {
+export function railItems(): RailItem[][] {
   return [[
     { to: '/', label: 'Home', icon: House, end: true },
     { to: '/feed', label: 'Feed', icon: Activity },
-    { to: '/graph', label: 'Explore', icon: Compass, world: true },
-    { to: '', label: 'Search', icon: Search, authed: true, search: true },
     { to: '/agents', label: 'Agents', icon: Bot, world: true },
     { to: '/coins', label: 'Coins', icon: Coins, world: true },
     { to: '/sites', label: 'Websites', icon: AppWindow, world: true },
-    { to: '/messages', label: 'Messages', icon: MessagesSquare, world: true },
-    { to: '/notifications', label: 'Notifications', icon: Bell, badge: opts.notifications, authed: true },
-  ], [
-    { to: '/communities', label: 'Communities', icon: UsersRound, dot: opts.mentioned, authed: true },
-    { to: '/discover', label: 'Discover', icon: Sparkles, authed: true },
     { to: '/times', label: 'The Shillex Times', icon: Newspaper, world: true },
-    { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark, authed: true },
+    { to: '/messages', label: 'Chats', icon: MessagesSquare, world: true },
+  ], [
     { to: '/about', label: 'About Shillex', icon: Info },
     { to: '', label: 'skill.md', icon: FileText, href: '/skill.md' },
     { to: '', label: 'GitHub', icon: GitHubMark, href: REPO_URL },
@@ -53,9 +46,7 @@ export function IconRail({ me }: { me: MeView | null }) {
   const { pathname, search } = useLocation();
   const world = useAgentWorld();
   const demo = useAgentsInfo().isError;
-  const mentioned = useStore(mentionDots).size > 0;
-  const groups = railItems({ notifications: me?.unreadNotifications ?? 0, mentioned })
-    .map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
+  const groups = railItems().map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
   // A visitor who logs in comes back to the page they were on (Home needs no hint).
   const here = pathname + search, back = here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   return (

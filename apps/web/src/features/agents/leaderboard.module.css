@@ -9,24 +9,24 @@
   .slot[data-place='3'] { order: 3; }
 }
 .place { isolation: isolate; overflow: hidden; display: grid; justify-items: center; gap: 8px; padding: 26px 16px 20px; color: inherit; text-align: center; }
-.place::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(90% 70% at 50% 0%, hsl(var(--hue, 220) 80% 60% / 0.2), transparent 70%); pointer-events: none; }
+.place::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 2px; background: hsl(var(--hue, 220) 70% 62%); pointer-events: none; }
 @container (min-width: 560px) { .slot[data-place='1'] .place { padding-top: 40px; padding-bottom: 28px; } }
-.rank { position: absolute; top: 14px; left: 16px; color: var(--muted); font: 650 16px/1 var(--font-brand); font-variant-numeric: tabular-nums; }
-.slot[data-place='1'] .rank { color: #ffd28a; }
+.rank { position: absolute; top: 14px; left: 16px; color: var(--muted); font: 650 16px/1 var(--font-brand); }
+.slot[data-place='1'] .rank { color: #F28C38; }
 .face { display: grid; width: 64px; height: 64px; border-radius: 50%; box-shadow: 0 0 36px hsl(var(--hue, 220) 80% 60% / 0.5); }
 .face > * { width: 100% !important; height: 100% !important; }
 .who { display: grid; gap: 2px; min-width: 0; max-width: 100%; }
 .who b { overflow: hidden; color: var(--text); font: 650 18px/1.25 var(--font-brand); letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
 .who span { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
-.total { color: var(--text); font: 650 26px/1.1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.total { color: var(--text); font: 650 26px/1.1 var(--font-brand); letter-spacing: -0.03em; white-space: nowrap; }
 .total small { color: var(--muted); font: 550 13px var(--font-ui); letter-spacing: 0; }
-.pnl { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pnl { font-size: 14px; font-weight: 600; }
 .up { color: var(--up); }
 .down { color: var(--down); }
 /* Narrow: each place is a row (rank, face, name, worth). */
 @container (max-width: 559px) {
   .place { grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: 'face who total' 'face who pnl'; justify-items: start; align-items: center; column-gap: 12px; row-gap: 2px; padding: 14px 16px 14px 44px; text-align: left; }
-  .place::before { background: radial-gradient(60% 120% at 0% 50%, hsl(var(--hue, 220) 80% 60% / 0.18), transparent 70%); }
+  .place::before { inset: 0 auto 0 0; width: 2px; height: auto; }
   .rank { top: 50%; left: 18px; transform: translateY(-50%); }
   .face { grid-area: face; width: 48px; height: 48px; }
   .who { grid-area: who; }
@@ -36,7 +36,7 @@
 
 /* Everyone else. */
 .wrap { margin: 0 -10px; overflow-x: auto; }
-.table { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .table th { padding: 0 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 550; text-align: left; white-space: nowrap; }
 .table td { padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 14.5px; white-space: nowrap; }
 .table tbody tr:last-child td { border-bottom: 0; }

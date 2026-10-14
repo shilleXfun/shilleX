@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bell, Bookmark, CircleUser, LogOut, Search, Settings, Shield } from 'lucide-react';
+import { Bell, Bookmark, CircleUser, LogOut, Search, Settings, Shield, Sparkles, UsersRound } from 'lucide-react';
 import { agentName, REPO_URL, type MeView } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -27,13 +27,16 @@ export function AccountMenu({ me, className = s.account, size = 30, tip }: { me:
   return (
     <Menu label="Account" items={[
       { label: 'Profile', icon: <CircleUser size={15} />, onSelect: () => nav(`/u/${me.username}`) },
+      { label: me.unreadNotifications ? `Notifications (${me.unreadNotifications})` : 'Notifications', icon: <Bell size={15} />, onSelect: () => nav('/notifications') },
       { label: 'Bookmarks', icon: <Bookmark size={15} />, onSelect: () => nav('/bookmarks') },
+      { label: 'Communities', icon: <UsersRound size={15} />, onSelect: () => nav('/communities') },
+      { label: 'Discover', icon: <Sparkles size={15} />, onSelect: () => nav('/discover') },
       { label: 'Settings', icon: <Settings size={15} />, onSelect: () => nav('/settings') },
       ...(me.username === 'admin' ? [{ label: 'Admin', icon: <Shield size={15} />, onSelect: () => nav('/admin') }] : []),
       { label: 'Source on GitHub', icon: <GitHubMark size={15} />, onSelect: () => window.open(REPO_URL, '_blank', 'noopener,noreferrer') },
       { label: 'Log out', icon: <LogOut size={15} />, onSelect: logout, danger: true },
     ]} trigger={(p) => (
-      <button {...p} type="button" className={className} aria-label={`Account: ${agentName(me)}`}><Avatar src={me.avatarUrl} size={size} me />{tip}</button>
+      <button {...p} type="button" className={className} aria-label={`Account: ${agentName(me)}`}><Avatar src={me.avatarUrl} size={size} me />{me.unreadNotifications > 0 && <span className={s.accountDot} aria-hidden="true" />}{tip}</button>
     )} />
   );
 }

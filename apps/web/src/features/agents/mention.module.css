@@ -5,3 +5,5 @@
 .face { flex: none; width: 16px; height: 16px; border-radius: 50%; background: #000; }
 .text { color: hsl(var(--hue, 220) 80% 76%); font-weight: 600; }
 .text:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Mentions read as links, one blue for everyone (2026-10-14): the agent's own hue is overridden. */
+.chip, .text { --hue: 218 !important; }

@@ -1,112 +1,108 @@
-/* Lumen over The Swarm (2026-10-14). Token names are stable. */
+/* Shillex (2026-10-14): Linear's precision, X's structure, Moltbook's plainness. Token names are stable; every page reads them. */
 :root {
   color-scheme: dark;
-  /* Lumen (2026-10-14): true black, white type, glass with luminous edges. The world's lights bring the colour; amber is
-     what is alive (live, focus, the brand mark); white is what a person can press. */
-  --bg: #020203;
-  --panel: #0B0B0E;
-  --raised: #141418;
-  --hover: #1B1B21;
-  --bg-hover: #09090C;
+  /* Near-black, solid surfaces and hairlines. White is what a person presses; orange is only the logo's X and what is
+     live; soft blue is a link (mentions, tickers); green and red are money moving. */
+  --bg: #08090A;
+  --panel: #0F1012;
+  --raised: #16171A;
+  --hover: #1D1E22;
+  --bg-hover: #0C0D0F;
   /* Hairlines: row dividers, column and card edges. */
-  --line: rgba(255, 255, 255, 0.075);
-  --line-strong: rgba(255, 255, 255, 0.13);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
   --line-hover: rgba(255, 255, 255, 0.24);
-  --text: #F4F4F6;
-  --muted: #8F8F9B;
-  --text-2: #C9C9D1;
-  /* Amber: life and focus. */
-  --accent: #FFBE6B;
-  --accent-hover: #FFCC8A;
-  --accent-ink: #160F04;
-  --accent-soft: rgba(255, 190, 107, 0.12);
-  --accent-line: rgba(255, 190, 107, 0.42);
-  --accent-wash: rgba(255, 190, 107, 0.06);
-  --accent-select: rgba(255, 190, 107, 0.3);
+  --text: #F7F8F8;
+  --muted: #7C818B;
+  --text-2: #B4B8C0;
+  /* Orange: the brand mark and what is live. */
+  --accent: #F28C38;
+  --accent-hover: #F59E55;
+  --accent-ink: #160A02;
+  --accent-soft: rgba(242, 140, 56, 0.14);
+  --accent-line: rgba(242, 140, 56, 0.45);
+  --accent-wash: rgba(242, 140, 56, 0.06);
+  --accent-select: rgba(138, 180, 255, 0.3);
   /* White: the primary action. */
-  --press: #F4F4F6;
+  --press: #F7F8F8;
   --press-hover: #FFFFFF;
-  --press-ink: #08080A;
-  /* Cyan: coins and tickers. Up and down for money moves only. */
-  --token: #7FE4FF;
-  --token-soft: rgba(127, 228, 255, 0.1);
-  --token-line: rgba(127, 228, 255, 0.4);
-  --token-hover: rgba(127, 228, 255, 0.18);
-  --token-ink: #04130F;
-  --up: #46E8A0;
-  --up-soft: rgba(70, 232, 160, 0.12);
-  --down: #FF6378;
-  --down-soft: rgba(255, 99, 120, 0.12);
-  --warn: #FFD166;
-  --warn-soft: rgba(255, 209, 102, 0.12);
-  --warn-line: rgba(255, 209, 102, 0.4);
-  --heat: #FF8A4C;
-  --heat-soft: rgba(255, 138, 76, 0.14);
-  /* Coin diamonds and agents with no faction or no life, as the backdrop and the Graph draw them. */
-  --coin: #FFE3B0;
-  --ghost: #6B6B78;
-  --scrim: rgba(2, 2, 4, 0.72);
-  --scrim-strong: rgba(2, 2, 4, 0.9);
-  --scrim-soft: rgba(2, 2, 4, 0.55);
-  --glass: rgba(14, 14, 18, 0.62);
-  --glass-blur: blur(22px) saturate(160%);
-  /* Glass: white at a few percent over the world, a luminous edge, light from above. Phones drop the blur. */
-  --card: rgba(20, 20, 26, 0.55);
-  --card-hover: rgba(28, 28, 36, 0.62);
-  --card-solid: rgba(12, 12, 16, 0.96);
-  --card-blur: blur(22px) saturate(160%);
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 50px rgba(0, 0, 0, 0.45);
-  /* The edge of a glass surface: brighter at the top left, fading round. Use as a border-box background. */
-  --edge: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0.1));
-  /* The sheet: the timeline column and the side column are one continuous surface each, rows split by hairlines. */
-  --sheet: rgba(9, 9, 12, 0.78);
-  --sheet-blur: blur(22px) saturate(160%);
-  /* A post row carries the sheet when it sits alone over the world (pages of floating cards); on a sheet it is clear. */
-  --row-bg: var(--sheet);
-  --row-blur: var(--sheet-blur);
-  --row-hover: rgba(255, 255, 255, 0.03);
+  --press-ink: #08090A;
+  /* Soft blue: links, @mentions and $tickers. */
+  --token: #8AB4FF;
+  --token-soft: rgba(138, 180, 255, 0.1);
+  --token-line: rgba(138, 180, 255, 0.4);
+  --token-hover: rgba(138, 180, 255, 0.18);
+  --token-ink: #06101F;
+  --up: #4CC38A;
+  --up-soft: rgba(76, 195, 138, 0.12);
+  --down: #EB5757;
+  --down-soft: rgba(235, 87, 87, 0.12);
+  --warn: #F2C94C;
+  --warn-soft: rgba(242, 201, 76, 0.12);
+  --warn-line: rgba(242, 201, 76, 0.4);
+  --heat: #F28C38;
+  --heat-soft: rgba(242, 140, 56, 0.14);
+  --coin: #F2E6D0;
+  --ghost: #5E6069;
+  --scrim: rgba(8, 9, 10, 0.72);
+  --scrim-strong: rgba(8, 9, 10, 0.9);
+  --scrim-soft: rgba(8, 9, 10, 0.55);
+  /* Surfaces are solid; the old glass tokens resolve to solid panels so every page follows without a blur. */
+  --glass: var(--panel);
+  --glass-blur: none;
+  --card: var(--panel);
+  --card-hover: #141518;
+  --card-solid: var(--panel);
+  --card-blur: none;
+  --card-shadow: none;
+  --edge: linear-gradient(var(--line), var(--line));
+  /* The sheet: the timeline column and the side column sit straight on the page. */
+  --sheet: var(--bg);
+  --sheet-blur: none;
+  --row-bg: transparent;
+  --row-blur: none;
+  --row-hover: rgba(255, 255, 255, 0.02);
   /* Fallback faction colours (real ones come from the data). */
-  --faction-1: #FF7A59;
-  --faction-2: #3DDBD9;
-  --faction-3: #B69CFF;
+  --faction-1: #F2994A;
+  --faction-2: #56CCF2;
+  --faction-3: #BB6BD9;
 
-  --glow-accent: 0 0 28px rgba(255, 190, 107, 0.3);
-  --glow-press: 0 0 0 1px rgba(255, 255, 255, 0.3), 0 8px 30px rgba(255, 255, 255, 0.16);
-  --glow-token: 0 0 24px rgba(125, 227, 255, 0.3);
+  --glow-accent: 0 0 0 3px rgba(242, 140, 56, 0.2);
+  --glow-press: none;
+  --glow-token: none;
 
   /* System emoji first; the bundled Twemoji (base.css) only fills glyphs the OS lacks, e.g. Unicode 13+ such as 🪖 on
      Windows 10, which otherwise render as empty boxes. */
   --font-emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Twemoji';
-  --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
+  --font-ui: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
-  /* Real code only (keys, JSON, curl, shortcuts); interface numbers use the UI face with tabular figures. */
+  /* Real code only (keys, JSON, curl, shortcuts). */
   --font-code: var(--font-mono);
-  /* One family: Geist, tight and heavy for display, plain for reading. */
-  --font-brand: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
+  /* One family: Inter, tight for titles, plain for reading. */
+  --font-brand: var(--font-ui);
 
-  /* 12 / 13.5 / 15.5 (posts and body) / 18 / 24 / 34, then display: page-level names at 44 and the home hero's headline. */
-  --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15.5px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-3xl: 44px;
-  --fs-display: clamp(56px, 8.4vw, 132px);
-  --lh: 1.5; --lh-display: 1.04;
+  /* 12 / 13.5 / 15 (posts and body) / 18 / 24 / 32 / 48; display for the home headline only. */
+  --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 32px; --fs-3xl: 48px;
+  --fs-display: clamp(40px, 6vw, 72px);
+  --lh: 1.5; --lh-display: 1.05;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
-  /* Radius by role: chips 6, inputs/buttons 12, popovers/dialogs 14, cards 16, pills/avatars 999. */
-  --radius-chip: 7px; --radius-sm: 12px; --radius: 12px; --radius-pop: 16px; --radius-card: 20px; --radius-pill: 999px;
-  --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-drawer: -24px 0 60px rgba(2, 2, 10, 0.55);
-  --shadow-sheet: 0 -20px 50px rgba(2, 2, 10, 0.6);
-  --shadow-media: 0 20px 60px rgba(0, 0, 0, 0.6);
-  /* A faint wash that lifts a tile off a card (stat tiles, launch rows). */
-  --tile: rgba(255, 255, 255, 0.025);
+  /* Radius by role: chips 6, inputs 10, popovers 12, cards 16, buttons and avatars round. */
+  --radius-chip: 6px; --radius-sm: 10px; --radius: 10px; --radius-pop: 12px; --radius-card: 16px; --radius-pill: 999px;
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line-strong);
+  --highlight: none;
+  --shadow-drawer: -20px 0 50px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -16px 40px rgba(0, 0, 0, 0.5);
+  --shadow-media: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --tile: rgba(255, 255, 255, 0.03);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-1: 120ms; --dur-2: 240ms; --dur-3: 480ms;
 
-  /* Desktop columns (layout/shell.module.css): the rail, the page filling the rest, and the side column from 1100 px. */
-  --rail-w: 76px; --side-w: clamp(340px, 24vw, 420px); --col-gap: 20px; --panel-w: 420px; --tabbar-h: 58px;
-  /* Rows (posts, the composer, the timeline's parts): the side padding and the gap between the 40 px avatar column and
-     the text. The avatar's centre, where thread lines run, is at --row-px + 20 px. */
-  --row-px: 18px; --card-gap: 12px;
+  /* Desktop columns (layout/shell.module.css): the rail, the timeline, and the side column from 1100 px. */
+  --rail-w: 76px; --side-w: 360px; --col-gap: 0px; --panel-w: 420px; --tabbar-h: 56px;
+  /* Rows (posts, the timeline's parts): the side padding and the gap between the 40 px avatar column and the text. The
+     avatar's centre, where thread lines run, is at --row-px + 20 px. */
+  --row-px: 20px; --card-gap: 12px;
   /* Full height the mobile tab bar occupies, including the home-indicator inset on notched phones. */
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
-/* Phones draw no backdrop blur (cost): a post row alone over the world goes near-solid instead. */
-@media (max-width: 767px) { :root { --row-bg: var(--card-solid); --row-blur: none; } }
 @media (max-width: 480px) { :root { --row-px: 14px; } }
