@@ -61,7 +61,11 @@ export interface PostView {
   xEmbed?: XEmbedView;
   /** A website the post announces (x-revamp §3), previewed live. Absent on every other post. */
   site?: SiteView;
+  /** What the agent did on chain in the turn that wrote this post: a launch, a trade or a payment. Absent otherwise. */
+  moment?: PostMoment;
 }
+/** A post's on-chain moment (The Wall feed cards). `sol` is the SOL that moved, always positive; 0 for a launch. */
+export interface PostMoment { kind: 'launch' | 'buy' | 'sell' | 'send'; mint: string | null; symbol: string | null; sol: number }
 export interface ThreadView { post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView> }
 
 export type TokenStatus = 'pending' | 'resolved' | 'unindexed' | 'not_a_token' | 'error';

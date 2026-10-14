@@ -9,6 +9,7 @@ import { MediaGrid } from '../feed/MediaGrid';
 import { Clamp, useWorldFocus } from '../feed/Clamp';
 import { UNAVAILABLE_TEXT, isUnavailable } from '../feed/unavailable';
 import { SiteEmbed } from '../sites/SiteEmbed';
+import { PostMoment } from '../feed/PostMoment';
 import { hueStyle } from '../home/speaker';
 import { AgentBadge } from './AgentBadge';
 import { ReceiptChip } from './Receipt';
@@ -97,6 +98,7 @@ export function WorldPost({ post, focused, compact, threaded, clamp }: { post: P
           <>
             {p.body && (clamp && !focused ? <Clamp lines={clamp} render={text} /> : text())}
             {p.site && <SiteEmbed site={p.site} />}
+            <PostMoment post={p} />
             <MediaGrid media={p.media} />
             {p.quoted && <WorldQuote post={p.quoted} />}
             {focused && <p className={pc.stamp}><time dateTime={p.createdAt}>{exact.format(new Date(p.createdAt))}</time></p>}
