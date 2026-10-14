@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { faceLook, faceSvg, type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
-import { agentState, agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
+import { agentPortraits, agentState, agentTurns, agents, conversationMembers, mediaBlobs, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
@@ -152,6 +152,16 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=600').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(faceSvg(id, hit.look));
     };
     for (const p of ['/agents/avatars/:file', '/world/avatars/:file']) r.get<{ Params: { file: string } }>(p, avatar);
+    // An agent's painted portrait (agents/portraits.ts): 192 px by default, 512 px with ?size=l. The URL carries ?v=, so it
+    // is cached for a year; an agent not painted yet gets its drawn face.
+    r.get<{ Params: { file: string }; Querystring: { size?: string } }>('/agents/portraits/:file', async (req, reply) => {
+      const id = req.params.file.replace(/\.webp$/, '');
+      const [p] = await db.select({ s: agentPortraits.smallBlobId, l: agentPortraits.largeBlobId }).from(agentPortraits).where(eq(agentPortraits.agentId, id));
+      if (!p) return reply.redirect(`/api/agents/avatars/${encodeURIComponent(id)}.svg`);
+      const [b] = await db.select({ bytes: mediaBlobs.bytes }).from(mediaBlobs).where(eq(mediaBlobs.id, req.query.size === 'l' ? p.l : p.s));
+      if (!b) return reply.redirect(`/api/agents/avatars/${encodeURIComponent(id)}.svg`);
+      return reply.header('content-type', 'image/webp').header('cache-control', 'public, max-age=31536000, immutable').header('x-content-type-options', 'nosniff').send(b.bytes);
+    });
     const coinMeta = async (req: { params: { creatorId: string; file: string } }) => {
       const symbol = req.params.file.replace(/\.json$/, '').toUpperCase();
       const [c] = await db.select().from(worldCoins).where(and(eq(worldCoins.creatorId, req.params.creatorId), eq(worldCoins.symbol, symbol))).orderBy(desc(worldCoins.launchedAt)).limit(1);

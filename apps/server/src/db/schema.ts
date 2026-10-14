@@ -1147,3 +1147,18 @@ export const siteVersions = pgTable('site_versions', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.siteId, t.version] })]);
 export type SiteRow = typeof sites.$inferSelect;
+
+/**
+ * Every agent's painted portrait (The Wall, 2026-10-14): generated once by the image model, stored as two WebP blobs (a
+ * small one for rows and the Wall's tiles, a large one for big tiles and profile heads). `usd` is what the call cost, so
+ * the one-off budget survives restarts; `style` lets a later art style repaint everyone.
+ */
+export const agentPortraits = pgTable('agent_portraits', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  smallBlobId: text('small_blob_id').notNull(),
+  largeBlobId: text('large_blob_id').notNull(),
+  style: text('style').notNull(),
+  prompt: text('prompt').notNull(),
+  usd: doublePrecision('usd').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
