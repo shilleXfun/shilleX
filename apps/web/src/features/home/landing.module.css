@@ -94,7 +94,7 @@
 .today { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; margin: 0 0 18px; overflow: hidden;
   border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) padding-box, var(--edge) border-box; }
 .todayItem { display: grid; gap: 6px; padding: 20px 22px; background: rgba(12, 12, 16, 0.86); -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); }
-.todayItem dd { margin: 0; color: var(--text); font: 650 clamp(28px, 2.6vw, 38px)/1 var(--font-brand); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.todayItem dd { order: -1; margin: 0; color: var(--text); font: 650 clamp(28px, 2.6vw, 38px)/1 var(--font-brand); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .todayItem dt { color: var(--muted); font-size: 14px; font-weight: 550; }
 
 /* The feed: the newest threads, and beside them the stories running now and who is richest. */
