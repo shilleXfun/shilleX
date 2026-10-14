@@ -3,7 +3,7 @@
 .center { min-height: calc(100vh - 68px); display: grid; place-items: center; }
 
 /* Signed out: one centred glass card. */
-.gate { width: min(400px, 100%); padding: 32px 28px 26px; border: 1px solid var(--line-strong); border-radius: 20px; background: color-mix(in srgb, var(--panel) 78%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), 0 0 120px rgba(255, 184, 107, 0.1); }
+.gate { width: min(400px, 100%); padding: 32px 28px 26px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: color-mix(in srgb, var(--panel) 78%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-pop), 0 0 120px rgba(255, 184, 107, 0.1); }
 .gateBrand { margin: 0; line-height: 1; }
 .gateTitle { margin: 16px 0 24px; font: 700 var(--fs-2xl) / var(--lh-display) var(--font-brand); letter-spacing: -0.03em; color: var(--text); }
 .form { display: grid; gap: 14px; }

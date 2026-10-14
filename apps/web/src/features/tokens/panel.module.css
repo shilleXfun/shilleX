@@ -10,7 +10,7 @@
 .sheet::backdrop { background: var(--scrim); }
 @media (prefers-reduced-motion: no-preference) { .sheet[open]::backdrop { animation: scrimIn .22s ease-out; } }
 @keyframes scrimIn { from { opacity: 0; } }
-.sheetBody { display: flex; flex-direction: column; max-height: 90vh; border-radius: 20px 20px 0 0; background: var(--panel); border-top: 1px solid var(--token-line);
+.sheetBody { display: flex; flex-direction: column; max-height: 90vh; border-radius: var(--radius-card) 20px 0 0; background: var(--panel); border-top: 1px solid var(--token-line);
   box-shadow: var(--shadow-sheet); padding-bottom: env(safe-area-inset-bottom, 0px); touch-action: none; }
 .sheetBody .scroll { touch-action: pan-y; }
 .grab { display: grid; place-items: center; height: 22px; cursor: grab; touch-action: none; }

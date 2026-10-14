@@ -212,7 +212,7 @@
 .moodGrid > li { min-width: 0; }
 /* --c: faction colour (amber on its own); --m: mood 0..1. A happier agent glows brighter, as on the backdrop. */
 .moodTile { position: relative; display: grid; justify-items: center; gap: 6px; height: 100%; padding: 11px 6px 9px; border-radius: 12px; color: var(--text); text-align: center;
-  background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--c) calc(var(--m) * 18%), transparent), transparent 72%), rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.02);
   box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .15s; }
 .moodTile:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent); }
 .moodAvatar { position: relative; display: inline-flex; margin-bottom: 2px; border-radius: 10px; }
@@ -243,10 +243,10 @@
 
 /* Hero: --c is the faction colour (amber on its own), --m the mood 0..1; the avatar is ringed in one and glows with the other. */
 .hero { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 12px; }
-.hero::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 140px; background: radial-gradient(70% 100% at 10% 0%, color-mix(in srgb, var(--c) 14%, transparent), transparent 72%); pointer-events: none; }
+.hero::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 2px; background: var(--c, var(--line-strong)); pointer-events: none; }
 .heroTop { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.heroAvatar { flex: none; display: inline-flex; border-radius: 18px; }
-.heroAvatar > span:first-child { border-radius: 18px; box-shadow: 0 0 0 2px var(--c), 0 0 calc(6px + var(--m) * 26px) color-mix(in srgb, var(--c) calc(var(--m) * 60%), transparent); }
+.heroAvatar { flex: none; display: inline-flex; border-radius: var(--radius-card); }
+.heroAvatar > span:first-child { border-radius: var(--radius-card); box-shadow: 0 0 0 2px var(--c), 0 0 calc(6px + var(--m) * 26px) color-mix(in srgb, var(--c) calc(var(--m) * 60%), transparent); }
 .hero[data-ghost='true'] .heroAvatar { opacity: .55; filter: grayscale(1); }
 .heroText { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .voice { margin: 0; font: 700 22px/1.2 var(--font-brand); letter-spacing: -.005em; color: var(--text); overflow-wrap: anywhere; }
@@ -318,6 +318,8 @@
 .affinity { flex: none; display: inline-flex; align-items: center; gap: 8px; font: 600 13px var(--font-ui); }
 .affinityBar { position: relative; width: 36px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
 .affinityBar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: currentColor; }
+.affinity.up { color: var(--ally); }
+.affinity.down { color: var(--feud); }
 
 /* Positions and wallet. */
 .position { min-height: 48px; margin: 0 -8px; padding: 6px 8px; border-radius: 10px; color: var(--text); }
@@ -447,26 +449,18 @@ a.person:hover { color: var(--accent-hover); }
   .overview > :not([aria-labelledby='agents-up'], [aria-labelledby='agents-down']) { grid-column: 1 / -1; }
 }
 
-/* ── Lumen (2026-10-14): the agent area's building blocks. Later rules of the same weight win over the ones above. ─────
-   Panels are glass with a luminous edge; titles are real headings; numbers are large; rows breathe. */
-.panel {
-  padding: 20px 22px 22px; border: 1px solid transparent; border-radius: 22px;
-  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
-}
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .panel { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; }
-  .panel:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); }
-}
+/* ── The Wall (2026-10-14): the agent area's building blocks. Later rules of the same weight win over the ones above. ──
+   Panels are solid with a hairline edge; titles are real headings; numbers are large; rows breathe. */
+.panel { padding: 18px 18px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--panel); box-shadow: none; }
 .panelHead { margin-bottom: 16px; }
-.panelTitle { gap: 10px; font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.panelTitle { gap: 10px; font: 700 17px/1.2 var(--font-brand); letter-spacing: -0.012em; }
 .panelTitle svg { color: var(--muted); }
 .panelNote { font-size: 13.5px; }
 .rows { gap: 4px; }
 .empty { padding: 6px 0; font-size: 14px; }
 .subTitle { color: var(--text-2); font: 600 14px/1.3 var(--font-ui); letter-spacing: -0.01em; }
 .rowNum { font-size: 14px; font-weight: 600; }
-.coinBadge { width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
+.coinBadge { width: 38px; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
 .ticker { color: var(--text); font-size: 15px; font-weight: 650; }
 .launchBy { font-size: 13px; }
 
@@ -474,9 +468,9 @@ a.person:hover { color: var(--accent-hover); }
 .profile { gap: 16px; padding: 18px var(--row-px) 0; }
 @container (min-width: 640px) { .profile { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .hero { gap: 20px; padding: 26px; }
-.hero::before { inset: 0; height: auto; background: radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--c) 26%, transparent), transparent 70%), radial-gradient(50% 80% at 100% 100%, color-mix(in srgb, var(--c) 10%, transparent), transparent 70%); }
+.hero::before { inset: 0 0 auto; height: 2px; background: var(--c, var(--line-strong)); }
 .heroTop { align-items: flex-start; gap: 22px; }
-.heroAvatar, .heroAvatar > span:first-child { border-radius: 50%; }
+.heroAvatar, .heroAvatar > span:first-child { border-radius: 28%; }
 .heroAvatar > span:first-child { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 70%, transparent), 0 0 calc(18px + var(--m) * 40px) color-mix(in srgb, var(--c) calc(30% + var(--m) * 40%), transparent); }
 .heroText { gap: 8px; padding-top: 4px; }
 .voice { font: 650 clamp(22px, 2.4vw, 30px)/1.15 var(--font-brand); letter-spacing: -0.035em; }
@@ -486,7 +480,7 @@ a.person:hover { color: var(--accent-hover); }
 .factionPill { padding: 4px 12px 4px 10px; font-size: 13.5px; font-weight: 600; }
 .vitals { gap: 10px; margin: 0; }
 @container (min-width: 640px) { .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.vital { gap: 6px; padding: 14px 16px 15px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.vital { gap: 6px; padding: 14px 16px 15px; border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
 .vital dt { color: var(--muted); font: 550 13px/1.3 var(--font-ui); }
 .vital dd { gap: 7px; font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
 /* Four to a row on a narrower card: the figures shrink with the row instead of breaking a word ("notoriou-s"). */
@@ -513,7 +507,7 @@ a.person:hover { color: var(--accent-hover); }
 .feedLabel { padding: 0; border: 0; background: none; box-shadow: none; color: var(--text); font: 650 22px/1.2 var(--font-brand); letter-spacing: -0.03em; }
 .feedLabel svg { display: none; }
 @media (max-width: 767px) {
-  .panel { padding: 16px; border-radius: 18px; }
+  .panel { padding: 16px; border-radius: var(--radius-card); }
   .hero { padding: 18px; }
   .heroTop { gap: 14px; }
   .vital dd { font-size: 19px; }
@@ -525,14 +519,14 @@ a.person:hover { color: var(--accent-hover); }
 .castGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
 .castCard {
   position: relative; isolation: isolate; display: grid; align-content: start; gap: 4px; height: 100%; padding: 18px; overflow: hidden;
-  border: 1px solid transparent; border-radius: 22px; color: var(--text);
+  border: 1px solid transparent; border-radius: var(--radius-card); color: var(--text);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
   transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
 }
-.castCard::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(90% 70% at 0% 0%, hsl(var(--hue, 220) 80% 55% / 0.2), transparent 70%); pointer-events: none; }
+.castCard::before { display: none; }
 .castCard:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 50px hsl(var(--hue, 220) 80% 55% / 0.16); }
-.castFace { justify-self: start; margin-bottom: 12px; border-radius: 50%; box-shadow: 0 0 0 1px hsl(var(--hue, 220) 70% 60% / 0.5), 0 0 28px hsl(var(--hue, 220) 85% 60% / 0.38); }
+.castFace { justify-self: start; margin-bottom: 12px; border-radius: 28%; }
 .castName { overflow: hidden; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
 .castRole { overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 13.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .castBio { display: -webkit-box; margin-top: 6px; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
@@ -545,7 +539,7 @@ a.person:hover { color: var(--accent-hover); }
 .moving { display: grid; }
 .movingGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
 .movingCard {
-  display: grid; gap: 14px; height: 100%; padding: 18px; border: 1px solid transparent; border-radius: 22px; color: var(--text);
+  display: grid; gap: 14px; height: 100%; padding: 18px; border: 1px solid transparent; border-radius: var(--radius-card); color: var(--text);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4); transition: transform .2s cubic-bezier(.2, .8, .2, 1);
 }
@@ -561,7 +555,7 @@ a.person:hover { color: var(--accent-hover); }
 .movingLabel { display: block; color: var(--muted); font-size: 12.5px; }
 .movingBig { display: block; margin-top: 2px; font: 650 clamp(16px, 1.4vw, 20px)/1.1 var(--font-brand); letter-spacing: -0.03em; }
 
-.tableWrap { border: 1px solid transparent; border-radius: 22px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.tableWrap { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .table th { padding: 14px 14px 12px; color: var(--muted); font: 550 12.5px var(--font-ui); border-bottom: 1px solid var(--line); }
 .table td { padding: 12px 14px; font-size: 14.5px; }
 .table tbody tr { transition: background .15s; }
@@ -571,7 +565,7 @@ a.person:hover { color: var(--accent-hover); }
 .creatorCell { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-weight: 550; white-space: nowrap; }
 .creatorCell:hover { color: var(--text); }
 .rugMark { margin-left: 8px; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: 11.5px; font-weight: 550; }
-.coinList { border: 1px solid transparent; border-radius: 20px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: none; }
+.coinList { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: none; }
 .coinItem { min-height: 56px; }
 .coinSym { color: var(--text); }
 /* The coin column keeps room for its name; the creator steps aside first as the column narrows (Lumen rows are wider). */
@@ -585,13 +579,13 @@ a.person:hover { color: var(--accent-hover); }
 
 /* A coin (CoinPage): a hero card with its identity, creator and large stats; the chart, talk, holders and trades as glass cards. */
 .coinPage { display: grid; gap: 16px; padding: 22px var(--row-px) 28px; container-type: inline-size; }
-.coinCard { min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: 22px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.coinCard { min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .coinCardTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 16px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
 .coinCount { color: var(--muted); font: 550 14px var(--font-ui); }
 .coinHero { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 16px; padding: 26px; }
-.coinHero::before { content: ''; position: absolute; z-index: -1; inset: 0; background: radial-gradient(60% 110% at 0% 0%, rgba(127, 228, 255, 0.14), transparent 70%); pointer-events: none; }
+.coinHero::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 2px; background: var(--line-hover); pointer-events: none; }
 .coinHeroTop { display: flex; align-items: center; gap: 18px; min-width: 0; }
-.coinHeroTile { display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: 22px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 40px rgba(0, 0, 0, 0.4); font-size: 38px; }
+.coinHeroTile { display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 40px rgba(0, 0, 0, 0.4); font-size: 38px; }
 /* Wide enough for the ticker on one line; on a narrow card Solscan wraps under it instead of squeezing it. */
 .coinHeroTop { flex-wrap: wrap; }
 .coinHeroText { flex: 1 1 180px; min-width: 0; }
@@ -603,7 +597,7 @@ a.person:hover { color: var(--accent-hover); }
 .coinBy { display: flex; }
 .coinStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 0; }
 @container (min-width: 600px) { .coinStats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.coinStat { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line); }
+.coinStat { display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line); }
 .coinStatWide { grid-column: 1 / -1; }
 .coinStat dt { color: var(--muted); font-size: 13px; font-weight: 550; }
 .coinStat dd { margin: 0; color: var(--text); font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
@@ -627,7 +621,7 @@ a.person:hover { color: var(--accent-hover); }
 
 /* Right now (AgentProfilePage Mind): the goal on the left, the latest reasoning on the right. */
 .mind { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 22px; }
-.mindGoal { display: grid; align-content: start; gap: 10px; padding: 18px 20px; border-radius: 18px; background: radial-gradient(120% 120% at 0% 0%, rgba(255, 190, 107, 0.12), transparent 60%), rgba(255, 255, 255, 0.03); box-shadow: inset 0 0 0 1px var(--line); }
+.mindGoal { display: grid; align-content: start; gap: 10px; padding: 18px 20px; border-radius: var(--radius-card); background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--line); }
 .mindKicker { color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .mindTitle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0; color: var(--text); font: 650 clamp(22px, 2.2vw, 28px)/1.15 var(--font-brand); letter-spacing: -0.03em; }
 .mindWho { display: inline-flex; align-items: center; gap: 8px; color: var(--text); text-decoration: underline 2px transparent; text-underline-offset: 4px; }
@@ -640,6 +634,6 @@ a.person:hover { color: var(--accent-hover); }
 .mindList li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .mindList li:last-child { border-bottom: 0; }
 .mindDid { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); font-weight: 650; }
-.mindTag { padding: 1px 8px; border-radius: var(--radius-pill); background: rgba(255, 190, 107, 0.14); color: #ffcf8f; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.mindTag { padding: 1px 8px; border-radius: var(--radius-pill); background: rgba(255, 106, 61, 0.14); color: #ffcf8f; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .mindReason { grid-column: 1; overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
 .mindList time { grid-column: 2; grid-row: 1; align-self: center; }
