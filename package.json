@@ -19,8 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "e2e": "playwright test -c e2e/playwright.config.ts",
     "e2e:agents": "playwright test -c e2e/agents.config.ts",
-    "readme:images": "node scripts/readme/build.mjs",
-    "readme:preview": "node scripts/readme/preview.mjs"
+    "readme:images": "node scripts/readme/build.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
