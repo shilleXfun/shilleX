@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createHash } from 'node:crypto';
-import { agentAffinity, agents, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
+import { agentAffinity, agents, conversations, factionMembers, factions, users, worldCoins } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
 import { memberById, memberLines } from '../scenes/cast.ts';
@@ -40,12 +40,27 @@ export function averageInternal(aff: Aff, ids: string[]): number {
   return n ? sum / n : 0;
 }
 
-const ADJ = ['Velvet', 'Rabid', 'Silent', 'Golden', 'Feral', 'Neon', 'Hollow', 'Lucky', 'Cursed', 'Midnight'];
-const NOUN = ['Cabal', 'Syndicate', 'Coven', 'Order', 'Pack', 'Circle', 'Guild', 'Cartel', 'Choir', 'Lodge'];
-/** The name and colour a faction gets without the model (and keeps when the model is not used). */
-export function localFactionName(id: string): { name: string; colour: string } {
+const ADJ = ['Velvet', 'Rabid', 'Silent', 'Golden', 'Feral', 'Neon', 'Hollow', 'Lucky', 'Cursed', 'Midnight',
+  'Iron', 'Paper', 'Crimson', 'Quiet', 'Salt', 'Glass', 'Ember', 'Tidal', 'Ashen', 'Electric'];
+const NOUN = ['Cabal', 'Syndicate', 'Coven', 'Order', 'Pack', 'Circle', 'Guild', 'Cartel', 'Choir', 'Lodge',
+  'Union', 'Court', 'League', 'Parish', 'Crew', 'Assembly', 'Brotherhood', 'Table', 'Society', 'Republic'];
+const ROMAN = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+/**
+ * The name and colour a faction gets without the model (and keeps when the model is not used). `taken` holds the names
+ * of the factions standing now: the id's own pick comes first, then the next free pair, so two factions never share a
+ * name (two "Feral Circles" in the graph's legend read as one).
+ */
+export function localFactionName(id: string, taken: ReadonlySet<string> = new Set()): { name: string; colour: string } {
   const h = createHash('sha256').update(id).digest();
-  return { name: `The ${ADJ[h[0]! % ADJ.length]} ${NOUN[h[1]! % NOUN.length]}`, colour: `#${h.subarray(2, 5).toString('hex')}` };
+  const colour = `#${h.subarray(2, 5).toString('hex')}`;
+  const start = (h[0]! * 256 + h[1]!) % (ADJ.length * NOUN.length);
+  for (let k = 0; k < ADJ.length * NOUN.length; k++) {
+    const i = (start + k * 37) % (ADJ.length * NOUN.length);
+    const name = `The ${ADJ[i % ADJ.length]} ${NOUN[Math.floor(i / ADJ.length)]}`;
+    if (!taken.has(name)) return { name, colour };
+  }
+  const base = `The ${ADJ[start % ADJ.length]} ${NOUN[Math.floor(start / ADJ.length)]}`;
+  return { name: `${base} ${ROMAN.find((r) => !taken.has(`${base} ${r}`)) ?? h.subarray(5, 7).toString('hex')}`, colour };
 }
 
 async function affinityGraph(d: EngineDeps): Promise<Aff> {
@@ -68,6 +83,24 @@ async function liveMembership(d: EngineDeps) {
   return by;
 }
 
+/**
+ * The names of the factions standing now, made unique first: of two standing factions with one name (formed before names
+ * were kept unique), the newer takes the next free name, and its group chat with it.
+ */
+async function uniqueNames(d: EngineDeps): Promise<Set<string>> {
+  const rows = await d.db.select({ id: factions.id, name: factions.name, conversationId: factions.conversationId }).from(factions)
+    .where(isNull(factions.splitAt)).orderBy(factions.formedAt, factions.id);
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (!seen.has(r.name)) { seen.add(r.name); continue; }
+    const { name } = localFactionName(r.id, new Set([...seen, ...rows.map((x) => x.name)]));
+    await d.db.update(factions).set({ name }).where(eq(factions.id, r.id));
+    if (r.conversationId) await d.db.update(conversations).set({ name: name.slice(0, 40) }).where(eq(conversations.id, r.conversationId));
+    seen.add(name);
+  }
+  return seen;
+}
+
 /** Turns every new clique into a faction with its local name, an agent-only group chat and a `faction` moment. */
 export async function formFactions(d: EngineDeps): Promise<string[]> {
   const aff = await affinityGraph(d);
@@ -76,12 +109,14 @@ export async function formFactions(d: EngineDeps): Promise<string[]> {
   // Open agents: an outside agent may be a member, never the lead (the lead's turns and moments are Shillex's to run).
   const outsiders = new Set((await d.db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'external'))).map((r) => r.id));
   const made: string[] = [];
+  const standing = await uniqueNames(d);
   for (const clique of findCliques(aff, taken)) {
     const first = clique.find((a) => !outsiders.has(a));
     if (!first) continue;
     const group = [first, ...clique.filter((a) => a !== first)];
     const id = newId();
-    const { name, colour } = localFactionName(id);
+    const { name, colour } = localFactionName(id, standing);
+    standing.add(name);
     const now = d.now();
     await d.db.insert(factions).values({ id, name, colour, formedAt: now });
     await d.db.insert(factionMembers).values(group.map((agentId) => ({ factionId: id, agentId, joinedAt: now })));

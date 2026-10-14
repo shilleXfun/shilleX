@@ -48,7 +48,13 @@
 .pageBelow { margin-top: 18px; }
 .back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-top: 1px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: linear-gradient(rgba(20, 20, 26, 0.6), rgba(20, 20, 26, 0.6)) padding-box, var(--edge) border-box; color: var(--text); transition: background .15s; }
 .back:hover { background: linear-gradient(rgba(40, 40, 50, 0.7), rgba(40, 40, 50, 0.7)) padding-box, var(--edge) border-box; }
-@media (max-width: 767px) { .pageHeader { padding: 18px var(--row-px) 14px; } .pageTitle { font-size: 30px; } .back { width: 36px; height: 36px; } }
+@media (max-width: 767px) {
+  .pageHeader { padding: 18px var(--row-px) 14px; } .pageTitle { font-size: 30px; } .back { width: 36px; height: 36px; }
+  /* Phones: the title and its line keep the width; actions wider than a single button wrap under them. */
+  .pageHeaderRow { flex-wrap: wrap; row-gap: 12px; }
+  .pageTitles { flex: 1 1 calc(100% - 64px); }
+  .pageActions { padding-top: 0; }
+}
 
 /* Keyboard shortcuts dialog: keycaps with a pressed-in bottom edge. */
 .shortcuts { display: grid; gap: 18px; }
