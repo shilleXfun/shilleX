@@ -1,12 +1,12 @@
 /* The Shillex Times (/times): one large floating card over the swarm, set like a front page. The page root carries data-cards. */
 .wrap { container-type: inline-size; }
 .wrap { display: grid; gap: 16px; padding: 20px var(--row-px) 32px; }
-.front { position: relative; min-width: 0; padding: clamp(20px, 5cqi, 44px) clamp(18px, 5.5cqi, 46px) clamp(18px, 4cqi, 32px); border: 1px solid transparent; border-radius: 24px; background: linear-gradient(rgba(14, 14, 18, 0.74), rgba(14, 14, 18, 0.74)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
+.front { position: relative; min-width: 0; padding: clamp(20px, 5cqi, 44px) clamp(18px, 5.5cqi, 46px) clamp(18px, 4cqi, 32px); border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
 
 /* Masthead: the nameplate, then the dateline between two hairlines. */
 .masthead { text-align: center; }
 .nameplate { margin: 0; color: var(--text); font: 650 clamp(34px, 9.4cqi, 74px)/.92 var(--font-brand); letter-spacing: -0.05em; white-space: nowrap; }
-.dateline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 16px; margin: clamp(12px, 2.6cqi, 18px) 0 0; padding: 9px 0; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); color: var(--muted); font: 500 13px/1.4 var(--font-ui); font-variant-numeric: tabular-nums; }
+.dateline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 16px; margin: clamp(12px, 2.6cqi, 18px) 0 0; padding: 9px 0; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); color: var(--muted); font: 500 13px/1.4 var(--font-ui); }
 .dateline time { color: var(--text-2); }
 .motto { font-style: italic; }
 
@@ -34,7 +34,7 @@
 .pagerLink[data-dir='next'] { margin-left: auto; justify-items: end; text-align: right; }
 .pagerLink:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 55%, transparent); }
 .pagerLink:hover .pagerLabel { color: var(--text); }
-.pagerLabel { display: inline-flex; align-items: center; gap: 6px; font: 500 13px/1.4 var(--font-ui); transition: color .15s; font-variant-numeric: tabular-nums; }
+.pagerLabel { display: inline-flex; align-items: center; gap: 6px; font: 500 13px/1.4 var(--font-ui); transition: color .15s; }
 .pagerDate { color: var(--text); font-size: 15px; font-weight: 600; }
 
 /* No edition yet, or none for that day. */
@@ -49,21 +49,21 @@
 
 /* Phones: a smaller headline; solid card, no blur (cost). */
 @media (max-width: 767px) {
-  .stopPress { padding: 18px; border-radius: 20px; -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; }
+  .stopPress { padding: 18px; border-radius: var(--radius-card); -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; }
   .wrap { gap: 12px; padding: 12px 12px 24px; }
-  .front { border-radius: 20px; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .front { border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .headline { font-size: 30px; }
   .dateline { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .pagerLink, .pagerLabel, .emptyLink { transition: none; } }
 /* Stop press (StopPress.tsx): today so far, a glass card under the latest page. */
-.stopPress { padding: 22px; border: 1px solid transparent; border-radius: 22px; background: linear-gradient(rgba(14, 14, 18, 0.72), rgba(14, 14, 18, 0.72)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.stopPress { padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .stopTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
 .stopTitle span { color: var(--muted); font: 500 13.5px var(--font-ui); letter-spacing: 0; }
 .stopList { display: grid; gap: 2px; }
 .stopItem { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: baseline; gap: 12px; margin: 0 -10px; padding: 9px 10px; border-radius: 12px; color: var(--text); font-size: 15.5px; transition: background .15s; }
 .stopItem:hover { background: rgba(255, 255, 255, 0.045); }
-.stopItem time { color: var(--muted); font: 500 13px/1.5 var(--font-ui); font-variant-numeric: tabular-nums; }
+.stopItem time { color: var(--muted); font: 500 13px/1.5 var(--font-ui); }
 .stopLabel { justify-self: start; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.06); color: var(--muted); font: 600 11.5px/1.5 var(--font-ui); }
 .stopItem[data-tone='up'] .stopLabel { background: var(--up-soft, rgba(39, 224, 192, 0.12)); color: var(--up); }
 .stopItem[data-tone='down'] .stopLabel, .stopItem[data-tone='heat'] .stopLabel { background: var(--down-soft); color: var(--down); }

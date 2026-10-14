@@ -6,7 +6,7 @@
 @media (max-width: 767px) { .page { padding: 0 8px 16px; } }
 .wrap { padding: 12px 0 0; }
 .card { overflow: hidden; }
-.summary { color: var(--muted); font: 500 11.5px var(--font-ui); font-variant-numeric: tabular-nums; }
+.summary { color: var(--muted); font: 500 11.5px var(--font-ui); }
 .box { position: relative; margin: 0 -16px; border-block: 1px solid var(--line); background: radial-gradient(62% 56% at 50% 48%, rgba(4, 5, 9, 0.42), transparent 78%); }
 .box > span { opacity: .5; }
 .svg { display: block; width: 100%; overflow: visible; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -32,7 +32,7 @@
 .body[data-ghost] .avatar { opacity: .45; filter: grayscale(1); }
 .svg[data-active] .body:not([data-near]) { opacity: .3; }
 
-.label { fill: var(--text); fill-opacity: .78; font: 500 10.5px var(--font-ui); paint-order: stroke; stroke: rgba(6, 7, 12, 0.9); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; transition: fill-opacity .2s; font-variant-numeric: tabular-nums; }
+.label { fill: var(--text); fill-opacity: .78; font: 500 10.5px var(--font-ui); paint-order: stroke; stroke: rgba(6, 7, 12, 0.9); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; transition: fill-opacity .2s; }
 .svg[data-active] .label { fill-opacity: .2; }
 .svg[data-active] .label[data-near] { fill-opacity: 1; }
 .svg .labelOn { fill-opacity: 1; font-weight: 700; }
@@ -60,7 +60,7 @@
 .readout[data-side='right'] { left: auto; right: 12px; }
 .readout[data-edge='bottom'] { top: auto; bottom: 12px; }
 .readName { margin-bottom: 2px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.readLine { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 500 11.5px/1.5 var(--font-ui); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.readLine { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 500 11.5px/1.5 var(--font-ui); white-space: nowrap; }
 .readLine b { font-weight: 600; }
 .readDot { flex: none; width: 8px; height: 8px; border-radius: 3px; background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
 .readCoin { color: var(--token); }
@@ -69,10 +69,10 @@
 .key { display: grid; gap: 10px; padding-top: 12px; }
 .key > ul { margin: 0; }
 .note { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
-.marks { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; color: var(--muted); font: 500 11px/1.4 var(--font-ui); font-variant-numeric: tabular-nums; }
+.marks { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; color: var(--muted); font: 500 11px/1.4 var(--font-ui); }
 .marks li { display: inline-flex; align-items: center; gap: 6px; }
 .marks svg { flex: none; overflow: visible; }
-.glow { flex: none; width: 18px; height: 14px; border-radius: 50%; background: radial-gradient(circle, #FFC98A 0 22%, rgba(255, 201, 138, 0.28) 46%, transparent 70%); }
+.glow { flex: none; width: 18px; height: 14px; border-radius: 50%; background: radial-gradient(circle, #F28C38 0 22%, rgba(255, 201, 138, 0.28) 46%, transparent 70%); }
 /* Halos breathe on each agent's own cycle (--breath, from its mood); ghosts and reduced motion stay still. */
 @media (prefers-reduced-motion: no-preference) {
   .halo { transform-box: fill-box; transform-origin: center; animation: breathe var(--breath, 4.5s) ease-in-out infinite; }

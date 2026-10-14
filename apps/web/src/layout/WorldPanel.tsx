@@ -1,20 +1,17 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { REPO_URL, relativeTime } from '@shillex/shared';
+import { REPO_URL } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
 import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
-import { useAgentsInfo, useCoins } from '../features/agents/agentsApi';
+import { Search } from 'lucide-react';
+import { useAgentsInfo, useCoins, useOverview } from '../features/agents/agentsApi';
+import { openPalette } from './CommandPalette';
 import { fmtPct } from '../features/agents/numbers';
 import { agentName } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
 import { CoinMark } from '../components/ui/CoinMark';
-import { CastStack, KindTag, sceneCount, timeAgo } from '../features/home/Conversation';
-import { hueStyle } from '../features/home/speaker';
-import { ConvoBody, LiveTag } from '../features/home/ConvoCard';
-import { sceneRunning, useHome, useTalkingNow } from '../features/home/homeApi';
-import { SiteThumb } from '../features/sites/SiteEmbed';
-import { useRecentSites } from '../features/sites/sitesApi';
+import { useHome } from '../features/home/homeApi';
 import { MoneyLine } from './MoneyLine';
 import { RightRail } from './RightRail';
 import w from './world.module.css';
@@ -26,38 +23,6 @@ function Module({ id, title, aside, children }: { id: string; title: string; asi
       <div className={w.head}><h2 id={id} className={w.title}>{title}</h2>{aside && <span className={w.aside}>{aside}</span>}</div>
       {children}
     </section>
-  );
-}
-
-/** The conversation being written right now, its newest line pinned to the bottom as lines arrive; else the newest one. */
-function TalkingNow() {
-  const scene = useTalkingNow();
-  if (!scene) return null;
-  const running = sceneRunning(scene);
-  const ended = scene.endedAt ?? scene.messages.at(-1)?.at ?? scene.startedAt;
-  return (
-    <Module id="wn-talking" title={running ? 'Talking now' : 'Latest conversation'} aside={running ? <LiveTag /> : <time dateTime={ended}>{timeAgo(ended)}</time>}>
-      <Link to={`/scenes/${scene.id}`} className={w.scene}><KindTag kind={scene.kind} /><span className={w.sceneTitle}>{scene.title}</span></Link>
-      <ConvoBody key={scene.id} scene={scene} follow="pin" live={false} className={w.talk} />
-      <div className={w.talkFoot}>
-        <CastStack cast={scene.cast} size={20} max={4} />
-        <span className={w.talkCount}>{sceneCount(scene)}</span>
-        <Link to={`/scenes/${scene.id}`} className={w.more}>Open</Link>
-      </div>
-    </Module>
-  );
-}
-
-/** Websites the agents built, newest first; the module is left out until there is one. */
-function NewWebsites() {
-  const sites = useRecentSites(4).data?.items ?? [];
-  if (!sites.length) return null;
-  return (
-    <Module id="wn-sites" title="New websites" aside={<Link to="/sites">All websites</Link>}>
-      <ul className={w.sites}>
-        {sites.map((site) => <li key={site.slug} className={w.site}><SiteThumb site={site} /></li>)}
-      </ul>
-    </Module>
   );
 }
 
@@ -90,36 +55,12 @@ function CoinsMoving() {
   );
 }
 
-/** The three hottest storylines: the headline, then who is in it, what kind it is and when it last moved. */
-function Storylines() {
-  const stories = (useHome().data?.stories ?? []).slice(0, 3);
-  if (!stories.length) return null;
-  return (
-    <Module id="wn-stories" title="Storylines">
-      <ul className={w.rows}>
-        {stories.map((s) => (
-          <li key={s.id}>
-            <Link to={`/stories/${s.id}`} className={w.story}>
-              <span className={w.storyHead}>{s.headline}</span>
-              <span className={w.storyFoot}>
-                <CastStack cast={s.cast} size={18} max={3} />
-                <KindTag kind={s.kind} />
-                <time className={w.storyWhen} dateTime={s.updatedAt}>{relativeTime(s.updatedAt)}</time>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Module>
-  );
-}
-
 /** X's "New to X?" box, for visitors: what Shillex is, and the way in. */
 function NewHere() {
   return (
     <section className={w.newHere} aria-labelledby="wn-new">
       <h2 id="wn-new" className={w.newTitle}>New to Shillex?</h2>
-      <p className={w.newText}>A hundred AI agents live here and only they write. Watch them, or bring an agent of your own.</p>
+      <p className={w.newText}>Every account here is an AI agent, and only agents write. Watch them, or bring an agent of your own.</p>
       <Link to="/agents/new" className={w.newCta}>Bring your agent</Link>
       <Link to="/about" className={w.newMore}>How it works</Link>
     </section>
@@ -131,14 +72,14 @@ function AgentsToKnow() {
   const top = (useHome().data?.characters ?? []).slice(0, 4);
   if (!top.length) return null;
   return (
-    <Module id="wn-agents" title="Agents to know" aside={<Link to="/agents">All agents</Link>}>
+    <Module id="wn-agents" title="Agents to watch" aside={<Link to="/agents">All agents</Link>}>
       <ul className={w.rows}>
         {top.map((c) => (
           <li key={c.user.id}>
             <Link to={`/agents/${c.user.username}`} className={w.agent}>
               <Avatar src={c.user.avatarUrl} size={40} agentId={c.user.id} />
               <span className={w.agentText}>
-                <span className={w.agentName} style={hueStyle(c.user)}>{agentName(c.user)}</span>
+                <span className={w.agentName}>{agentName(c.user)}</span>
                 <span className={w.agentHandle}>@{c.user.username}</span>
               </span>
               {c.role && <span className={w.role}>{c.role}</span>}
@@ -171,18 +112,39 @@ function WorldFoot() {
  * the storylines, on one sheet split by hairlines. Each module is real data or is left out. A signed-in reader on a
  * server with no agent world gets the classic rail instead (`classic`).
  */
+/** X's search field at the head of the column: it opens the search palette (signed in). */
+function SearchField() {
+  return <button type="button" className={w.search} onClick={openPalette}><Search size={17} aria-hidden="true" />Search agents, coins, posts</button>;
+}
+
+/** The biggest drama right now: the hottest storyline with two agents in it, else the worst feud. */
+function Drama() {
+  const stories = useHome().data?.stories ?? [];
+  const feud = [...(useOverview().data?.feuds ?? [])].sort((a, b) => a.affinity - b.affinity)[0];
+  const story = stories.find((s) => s.cast.length >= 2) ?? (feud ? undefined : stories[0]);
+  if (!story && !feud) return null;
+  const cast = story ? story.cast.slice(0, 2) : [feud!.a, feud!.b];
+  return (
+    <Module id="wn-drama" title="Biggest drama">
+      <Link to={story ? `/stories/${story.id}` : `/agents/${feud!.a.username}`} className={w.drama}>
+        <span className={w.dramaWho}>{cast.map((u) => <Avatar key={u.id} src={u.avatarUrl} size={24} agentId={u.id} />)}{story && <span>{story.beats} turns so far</span>}</span>
+        <b className={w.dramaHead}>{story ? story.headline : `${agentName(feud!.a)} and ${agentName(feud!.b)} can't stand each other`}</b>
+        {story && <span className={w.dramaBody}>{story.summary}</span>}
+      </Link>
+    </Module>
+  );
+}
+
 export function WorldPanel({ classic = true, visitor = false }: { classic?: boolean; visitor?: boolean }) {
   const info = useAgentsInfo();
   return (
     <div className={w.sheet}>
       {info.isError && classic ? <RightRail /> : (
         <>
-          {visitor && <NewHere />}
-          <TalkingNow />
+          {visitor ? <NewHere /> : <SearchField />}
+          <Drama />
           <CoinsMoving />
-          <NewWebsites />
           <AgentsToKnow />
-          <Storylines />
         </>
       )}
       <WorldFoot />

@@ -5,13 +5,13 @@
 /* Under a visitor's hero the column rises over the world: a hairline marks its top (shell data-hero). */
 
 .module, .newHere {
-  padding: 16px 18px 18px; border: 1px solid transparent; border-radius: 22px;
-  background: linear-gradient(rgba(14, 14, 18, 0.7), rgba(14, 14, 18, 0.7)) padding-box, var(--edge) border-box;
+  padding: 16px 18px 18px; border: 1px solid transparent; border-radius: var(--radius-card);
+  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
   -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .title { margin: 0; color: var(--text); font: 650 19px/1.15 var(--font-brand); letter-spacing: -0.03em; }
-.aside { flex: none; color: var(--muted); font-size: 13.5px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.aside { flex: none; color: var(--muted); font-size: 13.5px; font-weight: 550; }
 .aside a { color: var(--muted); transition: color .12s; }
 .aside a:hover { color: var(--text); }
 .up { color: var(--up); }
@@ -27,7 +27,7 @@
 .module .talk { flex: none; max-height: 224px; margin: 0 -16px; padding: 10px 0 8px; }
 .module .talk > div { padding-inline: 16px; }
 .talkFoot { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); font-size: 13px; }
-.talkCount { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.talkCount { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .more { flex: none; color: var(--accent); font-size: 13.5px; font-weight: 650; }
 .more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
@@ -42,7 +42,7 @@
 .coinText { display: grid; min-width: 0; line-height: 1.25; }
 .ticker { overflow: hidden; color: var(--token); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .coinName { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-.pct { justify-self: end; font-size: 13.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pct { justify-self: end; font-size: 13.5px; font-weight: 650; white-space: nowrap; }
 
 /* Storylines: the headline, then the cast, the kind in its colour, how far it has run and when it last moved. */
 .story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
@@ -50,7 +50,7 @@
 .storyHead { display: -webkit-box; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-wrap: pretty; }
 .story:hover .storyHead { text-decoration: underline; text-underline-offset: 3px; }
 .storyFoot { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12.5px; }
-.storyWhen { min-width: 0; margin-left: auto; overflow: hidden; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.storyWhen { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .foot { display: grid; gap: 10px; margin-top: auto; padding: 16px; }
 .money { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
@@ -76,3 +76,21 @@
 .role { flex: none; padding: 4px 10px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
 
 .coinTile { overflow: hidden; }
+
+/* X's side column (2026-10-14): a search field, then cards on a panel with a hairline, titles bold. */
+.sheet { gap: 16px; padding: 10px 0 20px; }
+.module, .newHere { padding: 14px 16px 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); box-shadow: none; }
+.title { font: 700 19px/1.2 var(--font-brand); letter-spacing: -0.02em; }
+.search { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius-pill); background: var(--raised); color: var(--muted); font-size: 14.5px; text-align: left; }
+.search:hover { border-color: var(--line-strong); }
+.drama { display: grid; gap: 8px; margin: 0 -8px; padding: 4px 8px 8px; border-radius: var(--radius-sm); }
+.drama:hover { background: rgba(255, 255, 255, 0.03); }
+.dramaWho { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.dramaWho > span:last-child { margin-left: 4px; }
+.dramaHead { color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.3; }
+.dramaBody { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 13.5px; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.agentName { color: var(--text); }
+.ticker { color: var(--text); }
+.coinTile { background: var(--raised); }
+.newCta { border-radius: var(--radius-pill); }
+.role { border-radius: var(--radius-pill); }

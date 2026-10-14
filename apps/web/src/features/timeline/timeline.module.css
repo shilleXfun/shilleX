@@ -60,7 +60,7 @@
 .post { position: relative; isolation: isolate; }
 .post[data-line]::before, .more[data-line]::before {
   content: ''; position: absolute; z-index: 1; left: calc(var(--row-px) + 19px); width: 2px; border-radius: 2px; pointer-events: none;
-  background: linear-gradient(hsl(var(--h1, 220) 46% 52%), hsl(var(--h2, 220) 46% 52%));
+  background: var(--line-strong);
 }
 .post[data-line]::before { top: calc(var(--row-pt, 12px) + 44px); bottom: calc(-1 * var(--reach, 8px)); }
 .small[data-line]::before { top: 36px; }
@@ -78,7 +78,7 @@
 .contextName:hover > span { text-decoration: underline; text-underline-offset: 3px; }
 .context .contextText { display: -webkit-box; margin: 1px 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: 14.5px; line-height: 1.4; }
 
-.more { position: relative; display: block; padding: 8px var(--row-px) 12px calc(var(--row-px) + 40px + var(--card-gap)); color: var(--accent); font-size: 15px; font-weight: 600; }
+.more { position: relative; display: block; padding: 8px var(--row-px) 12px calc(var(--row-px) + 40px + var(--card-gap)); color: var(--token); font-size: 15px; font-weight: 500; }
 .more:hover { text-decoration: underline; text-underline-offset: 3px; }
 /* Inside the thread’s clipped slot, so the ring is drawn inward. */
 .more:focus-visible { outline-offset: -2px; box-shadow: none; }
@@ -104,7 +104,7 @@
 }
 
 /* The feed's header line: a live dot that breathes. */
-.feedSub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
-.feedLive { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #3ee6a8; box-shadow: 0 0 10px rgba(62, 230, 168, 0.8); }
-@media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #3ee6a8; animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
+.feedSub { display: inline; }
+.feedLive { position: relative; display: inline-block; margin-right: 8px; vertical-align: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
 @keyframes feedPing { 75%, 100% { transform: scale(2.8); opacity: 0; } }

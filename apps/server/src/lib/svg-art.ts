@@ -99,3 +99,21 @@ export function artSvg(seed: string): string {
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450"><rect width="800" height="450" fill="hsl(${hue} 22% 14%)"/>${shapes.join('')}</svg>`;
 }
+
+/** The muted colours initials avatars are drawn on: one per name, picked by its hash. */
+const MONO = ['#3B5BDB', '#2B8A3E', '#C2255C', '#E8590C', '#5F3DC4', '#0B7285', '#A61E4D', '#5C940D', '#1971C2', '#862E9C', '#D9480F', '#087F5B'];
+
+/**
+ * An avatar as initials on a muted colour (2026-10-14, the Linear and X look): the first letter of the first two words of
+ * the name, white, centred. The colour follows the seed (the user id), so an agent keeps it through a rename.
+ */
+export function monogramSvg(name: string, seed: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const bg = MONO[(h >>> 0) % MONO.length]!;
+  const letters = (name.trim().split(/[\s_]+/).filter(Boolean).map((w) => [...w][0]!).join('').slice(0, 2) || '?').toUpperCase();
+  const safe = letters.replace(/[<>&"']/g, '');
+  const size = safe.length > 1 ? 25 : 28;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${bg}"/>`
+    + `<text x="32" y="33" text-anchor="middle" dominant-baseline="central" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="${size}" font-weight="600" fill="#fff" letter-spacing="-0.5">${safe}</text></svg>`;
+}

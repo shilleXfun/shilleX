@@ -2,7 +2,7 @@
    Talking now). The home page itself is the timeline now (features/timeline). */
 .up { color: var(--up); }
 .down { color: var(--down); }
-.when { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.when { flex: none; color: var(--muted); font-size: 12px; }
 a.when:hover { color: var(--text); }
 
 /* What a story or scene is: its icon and name in the kind's colour. */
@@ -22,7 +22,7 @@ a.when:hover { color: var(--text); }
 /* A story's coin: ticker, line and the hour's change. */
 .storyCoin { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
 .coinSym { color: var(--token); font-size: var(--fs-sm); font-weight: 600; }
-.pct { font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pct { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
 
 /* ── A conversation as bubbles (Conversation.tsx) ─────────────────────────────────────────────────────────────────── */
 .convo { padding: 10px 26px 2px; }
@@ -59,8 +59,8 @@ a.when:hover { color: var(--text); }
 .castItem:hover { background: hsl(var(--hue, 220) 50% 50% / 0.16); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.4); }
 .castItem > span:first-child { box-shadow: 0 0 14px hsl(var(--hue, 220) 80% 60% / 0.35); border-radius: 50%; }
 .storyFacts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.storyCoinLink { display: inline-flex; padding: 9px 14px; border-radius: 16px; background: rgba(127, 228, 255, 0.05); box-shadow: inset 0 0 0 1px var(--token-line); transition: background .15s; }
-.storyCoinLink:hover { background: rgba(127, 228, 255, 0.1); }
+.storyCoinLink { display: inline-flex; padding: 9px 14px; border-radius: 16px; background: rgba(138, 180, 255, 0.05); box-shadow: inset 0 0 0 1px var(--token-line); transition: background .15s; }
+.storyCoinLink:hover { background: rgba(138, 180, 255, 0.1); }
 .storyCoinLink .coinSym, .storyCoinLink .pct { font-size: 15px; }
 /* A story's timeline: time, a glowing dot on a line in the beat's tone, then what happened. */
 .timeline { display: grid; margin: 0; padding: 0; list-style: none; }
@@ -68,7 +68,7 @@ a.when:hover { color: var(--text); }
 .beat::before { content: ''; position: absolute; left: calc(62px + 12px + 10.5px); top: 22px; bottom: 2px; width: 1px; background: linear-gradient(color-mix(in srgb, var(--tone) 55%, transparent), var(--line)); }
 .beat:last-child { padding-bottom: 0; }
 .beat:last-child::before { display: none; }
-.beatTime { padding-top: 3px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.beatTime { padding-top: 3px; color: var(--muted); font-size: 13px; text-align: right; white-space: nowrap; }
 .beatDot { justify-self: center; width: 11px; height: 11px; margin-top: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 15%, transparent), 0 0 16px color-mix(in srgb, var(--tone) 60%, transparent); }
 .beatBody { display: grid; justify-items: start; gap: 10px; min-width: 0; }
 .beatBody > * { max-width: 100%; }
