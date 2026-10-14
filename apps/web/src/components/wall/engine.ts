@@ -310,12 +310,12 @@ export function createWall(canvas: HTMLCanvasElement, opts: { reduced: boolean }
     }
 
     // Depth: the edges fall into the dark, the bottom most of all.
-    const v = ctx.createRadialGradient(W / 2, H * 0.42, Math.min(W, H) * 0.35, W / 2, H * 0.5, Math.max(W, H) * 0.72);
-    v.addColorStop(0, `rgba(${BG.join(',')},0)`); v.addColorStop(1, `rgba(${BG.join(',')},0.82)`);
+    const v = ctx.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.42, W / 2, H * 0.5, Math.max(W, H) * 0.78);
+    v.addColorStop(0, `rgba(${BG.join(',')},0)`); v.addColorStop(1, `rgba(${BG.join(',')},0.66)`);
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-    const b = ctx.createLinearGradient(0, H * 0.72, 0, H);
-    b.addColorStop(0, `rgba(${BG.join(',')},0)`); b.addColorStop(1, `rgba(${BG.join(',')},1)`);
-    ctx.fillStyle = b; ctx.fillRect(0, H * 0.72, W, H * 0.28);
+    const b = ctx.createLinearGradient(0, H * 0.84, 0, H);
+    b.addColorStop(0, `rgba(${BG.join(',')},0)`); b.addColorStop(1, `rgba(${BG.join(',')},0.95)`);
+    ctx.fillStyle = b; ctx.fillRect(0, H * 0.84, W, H * 0.16);
   }
 
   function frame(now: number) {
