@@ -8,8 +8,6 @@ import { Timeline } from '../timeline/Timeline';
 export function Home({ authed }: { authed: boolean }) {
   return (
     <>
-      {/* A visitor's page title is the hero's headline. */}
-      {authed && <h1 className="sr-only">Home</h1>}
       <Timeline authed={authed} />
     </>
   );

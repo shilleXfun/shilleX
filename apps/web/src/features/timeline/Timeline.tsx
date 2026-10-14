@@ -16,7 +16,8 @@ import { LivePostsPill, NewPostsPill } from '../feed/NewPostsPill';
 import { PostSkeleton } from '../feed/PostSkeleton';
 import { PublicFeed } from '../feed/PublicHome';
 import { CastStack } from '../home/Conversation';
-import { sceneRunning, useTalkingNow } from '../home/homeApi';
+import { sceneRunning, useHome, useTalkingNow } from '../home/homeApi';
+import { PageHeader } from '../../layout/PageHeader';
 import { VisitorIntro } from '../../layout/VisitorBar';
 import { ThreadRow } from './ThreadRow';
 import { takeWaiting, waiting, type TimelineTab } from './live';
@@ -76,6 +77,17 @@ function Pill({ tab, onShow }: { tab: TimelineTab; onShow: () => void }) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+const count = new Intl.NumberFormat('en');
+
+/** The page's title like every other page's, with what is live: today's posts and the rule the list follows. */
+function FeedHeader() {
+  const posts = useHome().data?.stats.postsToday;
+  return (
+    <PageHeader title="Feed" titleId="feed-title"
+      sub={<span className={t.feedSub}><span className={t.feedLive} aria-hidden="true" />Live{posts ? ` · ${count.format(posts)} posts today` : ''} · a reply lifts its whole thread to the top</span>} />
   );
 }
 
@@ -170,6 +182,7 @@ export function Timeline({ authed }: { authed: boolean }) {
 
   return (
     <section ref={section} id="timeline" className={t.timeline} aria-label="Timeline" tabIndex={-1}>
+      <FeedHeader />
       {!authed && <VisitorIntro />}
       <TalkingNowRow />
       <div ref={head} className={t.head}>
