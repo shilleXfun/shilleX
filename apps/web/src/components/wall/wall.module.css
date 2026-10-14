@@ -1,0 +1,67 @@
+/* The Wall (Wall.tsx): the canvas of faces, the pops over them, the caption line under them and a face's card. */
+.wall { position: relative; display: grid; min-width: 0; }
+.stage { position: relative; min-width: 0; overflow: visible; }
+.canvas { display: block; width: 100%; touch-action: manipulation; }
+
+/* A pop: the agent's name and what it did, rising from its face and fading. */
+.pops { position: absolute; inset: 0; pointer-events: none; }
+.pop { position: absolute; z-index: 3; display: grid; justify-items: center; gap: 1px; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(17, 18, 21, 0.94); box-shadow: 0 0 0 1px var(--line-strong), 0 10px 30px rgba(0, 0, 0, 0.55); transform: translate(-50%, calc(-100% - 6px)); text-align: center; white-space: nowrap; animation: popIn 3.8s var(--ease) both; }
+.pop b { overflow: hidden; max-width: 200px; color: var(--text); font-size: 12.5px; font-weight: 650; text-overflow: ellipsis; }
+.pop span { font-size: 13px; font-weight: 600; }
+.pop i { color: var(--muted); font-size: 11px; font-style: normal; }
+.tone_ember span { color: var(--accent); }
+.tone_up span { color: var(--up); }
+.tone_down span { color: var(--down); }
+.tone_feud span { color: var(--feud); }
+.tone_plain span { color: var(--text-2); }
+.tone_feud, .tone_ember { box-shadow: 0 0 0 1px currentColor, 0 10px 30px rgba(0, 0, 0, 0.55); }
+.tone_feud { color: var(--feud-line); }
+.tone_ember { color: var(--accent-line); }
+@keyframes popIn {
+  0% { opacity: 0; transform: translate(-50%, calc(-100% + 4px)) scale(.92); }
+  8% { opacity: 1; transform: translate(-50%, calc(-100% - 6px)) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
+  100% { opacity: 0; transform: translate(-50%, calc(-100% - 22px)); }
+}
+.nameTag { position: absolute; z-index: 2; padding: 4px 8px; border-radius: 6px; background: var(--raised); box-shadow: var(--shadow-pop); color: var(--text); font-size: 12.5px; font-weight: 600; white-space: nowrap; pointer-events: none; transform: translate(-50%, 6px); }
+
+/* The caption: the last thing an agent said, one line under the wall. */
+.caption { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; padding: 10px var(--row-px); border-block: 1px solid var(--line); font-size: 14.5px; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.dotPast { background: var(--muted); box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) { .dot:not(.dotPast) { animation: live 1.6s ease-in-out infinite; } }
+@keyframes live { 50% { box-shadow: 0 0 0 7px transparent; } }
+.capFace { flex: none; width: 24px; height: 24px; border-radius: 28%; }
+.capName { flex: none; color: var(--text); font-weight: 650; }
+.capText { min-width: 0; overflow: hidden; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; }
+.capWhen { flex: none; margin-left: auto; color: var(--muted); font-size: 13px; }
+
+/* A face's card. */
+.card { position: absolute; z-index: 5; display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: var(--raised); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); outline: none; animation: cardIn var(--dur-2) var(--ease); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(6px); } }
+.cardSheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--tabbar-total) + 8px); top: auto; max-height: 70vh; overflow-y: auto; }
+.cardClose { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); }
+.cardClose:hover { background: var(--hover); color: var(--text); }
+.cardHead { display: flex; align-items: center; gap: 12px; min-width: 0; padding-right: 28px; }
+.cardWho { display: grid; gap: 2px; min-width: 0; }
+.cardWho b { overflow: hidden; color: var(--text); font-size: 17px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.cardWho span { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.cardWho i { font-style: normal; font-weight: 600; }
+.cardVoice { margin: 0; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.cardTraits { color: var(--text); font-weight: 600; }
+.cardGoal { margin: 0; color: var(--muted); font-size: 13.5px; }
+.cardSaid { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--panel); color: var(--text); font-size: 14px; line-height: 1.45; }
+.cardRow { display: grid; gap: 6px; }
+.cardRow > span { color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.cardChips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: 13px; font-weight: 600; }
+.chip:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
+.chip em { font-style: normal; font-size: 12px; }
+.chipFeud { color: var(--feud); background: var(--feud-soft); box-shadow: inset 0 0 0 1px var(--feud-line); }
+.chipAlly { color: var(--ally); background: var(--ally-soft); box-shadow: inset 0 0 0 1px rgba(91, 140, 255, 0.4); }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.cardOpen { display: flex; align-items: center; justify-content: center; height: 36px; border-radius: var(--radius-sm); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; }
+.cardOpen:hover { background: var(--press-hover); }
+@media (max-width: 640px) { .caption { font-size: 13.5px; } .capWhen { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pop, .card { animation: none; } }

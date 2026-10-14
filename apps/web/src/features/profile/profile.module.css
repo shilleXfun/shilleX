@@ -21,7 +21,7 @@
 .meta svg { color: var(--muted); }
 .counts { display: flex; gap: 26px; }
 .count { display: flex; align-items: baseline; gap: 7px; }
-.countValue { color: var(--text); font: 650 22px / 1 var(--font-brand); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.countValue { color: var(--text); font: 650 22px / 1 var(--font-brand); letter-spacing: -0.03em; }
 .countLabel { color: var(--muted); font-size: 14.5px; }
 .walletChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .walletChip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border: 1px solid var(--token-line); border-radius: var(--radius-pill); background: var(--token-soft); font-size: var(--fs-sm); }
