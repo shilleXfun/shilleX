@@ -29,7 +29,10 @@ export const PHRASEBOOK_SCHEMA: Record<string, unknown> = {
   properties: {
     voice: { type: 'string' },
     traits: { type: 'object', additionalProperties: false, required: TRAITS, properties: Object.fromEntries(TRAITS.map((t) => [t, { type: 'number' }])) },
-    lines: { type: 'object', additionalProperties: false, required: FALLBACK_SITUATIONS, properties: Object.fromEntries(FALLBACK_SITUATIONS.map((s) => [s, strings])) },
+    // A list of { situation, texts }, not an object with every situation as a required key: that object (25 keys, each a
+    // list) compiled to a grammar the API rejects as too large (400, 2026-10-14). validatePhrasebook takes either shape.
+    lines: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['situation', 'texts'],
+      properties: { situation: { type: 'string', enum: FALLBACK_SITUATIONS }, texts: strings } } },
     openers: strings, closers: strings, interests: strings,
     profile: { type: 'object', additionalProperties: false, required: ['display_name', 'bio', 'avatar_emoji', 'avatar_color'],
       properties: { display_name: { type: 'string' }, bio: { type: 'string' }, avatar_emoji: { type: 'string' }, avatar_color: { type: 'string' } } },
@@ -88,9 +91,13 @@ export function validatePhrasebook(raw: unknown): Phrasebook | null {
   const voice = clean(r.voice, 400, 'free');
   if (!voice) return null;
   const lines: Partial<Record<Situation, string[]>> = {};
+  // The model answers with a list of { situation, texts } (the schema above); an object keyed by situation also reads.
+  const byKey: Record<string, unknown[]> = {};
+  if (Array.isArray(r.lines)) for (const e of r.lines) { if (e && typeof e.situation === 'string' && Array.isArray(e.texts)) (byKey[e.situation] ??= []).push(...e.texts); }
+  else if (r.lines && typeof r.lines === 'object') Object.assign(byKey, r.lines);
   let full = 0;
   for (const s of FALLBACK_SITUATIONS) {
-    const l = list(r.lines?.[s], 280, 14, 'slots');
+    const l = list(byKey[s], 280, 14, 'slots');
     // Thin situations are left out so composeLine uses the built-in lines for them.
     if (l.length >= 4) { lines[s] = l; full++; }
   }
@@ -242,7 +249,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text:
       'This is Shillex, a social network where AI agents trade devnet coins next to human users. You write one agent’s phrasebook: lines in that agent’s own voice, based only on what it has written and done. '
-      + 'Lines are templates; the only slots are {coin} {user} {pct} {sol} {price} {holders} {room} {weather} {past} {topic}, and {weather} is one word for the market’s mood, such as giddy, slow, jumpy or unhinged; {topic} is a short label for something people on X are talking about. Give 10 to 14 different lines for each situation; for news, write some lines with {topic} and some without it (those go with a post the agent shares from X). '
+      + 'Lines are templates; the only slots are {coin} {user} {pct} {sol} {price} {holders} {room} {weather} {past} {topic}, and {weather} is one word for the market’s mood, such as giddy, slow, jumpy or unhinged; {topic} is a short label for something people on X are talking about. Give 10 to 14 different lines for each situation (one lines entry per situation, every situation once); for news, write some lines with {topic} and some without it (those go with a post the agent shares from X). '
       + 'Traits are numbers from 0 to 1 that describe how this agent has behaved so far. In profile, give the display name (up to 40 characters, no @), bio (up to 280 characters), one emoji and a colour (#rrggbb) that this agent would choose for itself, from what it has written and done. '
       + 'Everything between <world_content> tags was written by the agent or others in the world.' }];
     const wish = await d.wishOf?.(agentId);
