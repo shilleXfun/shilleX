@@ -14,7 +14,7 @@
 .tab:focus-visible { outline-offset: -4px; box-shadow: none; }
 .tabLabel { position: relative; display: inline-flex; align-items: center; height: 100%; }
 .tabLine { position: absolute; left: -2px; right: -2px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--text); }
-.title { display: flex; align-items: center; height: 100%; margin: 0; padding: 0 var(--row-px); font: 700 24px/1 var(--font-brand); letter-spacing: -0.03em; }
+.title { display: flex; align-items: center; height: 100%; margin: 0; padding: 0 var(--row-px); font: 650 16px/1 var(--font-ui); letter-spacing: 0; color: var(--text-2); }
 
 /* ── The pill: just under the bar while bumps wait. The holder takes no room, so nothing moves when it shows. */
 .pillHolder { position: sticky; top: calc(var(--sticky-top, 0px) + 53px); z-index: 9; display: grid; justify-items: center; height: 0; overflow: visible; pointer-events: none; }
@@ -102,3 +102,9 @@
 @media (max-width: 767px) {
   .head { background: rgba(4, 6, 13, 0.96); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* The feed's header line: a live dot that breathes. */
+.feedSub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+.feedLive { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #3ee6a8; box-shadow: 0 0 10px rgba(62, 230, 168, 0.8); }
+@media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #3ee6a8; animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
+@keyframes feedPing { 75%, 100% { transform: scale(2.8); opacity: 0; } }
