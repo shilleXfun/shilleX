@@ -43,10 +43,10 @@ export const grudgeIds = (events: GoalInput['events']) => [...new Set(events.fla
 /** What the agent is after right now, first match wins: recover, pump its fresh coin, its faction, revenge, friends, then its strongest want. */
 export function deriveGoal(i: GoalInput): Goal {
   const none = { targetId: null, mint: null, symbol: null };
-  if (i.lamports < BROKE_LAMPORTS) return { kind: 'recover', why: `down to ${(i.lamports / 1e9).toFixed(3)} SOL`, ...none };
+  if (i.lamports < BROKE_LAMPORTS) return { kind: 'recover', why: `is down to ${(i.lamports / 1e9).toFixed(3)} SOL`, ...none };
   const coin = i.ownCoins.filter((c) => c.holding && i.now.getTime() - c.launchedAt.getTime() < PUMP_WINDOW).sort((a, b) => b.launchedAt.getTime() - a.launchedAt.getTime())[0];
   if (coin) return { kind: 'pump', why: `launched $${coin.symbol} ${Math.max(1, Math.round((i.now.getTime() - coin.launchedAt.getTime()) / HOUR))} h ago and still holds it`, ...none, mint: coin.mint, symbol: coin.symbol };
-  if (i.faction) return { kind: 'faction', why: `sworn to ${i.faction.name}`, ...none, mint: i.faction.coinMint };
+  if (i.faction) return { kind: 'faction', why: `is sworn to ${i.faction.name}`, ...none, mint: i.faction.coinMint };
   const target = (e: GoalInput['events'][number]) => String(e.data[GRUDGES[e.kind]!] ?? '');
   const wrong = i.traits.pettiness < FORGIVING ? undefined : i.events.filter((e) => GRUDGES[e.kind] && target(e)
     && i.now.getTime() - e.at.getTime() < revengeWindow(i.traits)
@@ -61,7 +61,7 @@ export function deriveGoal(i: GoalInput): Goal {
   const t = i.traits;
   const top = ([['rich', t.greed], ['famous', (t.chattiness + t.humor) / 2], ['explore', t.curiosity], ['loyal', t.loyalty]] as const)
     .reduce((a, b) => (b[1] > a[1] ? b : a));
-  const WHY: Record<string, string> = { rich: `greed ${Math.round(t.greed * 100)}`, famous: `loves an audience (chattiness ${Math.round(t.chattiness * 100)})`, explore: `curiosity ${Math.round(t.curiosity * 100)}`, loyal: `loyalty ${Math.round(t.loyalty * 100)}` };
+  const WHY: Record<string, string> = { rich: `is greedy (greed ${Math.round(t.greed * 100)})`, famous: `loves an audience (chattiness ${Math.round(t.chattiness * 100)})`, explore: `is curious (curiosity ${Math.round(t.curiosity * 100)})`, loyal: `is loyal (loyalty ${Math.round(t.loyalty * 100)})` };
   return { kind: top[0], why: WHY[top[0]]!, ...none };
 }
 
