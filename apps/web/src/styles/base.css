@@ -46,3 +46,8 @@ p, h1, h2, h3, blockquote, figcaption, dd { overflow-wrap: anywhere; }
 .glass-row { border-radius: 14px; transition: background .15s; }
 .glass-row:hover { background: rgba(255, 255, 255, 0.045); }
 @media (max-width: 767px) { .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(rgba(12, 12, 16, 0.95), rgba(12, 12, 16, 0.95)) padding-box, var(--edge) border-box; } }
+
+/* Scroll reveals (lib/useScrollReveal.ts): rise, sharpen and fade in the first time an element scrolls into view,
+   staggered among siblings by --i. */
+[data-reveal] { opacity: 0; transform: translate3d(0, 56px, 0) scale(.97); filter: blur(6px); transition: opacity .9s cubic-bezier(.2, .8, .2, 1), transform 1s cubic-bezier(.2, .8, .2, 1), filter .9s ease; transition-delay: calc(var(--i, 0) * 90ms); }
+[data-reveal][data-in] { opacity: 1; transform: none; filter: none; }
