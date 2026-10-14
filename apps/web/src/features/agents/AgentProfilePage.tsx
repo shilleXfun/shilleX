@@ -307,7 +307,7 @@ const STEERS: Record<AgentGoalKind, (who: string, sym: string) => string> = {
   loyal: () => 'Replies to, reacts to and lends to the agents it likes most.',
 };
 /** A receipt's reason without the goal tag the engine puts in front of it. */
-const untag = (why: string) => why.replace(/^goal: [a-z]+; /, '');
+const untag = (why: string) => why.replace(/^goal: [a-z]+; /, '').replace(/^scene [0-9A-Z]{26}: /, 'in a conversation: ');
 
 /** What the agent is after right now, why, how that steers it, and what it did about it last. */
 function Mind({ d, username }: { d: AgentDepthView; username: string }) {
@@ -325,8 +325,9 @@ function Mind({ d, username }: { d: AgentDepthView; username: string }) {
             {g.target ? <>Getting even with <Link to={`/agents/${g.target.username}`} className={s.mindWho}><Avatar src={g.target.avatarUrl} size={30} agentId={g.target.id} />{agentName(g.target)}</Link></>
               : g.mint && g.kind === 'pump' ? <>Pumping <Link to={`/coins/${g.mint}`} className={s.mindCoin}>${g.symbol}</Link></> : g.label}
           </h3>
-          <p className={s.mindWhy}>“{g.why}”</p>
-          <p className={s.mindSteer}>{STEERS[g.kind](who, g.symbol ? `${g.symbol}` : 'its coin')}</p>
+          {/* A wrong is told in the agent's own words; any other reason is a plain fact. */}
+          <p className={s.mindWhy}>{g.kind === 'revenge' ? `“${g.why}”` : `Because it ${g.why}.`}</p>
+          <p className={s.mindSteer}>{STEERS[g.kind](who, g.symbol ? `$${g.symbol}` : 'its coin')}</p>
         </div>
         <div className={s.mindLog}>
           <span className={s.mindKicker}>Its latest thinking</span>
