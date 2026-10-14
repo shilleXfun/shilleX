@@ -62,36 +62,47 @@ function stream(seed: string) {
 }
 
 /**
- * Profile and community banners: a personal night skyline (visual v3). A seeded candle walk stands on fading towers
- * under a tinted sky with a horizon glow, echoing the app's live backdrop. No last-price line: in a profile or community
- * header that would read as the entity's own price history, and these walks are decoration.
+ * Profile and community banners: a patch of the living world (Lumen). Lit neurons gather in a few clusters on a dark
+ * field tinted with the seed's hue, each joined to its nearest neighbours by faint curved fibres, under two soft glows,
+ * the way the live backdrop draws the agents. No candles or price walks: those read as a price history and went stale.
  */
 export function bannerSvg(seed: string): string {
   const r = stream(`b:${seed}`);
   const hue = HUES[Math.floor(r() * HUES.length)]!;
-  const W = 1500, H = 220, STEP = 24, BODY = 12;
-  const y = (v: number) => (H - 14 - v * 150).toFixed(1);
-  let prev = 0.25 + r() * 0.5;
-  const candles: string[] = [];
-  for (let x = STEP / 2; x < W; x += STEP) {
-    const c = Math.min(0.97, Math.max(0.05, prev + (0.5 - prev) * 0.07 + (r() - 0.5) * 0.2));
-    const hi = Math.max(prev, c) + r() * 0.05, lo = Math.min(prev, c) - r() * 0.05;
-    const up = c >= prev, fill = up ? 'url(#u)' : 'url(#d)', tint = up ? '#27E0C0' : '#FF4F7B';
-    const top = y(Math.max(prev, c)), bottom = y(Math.min(prev, c));
-    const bodyH = Math.max(2, Number(bottom) - Number(top)).toFixed(1);
-    candles.push(
-      `<rect x="${x - BODY / 2}" y="${bottom}" width="${BODY}" height="${(H - Number(bottom)).toFixed(1)}" fill="${fill}"/>`
-      + `<line x1="${x}" x2="${x}" y1="${y(hi)}" y2="${y(lo)}" stroke="${tint}" stroke-opacity=".45"/>`
-      + `<rect x="${x - BODY / 2}" y="${top}" width="${BODY}" height="${bodyH}" fill="${tint}" fill-opacity=".7"/>`,
-    );
-    prev = c;
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice">`
-    + `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue} 40% 6%)"/><stop offset="1" stop-color="hsl(${hue} 45% 15%)"/></linearGradient>`
-    + `<radialGradient id="g" cx="${(0.3 + r() * 0.4).toFixed(2)}" cy="1" r=".7"><stop offset="0" stop-color="hsl(${(hue + 40) % 360} 75% 50%)" stop-opacity=".35"/><stop offset="1" stop-color="hsl(${hue} 70% 40%)" stop-opacity="0"/></radialGradient>`
-    + `<linearGradient id="u" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27E0C0" stop-opacity=".22"/><stop offset="1" stop-color="#27E0C0" stop-opacity="0"/></linearGradient>`
-    + `<linearGradient id="d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF4F7B" stop-opacity=".2"/><stop offset="1" stop-color="#FF4F7B" stop-opacity="0"/></linearGradient></defs>`
-    + `<rect width="${W}" height="${H}" fill="url(#s)"/><rect width="${W}" height="${H}" fill="url(#g)"/>${candles.join('')}</svg>`;
+  const warm = (hue + 30 + Math.floor(r() * 50)) % 360;
+  const W = 1500, H = 300;
+  const f = (v: number) => v.toFixed(1);
+  // A few clusters across the width, then neurons scattered around them (closer in near the centre of each).
+  const k = 3 + Math.floor(r() * 2);
+  const centres = Array.from({ length: k }, (_, i) => ({ x: (i + 0.3 + r() * 0.4) * (W / k), y: 60 + r() * (H - 120) }));
+  const nodes = Array.from({ length: 46 }, () => {
+    const c = centres[Math.floor(r() * centres.length)]!;
+    const d = Math.pow(r(), 1.6) * 260, a = r() * Math.PI * 2;
+    return { x: Math.min(W - 8, Math.max(8, c.x + Math.cos(a) * d * 1.4)), y: Math.min(H - 8, Math.max(8, c.y + Math.sin(a) * d * 0.55)), size: 1.2 + Math.pow(r(), 3) * 4.6 };
+  });
+  const fibres: string[] = [];
+  const seen = new Set<string>();
+  nodes.forEach((n, i) => {
+    const near = nodes.map((m, j) => ({ j, d: (m.x - n.x) ** 2 + (m.y - n.y) ** 2 })).filter((e) => e.j !== i).sort((p, q) => p.d - q.d).slice(0, 2);
+    for (const { j } of near) {
+      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const m = nodes[j]!, bend = (r() - 0.5) * 0.5;
+      const qx = (n.x + m.x) / 2 - (m.y - n.y) * bend, qy = (n.y + m.y) / 2 + (m.x - n.x) * bend;
+      fibres.push(`<path d="M${f(n.x)} ${f(n.y)}Q${f(qx)} ${f(qy)} ${f(m.x)} ${f(m.y)}" stroke-opacity="${(0.14 + r() * 0.24).toFixed(2)}"/>`);
+    }
+  });
+  const halos = nodes.filter((n) => n.size > 3).map((n) => `<circle cx="${f(n.x)}" cy="${f(n.y)}" r="${f(n.size * 4)}" fill="url(#h)"/>`);
+  const lights = nodes.map((n) => `<circle cx="${f(n.x)}" cy="${f(n.y)}" r="${f(n.size)}" fill="hsl(${n.size > 3 ? warm : hue} 95% ${n.size > 3 ? 78 : 72}%)" fill-opacity="${n.size > 2 ? 1 : 0.75}"/>`);
+  const g1 = centres[0]!, g2 = centres[centres.length - 1]!;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">`
+    + `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue} 30% 4%)"/><stop offset="1" stop-color="hsl(${hue} 36% 8%)"/></linearGradient>`
+    + `<radialGradient id="g1" cx="${(g1.x / W).toFixed(2)}" cy="${(g1.y / H).toFixed(2)}" r=".55"><stop offset="0" stop-color="hsl(${hue} 85% 58%)" stop-opacity=".26"/><stop offset="1" stop-color="hsl(${hue} 85% 58%)" stop-opacity="0"/></radialGradient>`
+    + `<radialGradient id="g2" cx="${(g2.x / W).toFixed(2)}" cy="${(g2.y / H).toFixed(2)}" r=".5"><stop offset="0" stop-color="hsl(${warm} 80% 58%)" stop-opacity=".2"/><stop offset="1" stop-color="hsl(${warm} 80% 58%)" stop-opacity="0"/></radialGradient>`
+    + `<radialGradient id="h"><stop offset="0" stop-color="hsl(${warm} 95% 70%)" stop-opacity=".45"/><stop offset="1" stop-color="hsl(${warm} 95% 70%)" stop-opacity="0"/></radialGradient></defs>`
+    + `<rect width="${W}" height="${H}" fill="url(#s)"/><rect width="${W}" height="${H}" fill="url(#g1)"/><rect width="${W}" height="${H}" fill="url(#g2)"/>`
+    + `<g fill="none" stroke="hsl(${hue} 80% 72%)" stroke-width="1">${fibres.join('')}</g>${halos.join('')}${lights.join('')}</svg>`;
 }
 
 export function artSvg(seed: string): string {

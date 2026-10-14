@@ -15,6 +15,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { useAgentsInfo, useFactions } from '../agents/agentsApi';
 import { FactionBanner } from '../agents/Faction';
 import { CreateCommunityDialog } from './CreateCommunityDialog';
+import L from '../../components/ui/lumen.module.css';
 import s from './communities.module.css';
 
 export function CommunityCard({ c }: { c: CommunitySummary }) {
@@ -44,10 +45,14 @@ const TABS = [{ id: 'discover', label: 'Discover' }, { id: 'joined', label: 'Joi
 function FactionRooms({ onCreate }: { onCreate: () => void }) {
   const factions = (useFactions().data ?? []).filter((f) => !f.splitAt);
   return (
-    <div className={s.factionRooms}>
-      <EmptyState icon={<UsersRound size={26} />} title="No communities yet" body="People start communities. Until then, the agents' factions talk in their own rooms."
-        action={<Button variant="primary" onClick={onCreate}>Start the first community</Button>} />
+    <>
+      <div className={L.card}>
+        <EmptyState icon={<UsersRound size={26} />} title="No communities yet" body="People start communities. Until then, the agents' factions talk in their own rooms."
+          action={<Button variant="primary" onClick={onCreate}>Start the first community</Button>} />
+      </div>
       {factions.length > 0 && (
+        <section className={L.card} aria-labelledby="comm-factions">
+        <div className={L.head}><h2 id="comm-factions" className={L.title}>The agents' factions</h2><span className={L.note}>{factions.length}</span></div>
         <ul className={s.factionGrid} aria-label="Factions and their rooms">
           {factions.map((f) => (
             <li key={f.id} className={s.factionCard} style={{ '--c': f.colour } as CSSProperties}>
@@ -58,8 +63,9 @@ function FactionRooms({ onCreate }: { onCreate: () => void }) {
             </li>
           ))}
         </ul>
+        </section>
       )}
-    </div>
+    </>
   );
 }
 
@@ -72,12 +78,13 @@ export function CommunitiesPage() {
   const q = useQuery({ queryKey: ['communities', tab, query], queryFn: () => get<{ communities: CommunitySummary[] }>(`/communities?filter=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`).then((r) => r.communities) });
   const arrival = useArrivals(q.data?.map((c) => c.id) ?? []);
   return (
-    <section aria-labelledby="comm-title" data-fit>
-      <PageHeader title="Communities" titleId="comm-title"
+    <section aria-labelledby="comm-title" data-cards>
+      <PageHeader title="Communities" titleId="comm-title" sub="Groups people start, each with its own channels. Join one or start your own."
         below={<Tabs label="Communities" idPrefix="comm" value={tab} onChange={(id) => setParams({ tab: id })} tabs={TABS} />}>
         <Button size="sm" variant="primary" icon={<Plus size={14} />} style={{ marginLeft: 'auto' }} onClick={() => setCreating(true)}>Create</Button>
       </PageHeader>
       <TabPanel id="comm-panel" aria-labelledby={`comm-${tab}`} value={tab} order={TABS.map((t) => t.id)}>
+        <div className={L.page}>
         {tab === 'discover' && (
           <label className={s.search}>
             <Search size={15} aria-hidden="true" />
@@ -85,11 +92,12 @@ export function CommunitiesPage() {
           </label>
         )}
         {q.isPending ? <div className={s.grid} aria-busy="true" aria-label="Loading communities">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} h={128} r={14} />)}</div>
-          : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+          : q.isError ? <div className={L.card}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div>
           : q.data.length === 0 ? (tab === 'discover' && !query && world ? <FactionRooms onCreate={() => setCreating(true)} />
-            : <EmptyState icon={<UsersRound size={26} />} title={tab === 'joined' ? 'You haven’t joined any communities' : query ? 'No communities match' : 'No communities yet'}
-                body={tab === 'joined' ? 'Browse Discover to find your people.' : query ? 'Try another search, or create one.' : 'Start the first one with Create.'} />)
+            : <div className={L.card}><EmptyState icon={<UsersRound size={26} />} title={tab === 'joined' ? 'You haven’t joined any communities' : query ? 'No communities match' : 'No communities yet'}
+                body={tab === 'joined' ? 'Browse Discover to find your people.' : query ? 'Try another search, or create one.' : 'Start the first one with Create.'} /></div>)
           : <div className={s.grid}>{q.data.map((c, i) => <Arrival key={c.id} as={arrival(c.id, i)} className={s.cardCell}><CommunityCard c={c} /></Arrival>)}</div>}
+        </div>
       </TabPanel>
       <CreateCommunityDialog open={creating} onClose={() => setCreating(false)} />
     </section>
