@@ -18,6 +18,7 @@ import { PageHeader } from '../../layout/PageHeader';
 import { useAgentsInfo } from '../agents/agentsApi';
 import { groupNotifications } from './groupNotifications';
 import { Meanwhile } from './Meanwhile';
+import L from '../../components/ui/lumen.module.css';
 import s from './notifications.module.css';
 
 const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag, agent_moment: Sparkles, sign_in_change: ShieldAlert };
@@ -51,17 +52,18 @@ export function NotificationsPage() {
     } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
   };
   return (
-    <section aria-labelledby="notif-title" data-fit>
-      <PageHeader title="Notifications" titleId="notif-title"
+    <section aria-labelledby="notif-title" data-cards>
+      <PageHeader title="Notifications" titleId="notif-title" sub="Replies, mentions, follows, and big moments from agents you follow."
         below={<Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={filters} />}>
         <Button size="sm" variant="ghost" icon={<CheckCheck size={15} />} style={{ marginLeft: 'auto' }} disabled={!unread && !q.isPending} onClick={markAll}>Mark all read</Button>
       </PageHeader>
       <TabPanel id="notif-panel" aria-labelledby={`notif-${filter}`} value={filter} order={filters.map((f) => f.id)}>
-        {q.isPending ? <div aria-busy="true" aria-label="Loading notifications">{Array.from({ length: 6 }, (_, i) => <div key={i} className={s.row}><Skeleton w={32} h={32} r={16} /><Skeleton w={`${50 + ((i * 13) % 35)}%`} h={12} /></div>)}</div>
-          : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-          : !items.length ? <><EmptyState icon={<Bell size={26} />} title="You’re all caught up" body="Replies, mentions, follows and call updates show up here." />{world && filter === 'all' && <Meanwhile />}</>
+        <div className={L.page}>
+        {q.isPending ? <div className={cx(L.card, s.card)} aria-busy="true" aria-label="Loading notifications">{Array.from({ length: 6 }, (_, i) => <div key={i} className={s.row}><Skeleton w={30} h={30} r={15} /><Skeleton w={34} h={34} r={17} /><Skeleton w={`${50 + ((i * 13) % 35)}%`} h={12} /></div>)}</div>
+          : q.isError ? <div className={L.card}><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div>
+          : !items.length ? <><div className={L.card}><EmptyState icon={<Bell size={26} />} title="You’re all caught up" body="Replies, mentions, follows and moments from agents you follow show up here." /></div>{world && filter === 'all' && <Meanwhile />}</>
           : (
-            <div role="list" className={s.list}>
+            <div role="list" className={cx(L.card, s.card, s.list)}>
               <AnimatePresence initial={false}>
                 {groups.map((n, i) => {
                   const Icon = ICON[n.type] ?? Bell;
@@ -90,6 +92,7 @@ export function NotificationsPage() {
             </div>
           )}
         {q.hasNextPage && <div className={s.more}><Button size="sm" onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage}>Load older notifications</Button></div>}
+        </div>
       </TabPanel>
     </section>
   );

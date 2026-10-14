@@ -21,6 +21,8 @@ import { useUserActions } from '../feed/postActions';
 import { CommunityCard } from '../communities/CommunitiesPage';
 import { copyAddress } from '../tokens/TokenPreview';
 import { useAgentsInfo } from '../agents/agentsApi';
+import { cx } from '../../lib/cx';
+import L from '../../components/ui/lumen.module.css';
 import { SayHi } from './SayHi';
 import s from './profile.module.css';
 import cs from '../communities/communities.module.css';
@@ -43,24 +45,34 @@ export function ProfilePage() {
   const world = useAgentsInfo().isSuccess;
   if (q.isPending) {
     return (
-      <div aria-busy="true" aria-label="Loading profile">
-        <div className={s.banner} />
-        <div className={s.top}><span className={s.avatarRing}><Skeleton w={88} h={88} r={44} /></span></div>
-        <div className={s.info}><Skeleton w={200} h={30} /><Skeleton w={140} h={12} /><Skeleton w="70%" h={12} /></div>
+      <div aria-busy="true" aria-label="Loading profile" data-cards>
+        <div className={L.page}>
+          <div className={cx(L.card, s.hero)}>
+            <div className={s.banner} />
+            <div className={s.top}><span className={s.avatarRing}><Skeleton w={96} h={96} r={48} /></span></div>
+            <div className={s.info}><Skeleton w={200} h={30} /><Skeleton w={140} h={12} /><Skeleton w="70%" h={12} /></div>
+          </div>
+        </div>
       </div>
     );
   }
   if (q.isError) {
-    return q.error instanceof ApiError && q.error.status === 404
-      ? <EmptyState icon={<UserRound size={26} />} title="This account doesn’t exist" body="Check the handle, or search for people from Messages." />
-      : <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+    return (
+      <div data-cards><div className={L.page}><div className={L.card}>
+        {q.error instanceof ApiError && q.error.status === 404
+          ? <EmptyState icon={<UserRound size={26} />} title="This account doesn’t exist" body="Check the handle, or search for people from Messages." />
+          : <ErrorState error={q.error} onRetry={() => void q.refetch()} />}
+      </div></div></div>
+    );
   }
   const p = q.data;
   return (
-    <section aria-labelledby="profile-name" data-fit>
+    <section aria-labelledby="profile-name" data-cards>
+      <div className={L.page}>
+      <header className={cx(L.card, s.hero)}>
       <div className={s.banner} style={{ backgroundImage: p.bannerUrl ? `url(${p.bannerUrl})` : undefined }} />
       <div className={s.top}>
-        <span className={s.avatarRing}><Avatar src={p.avatarUrl} size={88} me={p.isSelf} agent={p.isAgent} /></span>
+        <span className={s.avatarRing}><Avatar src={p.avatarUrl} size={96} me={p.isSelf} agent={p.isAgent} /></span>
         <ProfileActions p={p} />
       </div>
       <div className={s.info}>
@@ -91,6 +103,8 @@ export function ProfilePage() {
           </ul>
         )}
       </div>
+      </header>
+      <div className={cx(L.card, s.feedCard)}>
       <div className={s.tabsWrap}>
         <Tabs label="Profile sections" idPrefix="prof" value={tab} onChange={(id) => setParams({ tab: id })} tabs={[...TABS]} />
       </div>
@@ -104,6 +118,8 @@ export function ProfilePage() {
                 : <EmptyState title={EMPTY[tab].title} body={p.isSelf ? EMPTY[tab].self : undefined} />} />
           </>}
       </TabPanel>
+      </div>
+      </div>
     </section>
   );
 }

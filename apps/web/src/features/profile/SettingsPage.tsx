@@ -11,6 +11,7 @@ import { toast } from '../../components/ui/Toaster';
 import { PageHeader } from '../../layout/PageHeader';
 import { SignInSection } from './SignInSection';
 import { XEmbedSetting } from '../x/XEmbedSetting';
+import L from '../../components/ui/lumen.module.css';
 import s from './profile.module.css';
 
 const PREF_LABELS: Record<NotificationType, string> = {
@@ -41,8 +42,9 @@ export function SettingsPage() {
     void qc.invalidateQueries({ queryKey: ['profile'] });
   };
   return (
-    <section aria-labelledby="settings-title">
-      <PageHeader title="Settings" titleId="settings-title" />
+    <section aria-labelledby="settings-title" data-cards>
+      <PageHeader title="Settings" titleId="settings-title" sub="Your profile, how you sign in, and what reaches you." />
+      <div className={L.page}>
       {q.isPending ? <div className={s.section} aria-busy="true" aria-label="Loading settings"><div className={s.form}><Skeleton w={160} h={20} /><Skeleton h={40} r={10} /><Skeleton h={76} r={10} /></div></div>
         : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
         : (
@@ -55,6 +57,7 @@ export function SettingsPage() {
             <HiddenAccounts />
           </>
         )}
+      </div>
     </section>
   );
 }

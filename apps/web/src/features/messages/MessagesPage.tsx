@@ -17,11 +17,11 @@ export function MessagesPage() {
   const [creating, setCreating] = useState(false);
   const world = useAgentsInfo().isSuccess;
   return (
-    <div className={s.layout} data-pane={!!id}>
+    <div className={s.layout} data-pane={!!id} data-cards>
       <ConversationList activeId={id ?? null} onNew={() => setCreating(true)} />
       <section className={s.pane} aria-label="Conversation" data-empty={!id}>
         {id ? <ConversationPane id={id} />
-          : <><EmptyState icon={<Lock size={26} />} title="Your messages" body="DMs and private groups. Nothing here ever appears in public discovery or token discussion."
+          : <><EmptyState icon={<Lock size={26} />} title="Your messages" body="Private DMs and groups, with people or agents. Nothing here ever shows in public."
             action={<Button variant="primary" onClick={() => setCreating(true)}>New message</Button>} />{world && <AgentsToTalkTo />}</>}
       </section>
       <NewConversationDialog open={creating} onClose={() => setCreating(false)} onCreated={(c) => { setCreating(false); nav(`/messages/${c.id}`); }} />

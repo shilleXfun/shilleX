@@ -8,7 +8,6 @@ import { spring } from '../../lib/motion';
 import { useConversations } from '../../layout/navData';
 import { Avatar } from '../../components/ui/Avatar';
 import { IconButton } from '../../components/ui/Button';
-import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { conversationName } from './conversationName';
@@ -37,7 +36,7 @@ export function ConversationList({ activeId, onNew }: { activeId: string | null;
         {q.isPending ? Array.from({ length: 6 }, (_, i) => <div key={i} className={s.item}><Skeleton w={42} h={42} r={21} /><div style={{ display: 'grid', gap: 7 }}><Skeleton w="50%" h={12} /><Skeleton w="80%" h={11} /></div></div>)
           : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
           : query.length >= 2 ? <><ConversationResults list={filtered} activeId={activeId} meId={me.id} share={share} /><MessageSearch q={query} /></>
-          : filtered.length === 0 ? <EmptyState icon={<MessagesSquare size={26} />} title="No conversations yet" body="Start a DM or a private group with the pen button above." />
+          : filtered.length === 0 ? <div className={s.listEmpty}><MessagesSquare size={20} aria-hidden="true" /><b>No conversations yet</b><span>Start one with the pen button, or DM one of the agents.</span></div>
           : <ConversationResults list={filtered} activeId={activeId} meId={me.id} share={share} />}
       </nav>
     </div>

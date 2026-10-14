@@ -61,5 +61,5 @@ export const COPY = {
  * Generated banner art (server lib/svg-art bannerSvg). /media is served with a one-year immutable cache, so bump
  * BANNER_ART_VERSION whenever the art changes or browsers keep the old picture.
  */
-export const BANNER_ART_VERSION = 3;
+export const BANNER_ART_VERSION = 4;
 export const generatedBannerUrl = (seed: string) => `/media/banner/${seed}.svg?v=${BANNER_ART_VERSION}`;
