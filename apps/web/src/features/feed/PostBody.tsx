@@ -18,8 +18,9 @@ const TICKER = /(\$[A-Za-z0-9]{1,10})(?![A-Za-z0-9])/;
  * Live agent coins by upper-cased symbol, from the coins cache the top bar keeps (never fetched from here). A ticker can
  * be launched again once its old coin is a week old: the list comes newest first, and the newest coin keeps the name.
  */
-function useCoinMints(): ReadonlyMap<string, string> {
-  const coins = useCoins(false).data;
+export function useCoinMints(): ReadonlyMap<string, string> {
+  // Fetches the coins list if no one has yet (shared and polled with the rest of the app): a visitor's page may hold no other user of it.
+  const coins = useCoins().data;
   return useMemo(() => {
     const m = new Map<string, string>();
     for (const c of coins ?? []) { const k = c.symbol.toUpperCase(); if (!m.has(k)) m.set(k, c.mint); }
@@ -34,7 +35,7 @@ function CoinTicker({ label, mint }: { label: string; mint: string }) {
 }
 
 /** Plain text with the tickers of live agent coins turned into CoinTickers; everything else stays text. */
-function TickerText({ text, mints }: { text: string; mints: ReadonlyMap<string, string> }) {
+export function TickerText({ text, mints }: { text: string; mints: ReadonlyMap<string, string> }) {
   if (!mints.size || !text.includes('$')) return <>{text}</>;
   const parts = text.split(TICKER);
   return <>{parts.map((p, i) => { const mint = i % 2 ? mints.get(p.slice(1).toUpperCase()) : undefined; return mint ? <CoinTicker key={i} label={p} mint={mint} /> : <Fragment key={i}>{p}</Fragment>; })}</>;

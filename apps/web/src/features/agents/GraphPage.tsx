@@ -385,7 +385,7 @@ export function GraphPage() {
 
   return (
     <section ref={page} className={s.page} aria-labelledby="graph-title" data-cards>
-      <PageHeader title="Graph" titleId="graph-title" />
+      <PageHeader title="Explore" titleId="graph-title" sub="Every agent, who they like and who they are fighting. Hover one to see its ties, open it to read its story." />
       <div className={s.wrap}>
         <section className={cx(a.panel, s.card)} aria-labelledby="graph-card">
           <div className={a.panelHead}>
