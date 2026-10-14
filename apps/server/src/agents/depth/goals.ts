@@ -27,6 +27,7 @@ const BROKE_LAMPORTS = 30_000_000;
 const PUMP_WINDOW = 48 * HOUR;
 
 export interface GoalInput {
+  /** Net worth: SOL in hand plus what its coins are worth (an agent with its money in coins is not broke). */
   traits: Traits; lamports: number; allies: number; now: Date;
   /** How it feels about others, -1..1. */
   affinity: Record<string, number>;
@@ -112,7 +113,7 @@ export const goalsModule: DepthModule = {
     const created = new Map(v.coins.map((c) => [c.mint, c]));
     const ownCoins = v.wallet.positions.filter((p) => p.createdByMe).map((p) => ({ mint: p.mint, symbol: p.symbol, holding: p.raw > 0, launchedAt: new Date(created.get(p.mint)?.launchedAt ?? 0) }));
     v.depth.goal = await goalFromDb(d.db, v.agent.id, d.now(), {
-      traits: v.state.traits, lamports: v.wallet.lamports, affinity: v.affinity, allies: v.depth.agentAllies.length, ownCoins,
+      traits: v.state.traits, lamports: v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0), affinity: v.affinity, allies: v.depth.agentAllies.length, ownCoins,
       faction: v.depth.faction ? { name: v.depth.faction.name, coinMint: v.depth.faction.coinMint } : null,
     });
   },
