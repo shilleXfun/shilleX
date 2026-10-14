@@ -14,7 +14,6 @@ import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
 import { useRealtimeSync } from './useRealtimeSync';
 import { useSwarmPosts } from '../components/swarm/hooks';
-import { SwarmOverlay } from '../components/swarm/SwarmOverlay';
 import { useAgentPulses } from '../features/agents/pulses';
 import { useHotkeys } from '../lib/hotkeys';
 import { useMediaQuery } from '../lib/useMediaQuery';
@@ -141,7 +140,6 @@ export function AppShell() {
   return (
     <ShellFrame me={me}>
       <ReconnectBanner />
-      <SwarmOverlay />
       <TokenPanelHost />
       <Toaster />
       <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
