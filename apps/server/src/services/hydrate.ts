@@ -1,8 +1,8 @@
-import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostMoment, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins, agents, chainTxs,
+  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins, agents,
   type PostRow, type MessageRow,
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
@@ -50,31 +50,6 @@ const countBy = async (db: Db, col: typeof posts.parentId | typeof posts.quoteOf
   return new Map(rows.map((r) => [r.id as string, r.n]));
 };
 
-const MOMENT_RANK: Record<PostMoment['kind'], number> = { launch: 3, buy: 2, sell: 2, send: 1 };
-/**
- * What each agent post's turn did on chain (The Wall feed cards): a launch beats a trade, a trade a payment, and between
- * trades the bigger one wins. Read only; one query, bounded by the authors and the posts' time span.
- */
-async function momentsForPosts(db: Db, list: PostRow[]): Promise<Map<string, PostMoment>> {
-  const withTurn = list.filter((r) => r.agentTurnId && !r.deletedAt);
-  const out = new Map<string, PostMoment>();
-  if (!withTurn.length) return out;
-  const times = withTurn.map((r) => r.createdAt.getTime());
-  const rows = await db.select({ turnId: chainTxs.turnId, kind: chainTxs.kind, mint: chainTxs.mint, lamports: chainTxs.lamportsDelta, symbol: worldCoins.symbol })
-    .from(chainTxs).leftJoin(worldCoins, eq(worldCoins.mint, chainTxs.mint))
-    .where(and(inArray(chainTxs.agentId, [...new Set(withTurn.map((r) => r.authorId))]), inArray(chainTxs.turnId, withTurn.map((r) => r.agentTurnId!)),
-      inArray(chainTxs.kind, ['launch', 'buy', 'sell', 'send']), gte(chainTxs.createdAt, new Date(Math.min(...times) - 600_000)), lte(chainTxs.createdAt, new Date(Math.max(...times) + 600_000))));
-  const byTurn = new Map<string, PostMoment>();
-  for (const t of rows) {
-    if (!t.turnId) continue;
-    const m: PostMoment = { kind: t.kind as PostMoment['kind'], mint: t.mint, symbol: t.symbol ?? null, sol: t.kind === 'launch' ? 0 : Math.round((Math.abs(Number(t.lamports)) / LAMPORTS_PER_SOL) * 1000) / 1000 };
-    const have = byTurn.get(t.turnId);
-    if (!have || MOMENT_RANK[m.kind] > MOMENT_RANK[have.kind] || (MOMENT_RANK[m.kind] === MOMENT_RANK[have.kind] && m.sol > have.sol)) byTurn.set(t.turnId, m);
-  }
-  for (const r of withTurn) { const m = byTurn.get(r.agentTurnId!); if (m) out.set(r.id, m); }
-  return out;
-}
-
 export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): Promise<PostView[]> {
   if (!rows.length) return [];
   const all = new Map<string, PostRow>(rows.map((r) => [r.id, r]));
@@ -111,7 +86,6 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
   ]);
   // A website the post announces (x-revamp §3); no query unless a post links one.
   const siteOf = await sitesForPosts(db, list);
-  const momentOf = await momentsForPosts(db, list);
 
   const bookmarked = new Set(myBookmarks.map((r) => r.id));
   const repostedByMe = new Set(myReposts.map((r) => r.id));
@@ -164,7 +138,6 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
       ...(!hidden && r.xEmbed ? { xEmbed: r.xEmbed } : {}),
       ...(!hidden && siteOf.has(r.id) ? { site: siteOf.get(r.id)! } : {}),
-      ...(!hidden && momentOf.has(r.id) ? { moment: momentOf.get(r.id)! } : {}),
     };
   };
   return rows.map((r) => build(r, 0));

@@ -24,7 +24,6 @@ import { paperMomentHandler } from '../agents/depth/paper.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
-import { startPortraits } from '../agents/portraits.ts';
 import { haikuBrain, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
@@ -123,6 +122,7 @@ export async function restoreMemoryChain(db: Db, chain: MemoryChain): Promise<{ 
 /** Everything the agent world needs at boot when WORLD_KEY is set: seed, chain, interrupted-turn cleanup, budget, indexer, engine, moment queue, routes. */
 export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrain; chain?: Chain } = {}): Promise<WorldHandles & { stop(): Promise<void> }> {
   const { db, config, now } = app.deps;
+  await removePortraits(db);
   if (!config.worldKey) throw new Error('The agent world needs WORLD_KEY (32 bytes, base64)');
   const key = parseWorldKey(config.worldKey);
   console.log('[world] seed', await seedWorld(db, { now: now(), worldKey: key, adminPassword: config.worldAdminPassword, config }));
@@ -194,10 +194,6 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
-  // Every agent's painted portrait, once, under the owner's one-off budget (agents/portraits.ts).
-  const portraits = config.openaiApiKey && config.portraitsOn
-    ? startPortraits(db, { apiKey: config.openaiApiKey, model: config.openaiImageModel, budgetUsd: config.portraitBudgetUsd, now })
-    : null;
   await registerAgentRoutes(app, handles);
   await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerStoryRoutes(app, { indexer: handles.indexer });
@@ -239,5 +235,22 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { portraits?.stop(); clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+}
+
+/**
+ * The painted portraits (2026-10-14) were taken down at the owner's word: their blobs and rows are deleted and every
+ * agent's avatar points at its drawn face again. The portrait URLs were cached for a year, so the avatar must change URL.
+ * A no-op once done, and on a database that never had the table.
+ */
+async function removePortraits(db: Db) {
+  try {
+    await db.execute(sql.raw(`do $$ begin
+      if to_regclass('agent_portraits') is not null then
+        delete from media_blobs where id in (select small_blob_id from agent_portraits union select large_blob_id from agent_portraits);
+        delete from agent_portraits;
+      end if;
+      update users set avatar_url = '/api/agents/avatars/' || id || '.svg' where avatar_url like '/api/agents/portraits/%';
+    end $$`));
+  } catch (e) { console.error('[portraits] removal failed', e); }
 }

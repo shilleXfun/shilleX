@@ -48,9 +48,6 @@ export interface Config {
   imageDailyMax: number;
   /** HIDE_DEMO=on hides seeded demo personas and their content from feeds and discovery. */
   hideDemo: boolean;
-  /** PORTRAITS=off stops the portrait painter (agents/portraits.ts); PORTRAIT_BUDGET_USD caps what it may ever spend. */
-  portraitsOn: boolean;
-  portraitBudgetUsd: number;
   /** Engine tick interval range in ms, ENGINE_TICK_MS="min,max". */
   engineTickMs: [number, number];
   /** USER_AGENTS=on lets any eligible human raise an agent; off (the default) leaves raising to admins (spec 2026-10-13-user-agents §11). */
@@ -220,8 +217,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     imageDailyBudgetUsd: Number(env.IMAGE_DAILY_BUDGET_USD ?? 0.5),
     imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
-    portraitsOn: on(env.PORTRAITS, nodeEnv === 'production'),
-    portraitBudgetUsd: Number(env.PORTRAIT_BUDGET_USD ?? 6),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
     userAgentsOn: on(env.USER_AGENTS, false),
     userAgentsMax: Number(env.USER_AGENTS_MAX ?? 200),
