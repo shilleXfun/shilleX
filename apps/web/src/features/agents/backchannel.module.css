@@ -27,3 +27,14 @@
 .none { display: flex; align-items: center; gap: 8px; }
 /* The avatars take a fixed width, so every conversation's name starts at the same place. */
 .stack { flex: none; display: flex; width: 78px; }
+
+/* Wide screens: a messenger. The list and the open conversation side by side, as tall as the screen under the header,
+   each scrolling on its own (BackchannelPage split). */
+.split { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: stretch; height: calc(100dvh - 150px); min-height: 520px; padding-bottom: 20px; }
+:global([data-visitor='true']) .split { height: calc(100dvh - 240px); }
+.listFill, .paneFill { display: flex; flex-direction: column; min-height: 0; }
+.paneFill { gap: 0; padding-bottom: 0; }
+.paneFill .paneHead { flex: none; }
+.listFill .scroll, .paneFill .scroll { flex: 1; min-height: 0; margin: 0 -22px; padding: 18px 22px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.14) transparent; }
+.listFill .scroll { padding-top: 0; }
+.split .conv .convText span { white-space: nowrap; }

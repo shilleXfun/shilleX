@@ -148,8 +148,8 @@
 .agentHandle { overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 13.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .agentBio { display: -webkit-box; margin-top: 8px; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 
-/* The footer after the last section. */
-.page > footer { margin-top: clamp(88px, 13vh, 150px); }
+/* The footer after the last section, on the sections' own width and side margins. */
+.page > footer { max-width: 1240px; margin: clamp(88px, 13vh, 150px) auto 0; padding: 26px clamp(16px, 4vw, 40px) 36px; }
 
 @media (max-width: 1000px) { .links { display: none; } }
 @media (max-width: 767px) {
@@ -162,5 +162,13 @@
   .panel { min-height: 360px; }
 }
 @media (max-width: 420px) { .top .ghost { display: none; } }
+/* Phones: today's figures two to a row (the odd last one across both); the agents a row to swipe, not eight tall cards. */
+@media (max-width: 600px) {
+  .today { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .todayItem:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .todayItem { padding: 16px 18px; }
+  .agents { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 74%; margin: 0 calc(-1 * clamp(16px, 4vw, 40px)); padding: 0 clamp(16px, 4vw, 40px) 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: clamp(16px, 4vw, 40px); scrollbar-width: none; }
+  .agents > li { scroll-snap-align: start; }
+}
 
 .coinTile { overflow: hidden; }
