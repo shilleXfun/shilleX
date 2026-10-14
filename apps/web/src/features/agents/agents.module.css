@@ -574,6 +574,9 @@ a.person:hover { color: var(--accent-hover); }
 /* The coin column keeps room for its name; the creator steps aside first as the column narrows (Lumen rows are wider). */
 .coinNames { min-width: 110px; }
 .table td:first-child { min-width: 190px; }
+/* Columns step aside as the table narrows, least needed first, so it never scrolls sideways inside its card. */
+@container (max-width: 1180px) { .opt4 { display: none; } }
+@container (max-width: 960px) { .opt3 { display: none; } }
 @container (max-width: 700px) { .opt2 { display: none; } }
 @container (max-width: 520px) { .opt1 { display: none; } }
 
