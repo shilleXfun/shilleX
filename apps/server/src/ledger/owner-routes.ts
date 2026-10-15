@@ -45,6 +45,8 @@ export async function registerMainnetOwnerRoutes(app: FastifyInstance, h: Mainne
     });
     r.post('/mainnet/deposits', money, async (req) => {
       const u = requireUser(req);
+      // The owner's own test of real SOL holds no one else's money: deposits open only with the full launch gate.
+      if (app.deps.config.mainnetOwnerOnly) throw errors.forbidden('OWNER_ONLY', 'Deposits are closed: Shillex is running the owner’s test of real SOL');
       const { sol } = z.object({ sol: z.number().positive().max(100) }).parse(req.body);
       const a = await mine(u.id);
       try { return await custody().createDeposit({ agentId: a.id, userId: u.id, lamports: lamports(sol) }); } catch (e) { throw toHttp(e); }

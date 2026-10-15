@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Connection } from '@solana/web3.js';
 import { eq } from 'drizzle-orm';
-import { users } from '../db/schema.ts';
+import { agents, users } from '../db/schema.ts';
 import { notify } from '../services/notify.ts';
 import { payoutWallet } from '../services/wallets.ts';
 import { applyDuePayoutChanges, setLiveCustody } from './owner.ts';
@@ -17,6 +17,7 @@ import { registerMainnetRoutes, type MainnetHandles } from './routes.ts';
 import { LEDGER_RUG_RULE, setRugRule } from './rug-rule.ts';
 import { Web3CustodyRpc, assertCustodyNetwork, type CustodyNetwork, type CustodyRpc } from './rpc.ts';
 import { parseMainnetKey } from './vault.ts';
+import { startSeason } from './season.ts';
 
 const S = 1000;
 const refused = (missing: string[]) => new Error(`MAINNET=on refused. Still missing:\n- ${missing.join('\n- ')}`);
@@ -30,6 +31,13 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
   const { db, config, now } = app.deps;
   if (!(o.chain instanceof LedgerChain)) return null;
   const chain = o.chain;
+  // The owner's test of real SOL starts Season 1 by itself, once: practice books (devnet or paper SOL) never back real
+  // SOL. Every house agent waits at zero until the owner records a stake and opens the season on /admin.
+  if (config.mainnet === 'on' && config.mainnetOwnerOnly && PRACTICE_SEASONS.has(await currentSeason(db))) {
+    const wild = await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'));
+    const r = await startSeason(db, 'season1', new Map(wild.map((a) => [a.id, 0])), now());
+    console.log(`[mainnet] owner test: Season 1 started (${r.archivedCoins} practice coins archived). Send SOL from the cold address, record it as stake on /admin, then open the season.`);
+  }
   await chain.loadFrozen();
   setRugRule(LEDGER_RUG_RULE);
   let custody: Custody | null = null;

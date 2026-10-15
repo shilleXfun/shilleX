@@ -62,6 +62,23 @@ export async function startSeason(db: Db, name: string, opening: Map<string, num
   });
 }
 
+/**
+ * The owner's test (MAINNET_OWNER_ONLY): sets every house agent's opening to `perAgent` lamports (those not paid yet), then
+ * pays them from the house with fundOpening. The owner picks the amount on /admin after recording the stake.
+ */
+export async function openSeason(db: Db, perAgent: number, now: Date): Promise<{ funded: number; lamports: number }> {
+  const season = await currentSeason(db);
+  if (PRACTICE_SEASONS.has(season)) throw new Error(`Season ${season} is a practice season: start Season 1 first`);
+  const [s] = await db.select().from(ledgerSeasons).where(eq(ledgerSeasons.id, season));
+  const paid = new Set((await db.select({ ref: ledgerJournal.ref }).from(ledgerJournal).where(and(eq(ledgerJournal.season, season), eq(ledgerJournal.kind, 'opening')))).map((r) => r.ref));
+  const opening: Record<string, number> = { ...(((s?.summary as { opening?: Record<string, number> } | undefined)?.opening) ?? {}) };
+  for (const a of await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'))) {
+    if (!paid.has(`opening:${season}:${a.id}`)) opening[a.id] = perAgent;
+  }
+  await db.update(ledgerSeasons).set({ summary: { ...((s?.summary as object | undefined) ?? {}), opening } }).where(eq(ledgerSeasons.id, season));
+  return fundOpening(db, now);
+}
+
 /** Pays the season's opening balances from the house, once per agent (its journal ref), then lets the agents run. */
 export async function fundOpening(db: Db, now: Date): Promise<{ funded: number; lamports: number }> {
   const season = await currentSeason(db);

@@ -31,6 +31,13 @@ export interface Config {
   worldChain: 'devnet' | 'memory' | 'ledger';
   /** MAINNET=off|rehearsal|on (mainnet spec §9). Anything but off needs WORLD_CHAIN=ledger; on also needs the launch gate. */
   mainnet: 'off' | 'rehearsal' | 'on';
+  /**
+   * MAINNET_OWNER_ONLY=on (with MAINNET=on): the owner's own test of real SOL. Only the house stake the owner puts in backs
+   * the agents; public deposits are refused, so no one else's money is ever held. The gate then skips what protects other
+   * people's deposits (the recorded legal review, the 14-day rehearsal, the risk notice) and keeps every key, RPC, cap and
+   * reserves check. Turning it off later puts the full gate back.
+   */
+  mainnetOwnerOnly: boolean;
   /** MAINNET_KEY: 32 bytes base64 encrypting the hot vault. Never the same as WORLD_KEY. */
   mainnetKey: string | undefined;
   /** MAINNET_RPC_URL: custody's paid RPC (mainnet-beta when on, devnet in rehearsal). */
@@ -201,6 +208,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv !== 'production' && worldChain === 'memory' ? '12345' : null),
     worldChain,
     mainnet,
+    mainnetOwnerOnly: mainnet === 'on' && on(env.MAINNET_OWNER_ONLY, false),
     mainnetKey: env.MAINNET_KEY || undefined,
     mainnetRpcUrl: env.MAINNET_RPC_URL || undefined,
     coldAddress: env.MAINNET_COLD_ADDRESS || undefined,

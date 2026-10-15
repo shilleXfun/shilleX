@@ -82,6 +82,9 @@ export async function gateStatus(d: { db: Db; config: Config; rpc: CustodyRpc | 
     try { if ((await d.custody.reserves()) < b.ledgerTotal) missing.push('on-chain reserves are below the books'); }
     catch (e) { missing.push(`the reserves could not be read: ${(e as Error).message}`); }
   }
+  // The owner's own test (MAINNET_OWNER_ONLY): no one else's SOL comes in (deposits are refused), so what protects
+  // depositors (the notice, the lawyer's review, the rehearsal) waits for the day deposits open. Everything above still holds.
+  if (c.mainnetOwnerOnly) return missing;
   if (!(await currentNotice(d.db))) missing.push('no risk notice is published');
   if (!(await legalReviewValid(d.db))) missing.push('no legal review is recorded on /admin');
   const r = await rehearsalStatus(d.db, d.now());

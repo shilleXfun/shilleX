@@ -87,6 +87,7 @@ export interface WithdrawalView {
 export interface ReservesView { mode: MainnetMode; network: 'mainnet' | 'devnet' | 'local' | null; hot: string | null; cold: string | null; ledgerTotalSol: number; onchainTotalSol: number | null; lastCheckAt: string | null; lastPassAt: string | null; frozen: boolean }
 export interface MainnetAdminView {
   mode: MainnetMode; season: string; frozen: string | null;
+  /** MAINNET_OWNER_ONLY: the owner's own test, deposits closed. Absent on older servers. */ ownerOnly?: boolean;
   hot: { address: string; sol: number | null } | null; cold: { address: string; sol: number | null } | null;
   books: { ledgerTotalSol: number; houseSol: number; ok: boolean; mismatches: string[] };
   lastReconciliation: { at: string; ok: boolean | null; details: unknown } | null;

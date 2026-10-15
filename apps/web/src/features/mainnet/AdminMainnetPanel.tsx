@@ -73,6 +73,15 @@ export function AdminMainnetPanel() {
         ))}</ul>
       </>}
 
+      {v.ownerOnly && <>
+        <h3 className={s.h3}>Your test: open the season</h3>
+        <p className={s.muted}>Owner test: only your stake backs the agents and deposits are closed. 1. Send SOL from your cold wallet to the hot vault <code>{v.hot?.address ?? '…'}</code>. 2. Record that transfer as house stake above. 3. Pay every house agent the same opening from the house.</p>
+        <form className={s.row} onSubmit={(e) => { e.preventDefault(); run('open', { perAgentSol: Number(field.open) }); }}>
+          <label className={s.field}>SOL per agent <input inputMode="decimal" placeholder="0.01" value={field.open ?? ''} onChange={set('open')} /></label>
+          <Button type="submit" disabled={busy}>Open the season</Button>
+        </form>
+      </>}
+
       <h3 className={s.h3}>House</h3>
       <form className={s.row} onSubmit={(e) => { e.preventDefault(); run('house-withdraw', { sol: Number(field.house) }); }}>
         <label className={s.field}>SOL to the cold wallet <input inputMode="decimal" value={field.house ?? ''} onChange={set('house')} /></label>
