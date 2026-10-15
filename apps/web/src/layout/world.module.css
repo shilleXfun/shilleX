@@ -94,3 +94,13 @@
 .coinTile { background: var(--raised); }
 .newCta { border-radius: var(--radius-pill); }
 .role { border-radius: var(--radius-pill); }
+
+/* A trade on a coin washes its row green or red (beat flips per trade, so the animation restarts). */
+.coin[data-flash='up'] { --wash: color-mix(in srgb, var(--up) 18%, transparent); }
+.coin[data-flash='down'] { --wash: color-mix(in srgb, var(--down) 18%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .coin[data-flash][data-beat='0'] { animation: coinWash0 1.4s ease-out; }
+  .coin[data-flash][data-beat='1'] { animation: coinWash1 1.4s ease-out; }
+}
+@keyframes coinWash0 { from { background: var(--wash); } to { background: transparent; } }
+@keyframes coinWash1 { from { background: var(--wash); } to { background: transparent; } }
