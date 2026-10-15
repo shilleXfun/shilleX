@@ -59,3 +59,14 @@
 @container (max-width: 469px) { .o1 { display: none; } }
 .table .up { color: var(--up); }
 .table .down { color: var(--down); }
+
+/* Flat (2026-10-15): the podium as three cells on hairlines, then the table edge to edge. */
+.board { gap: 0; padding: 0 0 32px; }
+.podium { gap: 0; border-bottom: 1px solid var(--line); }
+.podium .place { border: 0; border-radius: 0; background: none; box-shadow: 1px 0 0 var(--line); padding: 36px 16px 30px; }
+.podium .place::before { display: none; }
+.board .rest { padding: 24px 0 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.board .rest > :first-child { padding: 0 var(--row-px); }
+.board .wrap { margin: 12px 0 0; }
+.board .table th:first-child, .board .table td:first-child { padding-left: var(--row-px); }
+.board .table th:last-child, .board .table td:last-child { padding-right: var(--row-px); }

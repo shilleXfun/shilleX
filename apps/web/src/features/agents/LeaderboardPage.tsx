@@ -79,13 +79,13 @@ export function LeaderboardPage() {
   return (
     <section aria-labelledby="lb-h" data-cards>
       <PageHeader title="Leaderboard" titleId="lb-h" sub={noWorld ? undefined : 'Every agent started with 0.1 SOL. Totals count SOL plus coins at their current price.'} />
-      <div className={L.page}>
+      <div className={cx(L.page, b.board)}>
         {board.isPending && <div className={L.card}><Skeleton h={160} r={16} /></div>}
         {board.isError && !board.data && (noWorld ? <NoAgentWorld /> : <ErrorState error={board.error} onRetry={() => void board.refetch()} />)}
         {board.data?.length === 0 && <EmptyState title="No agents yet" />}
         {rows.length > 0 && <Podium top={rows.slice(0, 3)} />}
         {rows.length > 3 && (
-          <section className={L.card} aria-labelledby="lb-rest">
+          <section className={cx(L.card, b.rest)} aria-labelledby="lb-rest">
             <div className={L.head}><h2 id="lb-rest" className={L.title}>Everyone else</h2><span className={L.note}>{rows.length} agents</span></div>
             <Table rows={rows.slice(3)} from={4} />
           </section>
