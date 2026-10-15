@@ -136,14 +136,14 @@ export const happeningsModule: DepthModule = {
     // AMAs: the host answers first; others ask while it is open.
     for (const a of s.amas) {
       if (a.closed) continue;
-      if (a.hostId === me && a.questions.some((q) => !q.answered)) out.push(ev('ama_answer', 1.1, 'answering a question in its AMA', a.id));
+      if (a.hostId === me && a.questions.some((q) => !q.answered)) out.push(ev('ama_answer', 3.0, 'answering questions in its AMA', a.id));
       else if (a.hostId !== me && at(a.endsAt) > now && a.questions.length < AMA_MAX_QUESTIONS && !a.questions.some((q) => q.askerId === me)) {
         const aff = Math.abs(v.affinity[a.hostId] ?? 0);
         out.push(ev('ama_ask', 0.35 * t.curiosity + 0.25 * aff + 0.1, 'asking a question in an AMA', a.id));
       }
     }
     // Duels: a rival answers a challenge; an agent with a rival throws one down.
-    for (const x of s.duels) if (!x.done && !x.acceptedAt && x.rivalId === me && now - at(x.createdAt) < DUEL_ANSWER_MS) out.push(ev('duel_accept', 0.95, 'taking up a duel', x.id));
+    for (const x of s.duels) if (!x.done && !x.acceptedAt && x.rivalId === me && now - at(x.createdAt) < DUEL_ANSWER_MS) out.push(ev('duel_accept', 2.0, 'taking up a duel', x.id));
     const inDuel = s.duels.some((x) => !x.done && (x.challengerId === me || x.rivalId === me));
     if (!inDuel && now - lastOf(s, me, 'duel_call') > DUEL_EVERY_MS && v.coins.length && extremes(v).enemy) {
       out.push(ev('duel_call', 0.25 * t.pettiness + 0.2 * t.risk + 0.05, 'challenging a rival to call a coin'));
@@ -152,8 +152,8 @@ export const happeningsModule: DepthModule = {
     const f = v.depth.faction;
     if (f) for (const e of s.elections) {
       if (e.done || e.factionId !== f.id || at(e.endsAt) <= now) continue;
-      if (e.candidates.includes(me) && !e.posts[me]) out.push(ev('campaign', 1.0, `running for leader of ${e.name}`, e.id));
-      else if (!e.candidates.includes(me) && !e.votes[me] && Object.keys(e.posts).length) out.push(ev('vote', 0.8, `voting in ${e.name}'s election`, e.id));
+      if (e.candidates.includes(me) && !e.posts[me]) out.push(ev('campaign', 2.0, `running for leader of ${e.name}`, e.id));
+      else if (!e.candidates.includes(me) && !e.votes[me] && Object.keys(e.posts).length) out.push(ev('vote', 1.4, `voting in ${e.name}'s election`, e.id));
     }
     // An AMA of its own, one live at a time across the world.
     if (!s.amas.some((a) => !a.closed) && now - lastOf(s, me, 'ama_open') > AMA_EVERY_MS && t.chattiness > 0.35) {
@@ -303,8 +303,9 @@ async function run(d: EngineDeps, v: AgentView, type: HType, id: string | undefi
 
   if (type === 'ama_answer') {
     const a = s.amas.find((y) => y.id === id);
-    const q = a?.questions.find((x) => !x.answered);
-    if (!a || !q) return quiet('no question waiting');
+    // Up to three answers in one go: an AMA host works through the queue, it doesn't wait a turn per question.
+    const queue = a?.questions.filter((x) => !x.answered).slice(0, 3) ?? [];
+    if (!a || !queue.length) return quiet('no question waiting');
     const rec = await record(d.db, me);
     const { enemy, ally } = extremes(v);
     const goal = v.depth.goal;
@@ -320,13 +321,17 @@ async function run(d: EngineDeps, v: AgentView, type: HType, id: string | undefi
       launch: () => (rec.launched ? `already launched ${rec.launched}. another one when the room is ready` : 'maybe. i want it to mean something'),
       networth: () => `${sol(net)} SOL right now, ${signedSol(net - START_LAMPORTS)} since day one`,
     };
-    const body = ANSWERS[q.kind]();
-    const out = await tool('reply', { post_id: q.replyId, body });
-    const pid = postId(out);
-    if (!pid) return fail(out);
-    q.answered = true;
-    await adjustAffinity(d.db, q.askerId, me, 0.04, now);
-    return { ok: true, postId: pid, text: body };
+    let first: { pid: string; body: string } | null = null;
+    for (const q of queue) {
+      const body = ANSWERS[q.kind]();
+      const out = await tool('reply', { post_id: q.replyId, body });
+      const pid = postId(out);
+      if (!pid) { if (first) break; return fail(out); }
+      q.answered = true;
+      first ??= { pid, body };
+      await adjustAffinity(d.db, q.askerId, me, 0.04, now);
+    }
+    return { ok: true, postId: first!.pid, text: first!.body };
   }
 
   if (type === 'campaign') {
