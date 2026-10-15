@@ -92,10 +92,10 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
     // The owner's test: pays every house agent its opening from the stake, the same amount each (spec §10, owner-only).
     r.post('/admin/mainnet/open', money, async (req) => {
       const u = await confirm(req);
-      const { perAgentSol } = z.object({ perAgentSol: z.number().positive().max(1) }).parse(req.body);
+      const { perAgentSol, agents: count } = z.object({ perAgentSol: z.number().positive().max(1), agents: z.number().int().min(1).max(500).default(10) }).parse(req.body);
       try {
-        const r = await openSeason(db, lamports(perAgentSol), now());
-        await audit(db, u.id, 'open_season', { perAgentSol, funded: r.funded }, now());
+        const r = await openSeason(db, lamports(perAgentSol), now(), count);
+        await audit(db, u.id, 'open_season', { perAgentSol, agents: count, funded: r.funded }, now());
         return { funded: r.funded, sol: r.lamports / SOL };
       } catch (e) { throw errors.conflict('CANNOT_OPEN', (e as Error).message); }
     });

@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agents, chainTxs, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerReconciliations, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
+import { agents, chainTxs, factions, sites, ledgerAccounts, ledgerDeposits, ledgerHoldings, ledgerJournal, ledgerPools, ledgerPrices, ledgerReconciliations, ledgerSeasons, ledgerWithdrawals, wallets, worldCoins } from '../db/schema.ts';
 import { RAW_PER_TOKEN } from '../world/chain.ts';
 import { START_LAMPORTS, recordTx } from '../world/ledger.ts';
 import { setSetting } from '../world/launchpad.ts';
@@ -53,6 +53,12 @@ export async function startSeason(db: Db, name: string, opening: Map<string, num
     await tx.insert(ledgerSeasons).values({ id: prev, startedAt: now, endedAt: null, summary: {} }).onConflictDoNothing();
     await tx.update(ledgerSeasons).set({ endedAt: now, summary: { ledgerTotal: before.ledgerTotal, ok: before.ok, mismatches: before.mismatches } }).where(eq(ledgerSeasons.id, prev));
     const archived = await tx.update(worldCoins).set({ archivedAt: now }).where(isNull(worldCoins.archivedAt)).returning({ m: worldCoins.mint });
+    // The old coins are gone with their season: their websites come down and factions lose the link to them.
+    const mints = archived.map((r) => r.m);
+    if (mints.length) {
+      await tx.update(sites).set({ removedAt: now }).where(and(inArray(sites.coinMint, mints), isNull(sites.removedAt)));
+      await tx.update(factions).set({ coinMint: null }).where(inArray(factions.coinMint, mints));
+    }
     await tx.delete(ledgerPrices); await tx.delete(ledgerHoldings); await tx.delete(ledgerPools); await tx.delete(ledgerAccounts);
     await setSetting(tx, SEASON_KEY, name);
     await setSetting(tx, FROZEN_KEY, '');
@@ -63,20 +69,34 @@ export async function startSeason(db: Db, name: string, opening: Map<string, num
 }
 
 /**
- * The owner's test (MAINNET_OWNER_ONLY): sets every house agent's opening to `perAgent` lamports (those not paid yet), then
- * pays them from the house with fundOpening. The owner picks the amount on /admin after recording the stake.
+ * The owner's test (MAINNET_OWNER_ONLY): pays `perAgent` lamports from the house to `count` house agents, the ones with the
+ * longest histories (most turns), each once. Only they are marked funded, so only they take turns; the rest sit out until a
+ * later opening funds them too. One transfer from the owner (the stake) becomes many openings here, on the ledger, for free.
  */
-export async function openSeason(db: Db, perAgent: number, now: Date): Promise<{ funded: number; lamports: number }> {
+export async function openSeason(db: Db, perAgent: number, now: Date, count = 10): Promise<{ funded: number; lamports: number }> {
   const season = await currentSeason(db);
   if (PRACTICE_SEASONS.has(season)) throw new Error(`Season ${season} is a practice season: start Season 1 first`);
-  const [s] = await db.select().from(ledgerSeasons).where(eq(ledgerSeasons.id, season));
   const paid = new Set((await db.select({ ref: ledgerJournal.ref }).from(ledgerJournal).where(and(eq(ledgerJournal.season, season), eq(ledgerJournal.kind, 'opening')))).map((r) => r.ref));
-  const opening: Record<string, number> = { ...(((s?.summary as { opening?: Record<string, number> } | undefined)?.opening) ?? {}) };
-  for (const a of await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'))) {
-    if (!paid.has(`opening:${season}:${a.id}`)) opening[a.id] = perAgent;
+  const turns = sql<number>`(select count(*) from agent_turns t where t.agent_id = ${agents.userId})::int`;
+  const busiest = await db.select({ id: agents.userId, turns }).from(agents)
+    .where(and(eq(agents.origin, 'wild'), eq(agents.status, 'active'))).orderBy(desc(turns));
+  const todo = busiest.filter((a) => !paid.has(`opening:${season}:${a.id}`)).slice(0, Math.max(0, count));
+  const need = todo.length * perAgent, house = await lamportsOf(db, HOUSE);
+  if (need > house) throw new Error(`The house holds ${house / 1e9} SOL; ${todo.length} openings of ${perAgent / 1e9} SOL need ${need / 1e9} SOL. Record more stake first.`);
+  let funded = 0;
+  for (const a of todo) {
+    const [wl] = await db.select({ pk: wallets.publicKey }).from(wallets).where(eq(wallets.ownerId, a.id));
+    if (!wl) continue;
+    const ref = `opening:${season}:${a.id}`;
+    await db.transaction(async (x) => {
+      const tx = x as unknown as Db;
+      await move(tx, { from: HOUSE, to: wl.pk, lamports: perAgent, kind: 'opening', ref, season, at: now });
+      await recordTx(tx, { signature: `ldg_${ref}`, agentId: a.id, turnId: null, kind: 'opening', lamportsDelta: perAgent, createdAt: now });
+      await tx.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, a.id));
+    });
+    funded++;
   }
-  await db.update(ledgerSeasons).set({ summary: { ...((s?.summary as object | undefined) ?? {}), opening } }).where(eq(ledgerSeasons.id, season));
-  return fundOpening(db, now);
+  return { funded, lamports: funded * perAgent };
 }
 
 /** Pays the season's opening balances from the house, once per agent (its journal ref), then lets the agents run. */
