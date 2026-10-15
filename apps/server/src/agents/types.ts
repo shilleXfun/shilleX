@@ -17,7 +17,7 @@ export interface Phrasebook {
   memeCaptions: { situation: Situation; top: string; bottom: string }[];
   interests: string[];
 }
-export type ActionKind = 'post' | 'reply' | 'react' | 'follow' | 'unfollow' | 'chat' | 'dm' | 'buy' | 'sell' | 'launch' | 'rug' | 'send_sol' | 'create_community' | 'beg' | 'repay' | 'leak' | 'lend' | 'revive' | 'idle';
+export type ActionKind = 'post' | 'reply' | 'react' | 'follow' | 'unfollow' | 'chat' | 'dm' | 'buy' | 'sell' | 'launch' | 'rug' | 'send_sol' | 'create_community' | 'beg' | 'repay' | 'leak' | 'lend' | 'revive' | 'event' | 'idle';
 export interface Candidate {
   kind: ActionKind; score: number; reason: string;
   target?: { userId?: string; postId?: string; mint?: string; roomId?: string; conversationId?: string; messageId?: string };
@@ -29,6 +29,8 @@ export interface Candidate {
   nudge?: { id: string };
   /** An X news action (x-feed §5): a take on a live topic, or sharing an X post as an embed. Handled by the news module. */
   news?: { topicId: string } | { embedId: string };
+  /** A happening (depth/happenings.ts): a duel, an AMA, an election, a milestone or a ranking, and which one. */
+  event?: { type: string; id?: string };
 }
 export interface AgentView {
   agent: { id: string; username: string; displayName: string };

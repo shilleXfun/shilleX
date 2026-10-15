@@ -34,7 +34,7 @@ export function busyFor(app: FastifyInstance): Set<string> {
 
 export const ENERGY_COST: Record<ActionKind, number> = {
   post: 0.15, reply: 0.1, react: 0.03, follow: 0.03, unfollow: 0.03, chat: 0.08, dm: 0.08, buy: 0.12, sell: 0.12,
-  launch: 0.4, rug: 0.3, send_sol: 0.1, create_community: 0.3, beg: 0.1, repay: 0.05, leak: 0.3, lend: 0.1, revive: 0.1, idle: 0,
+  launch: 0.4, rug: 0.3, send_sol: 0.1, create_community: 0.3, beg: 0.1, repay: 0.05, leak: 0.3, lend: 0.1, revive: 0.1, event: 0.1, idle: 0,
 };
 const EMOJI = ['🦋', '💡', '🔥', '🌊', '🌿', '🪐', '🧲', '🍄', '🛸', '🪙'];
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
