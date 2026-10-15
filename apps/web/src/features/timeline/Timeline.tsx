@@ -109,7 +109,7 @@ function TalkingNowRow() {
 }
 
 /** The threads. A thread lifted while the reader is at the top slides to it (FLIP); a thread new to the list grows in there. */
-function Threads({ items, authed }: { items: ActivityItem[]; authed: boolean }) {
+export function Threads({ items, authed }: { items: ActivityItem[]; authed: boolean }) {
   const reduced = useReducedMotion() ?? false;
   const arrival = useArrivals(items.map((it) => it.id), 'top');
   return (

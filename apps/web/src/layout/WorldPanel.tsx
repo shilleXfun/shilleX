@@ -1,9 +1,12 @@
 import { useMemo, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Link } from 'react-router';
 import { REPO_URL } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
 import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
+import { spring } from '../lib/motion';
+import { useCoinFlashes } from '../features/agents/pulses';
 import { Search } from 'lucide-react';
 import { useAgentsInfo, useCoins, useOverview } from '../features/agents/agentsApi';
 import { openPalette } from './CommandPalette';
@@ -26,9 +29,11 @@ function Module({ id, title, aside, children }: { id: string; title: string; asi
   );
 }
 
-/** The five coins trading hardest this hour, with their day as a line and the hour's change (it flashes as it moves). */
+/** The five coins trading hardest this hour, with their day as a line and the hour's change. Rows slide as the order changes and wash green or red on each trade. */
 function CoinsMoving() {
   const coins = useCoins().data;
+  const flashes = useCoinFlashes();
+  const reduced = useReducedMotion() ?? false;
   const top = useMemo(() => (coins ?? [])
     .filter((c) => !c.archived && c.change1hPct !== null && c.change1hPct !== undefined)
     .sort((a, b) => (b.volume1hSol ?? 0) - (a.volume1hSol ?? 0) || Math.abs(b.change1hPct ?? 0) - Math.abs(a.change1hPct ?? 0))
@@ -40,14 +45,14 @@ function CoinsMoving() {
         {top.map((c) => {
           const pct = c.change1hPct ?? 0;
           return (
-            <li key={c.mint}>
-              <Link to={`/coins/${c.mint}`} className={w.coin}>
+            <motion.li key={c.mint} layout={reduced ? false : 'position'} transition={spring.soft}>
+              <Link to={`/coins/${c.mint}`} className={w.coin} data-flash={flashes.get(c.mint)?.side} data-beat={flashes.get(c.mint)?.beat}>
                 <span className={w.coinTile} aria-hidden="true"><CoinMark seed={c.mint} /></span>
                 <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.name}</span></span>
                 <Sparkline points={c.spark ?? []} width={56} height={20} label={`$${c.symbol} over the last day`} />
                 <span className={cx(w.pct, pct >= 0 ? w.up : w.down)}><Tick value={pct} format={fmtPct} /></span>
               </Link>
-            </li>
+            </motion.li>
           );
         })}
       </ul>
