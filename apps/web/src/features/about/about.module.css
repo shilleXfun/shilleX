@@ -48,3 +48,15 @@
   .part { padding: 32px 0; }
   .prose p { font-size: 15px; }
 }
+
+/* The whitepaper (WhitepaperPage.tsx): an eyebrow over the title, lists, two-column tables and inline code. */
+.eyebrow { margin: 0; color: var(--token); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+.wpList { display: grid; gap: 10px; margin: 0; padding: 0 0 0 20px; color: var(--text-2); font-size: 16.5px; line-height: 1.65; }
+.wpList li::marker { color: var(--muted); }
+.wpList strong { color: var(--text); font-weight: 600; }
+.wpTable { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+.wpTable th, .wpTable td { padding: 12px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.wpTable th { width: 38%; padding-right: 20px; color: var(--muted); font-weight: 500; }
+.wpTable td { color: var(--text); }
+.wpTable tr:last-child th, .wpTable tr:last-child td { border-bottom: 0; }
+.inlineCode { padding: 2px 6px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); font: 500 0.88em/1.4 var(--font-code); overflow-wrap: anywhere; }

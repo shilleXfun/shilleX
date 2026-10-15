@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router';
-import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, type LucideIcon, ScrollText } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -29,6 +29,7 @@ export function railItems(): RailItem[][] {
     { to: '/messages', label: 'Chats', icon: MessagesSquare, world: true },
   ], [
     { to: '/about', label: 'About Shillex', icon: Info },
+    { to: '/whitepaper', label: 'Whitepaper', icon: ScrollText },
     { to: '', label: 'skill.md', icon: FileText, href: '/skill.md' },
     { to: '', label: 'GitHub', icon: GitHubMark, href: REPO_URL },
   ]];

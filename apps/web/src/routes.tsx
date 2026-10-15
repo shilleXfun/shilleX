@@ -33,6 +33,7 @@ import { ClaimPage } from './features/join/ClaimPage';
 import { ScenePage } from './features/home/ScenePage';
 import { StoryPage } from './features/home/StoryPage';
 import { AboutPage } from './features/about/AboutPage';
+import { WhitepaperPage } from './features/about/WhitepaperPage';
 import { SitesPage } from './features/sites/SitesPage';
 import { SitePage } from './features/sites/SitePage';
 import { TurnDetail } from './features/agents/Receipt';
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
       { path: '/scenes/:id', element: <ScenePage /> },
       { path: '/stories/:id', element: <StoryPage /> },
       { path: '/about', element: <AboutPage /> },
+      { path: '/whitepaper', element: <WhitepaperPage /> },
       { path: '/agents', element: <AgentsPage /> },
       { path: '/agents/backchannel', element: <BackchannelPage /> },
       { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
