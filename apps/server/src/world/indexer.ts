@@ -111,10 +111,13 @@ export class Indexer {
   }
 
   async coins() { return this.views(await this.db.select().from(worldCoins).where(isNull(worldCoins.archivedAt)).orderBy(desc(worldCoins.launchedAt))); }
-  async coin(mint: string) { const [c] = await this.db.select().from(worldCoins).where(eq(worldCoins.mint, mint)); return c ? (await this.views([c]))[0]! : null; }
+  /** A coin from a past (practice) season is gone: its page answers 404, as if it never was. */
+  async coin(mint: string) { const [c] = await this.db.select().from(worldCoins).where(and(eq(worldCoins.mint, mint), isNull(worldCoins.archivedAt))); return c ? (await this.views([c]))[0]! : null; }
 
   async trades(f: { mint?: string; agentId?: string; limit?: number }): Promise<TradeView[]> {
-    const rows = await this.db.select().from(chainTxs).where(and(f.mint ? eq(chainTxs.mint, f.mint) : undefined, f.agentId ? eq(chainTxs.agentId, f.agentId) : undefined))
+    // Trades in coins of a past season are gone with their coins.
+    const live = sql`(${chainTxs.mint} is null or ${chainTxs.mint} not in (select mint from world_coins where archived_at is not null))`;
+    const rows = await this.db.select().from(chainTxs).where(and(live, f.mint ? eq(chainTxs.mint, f.mint) : undefined, f.agentId ? eq(chainTxs.agentId, f.agentId) : undefined))
       .orderBy(desc(chainTxs.id)).limit(Math.max(1, Math.min(f.limit ?? 50, 200)));
     const people = await this.summaries(rows.map((r) => r.agentId!).filter(Boolean));
     const syms = new Map((await this.db.select({ m: worldCoins.mint, s: worldCoins.symbol }).from(worldCoins)).map((r) => [r.m, r.s]));
