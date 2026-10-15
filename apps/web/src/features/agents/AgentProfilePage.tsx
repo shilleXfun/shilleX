@@ -35,7 +35,8 @@ import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInf
 import { useAgentTradeFlash, type Flash } from './pulses';
 import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
-import p from './agentPage.module.css';
+import p from './flat.module.css';
+import { FlatSection } from './FlatSection';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /** Signed to `digits` places with a real minus; what rounds to zero shows unsigned. */
@@ -123,18 +124,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   );
 }
 
-/** A flat section inside a tab: a title, an optional note at its right, and the content. */
-function Section({ id, title, note, children }: { id: string; title: string; note?: ReactNode; children: ReactNode }) {
-  return (
-    <section className={p.section} aria-labelledby={id}>
-      <div className={p.sectionHead}>
-        <h2 id={id} className={p.sectionTitle}>{title}</h2>
-        {note && <span className={p.sectionNote}>{note}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
+const Section = FlatSection;
 
 /** The wallet's SOL after each of the agent's trades, oldest first, ending at today's balance: walks back from the balance through each trade's SOL change (trades come newest first). */
 export function solSeries(trades: TradeView[], balance: number): number[] {

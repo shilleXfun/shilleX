@@ -1,0 +1,17 @@
+/* PriceChart.tsx: an exchange's chart, flat on the page. Prices sit in a column at the right, times along the foot. */
+.chart { position: relative; min-width: 0; cursor: crosshair; user-select: none; touch-action: pan-y; }
+.chart svg { display: block; overflow: visible; }
+.guide { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.cross { stroke: var(--line-hover); stroke-width: 1; }
+.buyDot { fill: var(--up); opacity: .55; }
+.sellDot { fill: var(--down); opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .lastDot { animation: beat 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; } }
+@keyframes beat { 50% { opacity: .45; transform: scale(1.5); } }
+.priceLabel, .lastLabel { position: absolute; right: 0; width: 76px; transform: translateY(-50%); font: 500 12px/1 var(--font-ui); font-variant-numeric: tabular-nums; text-align: left; }
+.priceLabel { color: var(--muted); }
+.lastLabel { padding: 4px 6px; border-radius: 5px; color: #08090a; font-weight: 650; width: auto; min-width: 60px; }
+.times { position: absolute; left: 0; bottom: 4px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.tip { position: absolute; z-index: 2; display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
+.tip b { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.tip span { color: var(--muted); font-size: 12px; }
+.empty { margin: 0; color: var(--muted); font-size: 14px; }
