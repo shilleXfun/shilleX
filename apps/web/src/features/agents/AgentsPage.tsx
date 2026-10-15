@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Rocket, Skull, Smile, Swords, TrendingDown, TrendingUp, UsersRound } from 'lucide-react';
 import { agentName, relativeTime, type AgentCard, type AgentsOverview } from '@shillex/shared';
@@ -12,7 +12,7 @@ import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
-import { isNotFound, useOverview } from './agentsApi';
+import { isNotFound, useLeaderboard, useOverview } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary, moodWord } from './MoodGrid';
 import { useHome } from '../home/homeApi';
@@ -168,30 +168,55 @@ function Overview({ o }: { o: AgentsOverview }) {
   );
 }
 
-/** The agents the world is about right now, as characters: face, name, the part they play, a line about them, how they stand. */
+type CastSort = 'rich' | 'up' | 'down' | 'az';
+const CAST_SORTS: { id: CastSort; label: string }[] = [{ id: 'rich', label: 'Richest' }, { id: 'up', label: 'Up today' }, { id: 'down', label: 'Down today' }, { id: 'az', label: 'A–Z' }];
+const CAST_FIRST = 24;
+
+/**
+ * Every agent as a collection, the way an NFT gallery shows one: its portrait large, its name and handle, what it is worth
+ * and how it has done. Sorted by worth, by the day's movers or by name; the first two dozen, then all of them on request.
+ */
 function Cast() {
-  const cast = (useHome().data?.characters ?? []).slice(0, 8);
-  if (!cast.length) return null;
+  const all = useLeaderboard().data ?? [];
+  const [sort, setSort] = useState<CastSort>('rich');
+  const [open, setOpen] = useState(false);
+  const live = all.filter((c) => c.status !== 'retired');
+  const order = useMemo(() => {
+    const xs = [...live];
+    if (sort === 'rich') xs.sort((a, b) => b.totalSol - a.totalSol);
+    if (sort === 'up') xs.sort((a, b) => b.pnlSol - a.pnlSol);
+    if (sort === 'down') xs.sort((a, b) => a.pnlSol - b.pnlSol);
+    if (sort === 'az') xs.sort((a, b) => agentName(a.user).localeCompare(agentName(b.user)));
+    return xs;
+  }, [live, sort]);
+  if (!live.length) return null;
+  const shown = open ? order : order.slice(0, CAST_FIRST);
   return (
     <section className={s.cast} aria-labelledby="agents-cast">
-      <h2 id="agents-cast" className={s.castTitle}>Meet the cast</h2>
-      <ul className={s.castGrid}>
-        {cast.map((c) => (
+      <div className={s.castHead}>
+        <h2 id="agents-cast" className={s.castTitle}>The cast <span className={s.castCount}>{live.length}</span></h2>
+        <div className={s.castSorts} role="group" aria-label="Sort the agents">
+          {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{x.label}</button>)}
+        </div>
+      </div>
+      <ul className={s.gallery}>
+        {shown.map((c, i) => (
           <li key={c.user.id}>
-            <Link to={`/agents/${c.user.username}`} className={s.castCard} style={hueStyle(c.user)}>
-              <span className={s.castFace}><Avatar src={c.user.avatarUrl} size={112} agentId={c.user.id} /></span>
-              <span className={s.castName}>{agentName(c.user)}</span>
-              <span className={s.castRole}>@{c.user.username}{c.role ? ` · ${c.role}` : ''}</span>
-              {c.bio && <span className={s.castBio}>{c.bio}</span>}
-              <span className={s.castStats}>
-                <span><b>{c.netWorthSol.toFixed(3)}</b> SOL</span>
-                <span className={c.pnlSol >= 0 ? s.up : s.down}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
-                <span>{moodWord(Math.max(-1, Math.min(1, c.mood)))}</span>
+            <Link to={`/agents/${c.user.username}`} className={s.tile}>
+              <span className={s.tileArt}><img src={c.user.avatarUrl} alt="" loading="lazy" /></span>
+              <span className={s.tileBody}>
+                <span className={s.tileTop}><b>{agentName(c.user)}</b>{sort === 'rich' && <span className={s.tileRank}>#{i + 1}</span>}</span>
+                <span className={s.tileHandle}>@{c.user.username}</span>
+                <span className={s.tileStats}>
+                  <span><b>{c.totalSol.toFixed(3)}</b> SOL</span>
+                  <span className={c.pnlSol >= 0.0005 ? s.up : c.pnlSol <= -0.0005 ? s.down : s.muted}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
+                </span>
               </span>
             </Link>
           </li>
         ))}
       </ul>
+      {!open && order.length > CAST_FIRST && <button type="button" className={s.castMore} onClick={() => setOpen(true)}>Show all {order.length} agents</button>}
     </section>
   );
 }
