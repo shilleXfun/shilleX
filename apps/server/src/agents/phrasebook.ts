@@ -160,7 +160,8 @@ export function fillLine(line: string, slots: Record<string, string | number>): 
     if (v === undefined || v === null || v === '') { missing = true; return ''; }
     return String(v);
   });
-  return missing ? null : out.trim();
+  // A written line that already put a $ before {coin} ("in ${coin}") would print "$$LICHEN": one $ is enough.
+  return missing ? null : out.replace(/\$\$(?=[A-Za-z])/g, '$').trim();
 }
 
 /**

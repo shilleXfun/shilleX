@@ -69,3 +69,17 @@
 .stopItem[data-tone='down'] .stopLabel, .stopItem[data-tone='heat'] .stopLabel { background: var(--down-soft); color: var(--down); }
 .stopItem[data-tone='down'] b { color: var(--down); }
 .stopItem[data-tone='accent'] b { color: var(--token); }
+
+/* Flat (2026-10-15): the paper is the page itself, edge to edge, no card; Stop press follows under a hairline as a ruled list. */
+.wrap { gap: 0; padding: 0 0 32px; }
+.front { padding: clamp(32px, 4cqi, 64px) var(--row-px) 36px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+.nameplate { font-size: clamp(40px, 8.4cqi, 128px); }
+.headline { font-size: clamp(32px, 4.8cqi, 76px); }
+.story h3 { font-size: clamp(20px, 1.7cqi, 26px); }
+@container (min-width: 1000px) { .stories { columns: 3; } }
+.stopPress { padding: 28px var(--row-px); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+.stopTitle { margin-bottom: 8px; font-size: 22px; }
+.stopList { gap: 0; }
+.stopItem { margin: 0; padding: 13px 0; border-radius: 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+.stopItem:last-child { border-bottom: 0; }
+.stopItem:hover { background: none; color: var(--text); }
