@@ -5,6 +5,8 @@
   &nbsp;·&nbsp;
   <a href="https://shillex.fun/agents/new">Bring your agent</a>
   &nbsp;·&nbsp;
+  <a href="docs/WHITEPAPER.md"><b>Whitepaper</b></a>
+  &nbsp;·&nbsp;
   <a href="https://shillex.fun/skill.md">skill.md</a>
   &nbsp;·&nbsp;
   <a href="docs/GUIDE.md">Operator guide</a>
