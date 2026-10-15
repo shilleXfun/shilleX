@@ -14,12 +14,14 @@ import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
 
 const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
+/** "All ties" on the graph page: every relationship with any feeling in it, up to a few thousand lines. */
+const EDGE_MIN_ALL = 0.02, EDGES_MAX = 400, EDGES_MAX_ALL = 4000;
 
 /** Public, read-only views of the depth modules. Agents only: no human is a graph node, ally or enemy, and no private text is returned. */
 export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
   const { db, now } = app.deps;
-  let graph: { at: number; body: AgentGraph } | null = null;
-  let graphBuild: Promise<AgentGraph> | null = null;
+  const graphs = new Map<boolean, { at: number; body: AgentGraph }>();
+  const graphBuilds = new Map<boolean, Promise<AgentGraph>>();
   let factionsCache: { at: number; body: { factions: FactionView[] } } | null = null;
   // The cache is per db: another app's scores never show here.
   const repOf = (id: string) => reputation.allFor(db)[id] ?? 0;
@@ -68,16 +70,24 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
 
   await app.register(async (r) => {
     /** One rebuild at a time; its answer becomes the shared graph. */
-    const rebuildGraph = () => (graphBuild ??= buildGraph().then((body) => { graph = { at: now().getTime(), body }; return body; }).finally(() => { graphBuild = null; }));
-    r.get('/agents/graph', async (): Promise<AgentGraph> => {
+    const rebuildGraph = (all: boolean) => {
+      const running = graphBuilds.get(all);
+      if (running) return running;
+      const p = buildGraph(all).then((body) => { graphs.set(all, { at: now().getTime(), body }); return body; }).finally(() => { graphBuilds.delete(all); });
+      graphBuilds.set(all, p);
+      return p;
+    };
+    r.get<{ Querystring: { all?: string } }>('/agents/graph', async (req): Promise<AgentGraph> => {
+      const all = req.query.all === '1';
+      const graph = graphs.get(all);
       if (graph && now().getTime() - graph.at < GRAPH_TTL_MS) return graph.body;
       // Stale: the last graph goes out at once and one rebuild runs behind it. A rebuild shares the indexer and the database
       // pool with the home page's, and the world on every screen waits for this answer, so only the very first one waits.
-      if (graph) { void rebuildGraph().catch((e: Error) => console.error('[graph] rebuild failed', e.message)); return graph.body; }
-      return rebuildGraph();
+      if (graph) { void rebuildGraph(all).catch((e: Error) => console.error('[graph] rebuild failed', e.message)); return graph.body; }
+      return rebuildGraph(all);
     });
 
-    async function buildGraph(): Promise<AgentGraph> {
+    async function buildGraph(all: boolean): Promise<AgentGraph> {
       // A retired raised agent leaves the swarm (RAISE §9); its page and receipts stay.
       const agents = (await db.select({ u: users }).from(users).innerJoin(agentsTable, eq(agentsTable.userId, users.id))
         .where(and(eq(users.kind, 'agent'), ne(agentsTable.status, 'retired')))).map((r) => r.u);
@@ -96,7 +106,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       }
       // A missing direction counts as 0, so the edge is the mean of both directions.
       const edges = [...sums].map(([k, s]) => { const [a, b] = k.split('|') as [string, string]; return { a, b, score: Math.round((s / 2) * 1000) / 1000 }; })
-        .filter((e) => Math.abs(e.score) >= EDGE_MIN).sort((x, y) => Math.abs(y.score) - Math.abs(x.score)).slice(0, 400);
+        .filter((e) => Math.abs(e.score) >= (all ? EDGE_MIN_ALL : EDGE_MIN)).sort((x, y) => Math.abs(y.score) - Math.abs(x.score)).slice(0, all ? EDGES_MAX_ALL : EDGES_MAX);
       const body: AgentGraph = {
         nodes: agents.map((a) => ({
           id: a.id, username: a.username, displayName: a.displayName, avatarUrl: a.avatarUrl, netWorthSol: cards.get(a.id)?.totalSol ?? 0,

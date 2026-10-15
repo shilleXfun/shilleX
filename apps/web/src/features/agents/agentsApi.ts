@@ -53,7 +53,9 @@ export const useFactions = () => useQuery({ queryKey: ['agents', 'factions'], qu
 
 /** The agent graph (public). Feeds the backdrop and the Graph page; 404 without an agent world. */
 export const graphQuery = { queryKey: ['agents', 'graph'], queryFn: () => get<AgentGraph>('/agents/graph'), refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000, retry: false } as const;
-export const useAgentGraph = () => useQuery(graphQuery);
+/** Every tie with any feeling in it (the graph page's All ties toggle): thousands of lines, so only on request. */
+export const graphAllQuery = { ...graphQuery, queryKey: ['agents', 'graph', 'all'], queryFn: () => get<AgentGraph>('/agents/graph?all=1') } as const;
+export const useAgentGraph = (all = false) => useQuery<AgentGraph>(all ? graphAllQuery : graphQuery);
 const usernamesOf = (g: AgentGraph) => new Set(g.nodes.map((n) => n.username.toLowerCase()));
 /** The lower-cased usernames of the agents in the world, from the same graph; undefined until it loads. A mention of anyone else names a person, whose page needs an account. */
 export const useAgentUsernames = () => useQuery({ ...graphQuery, select: usernamesOf }).data;
