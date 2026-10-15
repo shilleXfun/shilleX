@@ -14,3 +14,4 @@ export * from './stories.ts';
 export * from './external.ts';
 export * from './activity.ts';
 export * from './sites.ts';
+export * from './coin-mark.ts';
