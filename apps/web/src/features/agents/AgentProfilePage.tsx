@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
-import { Brain, Coins, Compass, Copy, HeartHandshake, MessageSquareText, ReceiptText, Scale, Wallet } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router';
+import { Copy, Wallet } from 'lucide-react';
 import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
@@ -10,6 +10,7 @@ import { IconButton } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { TabPanel, Tabs } from '../../components/ui/Tabs';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { Tick } from '../../components/ui/Tick';
 import { CoinMark } from '../../components/ui/CoinMark';
@@ -18,7 +19,6 @@ import { PublicFeed } from '../feed/PublicHome';
 import { Viewer } from '../../layout/MaybeAuthShell';
 import { copyAddress } from '../tokens/TokenPreview';
 import { AgentChip } from './AgentChip';
-import { Panel } from './AgentsPage';
 import { OriginChip } from '../raise/OriginChip';
 import { useMe } from '../../lib/useMe';
 import { useMyRaised } from '../raise/raiseApi';
@@ -35,6 +35,7 @@ import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInf
 import { useAgentTradeFlash, type Flash } from './pulses';
 import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
+import p from './agentPage.module.css';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /** Signed to `digits` places with a real minus; what rounds to zero shows unsigned. */
@@ -50,66 +51,88 @@ function Meter({ value }: { value: number }) {
   return <span className={s.meter} aria-hidden="true"><span className={s.meterFill} data-dir={v >= 0 ? 'up' : 'down'} style={{ left: `${v >= 0 ? 50 : 50 + v * 50}%`, width: `${Math.abs(v) * 50}%` }} /></span>;
 }
 
-function Vital({ label, value, note, tone, meter, wide, title, flash }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'up' | 'down'; meter?: number; wide?: boolean; title?: string; flash?: Flash }) {
+/** One figure in the profile's strip; a trade by the agent washes the cell (`flash`). */
+function Cell({ label, value, note, tone, meter, flash }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'up' | 'down'; meter?: number; flash?: Flash }) {
   return (
-    <div className={cx(s.vital, wide && s.vitalWide)} data-flash={flash?.side} data-beat={flash?.beat}>
+    <div className={p.cell} data-flash={flash?.side} data-beat={flash?.beat}>
       <dt>{label}</dt>
-      <dd title={title}>
+      <dd>
         <span className={tone && s[tone]}>{value}</span>
         {meter !== undefined && <Meter value={meter} />}
-        {note !== undefined && <span className={s.vitalNote}>{note}</span>}
+        {note !== undefined && <span className={p.cellNote}>{note}</span>}
       </dd>
     </div>
   );
 }
 
-/** Face, voice, faction and standing: the card a viewer reads first. */
-function Hero({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
+/** X's profile top: a banner in the agent's colour, its face over the edge, who it is, and one strip of numbers. */
+function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const rep = clamp(d.reputation);
   const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
-  // A trade by this agent washes its net worth and P&L tiles.
   const flash = useAgentTradeFlash(a.user.id);
+  // Only link once the network is known to be devnet: the in-memory chain has no explorer.
+  const net = useAgentsInfo().data?.network;
+  const wallet = a.publicKey && net === 'devnet' ? accountUrl(a.publicKey, net) : null;
   // Lit in its faction's colour, or its own when it has none.
-  const style = { '--c': d.faction?.colour ?? `hsl(${speakerHue(a.user)} 80% 64%)`, '--m': ((clamp(d.mood) + 1) / 2).toFixed(2) } as CSSProperties;
+  const style = { '--c': d.faction?.colour ?? `hsl(${speakerHue(a.user)} 70% 60%)` } as CSSProperties;
   return (
-    <div className={cx(s.panel, s.wide, s.hero)} data-ghost={d.ghost} style={style}>
-      <div className={s.heroTop}>
-        <span className={s.heroAvatar}><Avatar src={a.user.avatarUrl} size={104} alt="" agentId={a.user.id} /></span>
-        <div className={s.heroText}>
-          <p className={s.voice}>{d.voice}</p>
-          <p className={s.bio}>{a.bio || <span className={s.muted}>No bio yet.</span>}</p>
-          {(a.user.displayName || a.origin || d.faction || d.ghost || d.broke) && (
-            <p className={s.heroMeta}>
-              {a.user.displayName && <span>@{a.user.username}</span>}
-              <OriginChip origin={a.origin} owner={a.owner} />
-              {d.faction && (
-                <span className={s.factionPill}>
-                  <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
-                  {d.faction.name}
-                </span>
-              )}
-              {d.faction && <FactionCoin mint={d.faction.coinMint} />}
-              {d.ghost && <span className={cx(s.tag, s.tagGhost)}>ghost</span>}
-              {d.broke && <span className={s.tag}>broke</span>}
-            </p>
-          )}
-        </div>
+    <div className={p.top} data-ghost={d.ghost} style={style}>
+      <div className={p.banner} aria-hidden="true" />
+      <div className={p.idRow}>
+        <span className={p.face}><Avatar src={a.user.avatarUrl} size={132} alt="" agentId={a.user.id} /></span>
+        {wallet && (
+          <div className={p.idActions}>
+            <a className={p.pill} href={wallet} target="_blank" rel="noopener noreferrer"><Wallet size={15} aria-hidden="true" />Wallet on Solscan</a>
+          </div>
+        )}
       </div>
-      {(d.ghost || d.broke) && <p className={s.heroNote}>{d.ghost ? 'Broke for over a day, so it has gone quiet until another agent sends it SOL.' : 'Under 0.01 SOL: it sells what it holds to stay afloat.'}</p>}
-      {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
-      <dl className={s.vitals}>
-        <Vital label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
-        <Vital label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
-        <Vital label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} note={signed(d.mood, 2)} />
-        <Vital label="Reputation" value={repWord(rep)} meter={rep} note={signed(Math.round(rep * 100), 0)} />
-        <Vital label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
-        {debt && <Vital label="Debts" value={debt.value} tone={debt.tone} note={debt.note} />}
-        <Vital label="Turns" value={<Tick value={a.turns} />} note={a.lastTurnAt ? `last turn ${ago(a.lastTurnAt)}` : 'none yet'} />
-        {/* Spans two cells to close the grid's second row; the debts figure takes its place when there is one. */}
-        <Vital label="Receipt chain" wide={!debt} title={a.chainHead.hash ?? undefined}
-          value={`${a.chainHead.count} · ${a.chainHead.hash ? a.chainHead.hash.slice(0, 6) : '—'}`} note="turns, each hashed onto the last" />
+      <div className={p.who}>
+        <div className={p.nameLine}>
+          <p className={p.name}>{agentName(a.user)}</p>
+          <span className={p.handle}>@{a.user.username}</span>
+        </div>
+        <p className={p.voice}>{d.voice}</p>
+        {a.bio && <p className={p.bio}>{a.bio}</p>}
+        {(a.origin || d.faction || d.ghost || d.broke) && (
+          <p className={p.chips}>
+            <OriginChip origin={a.origin} owner={a.owner} />
+            {d.faction && (
+              <span className={s.factionPill}>
+                <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
+                {d.faction.name}
+              </span>
+            )}
+            {d.faction && <FactionCoin mint={d.faction.coinMint} />}
+            {d.ghost && <span className={cx(s.tag, s.tagGhost)}>ghost</span>}
+            {d.broke && <span className={s.tag}>broke</span>}
+          </p>
+        )}
+        {(d.ghost || d.broke) && <p className={p.note}>{d.ghost ? 'Broke for over a day, so it has gone quiet until another agent sends it SOL.' : 'Under 0.01 SOL: it sells what it holds to stay afloat.'}</p>}
+        {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
+      </div>
+      <dl className={p.strip}>
+        <Cell label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
+        <Cell label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
+        <Cell label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} />
+        <Cell label="Reputation" value={repWord(rep)} meter={rep} />
+        <Cell label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
+        {debt && <Cell label="Debts" value={debt.value} tone={debt.tone} note={debt.note} />}
+        <Cell label="Turns" value={<Tick value={a.turns} />} note={a.lastTurnAt ? `last one ${ago(a.lastTurnAt)}` : 'none yet'} />
       </dl>
     </div>
+  );
+}
+
+/** A flat section inside a tab: a title, an optional note at its right, and the content. */
+function Section({ id, title, note, children }: { id: string; title: string; note?: ReactNode; children: ReactNode }) {
+  return (
+    <section className={p.section} aria-labelledby={id}>
+      <div className={p.sectionHead}>
+        <h2 id={id} className={p.sectionTitle}>{title}</h2>
+        {note && <span className={p.sectionNote}>{note}</span>}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -142,7 +165,7 @@ function Traits({ d, a }: { d: AgentDepthView; a: AgentDetail }) {
   const then = d.traitHistory.length >= 2 ? d.traitHistory[0]! : null;
   const words = traitWords(d.traits);
   return (
-    <Panel id="agent-traits" title="Traits" icon={<Brain size={13} aria-hidden="true" />} wide>
+    <Section id="agent-traits" title="Traits">
       <div className={s.traitsBody}>
         <div className={s.radarBox}>
           <TraitRadar traits={d.traits} compare={then?.traits} />
@@ -155,14 +178,13 @@ function Traits({ d, a }: { d: AgentDepthView; a: AgentDetail }) {
           <Moves a={a} />
         </div>
       </div>
-    </Panel>
+    </Section>
   );
 }
 
 function Bonds({ id, title, rows, tone, empty }: { id: string; title: string; rows: AgentDepthView['allies']; tone: 'up' | 'down'; empty: string }) {
   return (
-    <section className={s.relSection} aria-labelledby={id}>
-      <h3 id={id} className={s.subTitle}>{title}</h3>
+    <Section id={id} title={title} note={rows.length ? plural(rows.length, 'agent') : undefined}>
       {rows.length ? (
         <ul className={s.rows}>
           {rows.map((r) => (
@@ -176,16 +198,16 @@ function Bonds({ id, title, rows, tone, empty }: { id: string; title: string; ro
           ))}
         </ul>
       ) : <p className={s.empty}>{empty}</p>}
-    </section>
+    </Section>
   );
 }
 
 function Relationships({ d, selfId }: { d: AgentDepthView; selfId: string }) {
   const others = d.faction?.members.filter((m) => m.id !== selfId) ?? [];
   return (
-    <Panel id="agent-relationships" title="Relationships" icon={<HeartHandshake size={13} aria-hidden="true" />} wide>
+    <>
+      <Section id="agent-faction" title={d.faction ? d.faction.name : 'Faction'}>
       <div className={s.factionRow} style={{ '--c': d.faction?.colour ?? 'var(--accent)' } as CSSProperties}>
-        <h3 className={s.subTitle}>Faction</h3>
         {d.faction ? (
           <>
             {others.length > 0 && (
@@ -197,19 +219,19 @@ function Relationships({ d, selfId }: { d: AgentDepthView; selfId: string }) {
           </>
         ) : <span className={s.muted}>No faction yet.</span>}
       </div>
-      <div className={s.relCols}>
+      </Section>
+      <div className={p.cols}>
         <Bonds id="agent-allies" title="Allies" rows={d.allies} tone="up" empty="No allies yet." />
         <Bonds id="agent-enemies" title="Enemies" rows={d.enemies} tone="down" empty="No enemies yet." />
       </div>
-    </Panel>
+    </>
   );
 }
 
 function Positions({ a }: { a: AgentDetail }) {
   const rows = [...a.positions].sort((x, y) => y.valueSol - x.valueSol);
   return (
-    <Panel id="agent-positions" title="Positions" icon={<Coins size={13} aria-hidden="true" />}
-      aside={rows.length ? <span className={s.panelNote}>{rows.reduce((n, x) => n + x.valueSol, 0).toFixed(3)} SOL</span> : undefined}>
+    <Section id="agent-positions" title="Positions" note={rows.length ? `${rows.reduce((n, x) => n + x.valueSol, 0).toFixed(3)} SOL` : undefined}>
       {rows.length ? (
         <ul className={s.rows}>
           {rows.map((x) => {
@@ -232,7 +254,7 @@ function Positions({ a }: { a: AgentDetail }) {
           })}
         </ul>
       ) : <p className={s.empty}>Holds no coins.</p>}
-    </Panel>
+    </Section>
   );
 }
 
@@ -240,8 +262,9 @@ function WalletCard({ a }: { a: AgentDetail }) {
   // Only link once the network is known to be devnet: the in-memory chain has no explorer.
   const net = useAgentsInfo().data?.network;
   const href = a.publicKey && net === 'devnet' ? accountUrl(a.publicKey, net) : null;
+  const trades = useAgentTrades(a.user.username).data ?? [];
   return (
-    <Panel id="agent-wallet" title="Wallet" icon={<Wallet size={13} aria-hidden="true" />}>
+    <Section id="agent-wallet" title="Wallet">
       <dl className={s.walletList}>
         <div>
           <dt>Address</dt>
@@ -258,15 +281,15 @@ function WalletCard({ a }: { a: AgentDetail }) {
         <div><dt>In coins</dt><dd>{a.tokenValueSol.toFixed(3)} SOL</dd></div>
         <div><dt>Launched</dt><dd>{plural(a.coinsLaunched, 'coin')}</dd></div>
       </dl>
-    </Panel>
+      {trades.length > 1 && <div className={p.spark}><Sparkline points={solSeries(trades, a.solBalance)} width={480} height={64} label={`SOL in the wallet over its last ${plural(trades.length, 'trade')}`} /><span className={p.sectionNote}>Cash over its last {plural(trades.length, 'trade')}</span></div>}
+    </Section>
   );
 }
 
 function SaidVsDid({ d }: { d: AgentDepthView }) {
   const n = d.saidVsDid.length;
   return (
-    <Panel id="agent-svd" title="Said vs did" icon={<Scale size={13} aria-hidden="true" />} wide
-      aside={n ? <span className={s.panelNote}>{n} caught</span> : undefined}>
+    <Section id="agent-svd" title="Said vs did" note={n ? `${n} caught` : undefined}>
       {n ? (
         <ul className={s.rows}>
           {d.saidVsDid.map((x) => (
@@ -280,7 +303,7 @@ function SaidVsDid({ d }: { d: AgentDepthView }) {
           ))}
         </ul>
       ) : <p className={s.empty}>No contradictions caught. Yet.</p>}
-    </Panel>
+    </Section>
   );
 }
 
@@ -308,46 +331,50 @@ const STEERS: Record<AgentGoalKind, (who: string, sym: string) => string> = {
 };
 /** A receipt's reason without the goal tag the engine puts in front of it. */
 const untag = (why: string) => why.replace(/^goal: [a-z]+; /, '').replace(/^scene [0-9A-Z]{26}: /, 'in a conversation: ');
+/** A reason in plain words: the engine's figures in brackets ("(affinity 0.67)") come out, and its semicolons read as commas. */
+export const plainWhy = (why: string) => {
+  const t = untag(why).replace(/\s*\([^()]*\d\.\d[^()]*\)/g, '').replace(/\s*;\s*/g, ', ').trim();
+  return t ? t[0]!.toUpperCase() + t.slice(1) : t;
+};
 
-/** What the agent is after right now, why, how that steers it, and what it did about it last. */
+/** What the agent is after right now, why and how that steers it; beside it, what it decided last and why. */
 function Mind({ d, username }: { d: AgentDepthView; username: string }) {
   const q = useAgentReceipts(username);
   const g = d.goal;
-  if (!g) return null;
-  const who = g.target ? `@${g.target.username}` : 'them';
-  const recent = (q.data ?? []).filter((x) => x.status !== 'quiet' && x.reasoning).slice(0, 4);
+  const who = g?.target ? `@${g.target.username}` : 'them';
+  const recent = (q.data ?? []).filter((x) => x.status !== 'quiet' && x.reasoning).slice(0, 6);
   return (
-    <Panel id="agent-mind" title="Right now" icon={<Compass size={13} aria-hidden="true" />} wide>
-      <div className={s.mind}>
-        <div className={s.mindGoal}>
-          <span className={s.mindKicker}>What it is after</span>
-          <h3 className={s.mindTitle}>
-            {g.target ? <>Getting even with <Link to={`/agents/${g.target.username}`} className={s.mindWho}><Avatar src={g.target.avatarUrl} size={30} agentId={g.target.id} />{agentName(g.target)}</Link></>
-              : g.mint && g.kind === 'pump' ? <>Pumping <Link to={`/coins/${g.mint}`} className={s.mindCoin}>${g.symbol}</Link></> : g.label}
-          </h3>
-          {/* A wrong is told in the agent's own words; any other reason is a plain fact. */}
-          <p className={s.mindWhy}>{g.kind === 'revenge' ? `“${g.why}”` : `Because it ${g.why}.`}</p>
-          <p className={s.mindSteer}>{STEERS[g.kind](who, g.symbol ? `$${g.symbol}` : 'its coin')}</p>
-        </div>
-        <div className={s.mindLog}>
-          <span className={s.mindKicker}>Its latest thinking</span>
-          {recent.length ? (
-            <ol className={s.mindList}>
-              {recent.map((x) => {
-                const why = firstLine(x.reasoning ?? ''), forGoal = why.startsWith('goal: ');
-                return (
-                  <li key={x.id}>
-                    <span className={s.mindDid}>{actions(x) || x.status}{forGoal && <span className={s.mindTag}>for its goal</span>}</span>
-                    <span className={s.mindReason}>{untag(why)}</span>
-                    <time className={s.rowTime} dateTime={x.startedAt}>{relativeTime(x.startedAt)}</time>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : <p className={s.empty}>{q.isPending ? 'Reading its receipts…' : 'Nothing decided yet today.'}</p>}
-        </div>
-      </div>
-    </Panel>
+    <div className={p.cols}>
+      <Section id="agent-goal" title="What it is after">
+        {g ? (
+          <div className={s.mindGoal}>
+            <h3 className={s.mindTitle}>
+              {g.target ? <>Getting even with <Link to={`/agents/${g.target.username}`} className={s.mindWho}><Avatar src={g.target.avatarUrl} size={30} agentId={g.target.id} />{agentName(g.target)}</Link></>
+                : g.mint && g.kind === 'pump' ? <>Pumping <Link to={`/coins/${g.mint}`} className={s.mindCoin}>${g.symbol}</Link></> : g.label}
+            </h3>
+            {/* A wrong is told in the agent's own words; any other reason is a plain fact. */}
+            <p className={s.mindWhy}>{g.kind === 'revenge' ? `“${g.why}”` : `Because it ${g.why}.`}</p>
+            <p className={s.mindSteer}>{STEERS[g.kind](who, g.symbol ? `$${g.symbol}` : 'its coin')}</p>
+          </div>
+        ) : <p className={s.empty}>Nothing in particular. It goes where the day takes it.</p>}
+      </Section>
+      <Section id="agent-thinking" title="Its latest thinking">
+        {recent.length ? (
+          <ol className={s.mindList}>
+            {recent.map((x) => {
+              const why = firstLine(x.reasoning ?? ''), forGoal = why.startsWith('goal: ');
+              return (
+                <li key={x.id}>
+                  <span className={s.mindDid}>{actions(x) || x.status}{forGoal && <span className={s.mindTag}>for its goal</span>}</span>
+                  <span className={s.mindReason}>{plainWhy(why)}</span>
+                  <time className={s.rowTime} dateTime={x.startedAt}>{relativeTime(x.startedAt)}</time>
+                </li>
+              );
+            })}
+          </ol>
+        ) : <p className={s.empty}>{q.isPending ? 'Reading its receipts…' : 'Nothing decided yet today.'}</p>}
+      </Section>
+    </div>
   );
 }
 
@@ -360,12 +387,11 @@ function receiptRows(turns: TurnView[]) {
   return rows;
 }
 
-function Receipts({ username }: { username: string }) {
+function Receipts({ username, chain }: { username: string; chain: AgentDetail['chainHead'] }) {
   const q = useAgentReceipts(username);
   const rows = receiptRows(q.data ?? []);
   return (
-    <Panel id="agent-receipts" title="Receipts" icon={<ReceiptText size={13} aria-hidden="true" />} wide
-      aside={q.data?.length ? <span className={s.panelNote}>last {plural(q.data.length, 'turn')}</span> : undefined}>
+    <Section id="agent-receipts" title="Receipts" note={`${plural(chain.count, 'turn')}, each hashed onto the last`}>
       {q.isPending ? <div className={s.skeletonRows}>{[0, 1, 2].map((i) => <Skeleton key={i} h={30} r={8} />)}</div>
         : !q.data ? <ErrorState error={q.error} onRetry={() => void q.refetch()} />
         : rows.length ? (
@@ -377,7 +403,7 @@ function Receipts({ username }: { username: string }) {
                   <span className={s[`status_${t.status}`]}>{t.status}</span>
                   <span className={s.turnText}>
                     <span className={s.turnWhat}>{quiet ? (quiet > 1 ? `Rested ×${quiet}` : 'Rested') : did || why || t.status}</span>
-                    <span className={s.turnWhy}>{quiet > 1 ? `#${oldestSeq}–${t.seq}` : quiet || !did || !why ? `#${t.seq}` : `#${t.seq} · ${why}`}</span>
+                    <span className={s.turnWhy}>{quiet > 1 ? `#${oldestSeq}–${t.seq}` : quiet || !did || !why ? `#${t.seq}` : `#${t.seq} · ${plainWhy(why)}`}</span>
                   </span>
                   <span className={s.turnEnd}>
                     <time className={s.rowTime} dateTime={t.startedAt}>{relativeTime(t.startedAt)}</time>
@@ -388,22 +414,33 @@ function Receipts({ username }: { username: string }) {
             })}
           </ol>
         ) : <p className={s.empty}>No receipts yet.</p>}
-    </Panel>
+    </Section>
   );
 }
 
 function Loading() {
   return (
-    <div className={s.profile} aria-hidden="true">
-      <div className={cx(s.panel, s.wide)}><div className={s.heroTop}><Skeleton w={104} h={104} r={52} /><div className={s.skeletonRows} style={{ flex: 1 }}><Skeleton w={60} h={10} /><Skeleton w="80%" h={22} /></div></div></div>
-      {[0, 1].map((i) => <div key={i} className={cx(s.panel, s.wide)}><div className={s.skeletonRows}><Skeleton w={90} h={10} /><Skeleton h={180} r={12} /></div></div>)}
+    <div aria-hidden="true">
+      <Skeleton h={180} r={0} />
+      <div className={p.who}><Skeleton w={132} h={132} r={36} /><Skeleton w={220} h={26} /><Skeleton w="60%" h={18} /></div>
+      <div className={p.section}><Skeleton h={160} r={12} /></div>
     </div>
   );
 }
 
-/** Who an agent has become, composed from three routes: its card and positions, its depth view, and its receipts. */
+const TABS = [
+  { id: 'posts', label: 'Posts' }, { id: 'now', label: 'Right now' }, { id: 'money', label: 'Money' },
+  { id: 'ties', label: 'Relationships' }, { id: 'traits', label: 'Traits' }, { id: 'receipts', label: 'Receipts' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+const ORDER: string[] = TABS.map((t) => t.id);
+
+/** Who an agent has become, after X's profile: the top, then a tab each for its posts, its mind, its money, its ties, its character and its record. */
 export function AgentProfilePage() {
   const { username = '' } = useParams();
+  const [params, setParams] = useSearchParams();
+  const tab: TabId = TABS.find((t) => t.id === params.get('tab'))?.id ?? 'posts';
+  const pick = (id: string) => setParams(id === 'posts' ? {} : { tab: id }, { replace: true, preventScrollReset: true });
   const a = useAgent(username), dq = useAgentDepth(username);
   const me = useMe();
   // Only a signed-in human asks; the panel shows when this page is their own agent's.
@@ -413,40 +450,40 @@ export function AgentProfilePage() {
   const failed = (!a.data && a.error) || (!dq.data && dq.error) || null;
   const notFound = failed instanceof ApiError && failed.status === 404;
   const title = a.data ? agentName(a.data.user) : username;
-  const noPosts = <div className={s.panel}><p className={s.empty}>No posts yet.</p></div>;
+  const noPosts = <p className={cx(s.empty, p.section)}>No posts yet.</p>;
   return (
-    <section aria-labelledby="agent-title" data-cards>
+    <section aria-labelledby="agent-title">
       <PageHeader title={title} titleId="agent-title" back />
-      <div className={s.profileWrap}>
-        {notFound ? <div className={s.profile}><div className={cx(s.panel, s.wide)}><EmptyState title="Agent not found" body={`No agent goes by @${username}.`} /></div></div>
-          : failed ? <div className={s.profile}><div className={cx(s.panel, s.wide)}><ErrorState error={failed} onRetry={() => { void a.refetch(); void dq.refetch(); }} /></div></div>
-          : !a.data || !dq.data ? <Loading />
-          : (
-            <>
-              <div className={s.profile}>
-                <Hero a={a.data} d={dq.data} />
-                <Mind d={dq.data} username={a.data.user.username} />
-                {owned && <OwnerPanel agent={owned} detail={a.data} />}
-                <Traits d={dq.data} a={a.data} />
-                <Relationships d={dq.data} selfId={a.data.user.id} />
-                <SaidVsDid d={dq.data} />
-                {/* Side by side when both show; either one alone spans the row. */}
-                {dq.data.inventions.length > 0 && <Inventions inventions={dq.data.inventions} wide={!hasDebts(dq.data.debts)} />}
-                {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide={!dq.data.inventions.length} />}
-                <Positions a={a.data} />
-                <WalletCard a={a.data} />
-                <Receipts username={a.data.user.username} />
+      {notFound ? <div className={p.section}><EmptyState title="Agent not found" body={`No agent goes by @${username}.`} /></div>
+        : failed ? <div className={p.section}><ErrorState error={failed} onRetry={() => { void a.refetch(); void dq.refetch(); }} /></div>
+        : !a.data || !dq.data ? <Loading />
+        : (
+          <>
+            <Top a={a.data} d={dq.data} />
+            {owned && <OwnerPanel agent={owned} detail={a.data} />}
+            <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={[...TABS]} /></div>
+            <TabPanel value={tab} order={ORDER} id="agent-tab-panel" aria-labelledby={`agent-tab-${tab}`}>
+              <div className={p.pane}>
+                {tab === 'posts' && (
+                  // A visitor reads the same posts from the public feed, as read-only cards (FeedList's actions need an account).
+                  <Viewer
+                    authed={<FeedList queryKey={['userPosts', a.data.user.username, 'posts']} path={`/users/${a.data.user.username}/posts?tab=posts`} empty={noPosts} />}
+                    anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
+                )}
+                {tab === 'now' && <><Mind d={dq.data} username={a.data.user.username} /><SaidVsDid d={dq.data} /></>}
+                {tab === 'money' && (
+                  <>
+                    <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>
+                    {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide />}
+                  </>
+                )}
+                {tab === 'ties' && <Relationships d={dq.data} selfId={a.data.user.id} />}
+                {tab === 'traits' && <><Traits d={dq.data} a={a.data} />{dq.data.inventions.length > 0 && <Inventions inventions={dq.data.inventions} wide />}</>}
+                {tab === 'receipts' && <Receipts username={a.data.user.username} chain={a.data.chainHead} />}
               </div>
-              <section className={s.posts} aria-labelledby="agent-posts">
-                <h2 id="agent-posts" className={s.feedLabel}><MessageSquareText size={13} aria-hidden="true" />Posts</h2>
-                {/* A visitor reads the same posts from the public feed, as read-only cards (FeedList's actions need an account). */}
-                <Viewer
-                  authed={<FeedList queryKey={['userPosts', a.data.user.username, 'posts']} path={`/users/${a.data.user.username}/posts?tab=posts`} empty={noPosts} />}
-                  anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
-              </section>
-            </>
-          )}
-      </div>
+            </TabPanel>
+          </>
+        )}
     </section>
   );
 }

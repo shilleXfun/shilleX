@@ -1,0 +1,68 @@
+/* Agent page (AgentProfilePage.tsx), after X's profile: a banner in the agent's colour with the face over its edge, the
+   name and standing, one strip of numbers, then tabs. Everything under the tabs is flat: sections split by hairlines,
+   no cards. --c is the faction's colour, or the agent's own. */
+.top { --face: clamp(104px, 9vw, 140px); position: relative; }
+.banner { height: clamp(150px, 13vw, 230px); border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(90% 160% at 88% -20%, color-mix(in srgb, var(--c) 50%, transparent), transparent 62%),
+    radial-gradient(60% 120% at 8% 120%, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%),
+    linear-gradient(120deg, color-mix(in srgb, var(--c) 26%, var(--bg)), color-mix(in srgb, var(--c) 6%, var(--bg)) 75%); }
+.top[data-ghost='true'] .banner { filter: grayscale(1) brightness(.75); }
+.idRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: calc(var(--face) / -2); padding: 0 var(--row-px); }
+.face { position: relative; flex: none; display: inline-flex; border-radius: 28%; box-shadow: 0 0 0 5px var(--bg); }
+.face > span { border-radius: 28%; }
+.top[data-ghost='true'] .face { opacity: .6; filter: grayscale(1); }
+.idActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-bottom: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; transition: background var(--dur-1); }
+.pill:hover { background: rgba(255, 255, 255, 0.06); }
+.pill svg { color: var(--muted); }
+
+.who { display: grid; gap: 10px; padding: 16px var(--row-px) 0; }
+.nameLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.name { margin: 0; color: var(--text); font: 650 clamp(26px, 2.2vw, 34px)/1.1 var(--font-brand); letter-spacing: -0.035em; }
+.handle { color: var(--muted); font-size: 15px; }
+.voice { margin: 0; max-width: 70ch; color: var(--text); font: 550 clamp(18px, 1.35vw, 22px)/1.35 var(--font-brand); letter-spacing: -0.02em; }
+.voice::before { content: '\201C'; color: color-mix(in srgb, var(--c) 80%, white); }
+.voice::after { content: '\201D'; color: color-mix(in srgb, var(--c) 80%, white); }
+.bio { margin: 0; max-width: 80ch; color: var(--text-2); font-size: 15.5px; line-height: 1.55; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; color: var(--muted); font-size: 14px; }
+.note { margin: 0; max-width: 80ch; padding: 10px 14px; border-radius: 10px; background: var(--down-soft); color: var(--text); font-size: 14px; line-height: 1.45; }
+.top[data-ghost='true'] .note { background: var(--raised); }
+
+/* The numbers: one ruled strip, a cell per figure, as on home. */
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 22px 0 0; overflow: hidden; border-top: 1px solid var(--line); }
+.cell { position: relative; display: grid; align-content: start; gap: 4px; min-width: 0; padding: 16px var(--row-px) 18px; box-shadow: -1px 0 0 var(--line); }
+.cell dt { color: var(--muted); font-size: 13px; font-weight: 500; }
+.cell dd { display: grid; gap: 8px; margin: 0; color: var(--text); font: 650 clamp(18px, 1.5vw, 24px)/1.15 var(--font-brand); letter-spacing: -0.03em; overflow-wrap: anywhere; }
+.cellNote { color: var(--muted); font: 500 12.5px/1.3 var(--font-ui); letter-spacing: 0; }
+.cell[data-flash] { isolation: isolate; }
+@media (prefers-reduced-motion: no-preference) {
+  .cell[data-flash='up'][data-beat='0'], .cell[data-flash='down'][data-beat='0'] { animation: wash0 1.2s ease-out; }
+  .cell[data-flash='up'][data-beat='1'], .cell[data-flash='down'][data-beat='1'] { animation: wash1 1.2s ease-out; }
+}
+.cell[data-flash='up'] { --wash: color-mix(in srgb, var(--up) 16%, transparent); }
+.cell[data-flash='down'] { --wash: color-mix(in srgb, var(--down) 16%, transparent); }
+@keyframes wash0 { from { background: var(--wash); } to { background: transparent; } }
+@keyframes wash1 { from { background: var(--wash); } to { background: transparent; } }
+
+/* Tabs: X's row under the profile; the active one is underlined. */
+.tabsRow { padding: 0 calc(var(--row-px) - 16px); border-block: 1px solid var(--line); }
+.pane { min-width: 0; container-type: inline-size; }
+
+/* Flat sections inside a tab. Two side by side split by a hairline. */
+.section { min-width: 0; padding: 24px var(--row-px) 28px; border-bottom: 1px solid var(--line); container-type: inline-size; }
+.sectionHead { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 16px; }
+.sectionTitle { margin: 0; color: var(--text); font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.025em; }
+.sectionNote { color: var(--muted); font-size: 13.5px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) {
+  .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols > .section + .section { box-shadow: -1px 0 0 var(--line); }
+}
+
+@media (max-width: 767px) {
+  .idActions { display: none; }
+  .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.spark { display: grid; gap: 6px; margin-top: 18px; }
+.spark svg { width: 100%; height: 64px; }
