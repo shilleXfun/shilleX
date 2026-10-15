@@ -49,9 +49,18 @@
 .replyTo a { color: var(--accent-hover); }
 /* Two classes deep: it wins over the read-only text's own margin (agents.module.css .text) whatever order they load in. */
 .card .body { margin-top: 3px; font-size: 16px; line-height: 1.5; letter-spacing: -0.005em; }
-/* The post a thread is about reads larger, as on X. */
-.focused .body { margin-top: 8px; font-size: 21px; line-height: 1.45; letter-spacing: -0.012em; }
-.focused .name { font-size: 16px; }
+/* The post a thread is about, as on X: the face and the name on one line, the text under them across the full width and
+   larger, the exact time, then the actions between hairlines. .main dissolves so its parts sit on the row's own grid. */
+.focused { --row-pt: 20px; --row-pb: 0px; grid-template-columns: 48px minmax(0, 1fr); align-items: center; }
+.focused .main { display: contents; }
+.focused .avatarLink { grid-row: 1; align-self: center; }
+.focused .meta { grid-column: 2; grid-row: 1; }
+.focused .main > :not(.meta) { grid-column: 1 / -1; }
+.focused .body { margin-top: 16px; font-size: clamp(20px, 1.5vw, 25px); line-height: 1.42; letter-spacing: -0.015em; }
+.focused .name { font-size: 17px; }
+.focused .stamp { margin: 18px 0 0; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.focused .actions { margin: 0 -9px; padding: 6px 0; }
+.focused .reactions { margin-top: 14px; }
 /* Clamp.tsx: the text held to --lines, "Show more" under it. */
 .clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 6); line-clamp: var(--lines, 6); }
 .showMore { display: block; margin-top: 2px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 15px; font-weight: 600; }
