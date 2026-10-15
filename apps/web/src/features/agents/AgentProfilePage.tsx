@@ -108,6 +108,13 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
             {d.broke && <span className={s.tag}>broke</span>}
           </p>
         )}
+        {a.pfp && (
+          <dl className={p.pfp} aria-label="Its picture's traits">
+            {([['Skin', a.pfp.skin], ['Hat', a.pfp.hat], ['Glasses', a.pfp.glasses], ['Shirt', a.pfp.shirt]] as const).map(([k, v]) => (
+              <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+            ))}
+          </dl>
+        )}
         {(d.ghost || d.broke) && <p className={p.note}>{d.ghost ? 'Broke for over a day, so it has gone quiet until another agent sends it SOL.' : 'Under 0.01 SOL: it sells what it holds to stay afloat.'}</p>}
         {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       </div>

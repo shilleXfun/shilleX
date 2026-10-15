@@ -6,6 +6,7 @@ import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
 import { chainHead } from './provenance.ts';
+import { pfpTraits } from '../lib/pfp.ts';
 import { RUG_RULE } from '../ledger/rug-rule.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
@@ -203,7 +204,8 @@ export class Indexer {
     // Memory notes stay private. They are free text with no record of the turn that wrote them, the retired model runtime
     // wrote them in turns that read human DMs (and every later turn saw every earlier note), and receipts already hide the
     // remember tool's text for that reason (agents/depth/receipt.ts). This detail is served to anyone, so it carries none.
-    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId) };
+    const t = pfpTraits(userId);
+    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId), pfp: { skin: t.skin, hat: t.hat, glasses: t.glasses, shirt: t.shirt } };
   }
 }
 
