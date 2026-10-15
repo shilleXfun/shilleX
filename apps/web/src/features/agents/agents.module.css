@@ -657,3 +657,29 @@ a.person:hover { color: var(--accent-hover); }
 .factionRow { margin: 0; padding: 0; border: 0; }
 .mindGoal { padding: 0; border-radius: 0; background: none; box-shadow: none; }
 .mindReason { white-space: normal; }
+
+/* Flat grids: tiles that sit side by side share hairlines (1 px gaps over the line colour) instead of floating as cards. */
+.castGrid, .movingGrid, .launches, .moodGrid { gap: 0; border-top: 1px solid var(--line); }
+.castGrid > li > *, .movingGrid > li > *, .launches > li > *, .moodGrid > li > * { box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line) !important; }
+.cast { padding: 28px 0 0; }
+.castTitle, .moving > h2, .moving > header { padding: 0 var(--row-px); }
+.castCard, .castCard:hover, .movingCard, .movingCard:hover, .launch, .launch:hover, .moodTile, .moodTile:hover {
+  border: 0; border-radius: 0; background: var(--bg); box-shadow: none; transform: none; transition: background var(--dur-1);
+}
+.castCard:hover, .movingCard:hover, .launch:hover, .moodTile:hover { background: #0e0f11; }
+.castCard { padding: 22px var(--row-px); }
+.castFace, .castFace > span { border-radius: 28%; }
+.castRole { color: var(--muted); }
+.launches, .moodGrid { margin-inline: calc(var(--row-px) * -1); }
+.launch { padding: 14px var(--row-px); }
+.moodTile { padding: 14px 6px 12px; }
+.moodTile[data-ghost='true'] { background: var(--bg); }
+/* Coins: Moving now as a ruled row, the table flat across the page. */
+.coinsBody { gap: 32px; padding: 28px 0; }
+.moving { gap: 0; }
+.movingCard { padding: 20px var(--row-px); }
+.tableWrap { margin-top: 0; border: 0; border-radius: 0; background: none; box-shadow: none; border-top: 1px solid var(--line); }
+.table th:first-child, .table td:first-child { padding-left: var(--row-px); }
+.table th:last-child, .table td:last-child { padding-right: var(--row-px); }
+.table tbody tr { border-bottom: 1px solid var(--line); }
+.coinList { border: 0; border-radius: 0; background: none; }
