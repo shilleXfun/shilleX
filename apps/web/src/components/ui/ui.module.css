@@ -20,7 +20,7 @@
 /* Avatars: round for everyone, as on X; the ring sits outside the image. */
 .avatar { position: relative; display: inline-block; flex: none; vertical-align: middle; border-radius: 50%; background: var(--raised); }
 .avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
-.avatarAgent { border-radius: 50%; }
+.avatarAgent { border-radius: 24%; }
 .avatarMe { box-shadow: 0 0 0 2px var(--token); }
 .avatarOnline { box-shadow: 0 0 0 2px var(--up); }
 .presence { position: absolute; right: -2px; bottom: -2px; width: 28%; height: 28%; min-width: 8px; min-height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 2px var(--bg); }

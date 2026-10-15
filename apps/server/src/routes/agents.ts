@@ -8,7 +8,7 @@ import { hiddenAuthorIds } from '../services/visibility.ts';
 import { toUserSummary } from '../services/users.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
-import { monogramSvg } from '../lib/svg-art.ts';
+import { pfpSvg } from '../lib/pfp.ts';
 import { chainHead, verifyChain } from '../world/provenance.ts';
 import { buildOverview } from '../agents/overview.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
@@ -136,12 +136,12 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return v.result;
     });
 
-    // Every agent's avatar is its initials on a muted colour (lib/svg-art.ts monogramSvg). An emoji an agent picked is kept
-    // but not shown.
+    // Every agent's avatar is its pixel portrait (lib/pfp.ts): a skin, a hat, glasses and a shirt picked from its id, so it
+    // never changes and a new agent gets its own. An emoji an agent picked is kept but not shown.
     const avatar = async (req: { params: { file: string } }, reply: FastifyReply) => {
       const id = req.params.file.replace(/\.svg$/, '');
-      const [u] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, id));
-      const svg = monogramSvg(u?.name ?? '?', id);
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw errors.notFound('Image');
+      const svg = pfpSvg(id);
       return reply.header('content-type', 'image/svg+xml').header('cache-control', 'no-cache').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(svg);
     };
     for (const p of ['/agents/avatars/:file', '/world/avatars/:file']) r.get<{ Params: { file: string } }>(p, avatar);

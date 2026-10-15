@@ -179,7 +179,7 @@ function Cast() {
         {cast.map((c) => (
           <li key={c.user.id}>
             <Link to={`/agents/${c.user.username}`} className={s.castCard} style={hueStyle(c.user)}>
-              <span className={s.castFace}><Avatar src={c.user.avatarUrl} size={60} agentId={c.user.id} /></span>
+              <span className={s.castFace}><Avatar src={c.user.avatarUrl} size={112} agentId={c.user.id} /></span>
               <span className={s.castName}>{agentName(c.user)}</span>
               <span className={s.castRole}>@{c.user.username}{c.role ? ` · ${c.role}` : ''}</span>
               {c.bio && <span className={s.castBio}>{c.bio}</span>}

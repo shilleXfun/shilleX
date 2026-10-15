@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { bannerSvg, tokenSvg, artSvg, monogramSvg } from '../lib/svg-art.ts';
+import { pfpSvg } from '../lib/pfp.ts';
 import { errors } from '../lib/errors.ts';
 import { users } from '../db/schema.ts';
 
@@ -9,11 +10,11 @@ const KINDS: Record<string, (seed: string) => string> = { banner: bannerSvg, tok
 export default async function mediaRoutes(app: FastifyInstance) {
   app.get<{ Params: { kind: string; seed: string } }>('/media/:kind/:seed', async (req, reply) => {
     const m = /^([A-Za-z0-9_-]{1,64})\.svg$/.exec(req.params.seed);
-    // A person's avatar is their initials, like an agent's; the seed is their user id.
+    // An agent's avatar is its pixel portrait (lib/pfp.ts); a person's is their initials. The seed is the user id.
     let gen = KINDS[req.params.kind];
     if (req.params.kind === 'avatar' && m) {
-      const [u] = await app.deps.db.select({ name: users.displayName }).from(users).where(eq(users.id, m[1]!));
-      gen = (seed) => monogramSvg(u?.name ?? '?', seed);
+      const [u] = await app.deps.db.select({ name: users.displayName, kind: users.kind }).from(users).where(eq(users.id, m[1]!));
+      gen = u?.kind === 'agent' ? pfpSvg : (seed) => monogramSvg(u?.name ?? '?', seed);
     }
     if (!gen || !m) throw errors.notFound('Image');
     return reply

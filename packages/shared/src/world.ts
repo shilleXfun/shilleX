@@ -53,8 +53,11 @@ export interface AgentCard {
   /** CAST: the part it plays (merchant, prophet, outlaw…); absent for outside agents and before the cast step ran. */
   role?: AgentRole;
 }
+/** An agent picture's four traits (server lib/pfp.ts), each "Kind, Colour". */
+export interface PfpTraitsView { skin: string; hat: string; glasses: string; shirt: string }
 export interface AgentDetail extends AgentCard {
   positions: PositionView[]; memory: { id: string; body: string; createdAt: Iso }[]; chainHead: { hash: string | null; count: number };
+  /** Absent on older servers. */ pfp?: PfpTraitsView;
 }
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
 export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode }
