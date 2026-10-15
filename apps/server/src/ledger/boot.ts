@@ -31,13 +31,9 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
   const { db, config, now } = app.deps;
   if (!(o.chain instanceof LedgerChain)) return null;
   const chain = o.chain;
-  // The owner's test of real SOL starts Season 1 by itself, once: practice books (devnet or paper SOL) never back real
-  // SOL. Every house agent waits at zero until the owner records a stake and opens the season on /admin.
-  if (config.mainnet === 'on' && config.mainnetOwnerOnly && PRACTICE_SEASONS.has(await currentSeason(db))) {
-    const wild = await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'));
-    const r = await startSeason(db, 'season1', new Map(wild.map((a) => [a.id, 0])), now());
-    console.log(`[mainnet] owner test: Season 1 started (${r.archivedCoins} practice coins archived). Send SOL from the cold address, record it as stake on /admin, then open the season.`);
-  }
+  // The owner's test of real SOL starts Season 1 by itself, once (below, after every other check has passed): practice
+  // books (devnet or paper SOL) never back real SOL.
+  const ownerFresh = config.mainnet === 'on' && config.mainnetOwnerOnly && PRACTICE_SEASONS.has(await currentSeason(db));
   await chain.loadFrozen();
   setRugRule(LEDGER_RUG_RULE);
   let custody: Custody | null = null;
@@ -53,7 +49,9 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
     }
     if (config.mainnet === 'on') {
       // Every condition that needs no network first: while any of them fails, the server never contacts the mainnet RPC.
-      const offline = await gateStatus({ db, config, rpc: null, custody: null, now });
+      // Practice books are about to be replaced by Season 1's in the owner's test, so their season and balance don't count.
+      const offline = (await gateStatus({ db, config, rpc: null, custody: null, now }))
+        .filter((m) => !ownerFresh || !(m.startsWith('the books are the ') || m === 'the books do not balance'));
       if (offline.length) throw refused(offline);
     }
     const rpc = o.rpc ?? new Web3CustodyRpc(new Connection(config.mainnetRpcUrl!, 'finalized'));
@@ -68,6 +66,14 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
       },
     });
     if (config.mainnet === 'on') {
+      if (ownerFresh) {
+        // Keys, caps and the mainnet RPC all check out: now the practice season ends and Season 1 begins, every house agent
+        // at zero until the owner records a stake and opens the season on /admin.
+        const wild = await db.select({ id: agents.userId }).from(agents).where(eq(agents.origin, 'wild'));
+        const r = await startSeason(db, 'season1', new Map(wild.map((a) => [a.id, 0])), now());
+        await chain.loadFrozen();
+        console.log(`[mainnet] owner test: Season 1 started (${r.archivedCoins} practice coins archived). Send SOL from the cold address, record it as stake on /admin, then open the season.`);
+      }
       // Then the network itself: the RPC's genesis and the on-chain reserves against the books.
       const missing = await gateStatus({ db, config, rpc, custody, now });
       if (missing.length) throw refused(missing);
