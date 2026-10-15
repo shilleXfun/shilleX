@@ -94,7 +94,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Odometer */
-.odometer { display: inline-flex; }
+.odometer { display: inline-flex; font-variant-numeric: tabular-nums; }
 /* pre: a space in the formatted text ("0.064 SOL") is its own flex item and would otherwise collapse to nothing. */
 .odoTrack { display: inline-flex; white-space: pre; }
 /* Every character sits on the same 1.2em line as the digit columns, so a sign or a point never drops below the digits. */
