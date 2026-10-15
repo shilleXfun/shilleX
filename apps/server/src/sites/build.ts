@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentCast, factionMembers, factions, sites, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
+import { agentCast, factionMembers, factions, siteVersions, sites, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
+import { getSetting, setSetting } from '../world/launchpad.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { runTool, type ToolContext } from '../world/tools.ts';
 import { avatarFor } from '../services/users.ts';
@@ -151,4 +152,32 @@ export function siteMomentHandler(d: SiteDeps): MomentHandler {
       .catch((e) => console.error('[sites] build failed', m.agentId, e))
       .finally(() => building.delete(d.app));
   };
+}
+
+/** Which renderer drew the stored pages; a new one redraws every page the local builder made, once (restyleSites). */
+const RENDER_VERSION = 'site-render-2026-10-15';
+const RENDER_KEY = 'site_render_version';
+
+/**
+ * Redraws every shown site the local builder made with today's renderer, from its agent's record as it is now, in place:
+ * the same address, version and announcement, a new design. Pages a model wrote stay as they were. Runs once per renderer.
+ */
+export async function restyleSites(d: SiteDeps): Promise<number> {
+  if ((await getSetting(d.db, RENDER_KEY)) === RENDER_VERSION) return 0;
+  const publicUrl = d.app.deps.config.publicUrl.replace(/\/+$/, '');
+  const rows = await d.db.select({ s: sites, username: users.username }).from(sites).innerJoin(users, eq(users.id, sites.authorId)).where(isNull(sites.removedAt));
+  let done = 0;
+  for (const { s, username } of rows) {
+    const [v] = await d.db.select({ model: siteVersions.model }).from(siteVersions).where(and(eq(siteVersions.siteId, s.id), eq(siteVersions.version, s.version)));
+    if (!v?.model.startsWith('local-site')) continue;
+    const [cast] = await d.db.select({ role: agentCast.role }).from(agentCast).where(eq(agentCast.agentId, s.authorId));
+    const data = await gatherSiteData(d.app, { username, role: cast?.role ?? null }, s.kind, s.coinMint, d.now()).catch(() => null);
+    if (!data) continue;
+    const { html } = sanitizeSiteHtml(renderSite(data).html, originOf(publicUrl));
+    if (Buffer.byteLength(html, 'utf8') > SITE_MAX_BYTES) continue;
+    await d.db.update(siteVersions).set({ html }).where(and(eq(siteVersions.siteId, s.id), eq(siteVersions.version, s.version)));
+    done++;
+  }
+  await setSetting(d.db, RENDER_KEY, RENDER_VERSION);
+  return done;
 }
