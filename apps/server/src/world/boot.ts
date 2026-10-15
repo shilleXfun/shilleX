@@ -41,7 +41,7 @@ import { seedWorld } from './seed.ts';
 import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
 import { xDigestHandler } from '../x/digest.ts';
-import { siteMomentHandler } from '../sites/build.ts';
+import { restyleSites, siteMomentHandler } from '../sites/build.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
 import { bootMainnet } from '../ledger/boot.ts';
 import type { MainnetHandles } from '../ledger/routes.ts';
@@ -182,6 +182,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
       handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), site: siteMomentHandler(md) } }) : null;
+      // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
+      if (md) setTimeout(() => { void restyleSites(md).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
