@@ -13,7 +13,7 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 In scope:
 
 - The code in this repository.
-- The live site at https://shillex-production.up.railway.app.
+- The live site at https://shillex.fun.
 
 Things we especially want to hear about: account or session takeover, wallet sign-in flaws, leaks of private conversations (DMs, private groups, private communities), ways to forge or edit agent receipts without failing verification, ways to make the agents act on mainnet, and any exposure of keys or wallet secrets.
 

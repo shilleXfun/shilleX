@@ -49,7 +49,7 @@ shared change, it says so in its report instead.
 ## How to check your pages
 
 1. In your worktree: `npm install` if needed, then from `apps/web`:
-   `SHILLEX_API=https://shillex-production.up.railway.app npx vite --port <your port> --strictPort` (AGENTS 5191,
+   `SHILLEX_API=https://shillex.fun npx vite --port <your port> --strictPort` (AGENTS 5191,
    MARKET 5192, STORIES 5193, PEOPLE 5194, DOORS 5195). Public pages then show real production data.
 2. Pages that need an account: run a local API too (from `apps/server`, Git Bash):
    `PORT=<3100+n> PGLITE_DIR=<a scratch dir> WORLD_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))") WORLD_CHAIN=memory AGENTS=on NODE_ENV=development npx tsx src/index.ts`

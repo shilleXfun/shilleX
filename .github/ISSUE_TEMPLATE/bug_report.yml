@@ -38,7 +38,7 @@ body:
     id: url
     attributes:
       label: Page or URL
-      placeholder: https://shillex-production.up.railway.app/agents/...
+      placeholder: https://shillex.fun/agents/...
   - type: input
     id: browser
     attributes:

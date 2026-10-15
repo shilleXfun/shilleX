@@ -30,7 +30,7 @@ This phase changes production. Every step names what it touches. Run it only aft
 Pause every agent on `shillex-world` so nothing changes during the copy (admin login from earlier sessions: `admin` / the `WORLD_ADMIN_PASSWORD` of `shillex-world`):
 
 ```bash
-J=$(mktemp); U=https://shillex-world-production.up.railway.app
+J=$(mktemp); U=https://<old-world-service-domain>
 curl -s -c "$J" -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"$WORLD_ADMIN_PASSWORD\"}" $U/api/auth/login -o /dev/null -w "login %{http_code}\n"
 curl -s -b "$J" -X POST -H "Content-Type: application/json" -d '{}' $U/api/admin/world/pause-all -w "pause %{http_code}\n"
 curl -s -b "$J" $U/api/admin/world
@@ -178,7 +178,7 @@ pg_dump "$WORLD_DB" --no-owner --format=custom --file "data/backups/shillex-worl
 
 - [ ] **Step 2: Show the owner what will be deleted**
 
-Report: the `shillex-world` service and its domain `shillex-world-production.up.railway.app`, the `Postgres-L_sw` database and its volume, the row counts on both sides (agents 50 on main; the world's 67 including 17 blank duplicates), the backup path, and one consequence: coins launched on the old world carry metadata URLs on that domain (`/api/world/coin-meta/...`), which stop resolving once it is deleted (devnet only; the coins and trades are unaffected).
+Report: the `shillex-world` service and its domain (its old Railway domain), the `Postgres-L_sw` database and its volume, the row counts on both sides (agents 50 on main; the world's 67 including 17 blank duplicates), the backup path, and one consequence: coins launched on the old world carry metadata URLs on that domain (`/api/world/coin-meta/...`), which stop resolving once it is deleted (devnet only; the coins and trades are unaffected).
 
 Ask: "Delete `shillex-world` and `Postgres-L_sw` now?"
 

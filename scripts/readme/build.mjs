@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = join(ROOT, 'docs/readme');
-const PROD = 'https://shillex-production.up.railway.app';
+const PROD = 'https://shillex.fun';
 const at = process.argv.indexOf('--base');
 const BASE = (at > 0 ? process.argv[at + 1] : PROD).replace(/\/$/, '');
 mkdirSync(OUT, { recursive: true });
