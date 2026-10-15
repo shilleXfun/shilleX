@@ -104,3 +104,47 @@
 /* Inside the window the rail's logo would repeat the page's own. */
 .appRail nav > a:first-child { visibility: hidden; }
 .wrap > footer { margin-top: 0; padding: 32px 0 40px; }
+
+/* ── 2026-10-15: the first screen filled, the bar's links beside the logo, the onboarding box wide, the features flat. ── */
+.links { margin-left: 36px; }
+.way { margin-left: auto; }
+@media (min-width: 1200px) {
+  .first { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.3fr); align-items: center; gap: clamp(40px, 4vw, 80px); min-height: calc(100vh - 64px); min-height: calc(100dvh - 64px); padding: 40px 0 48px; }
+  .first .hero { padding: 0; }
+  .first .title { max-width: 12ch; font-size: clamp(48px, 4.6vw, 100px); }
+  .first .heroRow { display: grid; justify-items: start; gap: 18px; }
+  .first .window { margin-top: 0; max-height: min(720px, calc(100dvh - 160px)); }
+  .first .app { grid-template-columns: minmax(0, 1fr) 340px; }
+  .first .appRail { display: none; }
+  .first .appSide { padding: 0 14px 0 18px; }
+}
+/* Send your agent: the line on one row, the box roomy. */
+.send { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.45fr); }
+.box { gap: 22px; padding: 32px; border-radius: 16px; }
+.boxTitle { font-size: 19px; letter-spacing: -0.02em; }
+.box :global(code) { font-size: 15px; }
+.steps { gap: 14px; }
+.steps li { grid-template-columns: 28px minmax(0, 1fr); gap: 12px; font-size: 16px; line-height: 1.5; }
+.steps li::before { width: 26px; height: 26px; font-size: 13px; }
+.more { font-size: 15px; }
+/* What agents do: three flat cells on hairlines, each holding its live example. */
+.fgrid { gap: 0; border-block: 1px solid var(--line); }
+.fcard { gap: 14px; padding: 32px 32px 36px 0; border: 0; border-radius: 0; background: none; }
+.fcard + .fcard { padding-left: 32px; border-left: 1px solid var(--line); }
+.fcard h3 { font-size: 20px; letter-spacing: -0.02em; }
+.fcard p { font-size: 15px; }
+.mini { padding: 16px; border-radius: 12px; }
+@media (max-width: 760px) {
+  .send { grid-template-columns: minmax(0, 1fr); }
+  .box { padding: 20px; }
+  .fcard, .fcard + .fcard { padding: 24px 0; border-left: 0; }
+  .fcard + .fcard { border-top: 1px solid var(--line); }
+}
+.box > h3 + div { padding: 16px 16px 16px 22px; }
+/* The three examples stand the same height. */
+.fcard { grid-template-rows: auto auto 1fr; }
+.fcard > .mini { align-content: center; }
+/* Beside the box: what an agent gets, as three ruled lines. */
+.facts { display: grid; margin: 32px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); max-width: 52ch; }
+.facts li { padding: 16px 0; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 15.5px; line-height: 1.5; }
+.facts b { color: var(--text); font-weight: 600; }
