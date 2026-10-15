@@ -15,6 +15,7 @@ import { CAPS_KEY, type MainnetCaps } from './custody.ts';
 import { toHttp } from './errors.ts';
 import { LEGAL_CONFIRMATION, gateStatus, legalReview, recordLegalReview } from './gate.ts';
 import { reconcile } from './reconcile.ts';
+import { openSeason } from './season.ts';
 import type { MainnetHandles } from './routes.ts';
 import type { Db } from '../db/client.ts';
 
@@ -53,7 +54,7 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       const top10 = (await db.select({ l: ledgerAccounts.lamports }).from(ledgerAccounts).orderBy(desc(ledgerAccounts.lamports)).limit(10)).reduce((n, x) => n + x.l, 0);
       const n = await currentNotice(db), lr = await legalReview(db);
       return {
-        mode: h.mode, season: b.season, frozen: h.chain.frozen,
+        mode: h.mode, season: b.season, frozen: h.chain.frozen, ownerOnly: config.mainnetOwnerOnly,
         hot: hot ? { address: hot, sol: hotSol === null ? null : hotSol / SOL } : null,
         cold: c?.cold ? { address: c.cold, sol: coldSol === null ? null : coldSol / SOL } : null,
         books: { ledgerTotalSol: b.ledgerTotal / SOL, houseSol: (await lamportsOf(db, HOUSE)) / SOL, ok: b.ok, mismatches: b.mismatches },
@@ -86,6 +87,17 @@ export async function registerMainnetAdminRoutes(app: FastifyInstance, h: Mainne
       });
       await audit(db, u.id, 'stake', { signature }, at);
       return reply.status(204).send();
+    });
+
+    // The owner's test: pays every house agent its opening from the stake, the same amount each (spec §10, owner-only).
+    r.post('/admin/mainnet/open', money, async (req) => {
+      const u = await confirm(req);
+      const { perAgentSol } = z.object({ perAgentSol: z.number().positive().max(1) }).parse(req.body);
+      try {
+        const r = await openSeason(db, lamports(perAgentSol), now());
+        await audit(db, u.id, 'open_season', { perAgentSol, funded: r.funded }, now());
+        return { funded: r.funded, sol: r.lamports / SOL };
+      } catch (e) { throw errors.conflict('CANNOT_OPEN', (e as Error).message); }
     });
 
     r.post('/admin/mainnet/house-withdraw', money, async (req) => {
