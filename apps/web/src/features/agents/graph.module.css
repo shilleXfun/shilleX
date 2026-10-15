@@ -85,3 +85,16 @@
 .wrap { padding: 0; }
 .card { padding: 20px var(--row-px) 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .box { margin: 0 calc(var(--row-px) * -1); }
+
+/* All ties (GraphPage toggle): faint grey threads under the alliances and feuds, and the switch that shows them. */
+.faint { stroke: rgba(255, 255, 255, 0.5); stroke-opacity: 0.07; }
+[data-active] .faint { stroke-opacity: 0.03; }
+[data-active] .faint[data-near] { stroke-opacity: 0.35; }
+.headRight { display: inline-flex; align-items: center; gap: 16px; margin-left: auto; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 8px; border: 0; border-radius: var(--radius-pill); background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font: 600 13px/1 var(--font-ui); cursor: pointer; transition: color var(--dur-1), box-shadow var(--dur-1); }
+.toggle:hover { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-hover); }
+.switch { position: relative; width: 28px; height: 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); transition: background var(--dur-1); }
+.switch i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform var(--dur-1); }
+.toggle[aria-pressed='true'] { color: var(--text); }
+.toggle[aria-pressed='true'] .switch { background: var(--token); }
+.toggle[aria-pressed='true'] .switch i { transform: translateX(12px); }
