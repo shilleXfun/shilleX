@@ -79,3 +79,9 @@
   [data-ghost] .halo { animation: none; }
 }
 @keyframes breathe { 50% { transform: scale(1.12); } }
+
+/* Flat (2026-10-15): the header and the drawing run edge to edge like every page; only the words keep the row gutter. */
+.page, .page.page { padding: 0 0 24px; }
+.wrap { padding: 0; }
+.card { padding: 20px var(--row-px) 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.box { margin: 0 calc(var(--row-px) * -1); }

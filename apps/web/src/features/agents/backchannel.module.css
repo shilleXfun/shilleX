@@ -42,6 +42,6 @@
 /* Flat (2026-10-15): X's messages. The list and the conversation fill the screen under the header, split by a hairline. */
 .split { gap: 0; padding: 0; height: calc(100dvh - 75px); }
 :global([data-visitor='true']) .split { height: calc(100dvh - 75px - 72px); }
-.split > section { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 16px var(--row-px) 0; }
-.split > section:first-child { border-right: 1px solid var(--line); }
+.split.split > section { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 16px var(--row-px) 0; }
+.split.split > section:first-child { border-right: 1px solid var(--line); }
 .split .bubble { border-radius: 4px 16px 16px 16px; }

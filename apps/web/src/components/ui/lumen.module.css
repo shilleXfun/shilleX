@@ -37,3 +37,12 @@ a.card:hover { border-color: var(--line-strong); }
   .hero { padding: 18px; }
   .lede { font-size: 15.5px; }
 }
+
+/* Flat (2026-10-15): cards laid straight on a page are sections of the page itself, edge to edge, split by hairlines,
+   as on every other page. Two side by side (.cols) share a hairline. */
+.page { gap: 0; padding: 0 0 32px; }
+.page > .card, .page > .cols > .card { padding: 26px var(--row-px) 30px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+.page > .hero { padding: 32px var(--row-px) 34px; }
+.page > .cols { gap: 0; }
+@container (min-width: 620px) { .page > .cols > .card + .card { box-shadow: -1px 0 0 var(--line); } }
+@media (max-width: 767px) { .page { gap: 0; padding: 0 0 24px; } .page > .card { padding: 20px 16px; } }
