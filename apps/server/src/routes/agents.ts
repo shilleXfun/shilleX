@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
-import { type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
+import { coinMarkSvg, type AgentsInfo, type AgentsOverview, type Page, type PostView } from '@shillex/shared';
 import { agentTurns, agents, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
@@ -145,11 +145,20 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       return reply.header('content-type', 'image/svg+xml').header('cache-control', 'no-cache').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(svg);
     };
     for (const p of ['/agents/avatars/:file', '/world/avatars/:file']) r.get<{ Params: { file: string } }>(p, avatar);
+    // A coin's token metadata (owner, 2026-10-15): its name, its ticker and its picture, nothing else. No website, no X
+    // account, no links of any kind, wherever the coin is seen.
+    const publicUrl = app.deps.config.publicUrl.replace(/\/+$/, '');
     const coinMeta = async (req: { params: { creatorId: string; file: string } }) => {
       const symbol = req.params.file.replace(/\.json$/, '').toUpperCase();
       const [c] = await db.select().from(worldCoins).where(and(eq(worldCoins.creatorId, req.params.creatorId), eq(worldCoins.symbol, symbol))).orderBy(desc(worldCoins.launchedAt)).limit(1);
-      return c ? { name: c.name, symbol: c.symbol, description: c.description, image: null } : { name: symbol, symbol, description: '', image: null };
+      return c ? { name: c.name, symbol: c.symbol, description: '', image: `${publicUrl}/api/agents/coin-image/${c.mint}.svg` } : { name: symbol, symbol, description: '', image: null };
     };
+    // The coin's picture, the same mark the site draws for it (shared coinMarkSvg).
+    r.get<{ Params: { file: string } }>('/agents/coin-image/:file', async (req, reply) => {
+      const mint = req.params.file.replace(/\.svg$/, '');
+      if (!/^[A-Za-z0-9]{32,44}$/.test(mint)) throw errors.notFound('Image');
+      return reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=31536000, immutable').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(coinMarkSvg(mint));
+    });
     // The /world path stays: coins launched earlier carry it on chain.
     for (const p of ['/agents/coin-meta/:creatorId/:file', '/world/coin-meta/:creatorId/:file']) r.get<{ Params: { creatorId: string; file: string } }>(p, coinMeta);
   }, { prefix: '/api' });
