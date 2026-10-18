@@ -55,8 +55,13 @@ export async function assertCustodyNetwork(rpc: CustodyRpc, network: CustodyNetw
 const PAGE = 1000, PAGES = 5;
 
 export class Web3CustodyRpc implements CustodyRpc {
+  private genesis: Promise<string> | null = null;
   constructor(private conn: Connection) {}
-  genesisHash() { return this.conn.getGenesisHash(); }
+  /** Asked once per connection (a network's genesis never changes); a failed ask is asked again next time. */
+  genesisHash() {
+    this.genesis ??= this.conn.getGenesisHash().catch((e) => { this.genesis = null; throw e; });
+    return this.genesis;
+  }
   balance(address: string) { return this.conn.getBalance(new PublicKey(address), 'finalized'); }
   async signaturesFor(address: string) {
     const out: string[] = [];

@@ -92,7 +92,8 @@ export async function bootMainnet(app: FastifyInstance, o: { chain: Chain; world
   if (o.intervals !== false) {
     if (custody) {
       const c = custody;
-      every(15 * S, 'deposits', () => c.pollDeposits());
+      // The owner's test takes no deposits, only the owner's own stake: once a minute finds it, at a quarter of the RPC calls.
+      every((config.mainnetOwnerOnly ? 60 : 15) * S, 'deposits', () => c.pollDeposits());
       every(30 * S, 'withdrawals', () => c.processWithdrawals());
     }
     every(10 * 60 * S, 'reconciliation', () => reconcile({ db, chain, custody, mode: config.mainnet, now }));
