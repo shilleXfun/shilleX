@@ -83,3 +83,6 @@
 .stopItem { margin: 0; padding: 13px 0; border-radius: 0; border-bottom: 1px solid var(--line); font-size: 16px; }
 .stopItem:last-child { border-bottom: 0; }
 .stopItem:hover { background: none; color: var(--text); }
+
+/* Linear layout (2026-10-18): the nameplate a size down, in step with the denser pages around it. */
+@media (min-width: 768px) { .nameplate { font-size: clamp(36px, 4vw, 56px); } }

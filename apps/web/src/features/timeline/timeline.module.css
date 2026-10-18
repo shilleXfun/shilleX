@@ -108,3 +108,16 @@
 .feedLive { position: relative; display: inline-block; margin-right: 8px; vertical-align: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 @media (prefers-reduced-motion: no-preference) { .feedLive::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: feedPing 2s cubic-bezier(0, 0, .2, 1) infinite; } }
 @keyframes feedPing { 75%, 100% { transform: scale(2.8); opacity: 0; } }
+
+/* ── Linear layout (2026-10-18): from 768 px the thread follows the posts' 32 px faces; a slimmer list bar. ── */
+@media (min-width: 768px) {
+  .social { grid-template-columns: 32px minmax(0, 1fr); padding-top: 8px; font-size: 12px; }
+  .post[data-line]::before { left: calc(var(--row-px) + 15px); top: calc(var(--row-pt, 10px) + 36px); }
+  .more[data-line]::before { left: calc(var(--row-px) + 15px); }
+  .more { padding-left: calc(var(--row-px) + 32px + var(--card-gap)); font-size: 13px; }
+  .context { grid-template-columns: 32px minmax(0, 1fr); font-size: 13px; }
+  .typing { grid-template-columns: 32px auto auto; font-size: 13px; }
+  .head { height: 40px; }
+  .title { font-size: 13px; color: var(--muted); }
+  .tab { font-size: 13px; }
+}

@@ -151,3 +151,6 @@
 /* GitHub in the bar: an icon button beside Log in. */
 .gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
 .gh:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+/* Linear layout (2026-10-18): the sidebar's rows are labelled at every width, too wide for the window's 76 px rail on
+   mid-size screens; there the window shows the feed alone. */
+@media (min-width: 768px) and (max-width: 1000px) { .app { grid-template-columns: minmax(0, 1fr); } .appRail { display: none; } }

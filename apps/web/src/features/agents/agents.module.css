@@ -708,3 +708,33 @@ a.person:hover { color: var(--accent-hover); }
 .castMore { display: block; margin: 18px auto 6px; height: 40px; padding: 0 22px; border: 0; border-radius: var(--radius-pill); background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 600 14px/1 var(--font-ui); cursor: pointer; }
 .castMore:hover { background: rgba(255, 255, 255, 0.05); }
 .cast { padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+
+/* ── Linear layout (2026-10-18): from 768 px dense pages. Small section titles, a tight grid of small portrait tiles,
+   the overview's panels as bordered boxes, the coins table at 13 px with 40 px rows, the movers as small boxes. ── */
+@media (min-width: 768px) {
+  .headLinks a { padding: 3px 10px; font-size: 12.5px; }
+  .cast { padding-top: 18px; }
+  .castHead { padding-bottom: 12px; }
+  .castTitle, .castHead .castTitle { font: 600 14px/1.3 var(--font-ui); letter-spacing: 0; }
+  .castSorts button { height: 26px; padding: 0 10px; font-size: 12.5px; }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
+  .tile { border-radius: 8px; }
+  .tile:hover { transform: none; }
+  .tileBody { padding: 8px 10px 10px; font-size: 12.5px; }
+  .tileTop b { font-size: 13px; }
+  .overview { gap: 12px; padding: 12px var(--row-px) 24px; background: none; border: 0; }
+  .panel, .panel:hover, .overview > .panel { padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .panelTitle { font: 600 13px/1.3 var(--font-ui); letter-spacing: 0; color: var(--text-2); }
+  .panelTitle svg { display: inline; width: 14px; height: 14px; }
+  .panelHead { margin-bottom: 8px; }
+  .coinsBody { gap: 16px; padding: 16px 0; }
+  .table th { padding: 8px 12px; font-size: 12px; }
+  .table td { padding: 6px 12px; font-size: 13px; }
+  .coinTile { width: 26px; height: 26px; border-radius: 7px; }
+  .coinNames b { font-size: 13px; }
+  .coinNames span { font-size: 12px; }
+  .movingGrid { gap: 10px; padding: 0 var(--row-px); }
+  .movingCard, .movingCard:hover { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); transform: none; }
+  .movingBig { font-size: 16px; }
+  .movingCard svg { height: 36px; }
+}

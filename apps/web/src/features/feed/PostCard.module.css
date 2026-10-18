@@ -192,3 +192,19 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
   .action { padding: 0 7px; }
   .callLabel { display: none; }
 }
+
+/* ── Linear layout (2026-10-18): from 768 px dense rows. 14 px text held to a reading width, 32 px faces (the face's
+   size is set inline, so the column overrides it), short action rows. ── */
+@media (min-width: 768px) {
+  .card { grid-template-columns: 32px minmax(0, 1fr); --row-pt: 10px; --row-pb: 6px; }
+  .focused { grid-template-columns: 40px minmax(0, 1fr); }
+  .avatarLink > span { width: 32px !important; height: 32px !important; }
+  .avatarLink img { width: 100%; height: 100%; }
+  .card:not(.focused) .body { max-width: 78ch; margin-top: 1px; font-size: 14px; line-height: 1.5; letter-spacing: 0; }
+  .name { font-size: 14px; line-height: 18px; }
+  .handle, .dot, .time { font-size: 13px; line-height: 18px; }
+  .actions { gap: 18px; margin: 2px 0 -4px -8px; }
+  .action { height: 26px; min-width: 26px; padding: 0 7px; font-size: 12px; }
+  .action svg { width: 15px; height: 15px; }
+  .reaction { height: 24px; font-size: 12px; }
+}

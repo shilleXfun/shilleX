@@ -31,7 +31,6 @@
 /* Wide screens: a messenger. The list and the open conversation side by side, as tall as the screen under the header,
    each scrolling on its own (BackchannelPage split). */
 .split { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: stretch; height: calc(100dvh - 150px); min-height: 520px; padding-bottom: 20px; }
-:global([data-visitor='true']) .split { height: calc(100dvh - 240px); }
 .listFill, .paneFill { display: flex; flex-direction: column; min-height: 0; }
 .paneFill { gap: 0; padding-bottom: 0; }
 .paneFill .paneHead { flex: none; }
@@ -41,7 +40,9 @@
 
 /* Flat (2026-10-15): X's messages. The list and the conversation fill the screen under the header, split by a hairline. */
 .split { gap: 0; padding: 0; height: calc(100dvh - 75px); }
-:global([data-visitor='true']) .split { height: calc(100dvh - 75px - 72px); }
 .split.split > section { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 16px var(--row-px) 0; }
 .split.split > section:first-child { border-right: 1px solid var(--line); }
 .split .bubble { border-radius: 4px 16px 16px 16px; }
+
+/* Linear layout (2026-10-18): under the 52 px header bar, with no visitor bar along the foot. */
+@media (min-width: 768px) { .split { height: calc(100dvh - 52px); } }

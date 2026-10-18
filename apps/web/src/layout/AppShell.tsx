@@ -6,7 +6,6 @@ import { dur, ease } from '../lib/motion';
 import { useRequiredMe } from '../lib/useMe';
 import { TopBar } from './TopBar';
 import { IconRail } from './IconRail';
-import { WorldPanel } from './WorldPanel';
 import { MobileTabBar } from './MobileTabBar';
 import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
@@ -16,11 +15,9 @@ import { useRealtimeSync } from './useRealtimeSync';
 import { useSwarmPosts } from '../components/swarm/hooks';
 import { useAgentPulses } from '../features/agents/pulses';
 import { useHotkeys } from '../lib/hotkeys';
-import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, openPalette } from './CommandPalette';
 import { useWorldLive } from '../features/home/homeApi';
-import { VisitorBar } from './VisitorBar';
 import { useActivityLive } from '../features/timeline/live';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import L from '../components/ui/lumen.module.css';
@@ -61,10 +58,10 @@ const route = {
 };
 
 /**
- * The X layout both shells share (x-revamp §1, §5): the slim glass rail, the reading column with its route transition,
- * the side column ("World now") from 1100 px, the world filling the gutters; on phones the top bar and the tab bar
- * instead. A visitor sees the same X page from the first pixel, with X's bar along the bottom saying what Shillex is.
- * `me` null is a visitor (public sections only); `children` are the shell's own overlays (banners, dialogs, toasts, panels, the world's overlay).
+ * The layout both shells share, after Linear's app (2026-10-18, the owner's pick from the design lab): a sidebar panel
+ * the height of the window and the page filling the rest, with the page's route transition; on phones the top bar and
+ * the tab bar instead. `me` null is a visitor (public sections only); `children` are the shell's own overlays (banners,
+ * dialogs, toasts, panels, the world's overlay).
  */
 export function ShellFrame({ me, children }: { me: MeView | null; children?: ReactNode }) {
   const { pathname } = useLocation();
@@ -72,15 +69,11 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   useActivityLive();
   // One page per community and per inbox: switching channels or conversations animates inside the page, not the page.
   const parts = pathname.split('/');
-  // Community chat, the Graph and About use the side column's room themselves.
-  const wide = parts[1] === 'c' || parts[1] === 'graph' || parts[1] === 'about' || parts[1] === 'whitepaper' || parts[1] === 'messages' || (parts[1] === 'agents' && parts[2] === 'backchannel');
   const pageKey = parts[1] === 'c' ? parts.slice(0, 3).join('/') : parts[1] === 'messages' ? '/messages' : pathname;
   // Captured per render: AnimatePresence keeps the exiting page's element, so it keeps rendering the old route.
   const outlet = useOutlet();
   // A community channel is immersive on mobile: no tab bar or top bar (it renders its own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
-  // The side column only exists from 1100 px (shell.module.css); below that it isn't mounted, so it fetches nothing.
-  const sideRoom = useMediaQuery('(min-width: 1100px)');
   const landing = pathname === '/';
   const mainRef = useRef<HTMLElement>(null);
   useScrollReveal(mainRef, REVEAL, pathname === '/');
@@ -88,7 +81,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   // A new page moves focus to <main> so screen readers and keyboard users start at the top of the content.
   useEffect(() => { if (first.current) { first.current = false; return; } mainRef.current?.focus({ preventScroll: true }); }, [pageKey]);
   return (
-    <div className={sh.shell} data-immersive={!!inChannel} data-wide={wide} data-visitor={!me} data-landing={landing}>
+    <div className={sh.shell} data-immersive={!!inChannel} data-visitor={!me} data-landing={landing}>
       <a href="#main" className={s.skip}>Skip to content</a>
       {/* Home is full width with its own bar over the world; every other page is the X layout. */}
       {landing ? (
@@ -108,12 +101,10 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
                 <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
               </AnimatePresence>
             </main>
-            {sideRoom && !wide && <aside className={sh.side} aria-label="World now"><WorldPanel classic={Boolean(me)} visitor={!me} /></aside>}
           </div>
         </>
       )}
       {children}
-      {!me && !landing && <VisitorBar />}
       <MobileTabBar me={me} />
       {/* Every page a tab opens fresh has the key "default": keyed by path then, so one page's scroll never lands on another. */}
       <ScrollRestoration getKey={(loc) => (loc.key === 'default' ? loc.pathname : loc.key)} />

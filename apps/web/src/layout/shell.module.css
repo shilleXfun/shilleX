@@ -1,10 +1,7 @@
-/* X's layout, full width: the rail on the left edge, the page filling the rest, and from 1100 px the side column on the
-   right edge, the three split by hairlines. Phones: the top bar, one column and the tab bar. */
+/* The layout, full width: the sidebar on the left edge and the page filling the rest, split by a hairline (2026-10-18,
+   after Linear's app: there is no side column). Phones: the top bar, one column and the tab bar. */
 .shell { --topbar-h: 0px; --sticky-top: 0px; min-height: 100%; }
 .frame { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); align-items: start; column-gap: 0; min-width: 0; padding: 0 0 0 12px; }
-@media (min-width: 1100px) { .frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); padding-right: 0; } }
-/* Chat pages, the Graph and About use the side column's room themselves. */
-.shell[data-wide='true'] .frame { grid-template-columns: var(--rail-w) minmax(0, 1fr); padding-right: 0; }
 
 /* Above the page's sticky bars (z 10), so a rail label never slides under them. */
 .railCol { position: sticky; top: 0; z-index: 20; height: 100vh; height: 100dvh; border-right: 1px solid var(--line); }
@@ -12,8 +9,6 @@
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; min-height: 100dvh; outline: none; }
 /* <main> takes focus on every page change (for screen readers); it is a landing spot, not a control, so no ring. */
 .main:focus-visible { outline: none; box-shadow: none; }
-.side { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0 16px 0 24px; border-left: 1px solid var(--line); }
-.side:hover, .side:focus-within { scrollbar-width: thin; }
 
 /* ── The rail ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
 /* X's rail: the logo, the sections, a hairline and the small print; the account and Bring your agent at the foot. The
@@ -93,11 +88,10 @@
 .ctaBtn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
 .ctaBtn:hover { background: var(--press-hover); }
 
-@media (width < 1100px) { .side { display: none; } }
 @media (max-width: 767px) {
   .shell { --topbar-h: 52px; --sticky-top: var(--topbar-h); }
   .topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 10px; min-width: 0; height: var(--topbar-h); padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); background: rgba(8, 9, 10, 0.92); }
-  .frame, .shell[data-wide='true'] .frame { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: 0; }
+  .frame { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: 0; }
   .railCol { display: none; }
   /* The padding keeps the last row clear of the tab bar; with it a short page still fills the screen exactly. */
   .main { min-height: calc(100dvh - var(--topbar-h)); padding-bottom: var(--tabbar-total); }
@@ -111,3 +105,38 @@
 .landing { display: block; min-width: 0; min-height: 100vh; min-height: 100dvh; outline: none; }
 .landing:focus-visible { outline: none; box-shadow: none; }
 @media (max-width: 767px) { .landing { padding-bottom: var(--tabbar-total); } }
+
+/* ── The Linear sidebar (2026-10-18, the owner's pick from the design lab): from 768 px one solid panel the height of
+   the window, every row labelled at every width and 30 px tall, two small groups, the page you are on on a soft
+   panel, the account and Bring your agent on its bottom edge. The page beside it is denser (--row-px 24 px). ── */
+@media (min-width: 768px) {
+  .shell { --rail-w: 232px; }
+  .frame { padding: 0; }
+  .main { --row-px: 24px; --card-gap: 10px; }
+  .railCol { background: #111215; border-right-color: var(--line-strong); }
+  .rail { align-items: stretch; height: 100%; padding: 10px 10px 14px; overflow-x: hidden; overflow-y: auto; }
+  .railLogo { justify-self: start; width: auto; height: 40px; margin: 0 0 12px; padding: 0 8px; place-items: center start; border-radius: 8px; }
+  .railLogo svg { height: 20px; width: auto; }
+  .markSmall { display: none; }
+  .markWide { display: block; }
+  .railItems { align-items: stretch; gap: 1px; }
+  .railItems::before { content: 'Explore'; padding: 0 10px 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .railMinor { margin-top: 18px; padding-top: 0; border-top: 0; }
+  .railMinor::before { content: 'About'; }
+  .railItem { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: auto; height: 30px; padding: 0 10px; border-radius: 7px; color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: 0; }
+  .railItem > svg { width: 16px; height: 16px; }
+  .railItem:hover { background: rgba(255, 255, 255, 0.05); }
+  .railItem[aria-current='page'] { background: rgba(255, 255, 255, 0.09); color: var(--text); font-weight: 600; }
+  .railMinor .railItem { height: 28px; color: var(--muted); font-size: 13px; }
+  .railMinor .railItem > svg { width: 15px; height: 15px; }
+  .railItem .railBadge { top: 50%; left: auto; right: 8px; margin-top: -9px; }
+  .railDot { top: 50%; left: 22px; right: auto; margin-top: -11px; }
+  .railLabel { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .railTip { display: none; }
+  .railFoot { align-items: stretch; gap: 6px; }
+  .railCta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 32px; border-radius: 8px; font-size: 13.5px; font-weight: 600; }
+  .ctaIcon { display: none; }
+  .ctaLabel { display: inline; }
+  .railAccount { width: auto; height: 34px; justify-content: start; padding: 0 8px; border-radius: 8px; }
+  .accountDot { left: 30px; right: auto; }
+}
