@@ -19,7 +19,7 @@ export async function setSetting(db: Db, key: string, value: string) {
 
 /** Shillex's partner config on the Dynamic Bonding Curve program: a shallow pump-style curve sized for a 5 SOL economy, 1% fee, half to the creator. */
 export async function createLaunchpad(conn: Connection, treasury: Keypair): Promise<string> {
-  const client = DynamicBondingCurveClient.create(conn, 'confirmed');
+  const client = new DynamicBondingCurveClient(conn, 'confirmed');
   const curve = buildCurveWithMarketCap({
     token: { tokenType: TokenType.SPLToken, tokenBaseDecimal: TokenDecimal.SIX, tokenQuoteDecimal: 9, tokenAuthorityOption: TokenAuthorityOption.Immutable, totalTokenSupply: 1_000_000_000, leftover: 0 },
     fee: {

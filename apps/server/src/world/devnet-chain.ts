@@ -31,9 +31,10 @@ export const toChainError = (e: unknown): ChainError => {
   if (/no record of a prior credit/i.test(msg)) return new ChainError('INSUFFICIENT_FUNDS', 'Not enough SOL to pay the transaction fee');
   if (/insufficient funds for rent/i.test(msg)) return new ChainError('INSUFFICIENT_FUNDS', 'Not enough SOL: this would leave the wallet below the rent minimum');
   if (/Program log: Error: insufficient funds/i.test(msg)) return new ChainError('INSUFFICIENT_TOKENS', 'Not enough tokens: the wallet holds fewer than this sale needs');
-  if (/PoolIsCompleted/.test(msg)) return new ChainError('GRADUATED', GRADUATED_MESSAGE);
+  // The program's error names, and since SDK 2.0 the program's own messages for the same errors.
+  if (/PoolIsCompleted|Pool is completed/i.test(msg)) return new ChainError('GRADUATED', GRADUATED_MESSAGE);
   if (/ExceededSlippage|slippage/i.test(msg)) return new ChainError('SLIPPAGE', 'The price moved past your slippage limit; nothing was traded');
-  if (/Insufficient Liquidity|InsufficientLiquidity/i.test(msg)) return new ChainError('CURVE_FULL', 'The curve cannot fill this trade; try a smaller amount');
+  if (/Insufficient Liquidity|InsufficientLiquidity|Liquidity in bonding curve is insufficient|Required input amount exceeds the provided amount in/i.test(msg)) return new ChainError('CURVE_FULL', 'The curve cannot fill this trade; try a smaller amount');
   const anchor = /Error Message: (.+?)["\n]/.exec(msg)?.[1];
   const first = msg.replace(/^Simulation failed\.\s*/, '').split(/\n|\. ?Logs:/)[0]!.replace(/^Message: /, '').trim();
   return new ChainError('TX_FAILED', `Transaction failed: ${(anchor ?? first).slice(0, 300)}`);
@@ -71,7 +72,7 @@ export class DevnetChain implements Chain {
     this.networkChecked = true;
   }
   /** `config` is null until the launchpad exists (a fresh deploy with an unfunded treasury); coin actions then fail with NO_LAUNCHPAD. */
-  constructor(readonly conn: Connection, private config: PublicKey | null) { this.client = DynamicBondingCurveClient.create(conn, 'confirmed'); }
+  constructor(readonly conn: Connection, private config: PublicKey | null) { this.client = new DynamicBondingCurveClient(conn, 'confirmed'); }
   get hasLaunchpad() { return this.config !== null; }
   setLaunchpad(address: string) { this.config = new PublicKey(address); }
   private launchpad(): PublicKey {
@@ -209,7 +210,7 @@ export class DevnetChain implements Chain {
  */
 export async function makeChain(config: Config, db: Db, connect = (url: string) => new Connection(url, 'confirmed'), now: () => Date = () => new Date()): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
-  // Shillex's own books (mainnet spec §2): no RPC at all, and so nothing to check the network of.
+  // Shillex's own books (mainnet spec Â§2): no RPC at all, and so nothing to check the network of.
   if (config.worldChain === 'ledger') return new LedgerChain(db, now, rulesFromConfig(config));
   const address = await getSetting(db, DBC_CONFIG);
   const chain = new DevnetChain(connect(config.devnetRpcUrl), address ? new PublicKey(address) : null);

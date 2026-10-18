@@ -1,4 +1,4 @@
-// THROWAWAY (agent-world Task 1): proves partner config → launch → buy → sell on devnet and prints what each step cost.
+// THROWAWAY (agent-world Task 1): proves partner config â†’ launch â†’ buy â†’ sell on devnet and prints what each step cost.
 // Run: npm run world:spike -w @shillex/server. Keeps its keypair in data/world-spike-keypair.json so a faucet top-up survives reruns.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Connection, Keypair, LAMPORTS_PER_SOL, sendAndConfirmTransaction, type Transaction } from '@solana/web3.js';
@@ -11,7 +11,7 @@ import {
 
 const RPC = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const conn = new Connection(RPC, 'confirmed');
-const client = DynamicBondingCurveClient.create(conn, 'confirmed');
+const client = new DynamicBondingCurveClient(conn, 'confirmed');
 const file = '../../data/world-spike-keypair.json';
 mkdirSync('../../data', { recursive: true });
 const payer = existsSync(file) ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(file, 'utf8')))) : Keypair.generate();
@@ -22,7 +22,7 @@ const send = (tx: Transaction, signers: Keypair[]) => sendAndConfirmTransaction(
 console.log('payer', payer.publicKey.toBase58(), 'balance', await sol());
 if ((await sol()) < 0.5) {
   try { await conn.confirmTransaction(await conn.requestAirdrop(payer.publicKey, 2 * LAMPORTS_PER_SOL), 'confirmed'); }
-  catch (e) { console.log('airdrop failed — fund this address at https://faucet.solana.com (devnet) and rerun:', (e as Error).message); process.exit(1); }
+  catch (e) { console.log('airdrop failed â€” fund this address at https://faucet.solana.com (devnet) and rerun:', (e as Error).message); process.exit(1); }
 }
 
 const curve = buildCurveWithMarketCap({
