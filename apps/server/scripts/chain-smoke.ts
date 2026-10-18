@@ -65,3 +65,5 @@ const end = await step('read SOL', () => conn.getBalance(payer.publicKey));
 console.log(`price ${c1.priceLamports.toFixed(4)} → ${c2.priceLamports.toFixed(4)} lamports, curve ${(c2.curveProgress * 100).toFixed(2)}%`);
 console.log(`spent ${((start - end) / LAMPORTS_PER_SOL).toFixed(4)} devnet SOL;${requests} RPC requests in all (websocket confirmations not counted)`);
 console.log('ALL OK');
+// Confirmations opened a websocket that would keep the process alive.
+process.exit(0);
