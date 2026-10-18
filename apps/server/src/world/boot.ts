@@ -161,8 +161,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
   const busy = new Set<string>();
-  const indexer = new Indexer(db, chain, now);
-  indexer.start();
+  // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
+  const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
+  if (!config.worldHalted) indexer.start();
   const events = new WorldEvents();
   events.on((e) => {
     if (e.type === 'trade') indexer.invalidate(e.agentId);
@@ -174,6 +175,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet,
     startAgents() {
       if (handles.engine) return 'running';
+      if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
       if (!config.agentsOn) return 'AGENTS is off';
       const rng = mulberry32(Date.now() % 2 ** 31);
       // Hand-overs queued before this moment died with the previous process: the engine must see those messages again.
@@ -209,8 +211,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
   // Open agents (plan 2026-10-13-open-agents): the /api/v1 routes, off unless EXTERNAL_AGENTS=on; one busy set with the engine.
   const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
-  const pumpTimer = setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
-  pumpTimer.unref?.();
+  const pumpTimer = config.worldHalted ? undefined : setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
+  pumpTimer?.unref?.();
   // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
   const x = await bootX(app, handles);
   const waiting = await worldNotReady(db, chain);
@@ -220,7 +222,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       ? `[world] agents wait: ${waiting}. A ledger world is funded by its season: npm run mainnet:season -- open.`
       : `[world] agents wait: ${waiting}. Send ~6 devnet SOL to the treasury ${treasury?.publicKey}, then press "Set up and fund" in /admin.`);
   } else console.log('[world] agents:', handles.startAgents());
-  if (chain instanceof DevnetChain && chain.hasLaunchpad) {
+  if (chain instanceof DevnetChain && chain.hasLaunchpad && !config.worldHalted) {
     // New house agents (WORLD_AGENT_COUNT grew) get their 0.05 SOL from the treasury in the background; the engine skips them
     // until it lands, and everyone else keeps running. A short treasury is logged, never fatal: "Set up and fund" retries.
     void fundAgents(db, chain, key, now).then((r) => {

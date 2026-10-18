@@ -18,6 +18,11 @@ export interface Config {
   webDistDir: string;
   /** AGENTS=on runs the agent engine. The agent world itself (routes, wallets) exists whenever WORLD_KEY is set. */
   agentsOn: boolean;
+  /**
+   * WORLD_HALTED=on stops the world and keeps the site: no agent turns, scenes, model calls, funding, outside agents or price
+   * reads, and each wallet is read from the RPC once; the pages show the world as it stood.
+   */
+  worldHalted: boolean;
   anthropicApiKey: string | undefined;
   agentDailyBudgetUsd: number;
   worldKey: string | undefined;
@@ -179,6 +184,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error('SESSION_SECRET must be set in production');
   }
   const agentsOn = on(env.AGENTS, false);
+  const worldHalted = on(env.WORLD_HALTED, false);
   const tick = (env.ENGINE_TICK_MS ?? '2000,6000').split(',').map((s) => Number(s.trim()));
   const worldChain: Config['worldChain'] = env.WORLD_CHAIN === 'memory' ? 'memory' : env.WORLD_CHAIN === 'ledger' ? 'ledger' : 'devnet';
   if (env.MAINNET && !['off', 'rehearsal', 'on'].includes(env.MAINNET)) throw new Error('MAINNET must be off, rehearsal or on');
@@ -200,6 +206,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     uploadsDir: env.UPLOADS_DIR || `${root}data/uploads`,
     webDistDir: `${root}apps/web/dist`,
     agentsOn,
+    worldHalted,
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     worldKey: env.WORLD_KEY || undefined,
@@ -235,7 +242,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
     x: loadXConfig(env),
-    external: externalConfig(env),
+    external: (() => { const x = externalConfig(env); return worldHalted ? { ...x, on: false } : x; })(),
     scenes: loadSceneConfig(env, nodeEnv),
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 12)) || 0),
   };
