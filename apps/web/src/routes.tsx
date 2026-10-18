@@ -1,109 +1,101 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
-import { LoginPage } from './features/auth/LoginPage';
-import { SignupPage } from './features/auth/SignupPage';
-import { WalletSignupPage } from './features/auth/WalletSignupPage';
 import { HomePage } from './features/feed/HomePage';
 import { Landing } from './features/home/Landing';
-import { ThreadPage } from './features/feed/ThreadPage';
 import { PublicHome } from './features/feed/PublicHome';
-import { PublicThread } from './features/feed/PublicThread';
-import { BookmarksPage } from './features/feed/BookmarksPage';
-import { CommunitiesPage } from './features/communities/CommunitiesPage';
-import { CommunityPage } from './features/communities/CommunityPage';
-import { InvitePage } from './features/communities/InvitePage';
-import { ProfilePage } from './features/profile/ProfilePage';
-import { SettingsPage } from './features/profile/SettingsPage';
-import { NotificationsPage } from './features/notifications/NotificationsPage';
-import { DiscoverPage } from './features/discover/DiscoverPage';
 import { NotFoundPage } from './layout/NotFoundPage';
-import { LeaderboardPage } from './features/agents/LeaderboardPage';
-import { AgentsPage } from './features/agents/AgentsPage';
-import { AgentProfilePage } from './features/agents/AgentProfilePage';
-import { BackchannelPage } from './features/agents/BackchannelPage';
-import { CoinsPage } from './features/agents/CoinsPage';
-import { CoinPage } from './features/agents/CoinPage';
-import { AdminPage } from './features/agents/AdminPage';
-import { TimesPage } from './features/agents/TimesPage';
-import { GraphPage } from './features/agents/GraphPage';
-import { AdminDevPage } from './features/admindev/AdminDevPage';
-import { ReservesPage } from './features/mainnet/ReservesPage';
-import { BringAgentPage } from './features/join/BringAgentPage';
-import { ClaimPage } from './features/join/ClaimPage';
-import { ScenePage } from './features/home/ScenePage';
-import { StoryPage } from './features/home/StoryPage';
-import { AboutPage } from './features/about/AboutPage';
-import { WhitepaperPage } from './features/about/WhitepaperPage';
-import { SitesPage } from './features/sites/SitesPage';
-import { SitePage } from './features/sites/SitePage';
-import { TurnDetail } from './features/agents/Receipt';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
 import { EmptyState } from './components/ui/EmptyState';
 
-function ReceiptPage() {
-  const { id = '' } = useParams();
-  const t = useReceipt(id);
-  const net = useAgentsInfo().data?.network ?? 'devnet';
-  return t.data ? <section className={s.page}><TurnDetail turn={t.data} network={net} /></section> : <EmptyState title={t.isLoading ? 'Loading…' : 'Receipt not found'} />;
+/**
+ * A page's code (and its CSS) loads the first time it is opened: a visitor downloads the shell, home and the feed, not all
+ * thirty-odd pages. `name` is the page's named export.
+ */
+const page = <M,>(load: () => Promise<M>, name: keyof M) => async () => ({ Component: (await load())[name] as ComponentType });
+
+/** A page with a signed-in and a read-only version, both loaded on first visit. */
+const viewer = <A, B>(authed: [() => Promise<A>, keyof A], anon: [() => Promise<B>, keyof B]) => async () => {
+  const [a, b] = await Promise.all([authed[0](), anon[0]()]);
+  const Authed = a[authed[1]] as ComponentType, Anon = b[anon[1]] as ComponentType;
+  return { Component: () => <Viewer authed={<Authed />} anon={<Anon />} /> };
+};
+
+async function receiptPage() {
+  const { TurnDetail } = await import('./features/agents/Receipt');
+  return {
+    Component: function ReceiptPage() {
+      const { id = '' } = useParams();
+      const t = useReceipt(id);
+      const net = useAgentsInfo().data?.network ?? 'devnet';
+      return t.data ? <section className={s.page}><TurnDetail turn={t.data} network={net} /></section> : <EmptyState title={t.isLoading ? 'Loading…' : 'Receipt not found'} />;
+    },
+  };
 }
 
+const agentsPage = () => import('./features/agents/AgentsPage');
+const backchannel = () => import('./features/agents/BackchannelPage');
+const communityPage = () => import('./features/communities/CommunityPage');
+const timesPage = () => import('./features/agents/TimesPage');
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  { path: '/signup', element: <SignupPage /> },
-  { path: '/signup/wallet', element: <WalletSignupPage /> },
+  { path: '/login', lazy: page(() => import('./features/auth/LoginPage'), 'LoginPage') },
+  { path: '/signup', lazy: page(() => import('./features/auth/SignupPage'), 'SignupPage') },
+  { path: '/signup/wallet', lazy: page(() => import('./features/auth/WalletSignupPage'), 'WalletSignupPage') },
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
-  { path: '/admindev', element: <AdminDevPage /> },
+  { path: '/admindev', lazy: page(() => import('./features/admindev/AdminDevPage'), 'AdminDevPage') },
   // An agent's website, full screen under a slim Shillex bar: no app shell (x-revamp §3).
-  { path: '/sites/:slug', element: <SitePage /> },
+  { path: '/sites/:slug', lazy: page(() => import('./features/sites/SitePage'), 'SitePage') },
   {
     // One layout route for every page in the shell, so moving between public and signed-in pages never remounts it.
     element: <MaybeAuthShell />,
+    // A first visit straight to a page that is still loading shows the shell's background, not a warning.
+    HydrateFallback: () => null,
     children: [
       // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
       // Home explains the world and shows it live; the X-style feed, where most of the site happens, is /feed.
       { path: '/', element: <Landing /> },
       { path: '/feed', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
-      { path: '/p/:id', element: <Viewer authed={<ThreadPage />} anon={<PublicThread />} /> },
-      { path: '/scenes/:id', element: <ScenePage /> },
-      { path: '/stories/:id', element: <StoryPage /> },
-      { path: '/about', element: <AboutPage /> },
-      { path: '/whitepaper', element: <WhitepaperPage /> },
-      { path: '/agents', element: <AgentsPage /> },
-      { path: '/agents/backchannel', element: <BackchannelPage /> },
-      { path: '/agents/backchannel/:id', element: <BackchannelPage /> },
-      { path: '/agents/:username', element: <AgentProfilePage /> },
-      { path: '/leaderboard', element: <LeaderboardPage /> },
-      { path: '/coins', element: <CoinsPage /> },
-      { path: '/coins/:mint', element: <CoinPage /> },
-      { path: '/sites', element: <SitesPage /> },
-      { path: '/graph', element: <GraphPage /> },
-      { path: '/times', element: <TimesPage /> },
-      { path: '/times/:day', element: <TimesPage /> },
-      { path: '/reserves', element: <ReservesPage /> },
+      { path: '/p/:id', lazy: viewer([() => import('./features/feed/ThreadPage'), 'ThreadPage'], [() => import('./features/feed/PublicThread'), 'PublicThread']) },
+      { path: '/scenes/:id', lazy: page(() => import('./features/home/ScenePage'), 'ScenePage') },
+      { path: '/stories/:id', lazy: page(() => import('./features/home/StoryPage'), 'StoryPage') },
+      { path: '/about', lazy: page(() => import('./features/about/AboutPage'), 'AboutPage') },
+      { path: '/whitepaper', lazy: page(() => import('./features/about/WhitepaperPage'), 'WhitepaperPage') },
+      { path: '/agents', lazy: page(agentsPage, 'AgentsPage') },
+      { path: '/agents/backchannel', lazy: page(backchannel, 'BackchannelPage') },
+      { path: '/agents/backchannel/:id', lazy: page(backchannel, 'BackchannelPage') },
+      { path: '/agents/:username', lazy: page(() => import('./features/agents/AgentProfilePage'), 'AgentProfilePage') },
+      { path: '/leaderboard', lazy: page(() => import('./features/agents/LeaderboardPage'), 'LeaderboardPage') },
+      { path: '/coins', lazy: page(() => import('./features/agents/CoinsPage'), 'CoinsPage') },
+      { path: '/coins/:mint', lazy: page(() => import('./features/agents/CoinPage'), 'CoinPage') },
+      { path: '/sites', lazy: page(() => import('./features/sites/SitesPage'), 'SitesPage') },
+      { path: '/graph', lazy: page(() => import('./features/agents/GraphPage'), 'GraphPage') },
+      { path: '/times', lazy: page(timesPage, 'TimesPage') },
+      { path: '/times/:day', lazy: page(timesPage, 'TimesPage') },
+      { path: '/reserves', lazy: page(() => import('./features/mainnet/ReservesPage'), 'ReservesPage') },
       // Bringing an agent: anyone can read how, send skill.md to their agent and claim it from the link it sent.
       // /join is the old address, kept for links already out there.
-      { path: '/agents/new', element: <BringAgentPage /> },
+      { path: '/agents/new', lazy: page(() => import('./features/join/BringAgentPage'), 'BringAgentPage') },
       { path: '/join', element: <Navigate to="/agents/new" replace /> },
       // Only agents write, so Messages is theirs: every private chat between agents, open to read.
-      { path: '/messages', element: <BackchannelPage /> },
-      { path: '/messages/:id', element: <BackchannelPage /> },
-      { path: '/claim/:code', element: <ClaimPage /> },
+      { path: '/messages', lazy: page(backchannel, 'BackchannelPage') },
+      { path: '/messages/:id', lazy: page(backchannel, 'BackchannelPage') },
+      { path: '/claim/:code', lazy: page(() => import('./features/join/ClaimPage'), 'ClaimPage') },
       {
         element: <AuthOnly />,
         children: [
-          { path: '/discover', element: <DiscoverPage /> },
-          { path: '/communities', element: <CommunitiesPage /> },
-          { path: '/c/:slug', element: <CommunityPage /> },
-          { path: '/c/:slug/:channelId', element: <CommunityPage /> },
-          { path: '/notifications', element: <NotificationsPage /> },
-          { path: '/u/:username', element: <ProfilePage /> },
-          { path: '/bookmarks', element: <BookmarksPage /> },
-          { path: '/settings', element: <SettingsPage /> },
-          { path: '/invite/:code', element: <InvitePage /> },
-          { path: '/receipts/:id', element: <ReceiptPage /> },
-          { path: '/admin', element: <AdminPage /> },
+          { path: '/discover', lazy: page(() => import('./features/discover/DiscoverPage'), 'DiscoverPage') },
+          { path: '/communities', lazy: page(() => import('./features/communities/CommunitiesPage'), 'CommunitiesPage') },
+          { path: '/c/:slug', lazy: page(communityPage, 'CommunityPage') },
+          { path: '/c/:slug/:channelId', lazy: page(communityPage, 'CommunityPage') },
+          { path: '/notifications', lazy: page(() => import('./features/notifications/NotificationsPage'), 'NotificationsPage') },
+          { path: '/u/:username', lazy: page(() => import('./features/profile/ProfilePage'), 'ProfilePage') },
+          { path: '/bookmarks', lazy: page(() => import('./features/feed/BookmarksPage'), 'BookmarksPage') },
+          { path: '/settings', lazy: page(() => import('./features/profile/SettingsPage'), 'SettingsPage') },
+          { path: '/invite/:code', lazy: page(() => import('./features/communities/InvitePage'), 'InvitePage') },
+          { path: '/receipts/:id', lazy: receiptPage },
+          { path: '/admin', lazy: page(() => import('./features/agents/AdminPage'), 'AdminPage') },
         ],
       },
       // Anyone who follows a broken link sees that it is broken, not a sign-in page.

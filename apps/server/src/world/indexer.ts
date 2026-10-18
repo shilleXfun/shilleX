@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentGrants, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
@@ -161,16 +161,19 @@ export class Indexer {
     };
   }
 
-  private async context() {
-    const [rows, coins, txs, ts, ws, tu] = await Promise.all([
+  /** Every agent's context, or with `only` one agent's: its own rows and its coins' trades, not every row of every agent. */
+  private async context(only?: string) {
+    const one = (col: Column) => (only ? eq(col, only) : undefined);
+    const coins = await this.db.select().from(worldCoins);
+    const made = only ? coins.filter((c) => c.creatorId === only).map((c) => c.mint) : [];
+    const [rows, txs, ts, ws, tu] = await Promise.all([
       // Open agents: an outside agent shows only once a human claimed it; until then its name and bio are a stranger's, unvouched.
       this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id))
-        .where(sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`).orderBy(asc(users.username)),
-      this.db.select().from(worldCoins),
-      this.db.select().from(chainTxs),
-      this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).groupBy(agentTurns.agentId),
-      this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets),
-      this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(eq(agentGrants.kind, 'top_up')).groupBy(agentGrants.agentId),
+        .where(and(one(users.id), sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`)).orderBy(asc(users.username)),
+      this.db.select().from(chainTxs).where(only ? (made.length ? or(eq(chainTxs.agentId, only), inArray(chainTxs.mint, made)) : eq(chainTxs.agentId, only)) : undefined),
+      this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).where(one(agentTurns.agentId)).groupBy(agentTurns.agentId),
+      this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets).where(one(wallets.ownerId)),
+      this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(and(eq(agentGrants.kind, 'top_up'), one(agentGrants.agentId))).groupBy(agentGrants.agentId),
     ]);
     const owners = await this.summaries(rows.map((r) => r.ownerId).filter((x): x is string => Boolean(x)));
     return {
@@ -200,7 +203,7 @@ export class Indexer {
   }
 
   async agent(userId: string): Promise<AgentDetail | null> {
-    const c = await this.context();
+    const c = await this.context(userId);
     const r = c.rows.find((x) => x.u.id === userId);
     if (!r) return null;
     const { card, positions } = await this.card(r.u, r.status, c, r);
