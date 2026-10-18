@@ -3,7 +3,7 @@ import type { Db } from '../../db/client.ts';
 import { agents, chainTxs, factionMembers, factions, sites, users, worldCoins } from '../../db/schema.ts';
 import { getSetting, setSetting } from '../../world/launchpad.ts';
 import { START_LAMPORTS } from '../../world/ledger.ts';
-import { ready } from '../decide.ts';
+import { pickWeighted, ready } from '../decide.ts';
 import { adjustAffinity, rememberEvent } from '../state.ts';
 import type { AgentView, Candidate } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
@@ -28,6 +28,8 @@ const KEY = 'happenings_v1';
 const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
 const DUEL_STAKE_SOL = 0.002;
 const DUEL_ANSWER_MS = 30 * MIN, DUEL_MS = HOUR, DUEL_EVERY_MS = 3 * HOUR;
+/** Challenges across the whole world per hour: past this the feed reads as one duel template on repeat. */
+const DUEL_CALLS_PER_HOUR = 3;
 const AMA_MS = HOUR, AMA_EVERY_MS = DAY, AMA_MAX_QUESTIONS = 6;
 const ELECTION_MS = 45 * MIN, ELECTION_EVERY_MS = DAY;
 const RANKING_EVERY_MS = 8 * HOUR;
@@ -145,7 +147,8 @@ export const happeningsModule: DepthModule = {
     // Duels: a rival answers a challenge; an agent with a rival throws one down.
     for (const x of s.duels) if (!x.done && !x.acceptedAt && x.rivalId === me && now - at(x.createdAt) < DUEL_ANSWER_MS) out.push(ev('duel_accept', 2.0, 'taking up a duel', x.id));
     const inDuel = s.duels.some((x) => !x.done && (x.challengerId === me || x.rivalId === me));
-    if (!inDuel && now - lastOf(s, me, 'duel_call') > DUEL_EVERY_MS && v.coins.length && extremes(v).enemy) {
+    const callsThisHour = s.duels.filter((x) => now - at(x.createdAt) < HOUR).length;
+    if (!inDuel && callsThisHour < DUEL_CALLS_PER_HOUR && now - lastOf(s, me, 'duel_call') > DUEL_EVERY_MS && v.coins.length && extremes(v).enemy) {
       out.push(ev('duel_call', 0.25 * t.pettiness + 0.2 * t.risk + 0.05, 'challenging a rival to call a coin'));
     }
     // Elections: candidates campaign once, members vote once.
@@ -223,8 +226,13 @@ async function run(d: EngineDeps, v: AgentView, type: HType, id: string | undefi
 
   if (type === 'duel_call') {
     const { enemy } = extremes(v);
-    const coin = [...v.coins].filter((c) => !c.graduated).sort((a, b) => b.holders - a.holders || Math.abs(b.change1h) - Math.abs(a.change1h))[0];
-    if (!enemy || !coin || !coin.priceLamports) return quiet('no rival or no coin to call');
+    // A coin either side has a stake in is the one worth arguing about, and a coin already in a duel this hour is left
+    // alone: always calling the busiest coin made every duel on the feed the same duel.
+    const taken = new Set(s.duels.filter((x) => !x.done || now.getTime() - at(x.createdAt) < HOUR).map((x) => x.mint));
+    const held = new Set(v.wallet.positions.map((p) => p.mint));
+    const coin = pickWeighted(v.coins.filter((c) => !c.graduated && c.priceLamports && !taken.has(c.mint))
+      .map((c) => [c, (held.has(c.mint) || c.creatorId === me || c.creatorId === enemy ? 3 : 1) * (1 + Math.min(c.holders, 10) / 10 + Math.min(Math.abs(c.change1h), 0.5))] as [typeof c, number]), rng);
+    if (!enemy || !coin) return quiet('no rival or no coin to call');
     const n = await usernames(d.db, [enemy]);
     const r = n.get(enemy)!, S = coin.symbol, up = coin.change1h >= 0 ? rng() < 0.65 : rng() < 0.35;
     const body = pick([

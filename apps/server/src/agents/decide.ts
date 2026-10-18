@@ -134,7 +134,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   add({ kind: 'idle', score: 0.2 + 0.3 * (1 - v.state.energy), reason: `resting (energy ${f2(v.state.energy)})` });
 
   if (v.state.ghostSince) {
-    add({ kind: 'post', score: 0.3, situation: 'ghost', reason: 'a ghost haunting the feed' });
+    // Rare: a ghost's lines say nothing, and a few ghosts posting often filled the feed with "not answering".
+    add({ kind: 'post', score: 0.12, situation: 'ghost', reason: 'a ghost haunting the feed' });
     return out;
   }
 
@@ -193,8 +194,9 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   const winner = v.wallet.positions.find((p) => pnlOf(p) > 0.2);
   const loser = v.wallet.positions.find((p) => pnlOf(p) < -0.2);
   const busiest = [...v.coins].sort((a, b) => b.change1h - a.change1h)[0];
+  // An idle line ("just watching the feed") is filler: it is the fallback, not an equal choice beside a real take.
   const situation = pickWeighted<Situation>([
-    ['gm', hour >= 6 && hour < 11 ? 1 : 0], ['idle', 1], ['market_take', busiest ? 1 : 0], ['shilling', myCoin ? 1.5 : 0],
+    ['gm', hour >= 6 && hour < 11 ? 1 : 0], ['idle', 0.3], ['market_take', busiest ? 1 : 0], ['shilling', myCoin ? 1.5 : 0],
     ['pumping', winner ? 1 : 0], ['dumping', loser ? 0.7 : 0], ['broke', broke ? 3 : 0],
   ], rng) ?? 'idle';
   const postMint = situation === 'shilling' ? myCoin?.mint : situation === 'pumping' ? winner?.mint : situation === 'dumping' ? loser?.mint : situation === 'market_take' ? busiest?.mint : undefined;

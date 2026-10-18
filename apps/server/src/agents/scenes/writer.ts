@@ -12,9 +12,10 @@ import {
 } from './cast.ts';
 import type { SceneIdea } from './director.ts';
 import type { PlannedAction, PlannedAffinity, PlannedMessage, ScenePremise } from './types.ts';
+import { wornLine, wornPhrases } from './worn.ts';
 
 export const SCENE_MAX_TOKENS = 3000;
-export const SCENE_PROMPT_VERSION = 'scene-v2';
+export const SCENE_PROMPT_VERSION = 'scene-v3';
 export const MAX_LINE = 600;
 export const MIN_MESSAGES = 3, MAX_MESSAGES = 10;
 export const AFFINITY_STEP = 0.2;
@@ -32,7 +33,7 @@ How to write it:
 - Each message answers what came before it: pick up the other's words, a number, a jab, a claim. People interrupt, double down, change their minds, drag someone else in, and walk away.
 - Every speaker sounds like their own voice and character: a petty one needles, a greedy one talks numbers, a loyal one defends friends, a funny one jokes, a cautious one hedges. Two speakers never sound alike.
 - Vary the length on purpose. Some messages are one punchy line. Others are two to four sentences with real content.
-- Real content means specifics from the material: SOL amounts, percentages, prices, holder counts, who bought or sold and when, debts and favours, deals kept and broken, faction loyalties, what someone said they believe, callbacks to earlier posts. Accusations, receipts, offers, plans, confessions, invitations, jokes that land. Never invent numbers that contradict the material.
+- Real content means specifics from the material: who bought or sold and when, debts and favours, deals kept and broken, faction loyalties, what someone said they believe, callbacks to earlier posts, and now and then a number. Accusations, offers, plans, confessions, invitations, jokes that land. A number backs a point; most messages need none, and nobody recites a wallet balance or a bag's percentage as a comeback. Never invent numbers that contradict the material.
 - Money is one thing they talk about, not the only one: friendship, rivalry, belonging, beliefs, plans and plain banter matter as much as trades. Bring up a rug only when the material has one; never make one up or treat it as what everyone is waiting for.
 - Something has to happen: a reveal, a turn, an escalation, a deal struck or refused, a walk-off, a punchline. End on a line that lands, not on a summary or a moral.
 - Write coins as $SYMBOL. Mention agents only as @username, and only agents named in the material. No links, no hashtags, no markdown, at most one emoji in a message and usually none.
@@ -46,7 +47,7 @@ Affinity: list only the pairs whose feelings clearly moved during the scene, as 
 
 Title: at most 60 characters, a headline naming who and what, for example "Mott and Wren fall out over $WICK", "The Velvet Cabal sizes up Fern" or "Juno talks Brindle into the Lanterns". Names without @ in the title.
 
-Bad lines: "lol same", "gm", "to the moon", "this is the way", "interesting take", "let's see what happens". Good lines: "You sold 0.31 SOL of $WICK eleven minutes after telling us to hold. I have the trades, @wren." / "I vouched for you to the whole Cabal, @fern. Don't make me take it back." / "Funny how the guy with 41% of the supply is the loudest about diamond hands." / "You lent me 0.2 SOL when nobody would. Whatever you're building, I'm in."`;
+Bad lines: "lol same", "gm", "to the moon", "this is the way", "interesting take", "let's see what happens". Good lines: "You sold $WICK eleven minutes after telling us to hold, @wren." / "I vouched for you to the whole Cabal, @fern. Don't make me take it back." / "Here's the plan: we stop fighting over $LAMP and buy the next coin a newcomer launches, together." / "You lent me 0.2 SOL when nobody would. Whatever you're building, I'm in." / "I still think a coin is a promise. You think it's a ticket. That's the whole fight, @mott."`;
 
 export const SCENE_SCHEMA: Record<string, unknown> = {
   type: 'object', additionalProperties: false, required: ['title', 'messages', 'affinity'],
@@ -223,7 +224,7 @@ export interface WrittenScene { title: string | null; messages: PlannedMessage[]
 export async function writeScene(d: SceneDeps, m: SceneMaterial): Promise<WrittenScene | null> {
   if (!d.brain) return null;
   const budget = d.share.budgetFor(d.budget);
-  const content = `<world_content>\n${m.text.replaceAll('</world_content>', '')}\n</world_content>\n\nWrite the scene: 4 to 10 messages, reply_to threading each one to the message it answers.`;
+  const content = `<world_content>\n${m.text.replaceAll('</world_content>', '')}\n</world_content>${wornLine(await wornPhrases(d.db, d.now()))}\n\nWrite the scene: 4 to 10 messages, reply_to threading each one to the message it answers.`;
   const worst = sceneWorstUsd(content.length);
   if (!budget.canSpend() || !budget.canAfford(worst)) return null;
   const id = newId();

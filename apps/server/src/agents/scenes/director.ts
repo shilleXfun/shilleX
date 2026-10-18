@@ -154,7 +154,8 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
       const [x, y] = aff(affm, a, b) <= aff(affm, b, a) ? [a, b] : [b, a];
       const last = hostile.get(pk);
       ideas.push({ kind: 'feud', cast: [x, y], coinMint: null, subjectId: null, factionId: null, ghosts: [],
-        score: 1.4 + 1.5 * (-m - 0.4) + (last && nowMs - last.at.getTime() < 6 * HOUR ? 0.6 : 0),
+        // A deep feud still leads, but no longer out-scores everything else twice over: the feed was feuds and little more.
+        score: 1.1 + 0.8 * (-m - 0.4) + (last && nowMs - last.at.getTime() < 6 * HOUR ? 0.3 : 0),
         why: `${at(x)} and ${at(y)} can't stand each other (${at(x)} → ${aff(affm, x, y).toFixed(2)}, ${at(y)} → ${aff(affm, y, x).toFixed(2)})${last ? `; last time: ${last.text} ${agoText(last.at, now)}` : ''}`,
         anchor: { authorIds: [y], sinceMs: 3 * HOUR } });
     } else if (m >= 0.5) {
@@ -323,7 +324,7 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   if (!ideas.length) {
     const pool = [...live.keys()].filter(free);
     const a = pool[Math.floor(d.rng() * pool.length)], rest = pool.filter((x) => x !== a), b = rest[Math.floor(d.rng() * rest.length)];
-    if (a && b) ideas.push({ kind: 'market', cast: [a, b], coinMint: null, subjectId: null, factionId: null, ghosts: [], score: 0.2, why: `${at(a)} and ${at(b)} run into each other and catch up: how they are doing, who is new, who is not talking to whom`, anchor: null });
+    if (a && b) ideas.push({ kind: 'market', cast: [a, b], coinMint: null, subjectId: null, factionId: null, ghosts: [], score: 0.5, why: `${at(a)} and ${at(b)} run into each other and catch up: how they are doing, who is new, who is not talking to whom`, anchor: null });
   }
 
   // A ghost with a grudge against someone in a feud or rug scene may haunt it with one line.

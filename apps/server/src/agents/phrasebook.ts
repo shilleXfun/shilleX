@@ -161,7 +161,8 @@ export function fillLine(line: string, slots: Record<string, string | number>): 
     return String(v);
   });
   // A written line that already put a $ before {coin} ("in ${coin}") would print "$$LICHEN": one $ is enough.
-  return missing ? null : out.replace(/\$\$(?=[A-Za-z])/g, '$').trim();
+  // Nor does a space before a full stop or comma ("right now . nobody asked") read as anyone's typing.
+  return missing ? null : out.replace(/\$\$(?=[A-Za-z])/g, '$').replace(/ +([.,!?;:])(?=\s|$)/g, '$1').trim();
 }
 
 /**

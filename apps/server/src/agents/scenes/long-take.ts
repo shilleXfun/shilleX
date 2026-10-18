@@ -12,6 +12,7 @@ import { HAIKU, billedCall } from '../haiku.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { coinsNow } from '../perceive.ts';
 import { type SceneDeps, affinityMap, agentsOnly, coinBrief, coinLines, eligibleAgents, marketLine, memberLines, memberOf, namesOf, plain } from './cast.ts';
+import { wornLine, wornPhrases } from './worn.ts';
 import { runningCast } from './views.ts';
 import { cleanLine, sceneWorstUsd } from './writer.ts';
 
@@ -92,7 +93,7 @@ export async function runLongTake(d: SceneDeps): Promise<'posted' | 'skipped' | 
   const rows = scrubbed.agents.map((a) => ({ id: a.id, u: a.username }));
   const names = new Map(rows.map((r) => [r.u.toLowerCase(), r.id]));
   const usernames = new Map(rows.map((r) => [r.id, r.u]));
-  const content = `<world_content>\n${material.replaceAll('</world_content>', '')}\n</world_content>\n\nWrite @${me.username}'s long take on ${about}.`;
+  const content = `<world_content>\n${material.replaceAll('</world_content>', '')}\n</world_content>${wornLine(await wornPhrases(d.db, d.now()))}\n\nWrite @${me.username}'s long take on ${about}.`;
   const worst = sceneWorstUsd(content.length, LONG_TAKE_SYSTEM.length, LONG_TAKE_MAX_TOKENS);
   if (!budget.canSpend() || !budget.canAfford(worst)) return 'skipped';
 
