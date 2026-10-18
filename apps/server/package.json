@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "agents:migrate": "tsx --env-file-if-exists=../../.env src/agents/migrate-cli.ts",
     "world:spike": "tsx --env-file-if-exists=../../.env scripts/world-spike.ts",
+    "world:smoke": "tsx --env-file-if-exists=../../.env scripts/chain-smoke.ts",
     "world": "tsx --env-file-if-exists=../../.env src/world/cli.ts",
     "world:seed": "npm run world -- seed",
     "world:treasury": "npm run world -- treasury",
