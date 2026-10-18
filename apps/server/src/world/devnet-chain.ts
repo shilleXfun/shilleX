@@ -42,10 +42,21 @@ export const toChainError = (e: unknown): ChainError => {
 /** Solana mainnet-beta's genesis hash. The agents' chain is devnet or a local validator, never this one. */
 export const MAINNET_GENESIS = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
 
+/** A wallet read is kept this long: balances move through this chain's own transactions, and those expire the read at once. */
+const BALANCE_TTL_MS = 15 * 60_000;
+/** While the RPC is out it is asked again at most this often, so turns do not each wait out its retries. */
+const RETRY_MS = 60_000;
+
 export class DevnetChain implements Chain {
   readonly network = 'devnet' as const;
   private client: DynamicBondingCurveClient;
   private networkChecked = false;
+  private reads = new Map<string, { at: number; b: WalletBalances }>();
+  private failedAt = 0;
+  /** From a failed wallet read until one succeeds (an RPC out of credits): trades could not land, so the engine keeps agents to talk. */
+  get down() { return this.failedAt > 0; }
+  /** The next read asks the RPC again; the old value stays as the stand-in if it cannot answer. */
+  private expire(publicKey: string) { const r = this.reads.get(publicKey); if (r) r.at = 0; }
   /**
    * Fails with WRONG_NETWORK if the RPC serves mainnet-beta (a mainnet URL pasted into DEVNET_RPC_URL). Asked once; an RPC
    * that could not answer is asked again before the next transaction, so nothing is ever signed for an unchecked network.
@@ -80,6 +91,12 @@ export class DevnetChain implements Chain {
    */
   private async send(tx: Transaction, signers: Keypair[]): Promise<string> {
     try { await this.assertNotMainnet(); } catch (e) { throw toChainError(e); }
+    // Landed or not, the signers' wallets are read fresh next time: a transaction or its fee may have moved them.
+    try { return await this.sendOnce(tx, signers); }
+    finally { for (const s of signers) this.expire(s.publicKey.toBase58()); }
+  }
+
+  private async sendOnce(tx: Transaction, signers: Keypair[]): Promise<string> {
     for (let attempt = 0; attempt < 2; attempt++) {
       let signature: string;
       try {
@@ -107,11 +124,27 @@ export class DevnetChain implements Chain {
     return deltasFromTx(tx, owner, mint);
   }
 
+  /** Kept per wallet (BALANCE_TTL_MS); when the RPC cannot answer, the last read stands in, and with none the read fails. */
   async balances(publicKey: string): Promise<WalletBalances> {
     const owner = new PublicKey(publicKey);
-    const [lamports, accts] = await Promise.all([this.conn.getBalance(owner), this.conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID })]);
-    const tokens = accts.value.map((a) => ({ mint: a.account.data.parsed.info.mint as string, raw: Number(a.account.data.parsed.info.tokenAmount.amount) })).filter((t) => t.raw > 0);
-    return { lamports, tokens };
+    const hit = this.reads.get(publicKey), t = Date.now();
+    if (hit && t - hit.at < BALANCE_TTL_MS) return hit.b;
+    if (this.down && t - this.failedAt < RETRY_MS) {
+      if (hit) return hit.b;
+      throw new ChainError('RPC_DOWN', 'The Solana RPC is not answering; trades wait until it does');
+    }
+    try {
+      const [lamports, accts] = await Promise.all([this.conn.getBalance(owner), this.conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID })]);
+      const tokens = accts.value.map((a) => ({ mint: a.account.data.parsed.info.mint as string, raw: Number(a.account.data.parsed.info.tokenAmount.amount) })).filter((x) => x.raw > 0);
+      const b = { lamports, tokens };
+      this.reads.set(publicKey, { at: Date.now(), b });
+      this.failedAt = 0;
+      return b;
+    } catch (e) {
+      this.failedAt = Date.now();
+      if (hit) return hit.b;
+      throw e;
+    }
   }
 
   async launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult> {
@@ -153,6 +186,7 @@ export class DevnetChain implements Chain {
     let dest: PublicKey;
     try { dest = new PublicKey(to); } catch { throw new ChainError('BAD_ADDRESS', `${to} is not a Solana address`); }
     const signature = await this.send(new Transaction().add(SystemProgram.transfer({ fromPubkey: signer.publicKey, toPubkey: dest, lamports })), [signer]);
+    this.expire(dest.toBase58());
     return { signature, feeLamports: (await this.deltas(signature, signer.publicKey.toBase58(), null)).feeLamports };
   }
 

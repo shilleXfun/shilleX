@@ -55,8 +55,8 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   const v = await perceive(d, id);
   const base = candidates(v, d.rng);
   const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
-  // Frozen books (mainnet spec §5): the engine runs talk-only until an admin unfreezes them.
-  const cs = v.limits?.frozen ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : all;
+  // Frozen books (mainnet spec §5), or a chain that cannot be read: the engine runs talk-only until money can move again.
+  const cs = v.limits?.frozen || d.chain.down ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : all;
   const c = choose(cs, d.rng);
   const r = await act(d, v, c);
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };

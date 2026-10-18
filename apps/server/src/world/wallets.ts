@@ -1,8 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { Keypair } from '@solana/web3.js';
 import type { Db } from '../db/client.ts';
-import { wallets } from '../db/schema.ts';
+import { chainTxs, wallets } from '../db/schema.ts';
+import type { Chain, WalletBalances } from './chain.ts';
 
 export const TREASURY = 'treasury';
 
@@ -39,6 +40,19 @@ export async function createWallet(db: Db, ownerId: string, key: Buffer, now: Da
 export async function walletOf(db: Db, ownerId: string): Promise<{ ownerId: string; publicKey: string; fundedAt: Date | null } | null> {
   const [w] = await db.select({ ownerId: wallets.ownerId, publicKey: wallets.publicKey, fundedAt: wallets.fundedAt }).from(wallets).where(eq(wallets.ownerId, ownerId));
   return w ?? null;
+}
+
+/**
+ * What a wallet holds: the chain's answer, or, when the chain cannot be read (an RPC out of credits), the sum of the world's
+ * own records of its transactions, so agents keep talking about what they hold while trades wait.
+ */
+export async function holdingsOf(db: Db, chain: Chain, ownerId: string, publicKey: string): Promise<WalletBalances> {
+  try { return await chain.balances(publicKey); }
+  catch {
+    const rows = await db.select({ mint: chainTxs.mint, lamports: sql<number>`coalesce(sum(${chainTxs.lamportsDelta}), 0)::float8`, raw: sql<number>`coalesce(sum(${chainTxs.tokenDelta}), 0)::float8` })
+      .from(chainTxs).where(eq(chainTxs.agentId, ownerId)).groupBy(chainTxs.mint);
+    return { lamports: rows.reduce((n, r) => n + Number(r.lamports), 0), tokens: rows.flatMap((r) => (r.mint && Number(r.raw) > 0 ? [{ mint: r.mint, raw: Number(r.raw) }] : [])) };
+  }
 }
 
 export async function signerFor(db: Db, ownerId: string, key: Buffer): Promise<Keypair> {

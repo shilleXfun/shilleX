@@ -6,7 +6,7 @@ import { agentAffinity, agentState, agents, chainTxs, posts, users, wallets, wea
 import type { AgentBrain } from '../../world/brain.ts';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../../world/chain.ts';
 import { holdersOf } from '../../world/market.ts';
-import { walletOf } from '../../world/wallets.ts';
+import { holdingsOf, walletOf } from '../../world/wallets.ts';
 import { priceText } from '../act.ts';
 import { NOTABLE, eventText } from '../depth/memory.ts';
 import type { EngineDeps } from '../engine.ts';
@@ -92,7 +92,7 @@ export interface Position { mint: string; symbol: string; valueLamports: number;
 export async function walletNow(d: Pick<SceneDeps, 'db' | 'chain'>, agentId: string): Promise<{ lamports: number; positions: Position[] }> {
   const w = await walletOf(d.db, agentId);
   if (!w) return { lamports: 0, positions: [] };
-  const bal = await d.chain.balances(w.publicKey);
+  const bal = await holdingsOf(d.db, d.chain, agentId, w.publicKey);
   const mints = bal.tokens.map((t) => t.mint);
   if (!mints.length) return { lamports: bal.lamports, positions: [] };
   const coins = await d.db.select().from(worldCoins).where(inArray(worldCoins.mint, mints));

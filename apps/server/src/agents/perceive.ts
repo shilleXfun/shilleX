@@ -4,7 +4,7 @@ import {
   agentTurns, chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
 } from '../db/schema.ts';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
-import { walletOf } from '../world/wallets.ts';
+import { holdingsOf, walletOf } from '../world/wallets.ts';
 import { emptyDepth } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { phrasebookOf } from './phrasebook.ts';
@@ -76,9 +76,9 @@ async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSele
 async function walletView(d: EngineDeps, agentId: string, coins: AgentView['coins']): Promise<AgentView['wallet']> {
   const w = await walletOf(d.db, agentId);
   if (!w) return { lamports: 0, positions: [] };
-  const bal = await d.chain.balances(w.publicKey);
+  const bal = await holdingsOf(d.db, d.chain, agentId, w.publicKey);
   const mints = bal.tokens.map((t) => t.mint);
-  const known = mints.length ? await d.db.select().from(worldCoins).where(inArray(worldCoins.mint, mints)) : [];
+  const known =mints.length ? await d.db.select().from(worldCoins).where(inArray(worldCoins.mint, mints)) : [];
   const rows = mints.length ? await d.db.select({ mint: chainTxs.mint, kind: chainTxs.kind, lamportsDelta: chainTxs.lamportsDelta, tokenDelta: chainTxs.tokenDelta })
     .from(chainTxs).where(and(eq(chainTxs.agentId, agentId), inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).orderBy(chainTxs.id) : [];
   const basis = new Map(mints.map((m) => [m, averageCost(rows.filter((r) => r.mint === m), d.chain.limits?.launchCostLamports ?? LAUNCH_RENT)]));

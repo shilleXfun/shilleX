@@ -10,6 +10,8 @@ export interface ChainLimits { launchCostLamports: number; rugMinShare: number; 
 export interface Chain {
   readonly network: 'devnet' | 'memory' | 'ledger';
   readonly limits?: ChainLimits;
+  /** The chain cannot be read right now (devnet's RPC is out): nothing would land, so agents only talk. */
+  readonly down?: boolean;
   balances(publicKey: string): Promise<WalletBalances>;
   launch(signer: Keypair, input: LaunchInput): Promise<LaunchResult>;
   buy(signer: Keypair, mint: string, lamportsIn: number, slippageBps: number): Promise<TradeResult>;
