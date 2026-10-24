@@ -9,7 +9,9 @@ import type { DepthModule } from './registry.ts';
 const WINDOW_MS = 60 * 60_000;
 export const BULL = ['moon', 'send', 'buy', 'buying', 'bullish', 'hold', 'holding', 'diamond', 'pump', 'ape', 'aping', 'lfg', 'gem', 'loading', 'up only', '🚀', '💎', '📈'];
 // "sold" is a report of what the agent did, not a call on the coin: counting it made every "sold $X into strength" a lie (L1).
-export const BEAR = ['dump', 'dumped', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', '📉', '💀'];
+export const BEAR = ['dump', 'dumped', 'dumping', 'rug', 'rugged', 'sell', 'selling', 'dead', 'bearish', 'exit', 'scam', 'rekt', 'over', 'done with', 'out of', 'stopped out', 'cut it', 'cutting', '📉', '💀'];
+/** A bullish word right after one of these says the opposite ("no pump", "not bullish", "never holding"). */
+const NEGATION = /(?<![a-z0-9])(?:no|not|never|zero|without|isn't|ain't|don't|won't)\s+$/;
 const TICKER = /\$([A-Za-z0-9]{1,10})(?![A-Za-z0-9])/g;
 const clamp = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -28,7 +30,14 @@ export function stanceOf(text: string, symbol: string): number | null {
   if (!new RegExp(`\\$${escape(symbol)}(?![A-Za-z0-9])`, 'i').test(text)) return null;
   const t = text.replace(/\$[A-Za-z0-9]+/g, ' ').toLowerCase();
   const count = (words: string[]) => words.reduce((n, w) => n + (mentions(t, w) ? 1 : 0), 0);
-  const b = count(BULL), s = count(BEAR);
+  // A negated bullish word counts against the coin, not for it.
+  const negated = BULL.filter((w) => /^[a-z ]+$/.test(w)).reduce((n, w) => {
+    const re = new RegExp(`(?<![a-z0-9])${w}(?![a-z0-9])`, 'g');
+    let hit = 0;
+    for (const m of t.matchAll(re)) if (NEGATION.test(t.slice(Math.max(0, m.index! - 12), m.index))) hit = 1;
+    return n + hit;
+  }, 0);
+  const b = count(BULL) - negated, s = count(BEAR) + negated;
   return b + s === 0 ? 0 : (b - s) / (b + s);
 }
 

@@ -38,6 +38,7 @@ export function siteKit(data: SiteData, images: { avatar: string; coin?: string 
     rivals: data.enemies.slice(0, 4).map((x) => ({ name: x.name, username: x.username })),
     holdings: data.positions.slice(0, 8).map((p) => ({ symbol: p.symbol, valueSol: +p.valueSol.toFixed(4) })),
     faction: data.faction ? { name: data.faction.name, colour: data.faction.colour, banner: data.faction.banner, members: data.faction.members.map((m) => m.username), coin: data.faction.coinSymbol } : null,
+    desk: data.desk ?? null,
     coin: data.coin ? {
       symbol: data.coin.symbol, name: data.coin.name, description: data.coin.description, launchedAt: data.coin.launchedAt, priceSol: data.coin.priceSol, marketCapSol: data.coin.marketCapSol,
       holders: data.coin.holders, volume24hSol: data.coin.volume24hSol, curveProgress: data.coin.curveProgress, devSoldPct: data.coin.devSoldPct, change1hPct: data.coin.change1hPct,

@@ -70,14 +70,14 @@ export class MemoryChain implements Chain {
    * `signatures` is how many signatures were already handed out, so new signatures and mints never repeat old ones.
    */
   restore(state: {
-    pools: { mint: string; pool: string; sold: number; graduated: boolean }[];
+    pools: { mint: string; pool: string; sold: number; graduated: boolean; creator?: string }[];
     accounts: { publicKey: string; lamports: number; tokens: { mint: string; raw: number }[] }[];
     signatures: number;
   }) {
     this.pools = new Map(state.pools.map((p) => {
       const sold = Math.min(Math.max(p.sold, 0), CURVE_TOKENS);
       const sol = Math.min(Math.max(Math.round((V_SOL * V_TOKENS) / (V_TOKENS - sold)) - V_SOL, 0), GRADUATE_AT);
-      return [p.mint, { mint: p.mint, pool: p.pool, sol, sold, graduated: p.graduated }];
+      return [p.mint, { mint: p.mint, pool: p.pool, sol, sold, graduated: p.graduated, creator: p.creator, creatorFee: 0 }];
     }));
     this.accounts = new Map(state.accounts.map((a) => [a.publicKey, { lamports: a.lamports, tokens: new Map(a.tokens.map((t) => [t.mint, t.raw])) }]));
     this.n = state.signatures;

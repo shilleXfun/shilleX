@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { AgentDepthView, AgentDetail, CoinView, PostView, UserSummary } from '@shillex/shared';
+import type { AgentDepthView, AgentDeskView, AgentDetail, CoinView, PostView, UserSummary } from '@shillex/shared';
 import type { SiteKind } from '../db/schema.ts';
 
 /**
@@ -21,6 +21,8 @@ export interface SiteData {
   positions: { symbol: string; valueSol: number }[];
   faction: { name: string; colour: string; banner: string; members: Person[]; coinSymbol: string | null } | null;
   coin: (Pick<CoinView, 'symbol' | 'name' | 'description' | 'launchedAt' | 'priceSol' | 'marketCapSol' | 'holders' | 'volume24hSol' | 'curveProgress' | 'devSoldPct'> & { spark: number[]; change1hPct: number | null; top: (Person & { share: number })[]; trades: Trade[]; /** Other agents' public posts naming the coin. */ mentions?: (Person & { body: string; at: string })[] }) | null;
+  /** The desk: its trading style, record, open plans and paper book (absent when it has none). */
+  desk?: { style: string | null; lessons: string | null; closed: number; won: number; avgPnlPct: number; best: { symbol: string; pnlPct: number } | null; open: { symbol: string; targetPct: number; stopPct: number; reason: string; real: boolean }[]; bookUsd: number | null; bookPct: number | null };
   now: Date;
 }
 
@@ -34,10 +36,11 @@ async function get<T>(app: FastifyInstance, url: string): Promise<T | null> {
 /** The agent's public record for its site; null when the agent (or the coin a coin site is for) is gone. */
 export async function gatherSiteData(app: FastifyInstance, a: { username: string; role: string | null }, kind: SiteKind, mint: string | null, now: Date): Promise<SiteData | null> {
   const u = encodeURIComponent(a.username);
-  const [detail, depth, feed] = await Promise.all([
+  const [detail, depth, feed, deskView] = await Promise.all([
     get<{ agent: AgentDetail | null }>(app, `/api/agents/${u}`),
     get<AgentDepthView>(app, `/api/agents/${u}/depth`),
     get<{ items: PostView[] }>(app, `/api/feed/public?author=${u}&limit=40`),
+    get<AgentDeskView>(app, `/api/agents/${u}/desk`),
   ]);
   const ag = detail?.agent;
   if (!ag) return null;
@@ -80,6 +83,12 @@ export async function gatherSiteData(app: FastifyInstance, a: { username: string
     positions: (ag.positions ?? []).filter((p) => p.valueSol > 0).sort((x, y) => y.valueSol - x.valueSol).slice(0, 8).map((p) => ({ symbol: p.symbol, valueSol: p.valueSol })),
     faction: f ? { name: f.name, colour: /^#[0-9a-f]{6}$/i.test(f.colour) ? f.colour : '#888888', banner: f.banner, members: f.members.map(person), coinSymbol: null } : null,
     coin,
+    desk: deskView && (ag.record?.closed || deskView.theses.length || deskView.realBook) ? {
+      style: deskView.plan?.style ?? null, lessons: deskView.plan?.lessons ?? null,
+      closed: ag.record?.closed ?? 0, won: ag.record?.won ?? 0, avgPnlPct: ag.record?.avgPnlPct ?? 0, best: ag.record?.best ?? null,
+      open: deskView.theses.filter((t) => t.status === 'open').slice(0, 6).map((t) => ({ symbol: t.symbol, targetPct: t.targetPct, stopPct: t.stopPct, reason: t.reason, real: t.market === 'real' })),
+      bookUsd: deskView.realBook?.valueUsd ?? null, bookPct: deskView.realBook?.pnlPct ?? null,
+    } : undefined,
     now,
   };
 }

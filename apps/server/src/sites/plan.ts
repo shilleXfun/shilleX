@@ -96,12 +96,19 @@ async function coinWithoutSite(db: Db, now: Date): Promise<{ mint: string; creat
   return null;
 }
 
-const enqueue = (d: Pick<EngineDeps, 'moments' | 'now'>, agentId: string, job: SiteJob) =>
-  // `key` keeps one queued site per agent (and `mint` one per coin) in the moment queue.
-  d.moments?.enqueue({ kind: 'site', agentId, data: { ...job, key: 'site' }, at: d.now() }) ?? false;
+/**
+ * Queues a build. `key` keeps one queued site per agent (and `mint` one per coin) in the moment queue. With no queue (no model
+ * key) the local builder runs it straight away: it costs nothing, and its own guard keeps one build at a time.
+ */
+function enqueue(d: EngineDeps, agentId: string, job: SiteJob): boolean {
+  if (d.moments) return d.moments.enqueue({ kind: 'site', agentId, data: { ...job, key: 'site' }, at: d.now() });
+  void import('./build.ts').then(({ siteMomentHandler }) => siteMomentHandler(d)({ kind: 'site', agentId, data: { ...job }, at: d.now() }, null as never))
+    .catch((e) => console.error('[sites] local build failed', e));
+  return true;
+}
 
 /** Called right after an agent launches a coin (agents/act.ts): its site is built on the next drain, if today allows. */
-export function queueCoinSite(d: Pick<EngineDeps, 'app' | 'moments' | 'now'>, agentId: string, mint: string): void {
+export function queueCoinSite(d: EngineDeps, agentId: string, mint: string): void {
   if (d.app.deps.config.sitesPerDay > 0) enqueue(d, agentId, { site: 'coin', mint });
 }
 
@@ -118,7 +125,7 @@ async function builtSince(db: Db, since: Date): Promise<boolean> {
  */
 export async function planSites(d: EngineDeps, agentId: string): Promise<void> {
   const perDay = d.app.deps.config.sitesPerDay;
-  if (!d.moments || perDay <= 0) return;
+  if (perDay <= 0) return;
   const now = d.now();
   if (now.getTime() < (nextPlan.get(d.app) ?? 0)) return;
   nextPlan.set(d.app, now.getTime() + PLAN_EVERY_MS);

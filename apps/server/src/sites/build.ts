@@ -178,7 +178,7 @@ export function siteMomentHandler(d: SiteDeps): MomentHandler {
 }
 
 /** Which renderer drew the stored pages; a new one redraws every page the local builder made, once (restyleSites). */
-const RENDER_VERSION = 'site-render-2026-10-15';
+const RENDER_VERSION = 'site-render-2026-10-24';
 const RENDER_KEY = 'site_render_version';
 
 /**

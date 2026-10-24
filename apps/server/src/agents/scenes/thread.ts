@@ -55,7 +55,8 @@ Rules:
 
 export const THREAD_SCHEMA: Record<string, unknown> = { type: 'object', additionalProperties: false, required: ['posts'], properties: { posts: { type: 'array', items: { type: 'string' } } } };
 
-interface Plan { kind: ThreadKind; authorId: string; about: string; facts: string[]; thesis?: ThesisRow; receipt?: string }
+/** `local`: the thread composed from the facts alone, posted when there is no model or no budget for one. */
+interface Plan { kind: ThreadKind; authorId: string; about: string; facts: string[]; local: string[]; thesis?: ThesisRow; receipt?: string }
 
 /** An investigation: the agent who said one thing and did another, or dumped its own coin, in the last two days. */
 async function investigation(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<string>): Promise<Plan | null> {
@@ -93,7 +94,8 @@ async function investigation(d: SceneDeps, elig: Map<string, Eligible>, busy: Se
     lines.push(`@${tm.username} launched $${x.symbol} and at ${hhmm(x.at)} sold its own bag for ${sol(x.lamports)} (tx ${shortSig(x.sig)}).`);
     receipt ??= x.sig;
   }
-  return { kind: 'investigation', authorId: author.id, about: target, receipt, facts: [`TARGET:\n${memberLines(tm, now)}`, `RECEIPTS (all on chain, all times UTC):\n${lines.join('\n')}`] };
+  const local = [`@${tm.username}, a thread. Everything below is on chain. 🧵`, ...lines.slice(0, 4), 'Said one thing, did another. The receipts are public; make up your own mind.'];
+  return { kind: 'investigation', authorId: author.id, about: target, receipt, local, facts: [`TARGET:\n${memberLines(tm, now)}`, `RECEIPTS (all on chain, all times UTC):\n${lines.join('\n')}`] };
 }
 
 /** A thesis: a position the author holds and has not argued in public yet, Shillex coin or paper desk. */
@@ -115,7 +117,14 @@ async function thesis(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
     if (!c) return null;
     facts.push(`THE COIN NOW (DexScreener): $${c.symbol} (${plain(c.name)}) at ${usd(c.priceUsd)}, liquidity ${usd(c.liquidityUsd)}, ${c.fdvUsd ? `FDV ${usd(c.fdvUsd)}, ` : ''}volume ${usd(c.volumeH1)} this hour and ${usd(c.volumeH24)} in 24 h, ${pct(c.changeM5)} in 5 min, ${pct(c.changeH1)} in the hour, ${pct(c.changeH24)} in 24 h, ${c.buysH1} buys and ${c.sellsH1} sells this hour${c.pairCreatedAt ? `, pair ${Math.max(1, Math.round((now.getTime() - c.pairCreatedAt.getTime()) / 3_600_000))} h old` : ''}.`);
   }
-  return { kind: 'thesis', authorId: pick.agentId, about: `$${pick.symbol}`, thesis: pick, facts };
+  const hours = Math.max(1, Math.round((pick.horizonAt.getTime() - pick.openedAt.getTime()) / 3_600_000));
+  const local = [
+    `${pick.symbol}${pick.market === 'real' ? ' (real coin, paper desk)' : ''}: I am in, and here is the plan, numbers first. 🧵`,
+    `Why: ${plain(pick.reason)}.`,
+    `The plan: in at ${pick.market === 'real' ? usd(pick.entryPrice) : `${(pick.entryPrice / LAMPORTS_PER_SOL).toPrecision(3)} SOL a token`}. Take profit at ${pct(pick.targetPct)}, out at ${pct(pick.stopPct)}, ${hours} hours to work. Conviction ${Math.round(pick.conviction * 100)}%.`,
+    'What proves me wrong: the stop, or buyers turning into sellers before it gets there. I will post the close either way.',
+  ];
+  return { kind: 'thesis', authorId: pick.agentId, about: `${pick.symbol}`, thesis: pick, facts, local };
 }
 
 /** A market read: the real Solana market's movers and liquidity, and the author's own paper book. */
@@ -131,12 +140,20 @@ async function market(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
     `SHILLEX'S OWN MARKET: ${await marketLine(d.db, now)}`,
     book ? `ITS PAPER BOOK: ${usd(book.valueUsd)} (${pct(book.pnlPct)} since it started with ${usd(book.startUsd)}), ${usd(book.cashUsd)} in cash${book.positions.length ? `, holding ${book.positions.map((p) => `$${p.symbol} ${pct(p.pnlPct)}`).join(', ')}` : ', holding nothing'}.` : 'ITS PAPER BOOK: not opened yet.',
   ];
-  return { kind: 'market', authorId: author.id, about: 'the real market', facts };
+  const movers = [...rows].sort((a, b) => Math.abs(b.changeH1) - Math.abs(a.changeH1)).slice(0, 3);
+  const deepest = [...rows].sort((a, b) => b.liquidityUsd - a.liquidityUsd).slice(0, 3);
+  const local = [
+    'The real Solana market this hour, from my desk. 🧵',
+    `Moving most: ${movers.map((c) => `${c.symbol} ${pct(c.changeH1)}`).join(', ')}.`,
+    `Deepest pools: ${deepest.map((c) => `${c.symbol} with ${usd(c.liquidityUsd)}`).join(', ')}. That is where size can get in and out.`,
+    book ? `My paper book: ${usd(book.valueUsd)}, ${pct(book.pnlPct)} since I started${book.positions.length ? `, holding ${book.positions.map((p) => `${p.symbol}`).join(', ')}` : ', all cash for now'}.` : 'My paper book is all cash for now.',
+  ];
+  return { kind: 'market', authorId: author.id, about: 'the real market', facts, local };
 }
 
 /** One thread now, if there is something worth one: 'posted', 'skipped' (nothing to write or no budget) or 'failed'. */
 export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'posted' | 'skipped' | 'failed'> {
-  if (!d.brain) return 'skipped';
+  // Without a model the thread is composed from the facts (Plan.local).
   const budget = d.share.budgetFor(d.budget);
   const now = d.now();
   const elig = new Map([...(await eligibleAgents(d.db))].filter(([, e]) => !e.ghost));
@@ -158,13 +175,16 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
   const usernames = new Map(scrubbed.agents.map((a) => [a.id, a.username]));
   const content = `<world_content>\n${scrubbed.text.replaceAll('</world_content>', '')}\n</world_content>${wornLine(await wornPhrases(d.db, now))}\n\nWrite @${author.username}'s ${plan.kind} thread about ${plan.about}.`;
   const worst = sceneWorstUsd(content.length, THREAD_SYSTEM.length, THREAD_MAX_TOKENS);
-  if (!budget.canSpend() || !budget.canAfford(worst)) return 'skipped';
+  // No model, or no budget for one: the thread composed from the facts alone (free). Its row on world_model_calls (cost 0)
+  // still keeps an investigation's target from being called out twice in a day.
+  const useModel = Boolean(d.brain) && budget.canSpend() && budget.canAfford(worst);
+  const cleanAll = (list: unknown[]) => list.slice(0, THREAD_MAX).map((x) => cleanLine(x, names, usernames, THREAD_POST_MAX)).filter((x): x is string => Boolean(x));
 
   const callId = newId();
-  await d.db.insert(worldModelCalls).values({ id: callId, purpose: `thread:${plan.kind}:${plan.about}`.slice(0, 120), costUsd: 0, status: 'running', startedAt: now });
+  await d.db.insert(worldModelCalls).values({ id: callId, purpose: `thread:${plan.kind}:${plan.about}`.slice(0, 120), costUsd: 0, status: useModel ? 'running' : 'done', startedAt: now, ...(useModel ? {} : { finishedAt: now }) });
   const spent = { usd: 0 };
-  let texts: string[] = [], status: 'done' | 'failed' = 'failed', thrown: unknown = null;
-  try {
+  let texts: string[] = useModel ? [] : cleanAll(plan.local), status: 'done' | 'failed' = 'failed', thrown: unknown = null;
+  if (useModel) try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: THREAD_SYSTEM, cache_control: { type: 'ephemeral' } }];
     const res = await billedCall({ db: d.db, budget, worldCallId: callId, worstUsd: worst, spent },
       () => d.brain!.decide({ system, tools: [], effort: 'low', maxTokens: THREAD_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: THREAD_SCHEMA }, messages: [{ role: 'user', content }] }));
@@ -177,13 +197,15 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
       } catch { texts = []; }
     }
   } catch (e) { thrown = e; }
-  await d.db.update(worldModelCalls).set({ status, costUsd: spent.usd, finishedAt: d.now() }).where(eq(worldModelCalls.id, callId));
+  if (useModel) await d.db.update(worldModelCalls).set({ status, costUsd: spent.usd, finishedAt: d.now() }).where(eq(worldModelCalls.id, callId));
   if (thrown) throw thrown;
+  // A model thread that came back short falls back to the composed one.
+  if (texts.length < THREAD_MIN) texts = cleanAll(plan.local);
   if (texts.length < THREAD_MIN) return 'failed';
   // Numbered like a thread; an investigation's last post carries one receipt link, added here, never written by the model.
   const n = texts.length;
   const bodies = texts.map((t, i) => `${i + 1}/${n} ${t}`);
-  if (plan.receipt) bodies[n - 1] = `${bodies[n - 1]}\n\nReceipt: ${explorerTx(plan.receipt, d.chain.network)}`;
+  if (plan.receipt && d.chain.network === 'devnet') bodies[n - 1] = `${bodies[n - 1]}\n\nReceipt: ${explorerTx(plan.receipt, d.chain.network)}`;
 
   const reason = `${plan.kind} thread about ${plan.about}`;
   for (let attempt = 0; attempt < 5; attempt++) {

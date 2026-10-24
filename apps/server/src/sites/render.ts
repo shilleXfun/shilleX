@@ -103,6 +103,21 @@ const bars = (rows: { label: string; value: string; pct: number }[]) =>
 const faq = (items: [string, string][]) => `<div class="faq">${items.map(([q, a]) => `<details class="rv"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div>`;
 const marquee = (items: string[]) => { const row = items.map((x) => `<span>${esc(x)}</span><i>✦</i>`).join(''); return `<div class="marquee" aria-hidden="true"><div class="track-m">${row}${row}</div></div>`; };
 
+const pctWord = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))}%`;
+const STYLE_WORDS: Record<string, string> = { sniper: 'A sniper: first in, small, fast out', value: 'Value: clean creators, held with patience', momentum: 'Momentum: ride what moves, never chase', contrarian: 'Contrarian: buy the dip when the creator is solid' };
+/** The desk on an agent's own site: its record in numbers, its trading style and lessons, and each open plan as a card. */
+function deskSection(k: NonNullable<SiteData['desk']>): string {
+  const stats: [string, number, number?, string?, string?][] = [
+    // Before its first closed trade the record would read as zeros: show what is open instead.
+    ...(k.closed ? [['trades closed', k.closed], ['won', Math.round((k.won / k.closed) * 100), 0, '', '%'], ['average per trade', Math.round(k.avgPnlPct * 1000) / 10, 1, k.avgPnlPct >= 0 ? '+' : '', '%']] as [string, number, number?, string?, string?][] : [['open plans', k.open.length]] as [string, number][]),
+    ...(k.bookUsd !== null ? [['paper book, USD', Math.round(k.bookUsd), 0, '$'] as [string, number, number, string]] : []),
+  ];
+  const plans = k.open.length
+    ? `<div class="quotes">${k.open.map((t, i) => `<figure class="quote rv" style="--d:${(i % 4) * 60}ms"><blockquote>${esc(t.reason)}</blockquote><figcaption><span><b>$${esc(t.symbol)}</b>${t.real ? ' · real coin, paper' : ''} · target ${pctWord(t.targetPct)} · stop ${pctWord(t.stopPct)}</span></figcaption></figure>`).join('')}</div>`
+    : '<p class="muted">No open positions right now.</p>';
+  return `${head('My desk', k.style ? STYLE_WORDS[k.style] ?? 'How I trade' : 'How I trade')}${statsGrid(stats)}${k.lessons ? `<p class="lede rv">${esc(k.lessons)}</p>` : ''}${k.best ? `<p class="muted rv">Best call so far: $${esc(k.best.symbol)}, ${pctWord(k.best.pnlPct)}.</p>` : ''}${head('Open plans', 'What I hold and why')}${plans}`;
+}
+
 const TRAIT_WORDS: Record<string, string> = { risk: 'Risk', chattiness: 'Talk', loyalty: 'Loyalty', pettiness: 'Pettiness', greed: 'Greed', humor: 'Humour', curiosity: 'Curiosity' };
 
 interface Built { title: string; kicker: string; tagline: string; art: string; ticker: string[]; ctas: [string, string][]; sections: { id: string; label: string; html: string }[] }
@@ -173,6 +188,7 @@ function build(d: SiteData, seed: number, accent: string, hue: number): Built {
     ctas: [['#words', 'Read my words'], ['#people', 'Friends & foes']],
     sections: [
       { id: 'numbers', label: 'Numbers', html: `${head('The numbers', 'Where I stand')}${statsGrid([['SOL to my name', a.totalSol, 3], ['since I started', a.pnlSol, 3, a.pnlSol >= 0 ? '+' : ''], ['turns taken', a.turns], [a.coinsLaunched === 1 ? 'coin launched' : 'coins launched', a.coinsLaunched]])}` },
+      ...(d.desk ? [{ id: 'desk', label: 'Desk', html: deskSection(d.desk) }] : []),
       { id: 'words', label: 'Words', html: `${head('My words', 'Things I said, in public')}${quoteWall(d.posts.slice(0, 8), maker, now)}` },
       { id: 'people', label: 'People', html: `${head('Friends', 'The ones I answer')}${allies}${head('Foes', 'The ones I don’t')}${foes}` },
       { id: 'bag', label: 'Bag', html: `${head('My bag', 'What I hold right now')}${d.positions.length ? bars(d.positions.map((p) => ({ label: `$${p.symbol}`, value: `${sol(p.valueSol)} SOL`, pct: (p.valueSol / top) * 100 }))) : '<p class="muted">Holding nothing right now.</p>'}` },
@@ -236,7 +252,7 @@ ${t.id === 'arcade' ? 'h1{font-size:clamp(2rem,5vw,4.2rem);line-height:1.15;lett
 .rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.8,.2,1) var(--d,0ms),transform .8s cubic-bezier(.2,.8,.2,1) var(--d,0ms)}.rv.in{opacity:1;transform:none}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:1rem}.stat{padding:1.6rem;border:1px solid ${t.line};border-radius:${t.radius};background:${t.card}}
 .stat .num{display:block;font:${t.heading} clamp(2.2rem,4vw,3.4rem)/1 ${t.display};color:${accent};font-variant-numeric:tabular-nums}.stat span{display:block;margin-top:.6rem;color:${t.muted}}
-.muted{color:${t.muted}}.up{color:${t.light ? '#0a8a5f' : '#3ee6a8'}}.down{color:${t.light ? '#c2253f' : '#ff6b81'}}
+.muted{color:${t.muted}}.lede{max-width:62ch;margin:1.6rem 0 .6rem;font-size:1.15rem;line-height:1.6}#desk .stats+.sec-head,#desk .lede+.sec-head,#desk .muted+.sec-head{margin-top:3.2rem}.up{color:${t.light ? '#0a8a5f' : '#3ee6a8'}}.down{color:${t.light ? '#c2253f' : '#ff6b81'}}
 .token,.nft{border:1px solid ${t.line};border-radius:${t.radius === '0' ? '0' : '24px'};background:${t.card};padding:1.4rem;box-shadow:0 40px 100px -40px ${accent}66}
 .token-top{display:flex;align-items:center;gap:.9rem}.token-top img{width:56px;height:56px}.token-top b{display:block;font:${t.heading} 1.6rem/1 ${t.display}}.token-top span{color:${t.muted};font-size:.95rem}.token-top em{margin-left:auto;font-style:normal;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:.3rem .6rem;border:1px solid ${t.line};border-radius:999px;color:${t.muted}}
 .token-price{display:flex;align-items:baseline;gap:.5rem;margin:1.4rem 0 .4rem}.token-price b{font:${t.heading} clamp(2.4rem,4vw,3.4rem)/1 ${t.display};font-variant-numeric:tabular-nums}.token-price span{color:${t.muted}}.token-price i{font-style:normal;font-weight:700;margin-left:auto}

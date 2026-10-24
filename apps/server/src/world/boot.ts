@@ -98,7 +98,7 @@ export async function restoreMemoryChain(db: Db, chain: MemoryChain): Promise<{ 
   if (!history?.txs) return null;
   const total = (col: typeof chainTxs.tokenDelta | typeof chainTxs.lamportsDelta) => sql<number>`coalesce(sum(${col}), 0)::float8`;
   const [coins, keys, sold, lamports, bags, [launches]] = await Promise.all([
-    db.select({ mint: worldCoins.mint, pool: worldCoins.pool, graduatedAt: worldCoins.graduatedAt }).from(worldCoins),
+    db.select({ mint: worldCoins.mint, pool: worldCoins.pool, graduatedAt: worldCoins.graduatedAt, creatorId: worldCoins.creatorId }).from(worldCoins),
     db.select({ ownerId: wallets.ownerId, publicKey: wallets.publicKey }).from(wallets),
     db.select({ mint: chainTxs.mint, sold: total(chainTxs.tokenDelta) }).from(chainTxs).where(isNotNull(chainTxs.mint)).groupBy(chainTxs.mint),
     // A 'fund' row is the 0.1 SOL a treasury transfer gave the wallet: it is already the starting balance, not a change to it.
@@ -114,7 +114,8 @@ export async function restoreMemoryChain(db: Db, chain: MemoryChain): Promise<{ 
     lamports: Math.max(0, memoryStart(w.ownerId) + (spent.get(w.ownerId) ?? 0)),
     tokens: bags.filter((b) => b.ownerId === w.ownerId).map((b) => ({ mint: b.mint!, raw: b.raw })),
   }));
-  const pools = coins.map((c) => ({ mint: c.mint, pool: c.pool, sold: soldOf.get(c.mint) ?? 0, graduated: c.graduatedAt !== null }));
+  const pkOf = new Map(keys.map((k) => [k.ownerId, k.publicKey]));
+  const pools = coins.map((c) => ({ mint: c.mint, pool: c.pool, sold: soldOf.get(c.mint) ?? 0, graduated: c.graduatedAt !== null, creator: pkOf.get(c.creatorId) }));
   // Every transaction used at most one signature and every launch one mint number: this stays above all of them.
   chain.restore({ pools, accounts, signatures: history.txs + (launches?.n ?? 0) });
   return { pools: pools.length, accounts: accounts.length };
@@ -186,7 +187,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
       handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), site: siteMomentHandler(md), desk: deskMomentHandler(md) } }) : null;
       // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
-      if (md) setTimeout(() => { void restyleSites(md).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
+      setTimeout(() => { void restyleSites({ app, db, chain, events, worldKey: key, now, busy }).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));

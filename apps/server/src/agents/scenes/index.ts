@@ -99,7 +99,8 @@ export function startScenes(d: SceneDeps): Scenes {
     later(jitter(d.config.longTakeMs / boost(), d.rng), longTakeLoop);
   };
   const threadLoop = () => {
-    if (!threading && modelOpen()) {
+    // Threads run without the model too: runThread composes them from the facts when it cannot write them.
+    if (!threading && !halted && !d.moments?.halted()) {
       threading = runThread(d).then((r) => { if (r === 'posted') counts.threads++; })
         .catch((e) => {
           const p = accountProblem(e);
