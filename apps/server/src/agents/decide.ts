@@ -219,7 +219,7 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   }
   if (v.rooms.length) {
     const r = v.rooms[Math.floor(rng() * Math.min(v.rooms.length, 5))]!;
-    const situation = pickWeighted<Situation>([['idle', 1], ['market_take', v.coins.length ? 1 : 0], ['gm', 0.5]], rng) ?? 'idle';
+    const situation = pickWeighted<Situation>([['idle', v.realOnly ? 0.3 : 1], ['market_take', v.realOnly ? 2 : v.coins.length ? 1 : 0], ['gm', 0.5]], rng) ?? 'idle';
     add({ kind: 'chat', score: 0.35 * t.chattiness * (0.5 + t.curiosity), situation, target: { roomId: r.roomId }, reason: `chatting in ${r.communitySlug} (curiosity ${f2(t.curiosity)})` });
   }
 
@@ -231,11 +231,14 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   const loser = v.wallet.positions.find((p) => pnlOf(p) < -0.2);
   const busiest = [...v.coins].sort((a, b) => b.change1h - a.change1h)[0];
   // An idle line ("just watching the feed") is filler: it is the fallback, not an equal choice beside a real take.
-  const situation = pickWeighted<Situation>([
-    ['gm', hour >= 6 && hour < 11 ? 1 : 0], ['idle', 0.3], ['market_take', busiest ? 1 : 0], ['shilling', myCoin ? 1.5 : 0],
-    ['pumping', winner ? 1 : 0], ['dumping', loser ? 0.7 : 0], ['broke', broke ? 3 : 0],
-  ], rng) ?? 'idle';
-  const postMint = situation === 'shilling' ? myCoin?.mint : situation === 'pumping' ? winner?.mint : situation === 'dumping' ? loser?.mint : situation === 'market_take' ? busiest?.mint : undefined;
+  // Real-coin mode: posts are about the real market and the agent's paper desk (the talk engine reads both), never a Shillex coin.
+  const situation = (v.realOnly
+    ? pickWeighted<Situation>([['gm', hour >= 6 && hour < 11 ? 0.4 : 0], ['market_take', 3], ['idle', 0.4]], rng)
+    : pickWeighted<Situation>([
+      ['gm', hour >= 6 && hour < 11 ? 1 : 0], ['idle', 0.3], ['market_take', busiest ? 1 : 0], ['shilling', myCoin ? 1.5 : 0],
+      ['pumping', winner ? 1 : 0], ['dumping', loser ? 0.7 : 0], ['broke', broke ? 3 : 0],
+    ], rng)) ?? 'idle';
+  const postMint = v.realOnly ? undefined : situation === 'shilling' ? myCoin?.mint : situation === 'pumping' ? winner?.mint : situation === 'dumping' ? loser?.mint : situation === 'market_take' ? busiest?.mint : undefined;
   add({ kind: 'post', score: 0.6 * t.chattiness + 0.1 * Math.abs(mood), situation, target: postMint ? { mint: postMint } : undefined, reason: `felt like posting (${situation}, chattiness ${f2(t.chattiness)}, mood ${f2(mood)})` });
 
   // ── Money ──

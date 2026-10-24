@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { agentDesks, agentTheses, chainTxs, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
+import { agentDesks, agentTheses, chainTxs, realMarket, realPositions, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { HAIKU } from '../haiku.ts';
 import type { MomentHandler } from '../moments.ts';
@@ -123,6 +123,13 @@ export const deskModule: DepthModule = {
     const [desk] = await d.db.select().from(agentDesks).where(eq(agentDesks.agentId, v.agent.id));
     if (desk) v.depth.desk = { style: desk.style, risk: desk.risk, watch: desk.watch };
     const open = await d.db.select().from(agentTheses).where(and(eq(agentTheses.agentId, v.agent.id), eq(agentTheses.market, 'world'), eq(agentTheses.status, 'open')));
+    // Its paper book of real coins, so its posts can talk about what it actually holds.
+    const book = await d.db.select({ p: realPositions, price: realMarket.priceUsd }).from(realPositions).leftJoin(realMarket, eq(realMarket.address, realPositions.address)).where(eq(realPositions.agentId, v.agent.id));
+    if (book.length) {
+      const plans = new Map((await d.db.select().from(agentTheses).where(and(eq(agentTheses.agentId, v.agent.id), eq(agentTheses.market, 'real'), eq(agentTheses.status, 'open')))).map((t) => [t.asset, t]));
+      const nowMs = d.now().getTime();
+      v.depth.paper = book.map(({ p, price }) => ({ symbol: p.symbol, pnlPct: price && p.costUsd > 0 ? (p.qty * price) / p.costUsd - 1 : 0, hoursHeld: (nowMs - p.openedAt.getTime()) / 3_600_000, targetPct: plans.get(p.address)?.targetPct ?? null, stopPct: plans.get(p.address)?.stopPct ?? null }));
+    }
     v.depth.theses = Object.fromEntries(open.map((o) => [o.asset, { id: o.id, entryPrice: o.entryPrice, targetPct: o.targetPct, stopPct: o.stopPct, horizonAt: o.horizonAt.toISOString(), openedAt: o.openedAt.toISOString(), conviction: o.conviction }]));
   },
 

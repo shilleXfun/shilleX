@@ -83,7 +83,7 @@ async function bookOf(db: Db, agentId: string, now: Date) {
 /** Sometimes an agent says what it did on the desk, plainly marked as paper. */
 async function announce(d: EngineDeps, agentId: string, body: string) {
   // In real-coin mode the desk is the trading, so more of it is said out loud.
-  if (d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.6 : 0.35)) await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk');
+  if (d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.85 : 0.35)) await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk');
 }
 
 /** One agent's turn at the desk: exits first (target, stop, horizon), then at most one new position. */
@@ -138,7 +138,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       await d.db.insert(realTrades).values({ id: newId(), agentId, address: best.c.address, symbol: best.c.symbol, side: 'buy', qty: f.qty, priceUsd: f.priceUsd, usd: f.usd, feeUsd: f.feeUsd, thesisId, turnId: null, at: now });
       await d.db.insert(realPositions).values({ agentId, address: best.c.address, symbol: best.c.symbol, qty: f.qty, costUsd: f.usd, openedAt: now, updatedAt: now })
         .onConflictDoUpdate({ target: [realPositions.agentId, realPositions.address], set: { qty: f.qty, costUsd: f.usd, updatedAt: now } });
-      if (conviction > 0.4) await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`);
+      if (conviction > 0.25) await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`);
     }
   }
   await d.db.update(realBooks).set({ cashUsd: cash }).where(eq(realBooks.agentId, agentId));

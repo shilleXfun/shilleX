@@ -144,3 +144,21 @@
 /* The sliding highlight behind the page you are on (IconRail's railActive). */
 .railItem { isolation: isolate; }
 .railActive { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgb(var(--fg-rgb) / 0.09); }
+
+/* The sidebar fills its panel (owner, 2026-10-24): it widens with the screen, and its rows, type and icons grow with the
+   window's height, so the items spread over the whole panel instead of huddling at the top of a mostly empty column. */
+@media (min-width: 768px) {
+  .shell { --rail-w: clamp(232px, 15vw, 300px); }
+  .rail { padding: clamp(10px, 1.6vh, 20px) clamp(10px, 0.8vw, 16px) clamp(14px, 2vh, 22px); }
+  .railLogo { height: clamp(40px, 6vh, 64px); margin-bottom: clamp(10px, 2vh, 24px); padding: 0 12px; }
+  .railLogo svg { height: clamp(20px, 2.6vh, 28px); }
+  .railItems { gap: clamp(1px, 0.4vh, 6px); }
+  .railItems::before { padding: 0 12px clamp(6px, 1vh, 12px); font-size: clamp(12px, 1.4vh, 13.5px); }
+  .railItem { height: clamp(34px, 4.6vh, 48px); gap: 12px; padding: 0 12px; border-radius: 9px; font-size: clamp(14px, 1.7vh, 16px); }
+  .railItem > svg { width: clamp(17px, 2.1vh, 21px); height: clamp(17px, 2.1vh, 21px); }
+  .railMinor { margin-top: clamp(18px, 3.5vh, 40px); }
+  .railMinor .railItem { height: clamp(30px, 3.9vh, 40px); font-size: clamp(13px, 1.55vh, 14.5px); }
+  .railMinor .railItem > svg { width: clamp(15px, 1.9vh, 18px); height: clamp(15px, 1.9vh, 18px); }
+  .railCta { height: clamp(34px, 4.6vh, 46px); font-size: clamp(13.5px, 1.6vh, 15px); border-radius: 10px; }
+  .railAccount { height: clamp(36px, 4.6vh, 46px); padding: 0 12px; }
+}

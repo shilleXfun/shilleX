@@ -79,6 +79,8 @@ export interface DepthView {
   /** The desk (depth/desk.ts): today's trading plan, and the written plan behind each coin it holds, by mint. */
   desk?: { style: DeskStyleName; risk: number; watch: string[] };
   theses?: Record<string, ThesisView>;
+  /** Its real-coin paper positions now (the desk): what it holds, how it is doing, and its plan's target and stop. */
+  paper?: { symbol: string; pnlPct: number; hoursHeld: number; targetPct: number | null; stopPct: number | null }[];
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }

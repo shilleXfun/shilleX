@@ -92,7 +92,8 @@ export async function phrasebookScene(d: SceneDeps, m: SceneMaterial): Promise<{
   // half the time for a market scene, each speaker in its own voice.
   if (m.idea.kind === 'coin' || m.idea.kind === 'market') {
     const real = await realFactsNow(d.db, now).catch(() => []);
-    const useReal = real.length >= 3 && (m.idea.kind === 'market' || !m.coin) && d.rng() < 0.5;
+    const realOnly = d.app.deps.config.tradingMode === 'real';
+    const useReal = real.length >= 3 && (realOnly || ((m.idea.kind === 'market' || !m.coin) && d.rng() < 0.5));
     const fact = useReal ? { real: real[Math.floor(d.rng() * Math.min(real.length, 8))]! }
       : m.coin ? { world: { symbol: m.coin.symbol, holders: m.coin.holders, change1h: m.coin.change1h, change10m: m.coin.change10m, ageH: (now.getTime() - m.coin.launchedAt.getTime()) / 3_600_000, curve: m.coin.curveProgress, creator: null, mine: false } } : null;
     if (fact) {

@@ -2,7 +2,7 @@ import type { Db } from '../../db/client.ts';
 import { realMarketNow } from '../../world/real-market.ts';
 import { MIN_LIQUIDITY_USD } from '../../world/real-desk.ts';
 import type { AgentView, Candidate, Situation } from '../types.ts';
-import { planTake, realMarketTake, realTake, replyWithData, voiceOf, worldTake, type PlanFacts, type RealFacts, type Style, type WorldFacts } from './engine.ts';
+import { paperTake, planTake, realMarketTake, realTake, replyWithData, voiceOf, worldTake, type PlanFacts, type RealFacts, type Style, type WorldFacts } from './engine.ts';
 
 /** Real coins worth talking about, read at most once a minute per database (every agent's turn shares it). */
 const cache = new WeakMap<Db, { at: number; rows: RealFacts[] }>();
@@ -39,11 +39,18 @@ const REPLY = new Set<Situation>(['reply_agree', 'reply_disagree', 'roast']);
  * an open plan posts its progress instead.
  */
 export function talkLine(v: AgentView, c: Candidate, situation: Situation, real: RealFacts[], usernames: Record<string, string>, rng: () => number): string | null {
-  if (rng() > TALK_RATE) return null;
+  // Real-coin mode: market talk always comes from here (the phrase list only knows Shillex coins).
+  if (rng() > (v.realOnly && MARKET.has(situation) ? 1 : TALK_RATE)) return null;
   const voice = voiceOf(v.phrasebook.voice, v.state.traits, v.phrasebook);
   const style: Style = v.depth.desk?.style ?? 'momentum';
   const realHeld = new Set<string>();
   if (MARKET.has(situation)) {
+    // What it holds on its paper desk comes up often in real-coin mode.
+    const paper = v.depth.paper ?? [];
+    if (paper.length && rng() < (v.realOnly ? 0.4 : 0.15)) {
+      const p = paper[Math.floor(rng() * paper.length)]!;
+      return paperTake(p, real.find((r) => r.symbol === p.symbol) ?? null, voice, rng);
+    }
     // An open plan gets an update now and then.
     const plans = Object.entries(v.depth.theses ?? {});
     if (plans.length && rng() < 0.25) {
@@ -54,7 +61,7 @@ export function talkLine(v: AgentView, c: Candidate, situation: Situation, real:
         return planTake(p, voice, rng);
       }
     }
-    if (real.length >= 3 && rng() < (v.realOnly ? 0.9 : 0.65)) {
+    if (real.length >= 3 && rng() < (v.realOnly ? 1 : 0.65)) {
       if (rng() < 0.3) return realMarketTake(real, style, voice, rng);
       // Bigger moves and deeper pools come up more, but every coin on the list gets a turn.
       const weights = real.map((r) => 1 + Math.abs(r.changeH1) * 4 + (r.major ? 0.5 : 0));
@@ -62,8 +69,8 @@ export function talkLine(v: AgentView, c: Candidate, situation: Situation, real:
       for (let i = 0; i < real.length; i++) { x -= weights[i]!; if (x <= 0) { chosen = real[i]!; break; } }
       return realTake(chosen, style, realHeld.has(chosen.symbol), voice, rng);
     }
-    if (c.target?.mint) { const w = worldFactsOf(v, c.target.mint, usernames); if (w) return worldTake(w, voice, rng, held(v, c.target.mint)); }
-    return null;
+    if (!v.realOnly && c.target?.mint) { const w = worldFactsOf(v, c.target.mint, usernames); if (w) return worldTake(w, voice, rng, held(v, c.target.mint)); }
+    return v.realOnly && real.length ? realMarketTake(real, style, voice, rng) : null;
   }
   if (COIN.has(situation) && c.target?.mint) {
     const w = worldFactsOf(v, c.target.mint, usernames);
@@ -73,7 +80,7 @@ export function talkLine(v: AgentView, c: Candidate, situation: Situation, real:
     const body = v.feed.find((f) => f.postId === c.target!.postId)?.body ?? v.mentions.find((m) => m.postId === c.target!.postId)?.body;
     const sym = body?.match(TICKER)?.[1]?.toUpperCase();
     if (!sym) return null;
-    const world = v.coins.find((x) => x.symbol.toUpperCase() === sym);
+    const world = v.realOnly ? undefined : v.coins.find((x) => x.symbol.toUpperCase() === sym);
     const realCoin = real.find((r) => r.symbol.toUpperCase() === sym);
     if (!world && !realCoin) return null;
     return replyWithData(usernames[c.target.userId]!, world ? { world: worldFactsOf(v, world.mint, usernames)! } : { real: realCoin! }, situation === 'reply_agree', voice, rng);

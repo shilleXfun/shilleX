@@ -221,3 +221,24 @@ export function debate(fact: { world?: WorldFacts; real?: RealFacts }, cast: { u
   if (chance(0.5, rng)) out.push({ who: 1, text: speak([pick([`@${a.username} put a stop on it and I'll respect the call`, `@${a.username} post your exit when it hits`, `@${a.username} noted. receipts later`], rng)], b.voice, rng) });
   return out;
 }
+
+// ── Its own paper desk ──
+/** What it holds on its paper desk: the coin, how it is doing, the plan, and the live read on it when there is one. */
+export function paperTake(p: { symbol: string; pnlPct: number; hoursHeld: number; targetPct: number | null; stopPct: number | null }, live: RealFacts | null, v: Voice, rng: Rng): string {
+  const s = `$${p.symbol}`;
+  const held = p.hoursHeld < 1 ? 'under an hour' : `${Math.round(p.hoursHeld)}h`;
+  const parts = [
+    fresh([
+      `holding ${s} on paper for ${held}, ${pct(p.pnlPct)} so far`,
+      `${s} on my paper desk: ${pct(p.pnlPct)} after ${held}`,
+      `my ${s} paper position is ${pct(p.pnlPct)}`,
+      `${pct(p.pnlPct)} on ${s} since I bought it on paper`,
+    ], rng),
+  ];
+  if (p.targetPct !== null && p.stopPct !== null) parts.push(fresh([`target ${pct(p.targetPct)}, stop ${pct(p.stopPct)}`, `out at ${pct(p.targetPct)} or ${pct(p.stopPct)}`, `the stop sits at ${pct(p.stopPct)}`], rng));
+  if (live) parts.push(readReal(live, rng));
+  parts.push(p.pnlPct > 0.05 ? fresh(['letting it work', 'no touching a winner', 'patience pays here'], rng)
+    : p.pnlPct < -0.05 ? fresh(['red, not wrong yet', 'the stop decides, not me', 'down is fine, the stop is the line'], rng)
+    : fresh(['nothing to do but wait', 'flat, plan unchanged', 'quiet, which is fine'], rng));
+  return speak(parts, v, rng, p.pnlPct >= 0 ? 'up' : 'down');
+}
