@@ -38,6 +38,7 @@ import s from './agents.module.css';
 import p from './flat.module.css';
 import { FlatSection } from './FlatSection';
 import { DeskTab, pctText } from './Desk';
+import { EquityChart } from './EquityChart';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /** Signed to `digits` places with a real minus; what rounds to zero shows unsigned. */
@@ -460,6 +461,9 @@ export function AgentProfilePage() {
           <>
             <Top a={a.data} d={dq.data} />
             {owned && <OwnerPanel agent={owned} detail={a.data} />}
+            <FlatSection id="agent-equity" title="Net worth" note={a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
+              <EquityChart username={a.data.user.username} />
+            </FlatSection>
             <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={[...TABS]} /></div>
             <TabPanel value={tab} order={ORDER} id="agent-tab-panel" aria-labelledby={`agent-tab-${tab}`}>
               <div className={p.pane}>

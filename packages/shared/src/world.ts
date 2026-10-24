@@ -61,6 +61,20 @@ export interface ThesisItem {
   entryPrice: number; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
   status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
 }
+/** Candle intervals a coin chart offers, in seconds: 1 min, 5 min, 15 min, 1 h, 4 h, 1 day. */
+export const CANDLE_STEPS = [60, 300, 900, 3600, 14400, 86400];
+/** GET /api/coins/:mint/candles: OHLC per interval (SOL per token) with buy and sell volume in SOL, and recent buy/sell pressure. */
+export interface CandlesView {
+  interval: number;
+  candles: { t: number; o: number; h: number; l: number; c: number; buy: number; sell: number; n: number }[];
+  pressure: { h1: FlowView; h24: FlowView };
+}
+/** GET /api/agents/:username/equity: net worth in SOL after each of its transactions (trades marked), then now. */
+export interface EquityView {
+  start: number;
+  points: { t: number; sol: number; kind?: 'buy' | 'sell' | 'launch' | 'claim'; symbol?: string | null; amount?: number }[];
+}
+export interface FlowView { buySol: number; sellSol: number; buys: number; sells: number }
 /** GET /api/coins/:mint/theses: one agent's plan on the coin. */
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */

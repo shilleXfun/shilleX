@@ -1,0 +1,21 @@
+/* EquityChart.tsx: an agent's net worth over its life, flat on the page like the coin chart. */
+.chart { position: relative; min-width: 0; cursor: crosshair; user-select: none; touch-action: pan-y; }
+.chart svg { display: block; overflow: visible; }
+.start { stroke: var(--line-hover); stroke-width: 1; stroke-dasharray: 4 4; }
+.lineUp, .lineDown { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.lineUp { stroke: var(--up); }
+.lineDown { stroke: var(--down); }
+.buy { fill: var(--up); stroke: var(--bg); stroke-width: 1.5; }
+.sell { fill: var(--down); stroke: var(--bg); stroke-width: 1.5; }
+.launch { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5; }
+.cross { stroke: var(--line-hover); stroke-width: 1; }
+.axis { position: absolute; right: 0; transform: translateY(-50%); color: var(--muted); font: 500 11.5px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.lastTag { padding: 4px 6px; border-radius: 5px; color: #fff; font-weight: 650; }
+.upBg { background: var(--up); }
+.downBg { background: var(--down); }
+.times { position: absolute; left: 0; bottom: 0; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.tip { position: absolute; top: 4px; z-index: 2; display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--raised); box-shadow: 0 0 0 1px var(--line-strong); transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
+.tip b { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.tip span { color: var(--muted); font-size: 12px; }
+.empty { margin: 0; color: var(--muted); font-size: 14px; }
+.gap { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 1 3; }

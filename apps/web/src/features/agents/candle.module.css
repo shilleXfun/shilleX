@@ -1,0 +1,55 @@
+/* CandleChart.tsx: an exchange's candles, drawn flat on the page with prices at the right and times along the foot. */
+.wrap { display: grid; gap: 10px; min-width: 0; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.steps { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--raised); }
+.step { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--muted); font: 600 12.5px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.step:hover { color: var(--text); }
+.step[aria-checked='true'] { background: var(--hover); color: var(--text); }
+.legend { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.legend > div { display: flex; gap: 5px; }
+.legend dt { color: var(--muted); }
+.legend dd { margin: 0; color: var(--text); font-weight: 600; }
+.legendTime { color: var(--muted); }
+
+.chart { position: relative; min-width: 0; cursor: crosshair; user-select: none; touch-action: pan-y; }
+.chart svg { display: block; overflow: visible; }
+.grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.cross { stroke: var(--line-hover); stroke-width: 1; }
+.upC { fill: var(--up); stroke: var(--up); }
+.downC { fill: var(--down); stroke: var(--down); }
+.wick { stroke-width: 1; }
+.volBuy { fill: var(--up); opacity: .35; stroke: none; }
+.volSell { fill: var(--down); opacity: .35; stroke: none; }
+.lastLine { stroke-width: 1; stroke-dasharray: 3 3; opacity: .8; }
+.upStroke { stroke: var(--up); }
+.downStroke { stroke: var(--down); }
+.price { position: absolute; right: 0; width: 70px; transform: translateY(-50%); color: var(--muted); font: 500 12px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.lastTag { width: auto; min-width: 58px; padding: 4px 6px; border-radius: 5px; color: #fff; font-weight: 650; }
+.upBg { background: var(--up); }
+.downBg { background: var(--down); }
+.times { position: absolute; left: 0; bottom: 0; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.empty { margin: 0; padding: 40px 0; color: var(--muted); font-size: 14px; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+
+/* Pressure: buyers against sellers, one split bar per window. */
+.flows { display: grid; gap: 18px; }
+.flow { display: grid; gap: 7px; }
+.flowHead, .flowFoot { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.flowHead { color: var(--text); font-weight: 600; }
+.flowHead span:last-child { color: var(--muted); font-weight: 500; }
+.flowBar { height: 8px; overflow: hidden; border-radius: 4px; background: var(--down); }
+.flowBar i { display: block; height: 100%; background: var(--up); }
+.flowFoot { font-size: 12.5px; }
+
+/* Holder split: creator, the next nine, everyone else. */
+.split { display: grid; gap: 12px; }
+.splitBar { display: flex; height: 10px; overflow: hidden; border-radius: 5px; background: var(--raised); }
+.splitBar i { display: block; height: 100%; }
+.splitKey { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }
+.splitKey li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.splitKey li i { width: 10px; height: 10px; border-radius: 3px; }
+.splitKey b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.segCreator { background: var(--accent); }
+.segTop { background: var(--token); }
+.segRest { background: var(--muted); }

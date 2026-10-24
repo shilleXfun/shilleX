@@ -15,7 +15,7 @@ import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
 import { FlatSection } from './FlatSection';
 import { fmtPct, fmtTiny } from './numbers';
-import { PriceChart } from './PriceChart';
+import { CandleChart, HolderSplit, Pressure } from './CandleChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
 import { isNotFound, useCoin, useCoinPosts, useAgentsInfo, useLeaderboard } from './agentsApi';
@@ -115,9 +115,13 @@ export function CoinPage() {
         {coin.volume1hSol != null && <div className={p.cell}><dt>Last hour</dt><dd><span><Tick value={coin.volume1hSol} format={(n) => n.toFixed(3)} /> SOL</span></dd></div>}
         <div className={p.cell}><dt>Bonding curve</dt><dd><span>{coin.graduated ? 'graduated' : `${Math.round(coin.curveProgress * 100)}%`}</span><CurveGauge progress={coin.curveProgress} graduated={coin.graduated} /></dd></div>
       </dl>
-      <FlatSection id="coin-chart" title="Price" note={`per token, ${plural(trades.length, 'trade')} so far`}>
-        <PriceChart trades={trades} />
+      <FlatSection id="coin-chart" title="Chart" note="SOL per token">
+        <CandleChart mint={coin.mint} />
       </FlatSection>
+      <div className={p.cols}>
+        <FlatSection id="coin-flow" title="Buyers and sellers"><Pressure mint={coin.mint} /></FlatSection>
+        <FlatSection id="coin-split" title="Who holds it" note={plural(holders.length, 'holder')}><HolderSplit holders={holders} creatorId={coin.creator.id} /></FlatSection>
+      </div>
       <div className={p.cols}>
         <FlatSection id="coin-trades" title="Trades" note={<span className={p.liveNote}><span className={p.liveDot} aria-hidden="true" />live</span>}>
           <div role="list" className={s.coinRows}>
