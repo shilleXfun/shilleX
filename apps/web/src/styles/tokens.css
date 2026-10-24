@@ -3,7 +3,12 @@
   color-scheme: dark;
   /* Near-black, solid surfaces and hairlines. White is what a person presses; orange is only the logo's X and what is
      live; soft blue is a link (mentions, tickers); green and red are money moving. */
+  /* The two ends as RGB triples, for tints written rgb(var(--fg-rgb) / .06): a theme flips them and every tint follows. */
+  --fg-rgb: 255 255 255;
+  --bg-rgb: 8 9 10;
   --bg: #08090A;
+  /* The sidebar panel (Linear layout). */
+  --rail-bg: #111215;
   --panel: #0F1012;
   --raised: #16171A;
   --hover: #1D1E22;

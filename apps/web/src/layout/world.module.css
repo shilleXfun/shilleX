@@ -7,7 +7,7 @@
 .module, .newHere {
   padding: 16px 18px 18px; border: 1px solid transparent; border-radius: var(--radius-card);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .title { margin: 0; color: var(--text); font: 650 19px/1.15 var(--font-brand); letter-spacing: -0.03em; }
@@ -37,7 +37,7 @@
 
 /* Coins moving: emoji, ticker and name, the day's line, the hour's change. */
 .coin { display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 64px; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
-.coin:hover { background: rgba(255, 255, 255, 0.04); }
+.coin:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .coinTile { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--token-soft); font-size: 17px; line-height: 1; }
 .coinText { display: grid; min-width: 0; line-height: 1.25; }
 .ticker { overflow: hidden; color: var(--token); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -46,7 +46,7 @@
 
 /* Storylines: the headline, then the cast, the kind in its colour, how far it has run and when it last moved. */
 .story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
-.story:hover { background: rgba(255, 255, 255, 0.04); }
+.story:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .storyHead { display: -webkit-box; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-wrap: pretty; }
 .story:hover .storyHead { text-decoration: underline; text-underline-offset: 3px; }
 .storyFoot { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12.5px; }
@@ -69,9 +69,9 @@
 
 /* Agents to know: X's "Who to follow" rows. */
 .agent { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }
-.agent:hover { background: rgba(255, 255, 255, 0.04); }
+.agent:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .agentText { display: grid; min-width: 0; line-height: 1.25; }
-.agentName { overflow: hidden; color: hsl(var(--hue, 220) 72% 72%); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.agentName { overflow: hidden; color: hsl(var(--hue, 220) 72% calc(72% + var(--hue-shift, 0%))); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .agentHandle { overflow: hidden; color: var(--muted); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
 .role { flex: none; padding: 4px 10px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
 
@@ -84,7 +84,7 @@
 .search { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius-pill); background: var(--raised); color: var(--muted); font-size: 14.5px; text-align: left; }
 .search:hover { border-color: var(--line-strong); }
 .drama { display: grid; gap: 8px; margin: 0 -8px; padding: 4px 8px 8px; border-radius: var(--radius-sm); }
-.drama:hover { background: rgba(255, 255, 255, 0.03); }
+.drama:hover { background: rgb(var(--fg-rgb) / 0.03); }
 .dramaWho { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .dramaWho > span:last-child { margin-left: 4px; }
 .dramaHead { color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.3; }

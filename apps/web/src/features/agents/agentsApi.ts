@@ -40,6 +40,8 @@ export const useAgent = (username: string) => useQuery({
 /** The real Solana coins the paper desks watch, live. */
 export const useRealMarket = () => useQuery({ queryKey: ['agents', 'real'], queryFn: () => get<{ coins: RealCoinView[] }>('/real/market').then((r) => r.coins), ...live(60_000) });
 /** Every agent's written plan on one coin, open ones first. */
+/** The newest written plans across every agent (home's desk section). */
+export const useLatestTheses = (limit = 6) => useQuery({ queryKey: ['agents', 'theses', 'latest', limit], queryFn: () => get<{ items: CoinThesisView[] }>(`/theses/latest?limit=${limit}`).then((r) => r.items), ...live(30_000) });
 export const useCoinTheses = (mint: string) => useQuery({ queryKey: ['agents', 'coin', mint, 'theses'], queryFn: () => get<{ items: CoinThesisView[] }>(`/coins/${mint}/theses`).then((r) => r.items), ...live(30_000) });
 /** An agent's desk: today's plan, its theses and its real-market paper book. */
 export const useAgentDesk = (username: string) => useQuery({ queryKey: ['agents', 'desk', username], queryFn: () => get<AgentDeskView>(`/agents/${username}/desk`), ...live(30_000) });

@@ -4,7 +4,7 @@
   border: 1px solid transparent; border-radius: var(--radius-card);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
   -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
 }
 .bar { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
 .title { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; font: 650 16px/1.25 var(--font-brand); letter-spacing: -0.02em; }
@@ -22,7 +22,7 @@
 .body { position: relative; flex: 1; min-height: 0; padding: 16px 0 14px; }
 /* Pinned: the newest message sits on the bottom edge; older ones that no longer fit whole are hidden (ConvoBody). */
 .pin { display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
-.scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.14) transparent; }
+.scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgb(var(--fg-rgb) / 0.14) transparent; }
 .scroll:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent-line); }
 .body .convo { padding: 0 20px; }
 

@@ -34,15 +34,15 @@ a.when:hover { color: var(--text); }
 .groupAvatar { align-self: start; position: relative; z-index: 1; }
 .groupBody { display: grid; justify-items: start; gap: 4px; min-width: 0; }
 .who { display: flex; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; }
-.name { min-width: 0; overflow: hidden; color: hsl(var(--hue, 220) 72% 72%); font-size: 13.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.name { min-width: 0; overflow: hidden; color: hsl(var(--hue, 220) 72% calc(72% + var(--hue-shift, 0%))); font-size: 13.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .name:hover { text-decoration: underline; text-underline-offset: 3px; }
-.bubble { max-width: min(100%, 60ch); margin: 0; padding: 9px 14px; border-radius: 6px 17px 17px 17px; background: color-mix(in srgb, var(--tint) 12%, rgba(255, 255, 255, 0.02)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 22%, transparent); color: var(--text); font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.bubble { max-width: min(100%, 60ch); margin: 0; padding: 9px 14px; border-radius: 6px 17px 17px 17px; background: color-mix(in srgb, var(--tint) 12%, rgb(var(--fg-rgb) / 0.02)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 22%, transparent); color: var(--text); font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .ticker { color: var(--token); }
 .ticker:hover { text-decoration: underline; text-underline-offset: 3px; }
 .typingRow .groupAvatar { opacity: .6; }
 .typingRow .groupBody { align-self: center; }
-.typing { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: 6px 17px 17px 17px; background: color-mix(in srgb, var(--tint) 9%, rgba(255, 255, 255, 0.02)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 16%, transparent); }
-.typing i { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--hue, 220) 70% 72%); opacity: .35; animation: typing 1.25s ease-in-out infinite; }
+.typing { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: 6px 17px 17px 17px; background: color-mix(in srgb, var(--tint) 9%, rgb(var(--fg-rgb) / 0.02)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 16%, transparent); }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--hue, 220) 70% calc(72% + var(--hue-shift, 0%))); opacity: .35; animation: typing 1.25s ease-in-out infinite; }
 .typing i:nth-child(2) { animation-delay: .16s; }
 .typing i:nth-child(3) { animation-delay: .32s; }
 @keyframes typing { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
@@ -55,7 +55,7 @@ a.when:hover { color: var(--text); }
 
 /* ── Story and scene pages ────────────────────────────────────────────────────────────────────────────────────────── */
 .castList { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.castItem { display: inline-flex; align-items: center; gap: 8px; padding: 4px 13px 4px 4px; border-radius: var(--radius-pill); background: hsl(var(--hue, 220) 50% 50% / 0.08); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.22); color: hsl(var(--hue, 220) 72% 80%); font-size: 14px; font-weight: 600; transition: background .15s, box-shadow .15s; }
+.castItem { display: inline-flex; align-items: center; gap: 8px; padding: 4px 13px 4px 4px; border-radius: var(--radius-pill); background: hsl(var(--hue, 220) 50% 50% / 0.08); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.22); color: hsl(var(--hue, 220) 72% calc(80% + var(--hue-shift, 0%))); font-size: 14px; font-weight: 600; transition: background .15s, box-shadow .15s; }
 .castItem:hover { background: hsl(var(--hue, 220) 50% 50% / 0.16); box-shadow: inset 0 0 0 1px hsl(var(--hue, 220) 60% 60% / 0.4); }
 .castItem > span:first-child { box-shadow: 0 0 14px hsl(var(--hue, 220) 80% 60% / 0.35); border-radius: 50%; }
 .storyFacts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }

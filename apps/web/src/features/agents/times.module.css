@@ -1,7 +1,7 @@
 /* The Shillex Times (/times): one large floating card over the swarm, set like a front page. The page root carries data-cards. */
 .wrap { container-type: inline-size; }
 .wrap { display: grid; gap: 16px; padding: 20px var(--row-px) 32px; }
-.front { position: relative; min-width: 0; padding: clamp(20px, 5cqi, 44px) clamp(18px, 5.5cqi, 46px) clamp(18px, 4cqi, 32px); border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
+.front { position: relative; min-width: 0; padding: clamp(20px, 5cqi, 44px) clamp(18px, 5.5cqi, 46px) clamp(18px, 4cqi, 32px); border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.45); }
 
 /* Masthead: the nameplate, then the dateline between two hairlines. */
 .masthead { text-align: center; }
@@ -39,11 +39,11 @@
 
 /* No edition yet, or none for that day. */
 .empty { display: grid; justify-items: center; gap: 8px; padding: clamp(28px, 8cqi, 56px) 8px clamp(16px, 4cqi, 28px); text-align: center; }
-.emptyIcon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
+.emptyIcon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 50%; background: rgb(var(--fg-rgb) / 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
 .emptyTitle { margin: 0; color: var(--text); font: 650 24px/1.2 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
 .emptyBody { margin: 0; color: var(--muted); font-size: var(--fs-md); }
 .emptyLink { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 6px 13px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: var(--fs-sm); font-weight: 550; transition: box-shadow .15s; }
-.emptyLink:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
+.emptyLink:hover { box-shadow: inset 0 0 0 1px rgb(var(--fg-rgb) / 0.3); }
 
 .skeleton { display: grid; gap: 12px; margin-top: 24px; }
 
@@ -57,14 +57,14 @@
 }
 @media (prefers-reduced-motion: reduce) { .pagerLink, .pagerLabel, .emptyLink { transition: none; } }
 /* Stop press (StopPress.tsx): today so far, a glass card under the latest page. */
-.stopPress { padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.stopPress { padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; -webkit-backdrop-filter: var(--card-blur); backdrop-filter: var(--card-blur); box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .stopTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
 .stopTitle span { color: var(--muted); font: 500 13.5px var(--font-ui); letter-spacing: 0; }
 .stopList { display: grid; gap: 2px; }
 .stopItem { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: baseline; gap: 12px; margin: 0 -10px; padding: 9px 10px; border-radius: 12px; color: var(--text); font-size: 15.5px; transition: background .15s; }
-.stopItem:hover { background: rgba(255, 255, 255, 0.045); }
+.stopItem:hover { background: rgb(var(--fg-rgb) / 0.045); }
 .stopItem time { color: var(--muted); font: 500 13px/1.5 var(--font-ui); }
-.stopLabel { justify-self: start; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.06); color: var(--muted); font: 600 11.5px/1.5 var(--font-ui); }
+.stopLabel { justify-self: start; padding: 1px 7px; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.06); color: var(--muted); font: 600 11.5px/1.5 var(--font-ui); }
 .stopItem[data-tone='up'] .stopLabel { background: var(--up-soft, rgba(39, 224, 192, 0.12)); color: var(--up); }
 .stopItem[data-tone='down'] .stopLabel, .stopItem[data-tone='heat'] .stopLabel { background: var(--down-soft); color: var(--down); }
 .stopItem[data-tone='down'] b { color: var(--down); }

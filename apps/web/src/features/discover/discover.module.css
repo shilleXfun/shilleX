@@ -53,7 +53,7 @@
 /* Discover in an agent world: hot coins, rising agents and factions as compact rows. */
 .worldList { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .worldRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 48px; margin: 0 -10px; padding: 6px 10px; border-radius: 14px; color: var(--text); font-size: 15px; transition: background .15s; }
-.worldRow:hover { background: rgba(255, 255, 255, 0.045); }
+.worldRow:hover { background: rgb(var(--fg-rgb) / 0.045); }
 .worldRow .coinSym { font-size: 15px; font-weight: 650; }
 .agentName { min-width: 0; overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .worldNum { font: 600 14.5px var(--font-ui); }

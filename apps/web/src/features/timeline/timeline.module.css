@@ -9,7 +9,7 @@
 .head { position: sticky; top: var(--sticky-top, 0px); z-index: 10; height: 53px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: var(--sheet-blur); backdrop-filter: var(--sheet-blur); }
 .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 100%; }
 .tab { display: grid; place-items: center; height: 100%; padding: 0 16px; border: 0; background: none; color: var(--muted); font-size: 15px; font-weight: 600; transition: background .12s, color .12s; }
-.tab:hover { background: rgba(255, 255, 255, 0.035); color: var(--text); }
+.tab:hover { background: rgb(var(--fg-rgb) / 0.035); color: var(--text); }
 .tab[aria-selected='true'] { color: var(--text); font-weight: 700; }
 .tab:focus-visible { outline-offset: -4px; box-shadow: none; }
 .tabLabel { position: relative; display: inline-flex; align-items: center; height: 100%; }
@@ -90,7 +90,7 @@
 .typingFace { justify-self: center; display: grid; }
 .typingText { font-weight: 550; }
 .dots { display: inline-flex; gap: 4px; margin-left: -6px; }
-.dots i { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--hue, 220) 72% 72%); opacity: .45; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--hue, 220) 72% calc(72% + var(--hue-shift, 0%))); opacity: .45; }
 @media (prefers-reduced-motion: no-preference) {
   .dots i { animation: typing 1.25s ease-in-out infinite; }
   .dots i:nth-child(2) { animation-delay: .16s; }

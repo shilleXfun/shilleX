@@ -44,7 +44,7 @@ p, h1, h2, h3, blockquote, figcaption, dd { overflow-wrap: anywhere; }
    from the glass era; pages still use them.) */
 .glass { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); }
 .glass-row { border-radius: var(--radius-sm); transition: background var(--dur-1); }
-.glass-row:hover { background: rgba(255, 255, 255, 0.03); }
+.glass-row:hover { background: rgb(var(--fg-rgb) / 0.03); }
 
 /* Scroll reveals are off: everything on a page is there when it loads (lib/useScrollReveal.ts still marks elements). */
 [data-reveal] { opacity: 1; }

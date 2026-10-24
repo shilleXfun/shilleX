@@ -242,6 +242,22 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0 })) };
     });
 
+    // The newest written plans across every agent, with each one's coin and how it is going or how it ended (home's desk).
+    r.get<{ Querystring: { limit?: string } }>('/theses/latest', async (req): Promise<{ items: CoinThesisView[] }> => {
+      const limit = Math.max(1, Math.min(Number(req.query.limit) || 6, 24));
+      const rows = await db.select().from(agentTheses).orderBy(desc(sql`coalesce(${agentTheses.closedAt}, ${agentTheses.openedAt})`)).limit(limit);
+      const people = await userSummaries(db, rows.map((t) => t.agentId));
+      return {
+        items: rows.flatMap((t) => {
+          const agent = people.get(t.agentId);
+          return agent ? [{ agent, thesis: {
+            id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.market === 'world' ? t.entryPrice / LAMPORTS_PER_SOL : t.entryPrice, targetPct: t.targetPct, stopPct: t.stopPct,
+            horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null,
+          } }] : [];
+        }),
+      };
+    });
+
     // Who has a written plan on one Shillex coin: open ones first, then the last ones closed.
     r.get<{ Params: { mint: string } }>('/coins/:mint/theses', async (req): Promise<{ items: CoinThesisView[] }> => {
       const rows = await db.select().from(agentTheses).where(and(eq(agentTheses.market, 'world'), eq(agentTheses.asset, req.params.mint))).orderBy(desc(agentTheses.openedAt)).limit(40);

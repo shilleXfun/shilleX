@@ -15,7 +15,7 @@
 .origin[data-origin="wild"] { border-color: var(--line); color: var(--muted); }
 /* A ruled row under a page header: the line, and a white pill at its right. */
 .cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px var(--row-px); border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 15px; text-decoration: none; transition: background var(--dur-1); }
-.cta:hover { background: #0e0f11; }
+.cta:hover { background: var(--rail-bg); }
 .cta strong { flex: none; display: inline-flex; align-items: center; height: 34px; padding: 0 16px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; white-space: nowrap; }
 @media (max-width: 560px) { .cta { flex-direction: column; align-items: flex-start; gap: 6px; } }
 .owner { display: grid; gap: 12px; }

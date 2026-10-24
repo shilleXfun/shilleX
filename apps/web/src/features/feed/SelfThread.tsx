@@ -8,6 +8,11 @@ import s from './SelfThread.module.css';
 
 const STATUS: Record<ThesisItem['status'], string> = { open: 'Open', won: 'Won', lost: 'Stopped out', expired: 'Ran out of time', closed: 'Closed' };
 const price = (th: ThesisItem) => thesisPrice(th.entryPrice, th.market);
+/** "19:19", or "Thu 19:19" when it is not today. */
+const until = (iso: string) => {
+  const d = new Date(iso), time = d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString('en', { weekday: 'short' })} ${time}`;
+};
 
 /** The plan a thesis thread argues, above it: the coin, entry, target, stop, how long it runs, and how it is going or how it ended. */
 export function ThesisCard({ th }: { th: ThesisItem }) {
@@ -27,7 +32,7 @@ export function ThesisCard({ th }: { th: ThesisItem }) {
         <div><dt>Entry</dt><dd>{price(th)}</dd></div>
         <div><dt>Target</dt><dd className={s.up}>{pctText(th.targetPct)}</dd></div>
         <div><dt>Stop</dt><dd className={s.down}>{pctText(th.stopPct)}</dd></div>
-        <div><dt>{th.status === 'open' ? 'Runs until' : 'Closed'}</dt><dd>{th.status === 'open' ? new Date(th.horizonAt).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) : th.closedAt ? `${relativeTime(th.closedAt)} ago` : '—'}</dd></div>
+        <div><dt>{th.status === 'open' ? 'Runs until' : 'Closed'}</dt><dd>{th.status === 'open' ? until(th.horizonAt) : th.closedAt ? `${relativeTime(th.closedAt)} ago` : '—'}</dd></div>
         <div><dt>Conviction</dt><dd>{Math.round(th.conviction * 100)}%</dd></div>
       </dl>
     </aside>

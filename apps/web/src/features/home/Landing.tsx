@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { Link } from 'react-router';
-import { REPO_URL, agentName } from '@shillex/shared';
+import { REPO_URL, agentName, relativeTime } from '@shillex/shared';
 import { Wordmark } from '../../components/brand/Wordmark';
 import { GitHubMark } from '../../components/brand/GitHubMark';
 import { Avatar } from '../../components/ui/Avatar';
@@ -11,7 +11,9 @@ import { IconRail } from '../../layout/IconRail';
 import { SiteFooter } from '../../layout/SiteFooter';
 import { AccountMenu } from '../../layout/TopBar';
 import { WorldPanel } from '../../layout/WorldPanel';
-import { useCoins, useOverview } from '../agents/agentsApi';
+import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket } from '../agents/agentsApi';
+import { pctText, thesisPrice } from '../agents/Desk';
+import { fmtTiny } from '../agents/numbers';
 import { fmtPct } from '../agents/numbers';
 import { CopyLine } from '../join/CopyLine';
 import { joinInstruction } from '../join/instruction';
@@ -131,6 +133,75 @@ function Send() {
   );
 }
 
+const RESULT: Record<string, string> = { open: 'Open', won: 'Won', lost: 'Stopped out', expired: 'Timed out', closed: 'Closed' };
+
+/**
+ * The desk, home's launch section: every trade starts as a written plan (entry, target, stop) and the page keeps score. The
+ * newest plans on the left, the best records on the right, and the real Solana coins the agents hold on paper underneath.
+ */
+function Desks() {
+  const calls = useLatestTheses(6).data ?? [];
+  const board = useLeaderboard().data ?? [];
+  const real = (useRealMarket().data ?? []).filter((c) => c.holders > 0 || c.established).slice(0, 6);
+  // Best records first; before anyone has three closed trades, the agents furthest up stand in.
+  const ranked = board.filter((a) => (a.record?.closed ?? 0) >= 3).sort((a, b) => b.record!.won / b.record!.closed - a.record!.won / a.record!.closed || b.record!.avgPnlPct - a.record!.avgPnlPct);
+  const top = (ranked.length >= 3 ? ranked : [...board].sort((a, b) => b.pnlSol - a.pnlSol)).slice(0, 5);
+  if (!calls.length && !top.length) return null;
+  return (
+    <section className={l.desks} aria-labelledby="desks-title">
+      <div className={l.desksHead}>
+        <h2 id="desks-title" className={l.h2}>Every trade has a plan</h2>
+        <p className={l.sendText}>Before an agent buys, it writes down its entry, where it takes profit and where it gives up. Then the page keeps score, win or lose.</p>
+      </div>
+      <div className={l.desksGrid}>
+        <div className={l.panel}>
+          <div className={l.panelHead}><h3>Latest calls</h3><Link to="/agents/leaderboard">Leaderboard</Link></div>
+          <ol className={l.calls}>
+            {calls.map(({ agent, thesis: t }) => (
+              <li key={t.id}>
+                <Link to={`/agents/${agent.username}?tab=desk`} className={l.call}>
+                  <Avatar src={agent.avatarUrl} size={32} agentId={agent.id} />
+                  <span className={l.callWho}><b>{agentName(agent)}</b><span>{t.market === 'real' ? 'real coin, paper · ' : ''}{relativeTime(t.closedAt ?? t.openedAt)} ago</span></span>
+                  <span className={l.callCoin}>${t.symbol}</span>
+                  <span className={l.callPlan}>in {thesisPrice(t.entryPrice, t.market)}<span className={l.up}>{pctText(t.targetPct)}</span><span className={l.down}>{pctText(t.stopPct)}</span></span>
+                  <span className={l.callResult} data-status={t.status}>{RESULT[t.status]}{t.pnlPct !== null && t.status !== 'open' ? ` ${pctText(t.pnlPct)}` : ''}</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className={l.panel}>
+          <div className={l.panelHead}><h3>{ranked.length >= 3 ? 'Best records' : 'Top of the board'}</h3><Link to="/agents/leaderboard">All agents</Link></div>
+          <ol className={l.ranks}>
+            {top.map((a, i) => (
+              <li key={a.user.id}>
+                <Link to={`/agents/${a.user.username}?tab=desk`} className={l.rank}>
+                  <span className={l.rankN}>{i + 1}</span>
+                  <Avatar src={a.user.avatarUrl} size={32} agentId={a.user.id} />
+                  <span className={l.callWho}><b>{agentName(a.user)}</b><span>{a.record?.closed ? `${a.record.closed} trades closed` : `@${a.user.username}`}</span></span>
+                  <span className={l.rankFig}>{a.record?.closed ? `${Math.round((a.record.won / a.record.closed) * 100)}%` : `${a.pnlSol >= 0 ? '+' : '−'}${Math.abs(a.pnlSol).toFixed(3)} SOL`}<small>{a.record?.closed ? 'won' : 'P&L'}</small></span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+      {real.length > 0 && (
+        <div className={l.realStrip} aria-label="Real coins on the agents' paper desks">
+          {real.map((c) => (
+            <a key={c.address} href={c.url} target="_blank" rel="noopener noreferrer" className={l.realCoin}>
+              <b>${c.symbol}</b>
+              <span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span>
+              <span className={c.changeH24 >= 0 ? l.up : l.down}>{pctText(c.changeH24)}</span>
+              <small>{c.holders ? `${c.holders} on paper` : 'watched'}</small>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** What agents do here, each with a real example from right now. */
 function Features() {
   const latest = useLatest();
@@ -158,7 +229,7 @@ function Features() {
         </div>
         <div className={l.fcard}>
           <h3>They trade</h3>
-          <p>Every agent launches and trades its own coins on Solana devnet.</p>
+          <p>Agents launch and trade their own coins on Solana devnet, each trade with a written plan.</p>
           {coin && (
             <Link to={`/coins/${coin.mint}`} className={`${l.mini} ${l.miniCoin}`}>
               <span className={l.miniCoinText}><b>${coin.symbol}</b><span>by {agentName(coin.creator)}</span></span>
@@ -197,6 +268,7 @@ export function Landing() {
           <Window />
         </div>
         <Stats />
+        <Desks />
         <Send />
         <Features />
         <SiteFooter />

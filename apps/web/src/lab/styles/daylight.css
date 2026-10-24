@@ -1,0 +1,72 @@
+/*
+ * Daylight (look lab, 2026-10-24): the whole site on paper instead of night. A cool grey page, white sheets, ink-black text
+ * and buttons, cobalt for links and tickers, green and red only for money. Headings and the big figures take the logo's own
+ * face, condensed Bricolage, so the brand runs through every page instead of sitting in the corner. Everything else is the
+ * current layout: only the tokens change, which is why every page follows.
+ */
+html[data-look='daylight'] {
+  color-scheme: light;
+  --fg-rgb: 14 16 19;
+  --bg-rgb: 255 255 255;
+  --hue-shift: -38%;
+
+  --bg: #FFFFFF;
+  --rail-bg: #F4F5F7;
+  --panel: #FFFFFF;
+  --raised: #E9EBEF;
+  --hover: #E5E8EC;
+  --bg-hover: #ECEEF1;
+  --line: rgba(14, 16, 19, 0.09);
+  --line-strong: rgba(14, 16, 19, 0.15);
+  --line-hover: rgba(14, 16, 19, 0.3);
+  --text: #0E1013;
+  --text-2: #464C55;
+  --muted: #7B818A;
+
+  --accent: #E2680F;
+  --accent-hover: #C95A08;
+  --accent-ink: #FFFFFF;
+  --accent-soft: rgba(226, 104, 15, 0.12);
+  --accent-line: rgba(226, 104, 15, 0.45);
+  --accent-wash: rgba(226, 104, 15, 0.06);
+  --accent-select: rgba(37, 80, 232, 0.2);
+
+  --press: #0E1013;
+  --press-hover: #2A2E35;
+  --press-ink: #FFFFFF;
+
+  --token: #2550E8;
+  --token-soft: rgba(37, 80, 232, 0.08);
+  --token-line: rgba(37, 80, 232, 0.35);
+  --token-hover: rgba(37, 80, 232, 0.14);
+  --token-ink: #FFFFFF;
+
+  --up: #0B8A57;
+  --up-soft: rgba(11, 138, 87, 0.1);
+  --down: #D42A3D;
+  --down-soft: rgba(212, 42, 61, 0.09);
+  --warn: #9A6400;
+  --warn-soft: rgba(154, 100, 0, 0.1);
+  --warn-line: rgba(154, 100, 0, 0.4);
+  --heat: #E2680F;
+  --heat-soft: rgba(226, 104, 15, 0.12);
+  --coin: #3A2E1B;
+  --ghost: #A3A8B0;
+  --scrim: rgba(255, 255, 255, 0.78);
+  --scrim-strong: rgba(255, 255, 255, 0.92);
+  --scrim-soft: rgba(255, 255, 255, 0.6);
+
+  --card-hover: #F8F9FA;
+  --row-hover: rgba(14, 16, 19, 0.025);
+  --tile: rgba(14, 16, 19, 0.035);
+  --glow-accent: 0 0 0 3px rgba(226, 104, 15, 0.18);
+
+  --font-brand: 'Bricolage Grotesque Variable', var(--font-ui);
+}
+
+/* Headings in the logo's face: condensed, heavy, tight. */
+html[data-look='daylight'] :is(h1, h2) { font-stretch: 82%; font-weight: 750; }
+html[data-look='daylight'] body { background: var(--bg); color: var(--text); }
+/* Shadows were drawn for a dark page; on paper they turn to a thin lift. */
+html[data-look='daylight'] [class*='window'] { box-shadow: 0 1px 2px rgba(14, 16, 19, 0.06), 0 24px 60px rgba(14, 16, 19, 0.08) !important; }
+html[data-look='daylight'] ::selection { background: rgba(37, 80, 232, 0.18); }

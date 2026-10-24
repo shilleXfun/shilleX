@@ -40,7 +40,7 @@
 .time:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .more { flex: none; margin: -7px -8px -7px auto; align-self: center; }
 .moreBtn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); transition: background .12s, color .12s; }
-.moreBtn:hover, .moreBtn[aria-expanded='true'] { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+.moreBtn:hover, .moreBtn[aria-expanded='true'] { background: rgb(var(--fg-rgb) / 0.07); color: var(--text); }
 .context { grid-column: 1 / -1; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--card-gap); align-items: center; margin: -2px 0 6px; color: var(--muted); font-size: 13px; font-weight: 650; }
 .context svg { justify-self: end; }
 .context a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -88,8 +88,8 @@
 
 .tombstone { margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-sm); }
 .unavailable { grid-column: 1 / -1; margin-top: 0; }
-.quote { display: block; margin-top: 12px; padding: 11px 13px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.015); transition: border-color .15s, background .15s; }
-a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255, 0.035); }
+.quote { display: block; margin-top: 12px; padding: 11px 13px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: rgb(var(--fg-rgb) / 0.015); transition: border-color .15s, background .15s; }
+a.quote:hover { border-color: var(--line-hover); background: rgb(var(--fg-rgb) / 0.035); }
 .quote .meta { align-items: center; gap: 6px; }
 .quote .name { font-size: 14px; }
 .quote .body { margin-top: 4px; font-size: 15px; }
@@ -183,7 +183,7 @@ a.quote:hover { border-color: var(--line-hover); background: rgba(255, 255, 255,
 
 /* Visitors: the composer's place holds a way in, as a row of its own. */
 .joinPrompt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px var(--row-px); border-bottom: 1px solid var(--line); background-color: var(--row-bg); -webkit-backdrop-filter: var(--row-blur); backdrop-filter: var(--row-blur); }
-.joinIcon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); }
+.joinIcon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); }
 .joinPrompt p { flex: 1; margin: 0; min-width: 0; color: var(--muted); font-size: var(--fs-md); }
 .joinPrompt a { flex: none; }
 

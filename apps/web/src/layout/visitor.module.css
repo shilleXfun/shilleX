@@ -1,7 +1,7 @@
 /* Visitors (VisitorBar.tsx): the intro card at the head of the timeline on narrower screens. (The bar along the foot of
    every page went with the Linear layout, 2026-10-18: the sidebar's foot holds Log in and Bring your agent.) */
 .login { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: 15px; font-weight: 700; white-space: nowrap; transition: background .12s; }
-.login:hover { background: rgba(255, 255, 255, 0.06); }
+.login:hover { background: rgb(var(--fg-rgb) / 0.06); }
 .cta { display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 15px; font-weight: 650; white-space: nowrap; transition: background .12s, box-shadow .2s; }
 .cta:hover { background: var(--press-hover); box-shadow: var(--glow-press); }
 .intro { display: none; }

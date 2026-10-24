@@ -179,7 +179,7 @@
 .pair > a > span { box-shadow: 0 0 0 2px var(--card-solid); }
 .vs { margin: 0 3px; color: var(--down); font: 600 10.5px var(--font-ui); letter-spacing: .06em; }
 .heat { flex: none; display: inline-flex; align-items: center; gap: 8px; color: color-mix(in oklab, var(--down) calc(var(--h) * 100%), var(--heat)); font: 600 13px var(--font-ui); }
-.heatBar { position: relative; width: 40px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.heatBar { position: relative; width: 40px; height: 4px; border-radius: 2px; background: rgb(var(--fg-rgb) / 0.07); overflow: hidden; }
 .heatBar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, var(--heat), var(--down)); }
 
 /* Rugs and launches: the coin's emoji on a small tile. */
@@ -212,13 +212,13 @@
 .moodGrid > li { min-width: 0; }
 /* --c: faction colour (amber on its own); --m: mood 0..1. A happier agent glows brighter, as on the backdrop. */
 .moodTile { position: relative; display: grid; justify-items: center; gap: 6px; height: 100%; padding: 11px 6px 9px; border-radius: 12px; color: var(--text); text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgb(var(--fg-rgb) / 0.02);
   box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .15s; }
 .moodTile:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent); }
 .moodAvatar { position: relative; display: inline-flex; margin-bottom: 2px; border-radius: 10px; }
 .moodAvatar > span:first-child { border-radius: 10px; box-shadow: 0 0 0 2px var(--c), 0 0 calc(4px + var(--m) * 18px) color-mix(in srgb, var(--c) calc(var(--m) * 65%), transparent); }
 .moodName { max-width: 100%; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.moodBar { position: relative; width: min(100%, 76px); height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); }
+.moodBar { position: relative; width: min(100%, 76px); height: 5px; border-radius: 3px; background: rgb(var(--fg-rgb) / 0.08); }
 .moodBar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-hover); }
 .moodFill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 .moodFill[data-dir='up'] { background: var(--up); box-shadow: 0 0 6px color-mix(in srgb, var(--up) 55%, transparent); }
@@ -226,7 +226,7 @@
 .moodPnl { font: 500 11.5px var(--font-ui); }
 /* Broke or ghost: a small pill on the avatar's bottom edge. */
 .moodTag { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--down) 22%, var(--panel)); box-shadow: 0 0 0 2px var(--panel); color: var(--down); font: 600 9px/13px var(--font-ui); letter-spacing: .02em; }
-.moodTile[data-ghost='true'] { background: rgba(255, 255, 255, 0.015); }
+.moodTile[data-ghost='true'] { background: rgb(var(--fg-rgb) / 0.015); }
 .moodTile[data-ghost='true'] .moodAvatar > span:first-child, .moodTile[data-ghost='true'] .moodBar { opacity: .4; filter: grayscale(1); }
 .moodTile[data-ghost='true'] .moodName, .moodTile[data-ghost='true'] .moodPnl { color: var(--muted); }
 .moodTile[data-ghost='true'] .moodTag { background: var(--raised); color: var(--muted); }
@@ -272,7 +272,7 @@
 .vital dt { color: var(--muted); font: 500 10.5px/1.4 var(--font-ui); letter-spacing: 0; text-transform: none; }
 .vital dd { display: grid; gap: 5px; margin: 0; font: 600 16px/1.25 var(--font-ui); overflow-wrap: anywhere; }
 .vitalNote { color: var(--muted); font: 500 11.5px/1.35 var(--font-ui); }
-.meter { position: relative; display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
+.meter { position: relative; display: block; height: 4px; border-radius: 2px; background: rgb(var(--fg-rgb) / 0.08); }
 .meter::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-hover); }
 .meterFill { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .meterFill[data-dir='up'] { background: var(--up); box-shadow: 0 0 6px color-mix(in srgb, var(--up) 55%, transparent); }
@@ -284,7 +284,7 @@
 .radarBox { display: grid; justify-items: center; gap: 4px; max-width: 100%; }
 .radar { display: block; max-width: 100%; height: auto; overflow: visible; }
 .radarRing { fill: none; stroke: var(--line); stroke-width: 1; }
-.radarRim { fill: rgba(255, 255, 255, 0.015); stroke: var(--line-strong); stroke-width: 1; }
+.radarRim { fill: rgb(var(--fg-rgb) / 0.015); stroke: var(--line-strong); stroke-width: 1; }
 .radarThen { fill: none; stroke: var(--token); stroke-width: 1.4; stroke-dasharray: 4 4; stroke-linejoin: round; }
 .radarNow { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .radarDot { fill: var(--accent); }
@@ -316,7 +316,7 @@
 .bond { min-height: 38px; }
 .bond .agentChip { flex: 1; min-width: 0; }
 .affinity { flex: none; display: inline-flex; align-items: center; gap: 8px; font: 600 13px var(--font-ui); }
-.affinityBar { position: relative; width: 36px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.affinityBar { position: relative; width: 36px; height: 4px; border-radius: 2px; background: rgb(var(--fg-rgb) / 0.07); overflow: hidden; }
 .affinityBar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: currentColor; }
 
 /* Positions and wallet. */
@@ -452,11 +452,11 @@ a.person:hover { color: var(--accent-hover); }
 .panel {
   padding: 20px 22px 22px; border: 1px solid transparent; border-radius: var(--radius-card);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.42);
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .panel { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; }
-  .panel:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); }
+  .panel:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); }
 }
 .panelHead { margin-bottom: 16px; }
 .panelTitle { gap: 10px; font: 650 18px/1.2 var(--font-brand); letter-spacing: -0.025em; }
@@ -466,7 +466,7 @@ a.person:hover { color: var(--accent-hover); }
 .empty { padding: 6px 0; font-size: 14px; }
 .subTitle { color: var(--text-2); font: 600 14px/1.3 var(--font-ui); letter-spacing: -0.01em; }
 .rowNum { font-size: 14px; font-weight: 600; }
-.coinBadge { width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
+.coinBadge { width: 38px; height: 38px; border-radius: 12px; background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
 .ticker { color: var(--text); font-size: 15px; font-weight: 650; }
 .launchBy { font-size: 13px; }
 
@@ -486,7 +486,7 @@ a.person:hover { color: var(--accent-hover); }
 .factionPill { padding: 4px 12px 4px 10px; font-size: 13.5px; font-weight: 600; }
 .vitals { gap: 10px; margin: 0; }
 @container (min-width: 640px) { .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.vital { gap: 6px; padding: 14px 16px 15px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.vital { gap: 6px; padding: 14px 16px 15px; border-radius: 16px; background: rgb(var(--fg-rgb) / 0.035); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgb(var(--fg-rgb) / 0.04); }
 .vital dt { color: var(--muted); font: 550 13px/1.3 var(--font-ui); }
 .vital dd { gap: 7px; font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
 /* Four to a row on a narrower card: the figures shrink with the row instead of breaking a word ("notoriou-s"). */
@@ -500,10 +500,10 @@ a.person:hover { color: var(--accent-hover); }
 .traitWords::first-letter { text-transform: uppercase; }
 .relCols { gap: 20px; }
 .bond { min-height: 44px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
-.bond:hover { background: rgba(255, 255, 255, 0.04); }
+.bond:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .affinity { font-size: 13.5px; }
 .position { min-height: 56px; padding: 8px 10px; margin: 0 -10px; border-radius: 14px; }
-.position:hover { background: rgba(255, 255, 255, 0.045); }
+.position:hover { background: rgb(var(--fg-rgb) / 0.045); }
 .posChange { font-size: 12.5px; font-weight: 600; }
 .walletList > div { min-height: 46px; }
 .walletList dt { font-size: 14px; }
@@ -527,14 +527,14 @@ a.person:hover { color: var(--accent-hover); }
   position: relative; isolation: isolate; display: grid; align-content: start; gap: 4px; height: 100%; padding: 18px; overflow: hidden;
   border: 1px solid transparent; border-radius: var(--radius-card); color: var(--text);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 20px 60px rgba(0, 0, 0, 0.4);
   transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
 }
 .castCard::before { display: none; }
-.castCard:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 50px hsl(var(--hue, 220) 80% 55% / 0.16); }
+.castCard:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.08), 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 50px hsl(var(--hue, 220) 80% 55% / 0.16); }
 .castFace { justify-self: start; margin-bottom: 12px; border-radius: 28%; }
 .castName { overflow: hidden; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
-.castRole { overflow: hidden; color: hsl(var(--hue, 220) 72% 74%); font-size: 13.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.castRole { overflow: hidden; color: hsl(var(--hue, 220) 72% calc(74% + var(--hue-shift, 0%))); font-size: 13.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .castBio { display: -webkit-box; margin-top: 6px; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .castStats { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .castStats b { color: var(--text); font-weight: 650; }
@@ -547,12 +547,12 @@ a.person:hover { color: var(--accent-hover); }
 .movingCard {
   display: grid; gap: 14px; height: 100%; padding: 18px; border: 1px solid transparent; border-radius: var(--radius-card); color: var(--text);
   background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.4); transition: transform .2s cubic-bezier(.2, .8, .2, 1);
+  box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 20px 60px rgba(0, 0, 0, 0.4); transition: transform .2s cubic-bezier(.2, .8, .2, 1);
 }
 .movingCard:hover { transform: translateY(-3px); }
 .movingCard svg { width: 100%; height: 56px; }
 .movingTop { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.coinTileLg { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 24px; }
+.coinTileLg { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 14px; background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 24px; }
 .coinNames { display: grid; min-width: 0; line-height: 1.3; }
 .coinNames b { overflow: hidden; color: var(--text); font-size: 15.5px; font-weight: 650; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
 .coinNames span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
@@ -561,16 +561,16 @@ a.person:hover { color: var(--accent-hover); }
 .movingLabel { display: block; color: var(--muted); font-size: 12.5px; }
 .movingBig { display: block; margin-top: 2px; font: 650 clamp(16px, 1.4vw, 20px)/1.1 var(--font-brand); letter-spacing: -0.03em; }
 
-.tableWrap { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.tableWrap { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .table th { padding: 14px 14px 12px; color: var(--muted); font: 550 12.5px var(--font-ui); border-bottom: 1px solid var(--line); }
 .table td { padding: 12px 14px; font-size: 14.5px; }
 .table tbody tr { transition: background .15s; }
-.table tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
+.table tbody tr:hover { background: rgb(var(--fg-rgb) / 0.035); }
 .coinCell { display: inline-flex; align-items: center; gap: 12px; min-width: 0; color: var(--text); }
-.coinTile { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
+.coinTile { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line); font-size: 19px; }
 .creatorCell { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-weight: 550; white-space: nowrap; }
 .creatorCell:hover { color: var(--text); }
-.rugMark { margin-left: 8px; padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: 11.5px; font-weight: 550; }
+.rugMark { margin-left: 8px; padding: 1px 7px; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: 11.5px; font-weight: 550; }
 .coinList { border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: none; }
 .coinItem { min-height: 56px; }
 .coinSym { color: var(--text); }
@@ -585,25 +585,25 @@ a.person:hover { color: var(--accent-hover); }
 
 /* A coin (CoinPage): a hero card with its identity, creator and large stats; the chart, talk, holders and trades as glass cards. */
 .coinPage { display: grid; gap: 16px; padding: 22px var(--row-px) 28px; container-type: inline-size; }
-.coinCard { min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
+.coinCard { min-width: 0; padding: 22px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; box-shadow: inset 0 1px 0 rgb(var(--fg-rgb) / 0.06), 0 24px 70px rgba(0, 0, 0, 0.42); }
 .coinCardTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 16px; color: var(--text); font: 650 19px/1.2 var(--font-brand); letter-spacing: -0.025em; }
 .coinCount { color: var(--muted); font: 550 14px var(--font-ui); }
 .coinHero { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 16px; padding: 26px; }
 .coinHero::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: 2px; background: var(--line-hover); pointer-events: none; }
 .coinHeroTop { display: flex; align-items: center; gap: 18px; min-width: 0; }
-.coinHeroTile { display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 40px rgba(0, 0, 0, 0.4); font-size: 38px; }
+.coinHeroTile { display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: var(--radius-card); background: rgb(var(--fg-rgb) / 0.06); box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 40px rgba(0, 0, 0, 0.4); font-size: 38px; }
 /* Wide enough for the ticker on one line; on a narrow card Solscan wraps under it instead of squeezing it. */
 .coinHeroTop { flex-wrap: wrap; }
 .coinHeroText { flex: 1 1 180px; min-width: 0; }
 .coinTitle { margin: 0; color: var(--text); font: 650 clamp(32px, 3.6vw, 46px)/1 var(--font-brand); letter-spacing: -0.045em; overflow-wrap: anywhere; }
 .coinName { margin: 6px 0 0; color: var(--muted); font-size: 16px; }
 .coinLinkOut { flex: none; padding: 8px 14px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text-2); font-size: 13.5px; font-weight: 600; transition: background .15s, color .15s; }
-.coinLinkOut:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.coinLinkOut:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.06); }
 .coinDesc { margin: 0; max-width: 62ch; color: var(--text-2); font-size: 16px; line-height: 1.55; }
 .coinBy { display: flex; }
 .coinStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 0; }
 @container (min-width: 600px) { .coinStats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.coinStat { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px var(--line); }
+.coinStat { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgb(var(--fg-rgb) / 0.035); box-shadow: inset 0 0 0 1px var(--line); }
 .coinStatWide { grid-column: 1 / -1; }
 .coinStat dt { color: var(--muted); font-size: 13px; font-weight: 550; }
 .coinStat dd { margin: 0; color: var(--text); font: 650 22px/1.15 var(--font-brand); letter-spacing: -0.03em; }
@@ -614,9 +614,9 @@ a.person:hover { color: var(--accent-hover); }
 @container (min-width: 620px) { .coinCols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .coinRows { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .coinRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
-.coinRow:hover { background: rgba(255, 255, 255, 0.04); }
+.coinRow:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .tradeRow { display: grid; grid-template-columns: minmax(0, 1.4fr) 56px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
-.tradeRow:hover { background: rgba(255, 255, 255, 0.04); }
+.tradeRow:hover { background: rgb(var(--fg-rgb) / 0.04); }
 .tradeKind { font-size: 13.5px; font-weight: 650; text-transform: capitalize; }
 .tradeTokens { color: var(--muted); }
 .tradeEnd { display: inline-flex; align-items: center; gap: 10px; justify-self: end; }
@@ -666,7 +666,7 @@ a.person:hover { color: var(--accent-hover); }
 .castCard, .castCard:hover, .movingCard, .movingCard:hover, .launch, .launch:hover, .moodTile, .moodTile:hover {
   border: 0; border-radius: 0; background: var(--bg); box-shadow: none; transform: none; transition: background var(--dur-1);
 }
-.castCard:hover, .movingCard:hover, .launch:hover, .moodTile:hover { background: #0e0f11; }
+.castCard:hover, .movingCard:hover, .launch:hover, .moodTile:hover { background: var(--rail-bg); }
 .castCard { padding: 22px var(--row-px); }
 .castFace, .castFace > span { border-radius: 28%; }
 .castRole { color: var(--muted); }
@@ -706,7 +706,7 @@ a.person:hover { color: var(--accent-hover); }
 .tileStats { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums; }
 .tileStats b { font-weight: 650; }
 .castMore { display: block; margin: 18px auto 6px; height: 40px; padding: 0 22px; border: 0; border-radius: var(--radius-pill); background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 600 14px/1 var(--font-ui); cursor: pointer; }
-.castMore:hover { background: rgba(255, 255, 255, 0.05); }
+.castMore:hover { background: rgb(var(--fg-rgb) / 0.05); }
 .cast { padding-bottom: 28px; border-bottom: 1px solid var(--line); }
 
 /* ── Linear layout (2026-10-18): from 768 px dense pages. Small section titles, a tight grid of small portrait tiles,

@@ -4,7 +4,7 @@
 .wrap { padding: 0 max(var(--gut), env(safe-area-inset-left, 0px)); }
 
 /* The bar. */
-.topWrap { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid var(--line); background: rgba(8, 9, 10, 0.85); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.topWrap { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.85); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .top { display: flex; align-items: center; gap: 28px; height: 64px; padding: 0 var(--gut); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
 .links { display: flex; gap: 24px; margin-left: auto; font-size: 14px; color: var(--text-2); }
@@ -150,7 +150,46 @@
 .facts b { color: var(--text); font-weight: 600; }
 /* GitHub in the bar: an icon button beside Log in. */
 .gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
-.gh:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.gh:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.06); }
 /* Linear layout (2026-10-18): the sidebar's rows are labelled at every width, too wide for the window's 76 px rail on
    mid-size screens; there the window shows the feed alone. */
 @media (min-width: 768px) and (max-width: 1000px) { .app { grid-template-columns: minmax(0, 1fr); } .appRail { display: none; } }
+
+/* The desk (launch section): the newest written plans beside the best records, then the real coins held on paper. */
+.desks { padding: 104px 0 0; }
+.desksHead { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: end; gap: 16px clamp(56px, 6vw, 120px); }
+.desksHead .sendText { margin: 0; }
+.desksGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; margin-top: 36px; }
+.panel { min-width: 0; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); }
+.panelHead { display: flex; align-items: baseline; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.panelHead h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.panelHead a { color: var(--muted); font-size: 13.5px; }
+.panelHead a:hover { color: var(--text); }
+.calls, .ranks { margin: 0; padding: 0; list-style: none; }
+.calls li + li, .ranks li + li { border-top: 1px solid var(--line); }
+.call, .rank { display: grid; align-items: center; gap: 12px; padding: 12px 20px; color: inherit; }
+.call { grid-template-columns: 32px minmax(0, 1fr) auto auto auto; }
+.rank { grid-template-columns: 18px 32px minmax(0, 1fr) auto; }
+.call:hover, .rank:hover { background: var(--hover); }
+.callWho { display: grid; min-width: 0; }
+.callWho b { overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.callWho span { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.callCoin { color: var(--token); font-size: 14.5px; font-weight: 650; }
+.callPlan { display: inline-flex; gap: 10px; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.callPlan .up, .callPlan .down { font-size: 13px; }
+.callResult { min-width: 92px; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--text-2); font-size: 12.5px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.callResult[data-status='won'] { background: var(--up-soft); color: var(--up); }
+.callResult[data-status='lost'] { background: var(--down-soft); color: var(--down); }
+.callResult[data-status='expired'] { background: var(--warn-soft); color: var(--warn); }
+.rankN { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.rankFig { display: grid; justify-items: end; color: var(--text); font-size: 18px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.rankFig small { color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.realStrip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 20px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
+.realCoin { display: grid; gap: 2px; padding: 14px 16px; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.realCoin + .realCoin { border-left: 1px solid var(--line); }
+.realCoin b { color: var(--text); font-size: 15px; }
+.realCoin .up, .realCoin .down { font-size: 13px; }
+.realCoin small { color: var(--muted); font-size: 12px; }
+.realCoin:hover { background: var(--hover); }
+@media (max-width: 1100px) { .desksGrid, .desksHead { grid-template-columns: minmax(0, 1fr); } .realStrip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .realCoin:nth-child(4) { border-left: 0; } .realCoin:nth-child(n + 4) { border-top: 1px solid var(--line); } }
+@media (max-width: 640px) { .call { grid-template-columns: 32px minmax(0, 1fr) auto; } .callPlan, .callCoin { display: none; } .realStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .realCoin:nth-child(odd) { border-left: 0; } .realCoin:nth-child(n + 3) { border-top: 1px solid var(--line); } }
