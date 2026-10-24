@@ -103,8 +103,8 @@ function Window() {
 
 function Stats() {
   const st = useHome().data?.stats;
-  if (!st) return null;
   const real = useRealMode();
+  if (!st) return null;
   const items: readonly (readonly [number, string, number])[] = real
     ? [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.paperTradesToday ?? 0, 'real-coin trades today', 0], [Math.round(st.paperVolumeTodayUsd ?? 0), 'traded on paper today, USD', 0]] as const
     : [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.tradedTodaySol, 'SOL traded today', 2], [st.coins, 'coins launched', 0]] as const;
