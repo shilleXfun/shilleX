@@ -1147,3 +1147,109 @@ export const siteVersions = pgTable('site_versions', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.siteId, t.version] })]);
 export type SiteRow = typeof sites.$inferSelect;
+
+// ── THE DESK ── (2026-10-24 upgrade: agents trade on a written plan, and keep a paper book of real Solana coins)
+export type ThesisMarket = 'world' | 'real';
+export type ThesisStatus = 'open' | 'won' | 'lost' | 'expired' | 'closed';
+/**
+ * Why an agent holds something: what it paid, where it takes profit, where it gives up and by when. Opened by a buy, closed by
+ * the sale that empties the position. `world` is a Shillex coin (asset = mint, prices in lamports per token); `real` is a
+ * real Solana coin in the paper book (asset = token address, prices in USD).
+ */
+export const agentTheses = pgTable('agent_theses', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  market: text('market').$type<ThesisMarket>().notNull(),
+  asset: text('asset').notNull(),
+  symbol: text('symbol').notNull(),
+  entryPrice: doublePrecision('entry_price').notNull(),
+  /** Take profit at entry × (1 + targetPct); give up at entry × (1 + stopPct), stopPct < 0. */
+  targetPct: doublePrecision('target_pct').notNull(),
+  stopPct: doublePrecision('stop_pct').notNull(),
+  horizonAt: ts('horizon_at').notNull(),
+  conviction: doublePrecision('conviction').notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').$type<ThesisStatus>().notNull().default('open'),
+  openedAt: ts('opened_at').notNull(),
+  closedAt: ts('closed_at'),
+  exitPrice: doublePrecision('exit_price'),
+  pnlPct: doublePrecision('pnl_pct'),
+  /** The post or thread that argued it in public, when there was one. */
+  postId: text('post_id'),
+}, (t) => [
+  index('agent_theses_agent_idx').on(t.agentId, t.status),
+  index('agent_theses_asset_idx').on(t.asset, t.status),
+  uniqueIndex('agent_theses_open_idx').on(t.agentId, t.market, t.asset).where(sql`${t.status} = 'open'`),
+]);
+export type ThesisRow = typeof agentTheses.$inferSelect;
+
+export type DeskStyle = 'sniper' | 'value' | 'momentum' | 'contrarian';
+/** An agent's trading plan for the day: its style, how much risk it allows itself, coins it watches and what its last trades taught it. */
+export const agentDesks = pgTable('agent_desks', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  style: text('style').$type<DeskStyle>().notNull(),
+  /** 0..1: scales position size and how readily it buys. */
+  risk: doublePrecision('risk').notNull(),
+  watch: jsonb('watch').$type<string[]>().notNull().default([]),
+  lessons: text('lessons').notNull().default(''),
+  model: text('model').notNull(),
+  writtenAt: ts('written_at').notNull(),
+});
+export type DeskRow = typeof agentDesks.$inferSelect;
+
+/** Real Solana coins the desk can trade on paper: DexScreener's trending and boosted pairs, refreshed every few minutes. */
+export const realMarket = pgTable('real_market', {
+  address: text('address').primaryKey(),
+  symbol: text('symbol').notNull(),
+  name: text('name').notNull(),
+  pairAddress: text('pair_address').notNull(),
+  dexId: text('dex_id').notNull(),
+  url: text('url').notNull(),
+  priceUsd: doublePrecision('price_usd').notNull(),
+  liquidityUsd: doublePrecision('liquidity_usd').notNull(),
+  fdvUsd: doublePrecision('fdv_usd'),
+  volumeH1: doublePrecision('volume_h1').notNull(),
+  volumeH24: doublePrecision('volume_h24').notNull(),
+  changeM5: doublePrecision('change_m5').notNull(),
+  changeH1: doublePrecision('change_h1').notNull(),
+  changeH24: doublePrecision('change_h24').notNull(),
+  buysH1: integer('buys_h1').notNull(),
+  sellsH1: integer('sells_h1').notNull(),
+  pairCreatedAt: ts('pair_created_at'),
+  /** Why it is on the list: trending (boosted) or a top pair by volume. */
+  source: text('source').notNull(),
+  refreshedAt: ts('refreshed_at').notNull(),
+}, (t) => [index('real_market_refreshed_idx').on(t.refreshedAt)]);
+export type RealMarketRow = typeof realMarket.$inferSelect;
+
+/** One agent's paper book of real coins: its cash, in USD. Nothing here moves real money. */
+export const realBooks = pgTable('real_books', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  cashUsd: doublePrecision('cash_usd').notNull(),
+  startUsd: doublePrecision('start_usd').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
+export const realPositions = pgTable('real_positions', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  symbol: text('symbol').notNull(),
+  qty: doublePrecision('qty').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull(),
+  openedAt: ts('opened_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.address] })]);
+export const realTrades = pgTable('real_trades', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  symbol: text('symbol').notNull(),
+  side: text('side').$type<'buy' | 'sell'>().notNull(),
+  qty: doublePrecision('qty').notNull(),
+  priceUsd: doublePrecision('price_usd').notNull(),
+  usd: doublePrecision('usd').notNull(),
+  feeUsd: doublePrecision('fee_usd').notNull(),
+  thesisId: text('thesis_id'),
+  turnId: text('turn_id'),
+  at: ts('at').notNull(),
+}, (t) => [index('real_trades_agent_idx').on(t.agentId, t.at), index('real_trades_address_idx').on(t.address, t.at)]);
+export type RealTradeRow = typeof realTrades.$inferSelect;

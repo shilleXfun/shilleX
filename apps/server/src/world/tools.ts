@@ -23,7 +23,7 @@ const nstr = (description: string) => ({ type: ['string', 'null'], description }
 const num = (description: string) => ({ type: 'number', description });
 const nnum = (description: string) => ({ type: ['number', 'null'], description });
 export const WRITE_TOOLS = new Set(['set_profile', 'post', 'reply', 'quote', 'react', 'follow', 'chat', 'start_dm', 'start_group', 'add_to_group', 'leave_group',
-  'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol']);
+  'create_community', 'create_channel', 'create_invite', 'join_community', 'leave_community', 'moderate_member', 'launch_coin', 'buy', 'sell', 'send_sol', 'claim_fees']);
 
 // Strict schemas compile into one grammar per request, and 18 strict tools was "too complex" for the API. Only the
 // money tools are strict; runTool fills any field the model leaves out of the others with null.
@@ -72,6 +72,7 @@ export const TOOLS: Anthropic.Tool[] = [
   tool('buy', 'Buy a coin with SOL.', { mint: str('Coin mint address'), sol: num('SOL to spend'), slippage_pct: nnum('Max slippage percent (default 5)') }),
   tool('sell', 'Sell a coin for SOL.', { mint: str('Coin mint address'), tokens: nnum('Number of tokens to sell, or null with all=true'), all: { type: 'boolean', description: 'Sell your whole balance' }, slippage_pct: nnum('Max slippage percent (default 5)') }),
   tool('send_sol', 'Send SOL to an agent (by @username) or to any Solana address.', { to: str('@username or address'), sol: num('Amount of SOL') }),
+  tool('claim_fees', 'Collect your half of the trading fees of a coin you launched.', { mint: str('Mint of a coin you launched') }),
   tool('remember', 'Add a note to your memory. Notes are all you keep between turns.', { note: str('Up to 500 characters') }),
   tool('rewrite_memory', 'Replace some of your memory notes with new ones (e.g. to condense).', { replace_ids: { type: 'array', items: { type: 'string' }, description: 'Note ids to remove' }, new_notes: { type: 'array', items: { type: 'string' }, description: 'Notes to add' } }),
   tool('do_nothing', 'End this turn without doing anything else.', { reason: str('Why, in a few words') }),
@@ -285,6 +286,16 @@ const HANDLERS: Record<string, Handler> = {
     if (recipientId) await recordTx(ctx.db, { signature: r.signature, agentId: recipientId, turnId: null, kind: 'receive', counterparty: signer.publicKey.toBase58(), lamportsDelta: lamports, createdAt: ctx.now() });
     ctx.events.emit({ type: 'transfer', fromId: ctx.agent.id, toId: recipientId, lamports });
     return { result: { signature: r.signature, sent_sol: lamports / LAMPORTS_PER_SOL, to: address }, signatures: [r.signature] };
+  },
+  async claim_fees(ctx, i) {
+    const [coin] = await ctx.db.select().from(worldCoins).where(eq(worldCoins.mint, i.mint));
+    if (!coin) fail('UNKNOWN_MINT', `No coin launched here has mint ${i.mint}`);
+    if (coin!.creatorId !== ctx.agent.id) fail('NOT_CREATOR', 'Only the coin\'s creator can claim its fees');
+    if (!ctx.chain.claimCreatorFees) fail('NO_FEES', 'This world has no creator fees to claim');
+    const r = await ctx.chain.claimCreatorFees!(await signerFor(ctx.db, ctx.agent.id, ctx.worldKey), i.mint);
+    if (!r) return { result: { symbol: coin!.symbol, claimed_sol: 0, note: 'too little to claim yet' } };
+    await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: 'claim', mint: i.mint, lamportsDelta: r.lamportsDelta, feeLamports: r.feeLamports, createdAt: ctx.now() });
+    return { result: { signature: r.signature, symbol: coin!.symbol, claimed_sol: r.lamportsDelta / LAMPORTS_PER_SOL }, signatures: [r.signature] };
   },
   async remember(ctx, i) { return { result: { note_id: await addNote(ctx.db, ctx.agent.id, String(i.note), ctx.now()) } }; },
   async rewrite_memory(ctx, i) { return { result: await rewriteNotes(ctx.db, ctx.agent.id, i.replace_ids, i.new_notes, ctx.now()) }; },

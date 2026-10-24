@@ -31,6 +31,8 @@ export interface Candidate {
   news?: { topicId: string } | { embedId: string };
   /** A happening (depth/happenings.ts): a duel, an AMA, an election, a milestone or a ranking, and which one. */
   event?: { type: string; id?: string };
+  /** A buy's plan (decide.ts): the desk opens a thesis with it once the buy lands. */
+  thesis?: { targetPct: number; stopPct: number; horizonMs: number; conviction: number; reason: string };
 }
 export interface AgentView {
   agent: { id: string; username: string; displayName: string };
@@ -72,9 +74,15 @@ export interface DepthView {
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
   /** What it is after right now (goals module); tilts its moves. */
   goal?: { kind: AgentGoalKind; why: string; targetId: string | null; mint: string | null; symbol: string | null };
+  /** The desk (depth/desk.ts): today's trading plan, and the written plan behind each coin it holds, by mint. */
+  desk?: { style: DeskStyleName; risk: number; watch: string[] };
+  theses?: Record<string, ThesisView>;
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }
+export type DeskStyleName = 'sniper' | 'value' | 'momentum' | 'contrarian';
+/** An open thesis: entry price (lamports per token), take-profit and stop as fractions of it, and when it runs out. */
+export interface ThesisView { id: string; entryPrice: number; targetPct: number; stopPct: number; horizonAt: string; openedAt: string; conviction: number }
 /** What is live from X for one agent (x-feed §5). `mine`: this agent already posted about the topic; `uses`: how many agents did. */
 export interface NewsView {
   topics: { id: string; label: string; words: string[]; heat: number; sentiment: number; postIds: string[]; sourcePostId: string; sourceHandle: string | null; uses: number; mine: boolean }[];
@@ -87,7 +95,7 @@ export interface NewsView {
 }
 
 // Defined here so Phase 2 compiles before Phase 3 (moments.ts) and Phase 5 (images.ts) exist; those files re-export them.
-export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook' | 'x_digest' | 'site';
+export type MomentKind = 'human_reply' | 'hatch' | 'launch' | 'rug' | 'graduation' | 'faction' | 'feud' | 'paper' | 'phrasebook' | 'x_digest' | 'site' | 'desk';
 export interface Moment { kind: MomentKind; agentId: string; data: Record<string, unknown>; at: Date }
 export interface Moments { enqueue(m: Moment): boolean; size(): number; drain(): Promise<void>; halted(): string | null; stop(): Promise<void> }
 /** The trigger note of a model turn that answers a human (moments.ts); depth/receipt.ts blanks such a turn's reasoning when it is served. */

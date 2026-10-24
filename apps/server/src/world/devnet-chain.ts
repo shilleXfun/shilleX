@@ -4,7 +4,7 @@ import BN from 'bn.js';
 import { DynamicBondingCurveClient, SwapMode, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
-import { ChainError, GRADUATED_MESSAGE, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
+import { CLAIM_MIN_LAMPORTS, ChainError, GRADUATED_MESSAGE, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
 import { DBC_CONFIG, getSetting } from './launchpad.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
 import { rulesFromConfig } from '../ledger/rules.ts';
@@ -182,6 +182,17 @@ export class DevnetChain implements Chain {
 
   buy(signer: Keypair, mint: string, lamportsIn: number, slippageBps: number) { return this.swap(signer, mint, lamportsIn, slippageBps, false); }
   sell(signer: Keypair, mint: string, rawTokensIn: number, slippageBps: number) { return this.swap(signer, mint, rawTokensIn, slippageBps, true); }
+
+  /** The creator's unclaimed half of the pool's SOL trading fees (the launchpad collects fees in the quote token), paid to its wallet. */
+  async claimCreatorFees(signer: Keypair, mint: string): Promise<TradeResult | null> {
+    const pool = this.poolOf(mint);
+    let due: BN;
+    try { due = (await this.client.state.getPoolFeeMetrics(pool)).current.creatorQuoteFee; } catch (e) { throw toChainError(e); }
+    if (due.ltn(CLAIM_MIN_LAMPORTS)) return null;
+    const tx = await this.client.creator.claimCreatorTradingFee({ creator: signer.publicKey, payer: signer.publicKey, pool, maxBaseAmount: new BN(0), maxQuoteAmount: due });
+    const signature = await this.send(tx, [signer]);
+    return { signature, ...(await this.deltas(signature, signer.publicKey.toBase58(), null)) };
+  }
 
   async sendSol(signer: Keypair, to: string, lamports: number) {
     let dest: PublicKey;

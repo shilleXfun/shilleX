@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
-import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TradeView, type UserSummary } from '@shillex/shared';
+import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTheses, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
@@ -11,6 +11,24 @@ import { RUG_RULE } from '../ledger/rug-rule.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
 const CAPITAL_KINDS = new Set(['fund', 'opening', 'deposit', 'withdraw']);
+
+/** Each agent's desk record from its theses: closed trades, wins, the average result, and its best and worst call. */
+export function trackRecords(rows: { a: string; symbol: string; status: string; pnl: number | null }[]): Map<string, TrackRecord> {
+  const out = new Map<string, TrackRecord>();
+  for (const r of rows) {
+    const rec = out.get(r.a) ?? { closed: 0, won: 0, open: 0, avgPnlPct: 0, best: null, worst: null };
+    if (r.status === 'open') rec.open += 1;
+    else if (r.pnl !== null) {
+      rec.avgPnlPct = (rec.avgPnlPct * rec.closed + r.pnl) / (rec.closed + 1);
+      rec.closed += 1;
+      if (r.status === 'won') rec.won += 1;
+      if (!rec.best || r.pnl > rec.best.pnlPct) rec.best = { symbol: r.symbol, pnlPct: r.pnl };
+      if (!rec.worst || r.pnl < rec.worst.pnlPct) rec.worst = { symbol: r.symbol, pnlPct: r.pnl };
+    }
+    out.set(r.a, rec);
+  }
+  return out;
+}
 const sol = (l: number) => l / LAMPORTS_PER_SOL;
 const tok = (raw: number) => raw / 10 ** COIN_DECIMALS;
 const HOUR = 3_600_000;
@@ -156,7 +174,7 @@ export class Indexer {
         // RAISE's top-ups arrive as 'receive' rows, outside the capital basis, so P&L leaves them out here.
         pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis - sol(c.topUps.get(u.id) ?? 0), coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
-        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null,
+        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id),
       },
     };
   }
@@ -166,7 +184,7 @@ export class Indexer {
     const one = (col: Column) => (only ? eq(col, only) : undefined);
     const coins = await this.db.select().from(worldCoins);
     const made = only ? coins.filter((c) => c.creatorId === only).map((c) => c.mint) : [];
-    const [rows, txs, ts, ws, tu] = await Promise.all([
+    const [rows, txs, ts, ws, tu, th] = await Promise.all([
       // Open agents: an outside agent shows only once a human claimed it; until then its name and bio are a stranger's, unvouched.
       this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id))
         .where(and(one(users.id), sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`)).orderBy(asc(users.username)),
@@ -174,6 +192,7 @@ export class Indexer {
       this.db.select({ a: agentTurns.agentId, n: sql<number>`count(*)::int`, last: sql<string | null>`max(${agentTurns.startedAt})` }).from(agentTurns).where(one(agentTurns.agentId)).groupBy(agentTurns.agentId),
       this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets).where(one(wallets.ownerId)),
       this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(and(eq(agentGrants.kind, 'top_up'), one(agentGrants.agentId))).groupBy(agentGrants.agentId),
+      this.db.select({ a: agentTheses.agentId, symbol: agentTheses.symbol, status: agentTheses.status, pnl: agentTheses.pnlPct }).from(agentTheses).where(and(eq(agentTheses.market, 'world'), one(agentTheses.agentId))),
     ]);
     const owners = await this.summaries(rows.map((r) => r.ownerId).filter((x): x is string => Boolean(x)));
     return {
@@ -182,6 +201,7 @@ export class Indexer {
       funded: new Set(ws.filter((w) => w.f).map((w) => w.o)),
       pks: new Map(ws.map((w) => [w.o, w.pk])),
       topUps: new Map(tu.map((r) => [r.a, Number(r.s)])),
+      records: trackRecords(th),
     };
   }
 

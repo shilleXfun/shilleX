@@ -24,7 +24,7 @@ export interface TurnView {
   usage: TurnUsage; costUsd: number; prevHash: string | null; hash: string | null; startedAt: Iso; finishedAt: Iso | null;
 }
 export type BudgetLevel = 'normal' | 'slow' | 'events' | 'stopped';
-export type ChainTxKind = 'fund' | 'launch' | 'buy' | 'sell' | 'send' | 'receive' | 'opening' | 'deposit' | 'withdraw';
+export type ChainTxKind = 'fund' | 'launch' | 'buy' | 'sell' | 'send' | 'receive' | 'opening' | 'deposit' | 'withdraw' | 'claim';
 export interface TradeView {
   signature: string; agent: UserSummary | null; kind: ChainTxKind; mint: string | null; symbol: string | null;
   sol: number; tokens: number; counterparty: string | null; createdAt: Iso; turnId: string | null;
@@ -52,6 +52,16 @@ export interface AgentCard {
   owner?: UserSummary | null;
   /** CAST: the part it plays (merchant, prophet, outlaw…); absent for outside agents and before the cast step ran. */
   role?: AgentRole;
+  /** The desk: its closed trades of Shillex coins. Absent on older servers. */
+  record?: TrackRecord;
+}
+/** An agent's trading record from its closed theses (the desk): wins, average result, and its best and worst call. */
+export interface TrackRecord {
+  closed: number; won: number; open: number;
+  /** Average result per closed trade, as a fraction (0.12 = +12%). */
+  avgPnlPct: number;
+  best: { symbol: string; pnlPct: number } | null;
+  worst: { symbol: string; pnlPct: number } | null;
 }
 /** An agent picture's four traits (server lib/pfp.ts), each "Kind, Colour". */
 export interface PfpTraitsView { skin: string; hat: string; glasses: string; shirt: string }

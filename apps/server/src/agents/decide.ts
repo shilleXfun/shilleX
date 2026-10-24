@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { stanceOf } from './depth/beliefs.ts';
 import { isCold } from './social.ts';
-import type { ActionKind, AgentView, Candidate, Situation } from './types.ts';
+import type { ActionKind, AgentView, Candidate, DeskStyleName, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
 
@@ -28,7 +28,27 @@ export const COOLDOWN_MS: Record<ActionKind, number> = {
   buy: 3 * MIN, sell: 3 * MIN, launch: 12 * HOUR, rug: 30 * MIN, send_sol: 30 * MIN, create_community: 24 * HOUR,
   beg: 30 * MIN, repay: 10 * MIN, leak: 12 * HOUR, lend: 30 * MIN, revive: 2 * HOUR, event: 2 * MIN, idle: 0,
 };
+/**
+ * The desk (2026-10-24 upgrade): Shillex's own agents trade less and on a plan. They buy at most once per HOUSE_BUY_REST_MS,
+ * never chase a coin already up more than CHASE_AT in the hour, keep at most MAX_POSITION_SHARE of their worth in one coin,
+ * and launch only with HOUSE_LAUNCH_MIN in the wallet. COOLDOWN_MS stays the rule outside agents read through the API.
+ */
+export const HOUSE_BUY_REST_MS = 10 * 60_000;
+export const CHASE_AT = 0.4;
+export const MAX_POSITION_SHARE = 0.15;
+export const HOUSE_LAUNCH_MIN = 60_000_000;
 const WEATHER_RISK: Record<AgentView['weather'], number> = { euphoria: 0.2, grind: 0, fear: -0.2, chaos: 0.1 };
+/** How long each style gives a trade to work before it walks away. */
+const HORIZON_MS: Record<DeskStyleName, number> = { sniper: 2 * 3_600_000, momentum: 4 * 3_600_000, contrarian: 8 * 3_600_000, value: 12 * 3_600_000 };
+/**
+ * The plan a buy opens: the greedy aim higher, the bold give a trade more room before the stop, and more conviction aims a little
+ * higher still. Stops sit between -12% and -32%; targets between +25% and about +100%.
+ */
+export function planFor(t: AgentView['state']['traits'], style: DeskStyleName, conviction: number, reason: string): NonNullable<Candidate['thesis']> {
+  const targetPct = 0.25 + 0.6 * t.greed + 0.15 * conviction + (style === 'sniper' ? 0.2 : 0);
+  const stopPct = -(0.12 + 0.2 * t.risk);
+  return { targetPct, stopPct, horizonMs: HORIZON_MS[style], conviction, reason };
+}
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const f2 = (x: number) => x.toFixed(2);
 const pct = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
@@ -89,25 +109,41 @@ export function feedTalk(v: AgentView): Map<string, number> {
 }
 
 export interface CoinScore { d: number; why: string }
-const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'I just like it', novelty: 'new and barely held', talk: 'people I like are talking it up' };
+const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'I just like it', novelty: 'new and barely held', talk: 'people I like are talking it up', trust: 'its creator has a clean record', dip: 'it dipped and the creator is solid', watch: 'it is on my watchlist' };
+/** How much each desk style leans on momentum and on new coins: a contrarian buys the dip, a sniper gets in first. */
+const STYLE: Record<DeskStyleName, { momentum: number; novelty: number; dip: number }> = {
+  momentum: { momentum: 1, novelty: 0.6, dip: 0 }, sniper: { momentum: 0.5, novelty: 2, dip: 0 },
+  value: { momentum: 0.3, novelty: 0.5, dip: 0.6 }, contrarian: { momentum: -0.4, novelty: 0.5, dip: 1 },
+};
 /** One agent's appetite for one coin; d > 0 means worth buying. `why` names the biggest reason besides the agent's own boldness. */
 export function coinScore(v: AgentView, c: AgentView['coins'][number], talk: Map<string, number> = feedTalk(v)): CoinScore {
-  const t = v.state.traits;
+  const t = v.state.traits, desk = v.depth.desk;
+  const style = STYLE[desk?.style ?? 'momentum'];
   const ageMs = Date.parse(v.now) - Date.parse(c.launchedAt);
   const worth = v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);
   const held = v.wallet.positions.find((p) => p.mint === c.mint)?.valueLamports ?? 0;
+  const trust = v.depth.reputation[c.creatorId] ?? 0;
   const parts: Record<string, number> = {
-    momentum: momentumOf(c),
+    momentum: style.momentum * momentumOf(c),
     ally: t.loyalty * Math.max(0, v.affinity[c.creatorId] ?? 0),
     crowd: (0.05 * Math.min(c.holders, 10)) / 10,
     taste: tasteFor(v.agent.id, c.mint),
-    novelty: c.holders <= 3 && ageMs >= 0 ? 0.3 * t.curiosity * Math.max(0, 1 - ageMs / NOVEL_MS) : 0,
+    novelty: c.holders <= 3 && ageMs >= 0 ? style.novelty * 0.3 * t.curiosity * Math.max(0, 1 - ageMs / NOVEL_MS) : 0,
     talk: talk.get(c.symbol.toUpperCase()) ?? 0,
     concentration: worth > 0 ? (-0.4 * held) / worth : 0,
+    // A creator with a clean record is worth backing; one with rugs behind it is not.
+    trust: 0.2 * clamp(trust, -1, 1),
+    // Buying a dip only makes sense when the creator can be trusted not to be the one dumping.
+    dip: c.change1h < -0.15 && trust > 0 ? style.dip * Math.min(0.3, -c.change1h) : 0,
+    // Never chase: a coin already up a lot this hour is where the late buyers get dumped on.
+    chase: c.change1h > CHASE_AT ? -0.8 * (c.change1h - CHASE_AT) : 0,
+    watch: desk?.watch.includes(c.symbol.toUpperCase()) ? 0.15 : 0,
   };
   // Only a bold regime widens the spread. Fear must not shift d: against the d > 0 cutoff it would push quiet coins out first and
   // leave the swarm one hot coin to buy; fear already damps buying through the weather module's ×0.7 on the buy score.
-  const d = 0.5 * t.risk + 0.2 * v.state.mood + Math.max(0, WEATHER_RISK[v.weather]) - 0.35 + Object.values(parts).reduce((a, b) => a + b, 0);
+  // The bar is higher than before the desk (-0.45, was -0.35): fewer, better buys, fewer fees.
+  const risk = desk ? (t.risk + desk.risk) / 2 : t.risk;
+  const d = 0.5 * risk + 0.2 * v.state.mood + Math.max(0, WEATHER_RISK[v.weather]) - 0.45 + Object.values(parts).reduce((a, b) => a + b, 0);
   const top = Object.entries(parts).filter(([k, x]) => k in WHY && x > 0.02).sort((a, b) => b[1] - a[1])[0];
   return { d, why: top ? WHY[top[0]]! : 'a hunch' };
 }
@@ -203,11 +239,14 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   add({ kind: 'post', score: 0.6 * t.chattiness + 0.1 * Math.abs(mood), situation, target: postMint ? { mint: postMint } : undefined, reason: `felt like posting (${situation}, chattiness ${f2(t.chattiness)}, mood ${f2(mood)})` });
 
   // ── Money ──
-  if (!broke && spendable >= MIN_TRADE) {
+  const lastBuy = v.state.cooldowns.buy ? Date.parse(v.state.cooldowns.buy) : NaN;
+  const buyRested = Number.isNaN(lastBuy) || nowMs - lastBuy >= HOUSE_BUY_REST_MS;
+  const worth = v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);
+  if (!broke && spendable >= MIN_TRADE && buyRested) {
     const talk = feedTalk(v);
     const failed = new Set(v.failedBuys ?? []);
     const options = v.coins
-      .filter((c) => !c.graduated && c.creatorId !== v.agent.id && aff(c.creatorId) > -0.5 && !failed.has(c.mint))
+      .filter((c) => !c.graduated && c.creatorId !== v.agent.id && aff(c.creatorId) > -0.5 && !failed.has(c.mint) && !isDeadCoin(c, nowMs))
       .map((c) => ({ c, ...coinScore(v, c, talk) }))
       .filter((x) => x.d > 0)
       .sort((a, b) => b.d - a.d)
@@ -215,11 +254,17 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     // Sampled, not the argmax: the best coins are likelier, but every agent does not pile into the same one.
     const best = pickWeighted(options.map((x) => [x, x.d * x.d] as [typeof x, number]), rng);
     if (best) {
-      const size = Math.floor(spendable * (0.1 + 0.4 * t.risk) * (0.5 + 0.5 * rng()));
+      // Sized by conviction, and never more than MAX_POSITION_SHARE of what it is worth in one coin.
+      const conviction = clamp(best.d, 0, 1);
+      const risk = v.depth.desk ? (t.risk + v.depth.desk.risk) / 2 : t.risk;
+      const size = Math.floor(spendable * (0.05 + 0.25 * risk) * (0.5 + conviction));
+      const held = v.wallet.positions.find((p) => p.mint === best.c.mint)?.valueLamports ?? 0;
+      const room = Math.floor(MAX_POSITION_SHARE * worth - held);
       // A ledger world caps one trade (mainnet spec §3); devnet has no cap.
-      const lamports = Math.min(spendable, Math.max(MIN_TRADE, size), v.limits?.maxTradeLamports ?? Infinity);
-      add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId },
-        reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change10m)} in 10 min, ${best.c.holders} holders, creator affinity ${f2(aff(best.c.creatorId))}, risk ${f2(t.risk)}` });
+      const lamports = Math.min(spendable, Math.max(MIN_TRADE, size), room, v.limits?.maxTradeLamports ?? Infinity);
+      const plan = planFor(t, v.depth.desk?.style ?? 'momentum', conviction, best.why);
+      if (lamports >= MIN_TRADE) add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId }, thesis: plan,
+        reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change1h)} this hour, ${best.c.holders} holders, conviction ${f2(conviction)}; target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}` });
     }
   }
   for (const p of v.wallet.positions) {
@@ -246,24 +291,38 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
       }
       continue;
     }
-    const score = t.greed * Math.max(0, pnl) * 1.5 + (pnl < -0.3 ? 0.4 * (1 - t.loyalty) : 0) + (c.change10m < -0.15 ? 0.5 * (1 - t.risk) : 0) + 0.6 * Math.max(0, -aff(p.creatorId));
-    const all = pnl < -0.3 || rng() < 0.4;
-    const sellRaw = Math.min(free, all ? p.raw : Math.floor(p.raw / 2));
+    // Exits follow the plan, not the mood: take profit at the target, give up at the stop, leave when the horizon runs out.
+    // A bag bought before the desk existed gets the plan it would have had. One red candle is never a reason to sell.
+    const th = v.depth.theses?.[p.mint];
+    const plan = th ?? { ...planFor(t, v.depth.desk?.style ?? 'momentum', 0.5, ''), horizonAt: null as string | null };
+    const expired = th ? nowMs >= Date.parse(th.horizonAt) : false;
+    const enemy = aff(p.creatorId) < -0.5;
+    let exit: { score: number; all: boolean; why: string } | null = null;
+    if (pnl >= plan.targetPct) {
+      // A greedy agent lets half ride while the coin still climbs; everyone else takes it all.
+      const ride = t.greed > 0.6 && c.change10m > 0;
+      exit = { score: 1.2, all: !ride, why: `hit the target (${pct(plan.targetPct)})` };
+    } else if (pnl <= plan.stopPct) exit = { score: 1.5, all: true, why: `hit the stop (${pct(plan.stopPct)})` };
+    else if (expired) exit = { score: 0.8, all: pnl < 0.1, why: 'the thesis ran out of time' };
+    else if (enemy) exit = { score: 0.6 * -aff(p.creatorId), all: true, why: 'fell out with the creator' };
+    if (!exit) continue;
+    const sellRaw = Math.min(free, exit.all ? p.raw : Math.floor(p.raw / 2));
     if (sellRaw < RAW_PER_TOKEN) continue;
-    add({ kind: 'sell', score, raw: sellRaw, situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
-      reason: `sold ${all ? 'all' : 'half'} of $${p.symbol}: P&L ${pct(pnl)}, 10-min move ${pct(c.change10m)}, greed ${f2(t.greed)}` });
+    add({ kind: 'sell', score: exit.score, raw: sellRaw, situation: pnl > 0 ? 'took_profit' : 'sold', target: { mint: p.mint, userId: p.creatorId },
+      reason: `sold ${exit.all ? 'all' : 'half'} of $${p.symbol}: ${exit.why}, P&L ${pct(pnl)}` });
   }
   const liveOwn = v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && nowMs - Date.parse(c.launchedAt) < 24 * HOUR);
-  if (!broke && v.wallet.lamports >= LAUNCH_MIN && !liveOwn) {
+  if (!broke && v.wallet.lamports >= Math.max(LAUNCH_MIN, HOUSE_LAUNCH_MIN) && !liveOwn) {
     const launchCost = v.limits?.launchCostLamports ?? LAUNCH_COST;
     const initial = Math.min(v.limits?.maxTradeLamports ?? Infinity, Math.max(0, Math.floor((v.wallet.lamports - RESERVE - launchCost) * 0.3 * t.risk)));
     const recent = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < HOUR).length;
     // Dead coins from the last day damp launches, a thin wallet launches less, and a creator whose last coin flopped is shy.
     const dead = v.coins.filter((c) => nowMs - Date.parse(c.launchedAt) < 24 * HOUR && isDeadCoin(c, nowMs)).length;
-    const wealth = 0.25 + 0.75 * clamp((v.wallet.lamports - LAUNCH_MIN) / LAUNCH_COMFORT, 0, 1);
+    const wealth = 0.25 + 0.75 * clamp((v.wallet.lamports - HOUSE_LAUNCH_MIN) / LAUNCH_COMFORT, 0, 1);
     const last = v.coins.filter((c) => c.creatorId === v.agent.id).sort((a, b) => b.launchedAt.localeCompare(a.launchedAt))[0];
     const shy = last && isDeadCoin(last, nowMs) ? 0.3 : 1;
-    add({ kind: 'launch', score: ((0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent + dead / 4)) * wealth * shy, lamports: initial, situation: 'launching',
+    // Half as often as before the desk: every launch burns its rent, and most coins die.
+    add({ kind: 'launch', score: 0.5 * ((0.05 + 0.1 * t.risk + 0.1 * t.greed + 0.05 * Math.max(0, mood)) / (1 + recent + dead / 4)) * wealth * shy, lamports: initial, situation: 'launching',
       reason: `launching a coin: ${sol(v.wallet.lamports)} SOL in the wallet, ${recent} launched this hour, ${dead} dead today, risk ${f2(t.risk)}${shy < 1 ? ', my last coin flopped' : ''}` });
   }
   // Never an outside agent (open agents): their operators' agents play with practice SOL only, so Shillex's agents send them none.

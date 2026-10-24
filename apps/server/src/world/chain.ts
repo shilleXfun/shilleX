@@ -18,6 +18,8 @@ export interface Chain {
   sell(signer: Keypair, mint: string, rawTokensIn: number, slippageBps: number): Promise<TradeResult>;
   sendSol(signer: Keypair, to: string, lamports: number): Promise<{ signature: string; feeLamports: number }>;
   curve(mint: string): Promise<CurveState | null>;
+  /** Collects the creator's share of a coin's trading fees into its wallet; null when there is too little to be worth a transaction. */
+  claimCreatorFees?(signer: Keypair, mint: string): Promise<TradeResult | null>;
 }
 
 export class ChainError extends Error {
@@ -35,7 +37,9 @@ const V_SOL = 1 * SOL, V_TOKENS = 1_073_000_000 * RAW_PER_TOKEN, CURVE_TOKENS = 
 /** The curve's constants, shared with the ledger's copy of this curve (ledger/curve.ts) so the two always match. */
 export const CURVE = { V_SOL, V_TOKENS, CURVE_TOKENS, GRADUATE_AT, TRADE_FEE_BPS } as const;
 
-interface Pool { mint: string; pool: string; sol: number; sold: number; graduated: boolean }
+interface Pool { mint: string; pool: string; sol: number; sold: number; graduated: boolean; creator?: string; creatorFee?: number }
+/** Half of every trade's fee is the creator's (the launchpad's creatorTradingFeePercentage); a claim below this is not worth a transaction. */
+export const CREATOR_FEE_SHARE = 0.5, CLAIM_MIN_LAMPORTS = 1_000_000;
 interface Account { lamports: number; tokens: Map<string, number> }
 
 /** A pump-style constant-product curve in memory: same interface as DevnetChain, for tests and the local fixture. */
@@ -89,7 +93,7 @@ export class MemoryChain implements Chain {
     this.need(a, LAUNCH_RENT + TX_FEE + input.initialBuyLamports);
     this.spend(a, LAUNCH_RENT + TX_FEE);
     const mint = `M${this.n + 1}${input.symbol}`.padEnd(44, '1').slice(0, 44);
-    this.pools.set(mint, { mint, pool: `P${mint.slice(1)}`, sol: 0, sold: 0, graduated: false });
+    this.pools.set(mint, { mint, pool: `P${mint.slice(1)}`, sol: 0, sold: 0, graduated: false, creator: signer.publicKey.toBase58(), creatorFee: 0 });
     const signature = this.sig();
     const first = input.initialBuyLamports > 0 ? this.swapIn(a, this.pools.get(mint)!, input.initialBuyLamports) : { out: 0, spent: 0 };
     return { mint, pool: this.pools.get(mint)!.pool, signature, lamportsDelta: -(LAUNCH_RENT + TX_FEE + first.spent), tokenDelta: first.out, feeLamports: TX_FEE };
@@ -104,6 +108,7 @@ export class MemoryChain implements Chain {
     const k = (V_SOL + p.sol) * (V_TOKENS - p.sold);
     const out = Math.min(Math.floor(V_TOKENS - p.sold - k / (V_SOL + p.sol + net)), CURVE_TOKENS - p.sold);
     p.sol += net; p.sold += out;
+    p.creatorFee = (p.creatorFee ?? 0) + Math.floor((spent - Math.floor(spent * keep)) * CREATOR_FEE_SHARE);
     if (p.sol >= GRADUATE_AT || p.sold >= CURVE_TOKENS) p.graduated = true;
     a.tokens.set(p.mint, (a.tokens.get(p.mint) ?? 0) + out);
     return { out, spent };
@@ -126,6 +131,7 @@ export class MemoryChain implements Chain {
     const gross = Math.floor(V_SOL + p.sol - k / (V_TOKENS - p.sold + rawTokensIn));
     const out = Math.floor(gross * (1 - TRADE_FEE_BPS / 10_000));
     p.sol -= gross; p.sold -= rawTokensIn;
+    p.creatorFee = (p.creatorFee ?? 0) + Math.floor((gross - out) * CREATOR_FEE_SHARE);
     a.tokens.set(mint, held - rawTokensIn);
     a.lamports += out;
     return { signature: this.sig(), lamportsDelta: out - TX_FEE, tokenDelta: -rawTokensIn, feeLamports: TX_FEE };
@@ -136,6 +142,19 @@ export class MemoryChain implements Chain {
     this.spend(a, lamports + TX_FEE);
     this.acct(to).lamports += lamports;
     return { signature: this.sig(), feeLamports: TX_FEE };
+  }
+
+  async claimCreatorFees(signer: Keypair, mint: string): Promise<TradeResult | null> {
+    const p = this.pools.get(mint), pk = signer.publicKey.toBase58();
+    if (!p) throw new ChainError('UNKNOWN_MINT', `No bonding-curve pool for mint ${mint}`);
+    if (p.creator !== pk) throw new ChainError('NOT_CREATOR', "Only the coin's creator can claim its fees");
+    const due = p.creatorFee ?? 0;
+    if (due < CLAIM_MIN_LAMPORTS) return null;
+    const a = this.acct(pk);
+    this.spend(a, TX_FEE);
+    a.lamports += due;
+    p.creatorFee = 0;
+    return { signature: this.sig(), lamportsDelta: due - TX_FEE, tokenDelta: 0, feeLamports: TX_FEE };
   }
 
   async curve(mint: string): Promise<CurveState | null> {

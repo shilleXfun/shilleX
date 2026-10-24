@@ -11,7 +11,7 @@ const isStr = (x: unknown): x is string => typeof x === 'string' && x.length > 0
 const bare = (name: string) => name.replace(/^@/, '').toLowerCase();
 
 /** Tools whose input and result never hold conversation, channel or community content. Every other tool is checked below or kept private. */
-const OPEN = new Set(['set_profile', 'post', 'follow', 'read_profile', 'read_wallet', 'read_coin', 'launch_coin', 'buy', 'sell', 'send_sol', 'do_nothing']);
+const OPEN = new Set(['set_profile', 'post', 'follow', 'read_profile', 'read_wallet', 'read_coin', 'launch_coin', 'buy', 'sell', 'send_sol', 'claim_fees', 'do_nothing']);
 /**
  * Always private: list_conversations returns each conversation's last message; list_communities names private communities;
  * an invite code opens a private community; memory notes are free text that can quote a DM.
