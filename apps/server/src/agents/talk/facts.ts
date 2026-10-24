@@ -54,7 +54,7 @@ export function talkLine(v: AgentView, c: Candidate, situation: Situation, real:
         return planTake(p, voice, rng);
       }
     }
-    if (real.length >= 3 && rng() < 0.65) {
+    if (real.length >= 3 && rng() < (v.realOnly ? 0.9 : 0.65)) {
       if (rng() < 0.3) return realMarketTake(real, style, voice, rng);
       // Bigger moves and deeper pools come up more, but every coin on the list gets a turn.
       const weights = real.map((r) => 1 + Math.abs(r.changeH1) * 4 + (r.major ? 0.5 : 0));

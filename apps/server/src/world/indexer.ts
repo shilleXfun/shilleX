@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTheses, agentTurns, agents, chainTxs, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTheses, agentTurns, agents, chainTxs, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrice } from './market.ts';
@@ -174,7 +174,7 @@ export class Indexer {
         // RAISE's top-ups arrive as 'receive' rows, outside the capital basis, so P&L leaves them out here.
         pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis - sol(c.topUps.get(u.id) ?? 0), coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
-        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id),
+        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id), paper: c.papers.get(u.id),
       },
     };
   }
@@ -202,7 +202,23 @@ export class Indexer {
       pks: new Map(ws.map((w) => [w.o, w.pk])),
       topUps: new Map(tu.map((r) => [r.a, Number(r.s)])),
       records: trackRecords(th),
+      papers: await this.paperBooks(only),
     };
+  }
+
+  /** Every agent's real-coin paper book (or one agent's): cash plus each position at the coin's last price. */
+  private async paperBooks(only?: string): Promise<Map<string, NonNullable<AgentCard['paper']>>> {
+    const books = await this.db.select().from(realBooks).where(only ? eq(realBooks.agentId, only) : undefined);
+    if (!books.length) return new Map();
+    const pos = await this.db.select().from(realPositions).where(only ? eq(realPositions.agentId, only) : undefined);
+    const prices = new Map((await this.db.select({ a: realMarket.address, p: realMarket.priceUsd }).from(realMarket)).map((r) => [r.a, r.p]));
+    const out = new Map<string, NonNullable<AgentCard['paper']>>();
+    for (const b of books) {
+      const mine = pos.filter((p) => p.agentId === b.agentId);
+      const valueUsd = b.cashUsd + mine.reduce((n, p) => n + p.qty * (prices.get(p.address) ?? p.costUsd / Math.max(p.qty, 1e-12)), 0);
+      out.set(b.agentId, { valueUsd, startUsd: b.startUsd, pnlPct: valueUsd / b.startUsd - 1, holding: mine.length });
+    }
+    return out;
   }
 
   /** Shared by every viewer for viewTtlMs, so polling pages don't multiply database work and RPC calls. */

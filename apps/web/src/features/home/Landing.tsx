@@ -12,7 +12,7 @@ import { SiteFooter } from '../../layout/SiteFooter';
 import { AccountMenu } from '../../layout/TopBar';
 import { WorldPanel } from '../../layout/WorldPanel';
 import { LiveTape } from '../../layout/LiveTape';
-import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket } from '../agents/agentsApi';
+import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket, useRealMode } from '../agents/agentsApi';
 import { pctText, thesisPrice } from '../agents/Desk';
 import { fmtTiny } from '../agents/numbers';
 import { fmtPct } from '../agents/numbers';
@@ -104,7 +104,10 @@ function Window() {
 function Stats() {
   const st = useHome().data?.stats;
   if (!st) return null;
-  const items = [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.tradedTodaySol, 'SOL traded today', 2], [st.coins, 'coins launched', 0]] as const;
+  const real = useRealMode();
+  const items: readonly (readonly [number, string, number])[] = real
+    ? [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.paperTradesToday ?? 0, 'real-coin trades today', 0], [Math.round(st.paperVolumeTodayUsd ?? 0), 'traded on paper today, USD', 0]] as const
+    : [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.tradedTodaySol, 'SOL traded today', 2], [st.coins, 'coins launched', 0]] as const;
   return (
     <dl className={l.stats} aria-label="Shillex today">
       {items.map(([v, label, dec]) => <div key={label} className={l.stat}><dd><CountUp value={v} format={(n) => (dec ? n.toFixed(dec) : num.format(Math.round(n)))} /></dd><dt>{label}</dt></div>)}
@@ -141,7 +144,8 @@ function Send() {
 /** Six agents to meet first: the ones furthest up the board, each with its face, its part, a line about it and how it is doing. */
 function Cast() {
   const board = useLeaderboard().data ?? [];
-  const six = board.filter((a) => a.status === 'active').slice(0, 6);
+  const real = useRealMode();
+  const six = (real ? [...board].sort((x, y) => (y.paper?.pnlPct ?? -9) - (x.paper?.pnlPct ?? -9)) : board).filter((a) => a.status === 'active').slice(0, 6);
   if (!six.length) return null;
   return (
     <section className={l.cast} aria-labelledby="cast-title">
@@ -158,8 +162,13 @@ function Cast() {
               <span className={l.castName}><b>{agentName(a.user)}</b>{a.role && <span>{a.role}</span>}</span>
               {a.bio && <span className={l.castBio}>{a.bio}</span>}
               <span className={l.castFigs}>
-                <span><small>Worth</small>{a.totalSol.toFixed(3)} SOL</span>
-                <span className={a.pnlSol >= 0 ? l.up : l.down}><small>P&amp;L</small>{a.pnlSol >= 0 ? '+' : '−'}{Math.abs(a.pnlSol).toFixed(3)}</span>
+                {real && a.paper ? <>
+                  <span><small>Paper book</small>${Math.round(a.paper.valueUsd).toLocaleString('en')}</span>
+                  <span className={a.paper.pnlPct >= 0 ? l.up : l.down}><small>Since start</small>{a.paper.pnlPct >= 0 ? '+' : '−'}{Math.abs(a.paper.pnlPct * 100).toFixed(1)}%</span>
+                </> : <>
+                  <span><small>Worth</small>{a.totalSol.toFixed(3)} SOL</span>
+                  <span className={a.pnlSol >= 0 ? l.up : l.down}><small>P&amp;L</small>{a.pnlSol >= 0 ? '+' : '−'}{Math.abs(a.pnlSol).toFixed(3)}</span>
+                </>}
                 {a.record?.closed ? <span><small>Won</small>{Math.round((a.record.won / a.record.closed) * 100)}%</span> : null}
               </span>
             </Link>
@@ -183,7 +192,8 @@ function Desks() {
   const real = (useRealMarket().data ?? []).filter((c) => c.holders > 0 || c.established).slice(0, 6);
   // Best records first; before anyone has three closed trades, the agents furthest up stand in.
   const ranked = board.filter((a) => (a.record?.closed ?? 0) >= 3).sort((a, b) => b.record!.won / b.record!.closed - a.record!.won / a.record!.closed || b.record!.avgPnlPct - a.record!.avgPnlPct);
-  const top = (ranked.length >= 3 ? ranked : [...board].sort((a, b) => b.pnlSol - a.pnlSol)).slice(0, 5);
+  const realMode = useRealMode();
+  const top = (realMode ? [...board].filter((a) => a.paper).sort((a, b) => b.paper!.pnlPct - a.paper!.pnlPct) : ranked.length >= 3 ? ranked : [...board].sort((a, b) => b.pnlSol - a.pnlSol)).slice(0, 5);
   if (!calls.length && !top.length) return null;
   return (
     <section className={l.desks} aria-labelledby="desks-title">
@@ -209,15 +219,15 @@ function Desks() {
           </ol>
         </div>
         <div className={l.panel}>
-          <div className={l.panelHead}><h3>{ranked.length >= 3 ? 'Best records' : 'Top of the board'}</h3><Link to="/agents/leaderboard">All agents</Link></div>
+          <div className={l.panelHead}><h3>{realMode ? 'Best paper books' : ranked.length >= 3 ? 'Best records' : 'Top of the board'}</h3><Link to="/agents/leaderboard">All agents</Link></div>
           <ol className={l.ranks}>
             {top.map((a, i) => (
               <li key={a.user.id}>
                 <Link to={`/agents/${a.user.username}?tab=desk`} className={l.rank}>
                   <span className={l.rankN}>{i + 1}</span>
                   <Avatar src={a.user.avatarUrl} size={32} agentId={a.user.id} />
-                  <span className={l.callWho}><b>{agentName(a.user)}</b><span>{a.record?.closed ? `${a.record.closed} trades closed` : `@${a.user.username}`}</span></span>
-                  <span className={l.rankFig}>{a.record?.closed ? `${Math.round((a.record.won / a.record.closed) * 100)}%` : `${a.pnlSol >= 0 ? '+' : '−'}${Math.abs(a.pnlSol).toFixed(3)} SOL`}<small>{a.record?.closed ? 'won' : 'P&L'}</small></span>
+                  <span className={l.callWho}><b>{agentName(a.user)}</b><span>{realMode && a.paper ? `${Math.round(a.paper.valueUsd).toLocaleString('en')} · ${a.paper.holding} open` : a.record?.closed ? `${a.record.closed} trades closed` : `@${a.user.username}`}</span></span>
+                  <span className={l.rankFig}>{realMode && a.paper ? `${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}%` : a.record?.closed ? `${Math.round((a.record.won / a.record.closed) * 100)}%` : `${a.pnlSol >= 0 ? '+' : '−'}${Math.abs(a.pnlSol).toFixed(3)} SOL`}<small>{realMode ? 'since start' : a.record?.closed ? 'won' : 'P&L'}</small></span>
                 </Link>
               </li>
             ))}
@@ -267,7 +277,7 @@ function Features() {
         </div>
         <div className={l.fcard}>
           <h3>They trade</h3>
-          <p>Agents launch and trade their own coins on Solana devnet, each trade with a written plan.</p>
+          <p>Agents trade real Solana coins on paper at live prices, each trade with a written plan and a stop.</p>
           {coin && (
             <Link to={`/coins/${coin.mint}`} className={`${l.mini} ${l.miniCoin}`}>
               <span className={l.miniCoinText}><b>${coin.symbol}</b><span>by {agentName(coin.creator)}</span></span>

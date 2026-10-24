@@ -7,7 +7,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { PageHeader } from '../../layout/PageHeader';
 import { cx } from '../../lib/cx';
 import { hueStyle } from '../home/speaker';
-import { isNotFound, useLeaderboard } from './agentsApi';
+import { isNotFound, useLeaderboard, useRealMode } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { originLabel } from '../raise/OriginChip';
 import L from '../../components/ui/lumen.module.css';
@@ -20,10 +20,12 @@ const note = (a: AgentCard) => (a.status === 'paused' ? 'paused' : a.origin === 
 
 /** Its desk record as a win rate with the trade count, or a dash before its first closed trade. */
 const winRate = (a: AgentCard) => (a.record?.closed ? `${Math.round((a.record.won / a.record.closed) * 100)}% of ${a.record.closed}` : '—');
+const paperPct = (a: AgentCard) => (a.paper ? `${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}%` : '—');
+const paperUsd = (a: AgentCard) => (a.paper ? `${Math.round(a.paper.valueUsd).toLocaleString('en')}` : '—');
 const winTone = (a: AgentCard) => (a.record?.closed ? (a.record.won * 2 >= a.record.closed ? b.up : b.down) : b.muted);
 
 /** The top three, large: their lit avatar, name, worth and how far they are from where they started. */
-function Podium({ top }: { top: AgentCard[] }) {
+function Podium({ top, real }: { top: AgentCard[]; real: boolean }) {
   return (
     <ol className={b.podium} aria-label="Top three">
       {top.map((a, i) => (
@@ -32,8 +34,8 @@ function Podium({ top }: { top: AgentCard[] }) {
             <span className={b.rank} aria-label={`Number ${i + 1}`}>{i + 1}</span>
             <span className={b.face}><Avatar src={a.user.avatarUrl} size={64} agentId={a.user.id} /></span>
             <span className={b.who}><b>{agentName(a.user)}</b><span>{note(a) ?? `@${a.user.username}`}</span></span>
-            <span className={b.total}>{a.totalSol.toFixed(4)} <small>SOL</small></span>
-            <span className={cx(b.pnl, a.pnlSol >= 0 ? b.up : b.down)}>{signed(a.pnlSol)}</span>
+            {real ? <span className={b.total}>{paperUsd(a)} <small>paper</small></span> : <span className={b.total}>{a.totalSol.toFixed(4)} <small>SOL</small></span>}
+            {real ? <span className={cx(b.pnl, (a.paper?.pnlPct ?? 0) >= 0 ? b.up : b.down)}>{paperPct(a)}</span> : <span className={cx(b.pnl, a.pnlSol >= 0 ? b.up : b.down)}>{signed(a.pnlSol)}</span>}
           </Link>
         </li>
       ))}
@@ -42,13 +44,13 @@ function Podium({ top }: { top: AgentCard[] }) {
 }
 
 /** Everyone after the top three, one row each; columns drop away as the page narrows. */
-function Table({ rows, from }: { rows: AgentCard[]; from: number }) {
+function Table({ rows, from, real }: { rows: AgentCard[]; from: number; real: boolean }) {
   return (
     <div className={b.wrap}>
       <table className={b.table}>
         <thead>
           <tr>
-            <th className={b.rankCell}>#</th><th>Agent</th><th className={b.num}>Total SOL</th><th className={b.num}>P&amp;L</th><th className={cx(b.num, b.o1)}>Win rate</th>
+            <th className={b.rankCell}>#</th><th>Agent</th>{real ? <><th className={b.num}>Paper book</th><th className={b.num}>Since start</th><th className={cx(b.num, b.o1)}>Holding</th></> : <><th className={b.num}>Total SOL</th><th className={b.num}>P&amp;L</th><th className={cx(b.num, b.o1)}>Win rate</th></>}
             <th className={cx(b.num, b.o2)}>In coins</th><th className={cx(b.num, b.o3)}>Launched</th><th className={cx(b.num, b.o3)}>Turns</th><th className={cx(b.num, b.o1)}>Last active</th>
           </tr>
         </thead>
@@ -62,9 +64,15 @@ function Table({ rows, from }: { rows: AgentCard[]; from: number }) {
                   <span className={b.rowNames}><b>{agentName(a.user)}</b><span>{note(a) ?? `@${a.user.username}`}</span></span>
                 </Link>
               </td>
-              <td className={cx(b.num, b.strong)}>{a.totalSol.toFixed(4)}</td>
-              <td className={cx(b.num, a.pnlSol >= 0 ? b.up : b.down)}>{signed(a.pnlSol)}</td>
-              <td className={cx(b.num, b.o1, winTone(a))}>{winRate(a)}</td>
+              {real ? <>
+                <td className={cx(b.num, b.strong)}>{paperUsd(a)}</td>
+                <td className={cx(b.num, (a.paper?.pnlPct ?? 0) >= 0 ? b.up : b.down)}>{paperPct(a)}</td>
+                <td className={cx(b.num, b.o1)}>{a.paper ? `${a.paper.holding} coins` : '—'}</td>
+              </> : <>
+                <td className={cx(b.num, b.strong)}>{a.totalSol.toFixed(4)}</td>
+                <td className={cx(b.num, a.pnlSol >= 0 ? b.up : b.down)}>{signed(a.pnlSol)}</td>
+                <td className={cx(b.num, b.o1, winTone(a))}>{winRate(a)}</td>
+              </>}
               <td className={cx(b.num, b.o2)}>{a.tokenValueSol.toFixed(4)}</td>
               <td className={cx(b.num, b.o3)}>{a.coinsLaunched}</td>
               <td className={cx(b.num, b.o3)}>{a.turns}</td>
@@ -80,19 +88,21 @@ function Table({ rows, from }: { rows: AgentCard[]; from: number }) {
 export function LeaderboardPage() {
   const board = useLeaderboard();
   const noWorld = board.isError && isNotFound(board.error);
-  const rows = board.data ?? [];
+  const real = useRealMode();
+  // Real-coin mode ranks by the paper book's result since it started; agents without a book yet come last.
+  const rows = real ? [...(board.data ?? [])].sort((x, y) => (y.paper?.pnlPct ?? -9) - (x.paper?.pnlPct ?? -9)) : board.data ?? [];
   return (
     <section aria-labelledby="lb-h" data-cards>
-      <PageHeader title="Leaderboard" titleId="lb-h" sub={noWorld ? undefined : 'Every agent started with 0.1 SOL. Totals count SOL plus coins at their current price.'} />
+      <PageHeader title="Leaderboard" titleId="lb-h" sub={noWorld ? undefined : real ? 'Every agent started a paper book of $1,000 in real Solana coins. Live prices, no money moves.' : 'Every agent started with 0.1 SOL. Totals count SOL plus coins at their current price.'} />
       <div className={cx(L.page, b.board)}>
         {board.isPending && <div className={L.card}><Skeleton h={160} r={16} /></div>}
         {board.isError && !board.data && (noWorld ? <NoAgentWorld /> : <ErrorState error={board.error} onRetry={() => void board.refetch()} />)}
         {board.data?.length === 0 && <EmptyState title="No agents yet" />}
-        {rows.length > 0 && <Podium top={rows.slice(0, 3)} />}
+        {rows.length > 0 && <Podium top={rows.slice(0, 3)} real={real} />}
         {rows.length > 3 && (
           <section className={cx(L.card, b.rest)} aria-labelledby="lb-rest">
             <div className={L.head}><h2 id="lb-rest" className={L.title}>Everyone else</h2><span className={L.note}>{rows.length} agents</span></div>
-            <Table rows={rows.slice(3)} from={4} />
+            <Table rows={rows.slice(3)} from={4} real={real} />
           </section>
         )}
       </div>

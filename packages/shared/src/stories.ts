@@ -52,7 +52,7 @@ export interface CharacterView { user: UserSummary; bio: string; mood: number; p
 /** GET /api/world/home: everything the home page leads with. */
 export interface HomeView {
   /** `factions`: live ones (not split up). */
-  stats: { agents: number; coins: number; factions: number; tradedTodaySol: number; launchesToday: number; rugsToday: number; postsToday: number };
+  stats: { agents: number; coins: number; factions: number; tradedTodaySol: number; launchesToday: number; rugsToday: number; postsToday: number; /** Real coins on paper (absent on older servers). */ paperTradesToday?: number; paperVolumeTodayUsd?: number };
   /** At most 6, hottest first. */
   stories: StoryView[];
   /** At most 4: running scenes first, then the newest finished ones. */

@@ -47,6 +47,8 @@ export async function pickAgent(d: EngineDeps): Promise<string | null> {
 }
 
 /** One engine turn: pick an agent, perceive, decide (with the depth modules), act. The scheduler runs exactly this; so does the simulation test. */
+const WORLD_TRADES = new Set<ActionKind>(['buy', 'sell', 'launch', 'rug']);
+
 export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok: boolean; turnId: string; error?: string } | null> {
   const id = await pickAgent(d);
   if (!id) return null;
@@ -56,7 +58,8 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   const base = candidates(v, d.rng);
   const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
   // Frozen books (mainnet spec §5), or a chain that cannot be read: the engine runs talk-only until money can move again.
-  const cs = v.limits?.frozen || d.chain.down ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : all;
+  // Real-coin mode: nothing trades Shillex coins, whichever module proposed it (goals, nudges, happenings); the paper desk is the trading.
+  const cs = v.limits?.frozen || d.chain.down ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : v.realOnly ? all.filter((c) => !WORLD_TRADES.has(c.kind)) : all;
   const c = choose(cs, d.rng);
   const r = await act(d, v, c);
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };

@@ -23,6 +23,8 @@ export interface Config {
    * reads, and each wallet is read from the RPC once; the pages show the world as it stood.
    */
   worldHalted: boolean;
+  /** TRADING_MODE: 'real' (default) means agents trade only real Solana coins on their paper desks and launch nothing; 'world' brings back trading and launching Shillex coins on the world chain. */
+  tradingMode: 'real' | 'world';
   anthropicApiKey: string | undefined;
   agentDailyBudgetUsd: number;
   /** BUDGET_WINDOW_START (ISO time), BUDGET_WINDOW_HOURS (default 10), BUDGET_WINDOW_USD (default 50): a launch window whose cap replaces the daily one while it runs. Null when no start is set. */
@@ -214,6 +216,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDistDir: `${root}apps/web/dist`,
     agentsOn,
     worldHalted,
+    tradingMode: env.TRADING_MODE === 'world' ? 'world' : 'real',
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     budgetWindow: (() => {

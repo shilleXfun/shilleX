@@ -82,7 +82,8 @@ async function bookOf(db: Db, agentId: string, now: Date) {
 
 /** Sometimes an agent says what it did on the desk, plainly marked as paper. */
 async function announce(d: EngineDeps, agentId: string, body: string) {
-  if (d.rng() < 0.35) await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk');
+  // In real-coin mode the desk is the trading, so more of it is said out loud.
+  if (d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.6 : 0.35)) await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk');
 }
 
 /** One agent's turn at the desk: exits first (target, stop, horizon), then at most one new position. */
@@ -123,7 +124,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
   const scored = market.filter((c) => !held.has(c.address)).map((c) => ({ c, s: realScore(c, style, { ...traits, risk }, agentId, now) }))
     .filter((x): x is { c: RealMarketRow; s: { d: number; why: string } } => Boolean(x.s && x.s.d > 0)).sort((a, b) => b.s.d - a.s.d);
   const best = scored[0];
-  if (best && d.rng() < 0.6) {
+  if (best && d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.75 : 0.6)) {
     const conviction = clamp(best.s.d, 0, 1);
     const value = cash + positions.reduce((n, p) => n + p.qty * (prices.get(p.address)?.priceUsd ?? 0), 0);
     const size = Math.min(cash, 0.2 * value, cash * (0.05 + 0.15 * risk) * (0.5 + conviction));
@@ -156,11 +157,13 @@ export const realDeskModule: DepthModule = {
     if (!market.length) return;
     const elig = [...(await eligibleAgents(d.db)).values()].filter((e) => !e.ghost).sort((a, b) => a.id.localeCompare(b.id));
     if (!elig.length) return;
-    for (let i = 0; i < Math.min(BOOKS_PER_SWEEP, elig.length); i++) {
+    // Real-coin mode: every agent's book is worked about every quarter of an hour.
+    const per = d.app.deps.config.tradingMode === 'real' ? Math.ceil(elig.length / 3) : BOOKS_PER_SWEEP;
+    for (let i = 0; i < Math.min(per, elig.length); i++) {
       const e = elig[(cursor + i) % elig.length]!;
       try { await workBook(d, e.id, e.traits, market); } catch (err) { console.error('[real] book failed', e.id, err); }
     }
-    cursor = (cursor + BOOKS_PER_SWEEP) % elig.length;
+    cursor = (cursor + per) % elig.length;
   },
 };
 

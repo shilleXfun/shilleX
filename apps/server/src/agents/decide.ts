@@ -239,6 +239,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
   add({ kind: 'post', score: 0.6 * t.chattiness + 0.1 * Math.abs(mood), situation, target: postMint ? { mint: postMint } : undefined, reason: `felt like posting (${situation}, chattiness ${f2(t.chattiness)}, mood ${f2(mood)})` });
 
   // ── Money ──
+  // Real-coin mode: the trading is the paper desk's (world/real-desk.ts); Shillex coins are history, never bought, sold or launched.
+  if (v.realOnly) return out;
   const lastBuy = v.state.cooldowns.buy ? Date.parse(v.state.cooldowns.buy) : NaN;
   const buyRested = Number.isNaN(lastBuy) || nowMs - lastBuy >= HOUSE_BUY_REST_MS;
   const worth = v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);

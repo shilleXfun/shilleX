@@ -54,6 +54,8 @@ export interface AgentCard {
   role?: AgentRole;
   /** The desk: its closed trades of Shillex coins. Absent on older servers. */
   record?: TrackRecord;
+  /** Its real-coin paper book: value in USD and the change since it started. Absent before its first paper trade. */
+  paper?: { valueUsd: number; startUsd: number; pnlPct: number; holding: number };
 }
 /** One written trade plan (the desk): a Shillex coin ('world', prices in SOL) or a real Solana coin on the paper desk ('real', USD). */
 export interface ThesisItem {
@@ -71,6 +73,8 @@ export interface CandlesView {
 }
 /** GET /api/agents/:username/equity: net worth in SOL after each of its transactions (trades marked), then now. */
 export interface EquityView {
+  /** The figures' unit: SOL (Shillex net worth, the default) or USD (the real-coin paper book). */
+  unit?: 'SOL' | 'USD';
   start: number;
   points: { t: number; sol: number; kind?: 'buy' | 'sell' | 'launch' | 'claim'; symbol?: string | null; amount?: number }[];
 }
@@ -79,6 +83,8 @@ export interface FlowView { buySol: number; sellSol: number; buys: number; sells
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */
 export interface RealCoinView { address: string; symbol: string; name: string; url: string; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
+/** GET /api/real/trades: one paper trade of a real coin; a sale carries its plan's result. */
+export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso }
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;
@@ -106,7 +112,7 @@ export interface AgentDetail extends AgentCard {
   /** Absent on older servers. */ pfp?: PfpTraitsView;
 }
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
-export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode }
+export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only. Absent on older servers. */ trading?: 'real' | 'world' }
 /** Display name for agents that have not chosen one yet. */
 export const agentName = (u: Pick<UserSummary, 'displayName' | 'username'>) => u.displayName || u.username;
 

@@ -31,7 +31,7 @@ import { ReceiptChip } from './Receipt';
 import { TraitHistory } from './TraitHistory';
 import { TraitRadar, traitWords } from './TraitRadar';
 import { accountUrl } from './links';
-import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo } from './agentsApi';
+import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo, useRealMode } from './agentsApi';
 import { useAgentTradeFlash, type Flash } from './pulses';
 import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
@@ -121,6 +121,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       </div>
       <dl className={p.strip}>
+        {a.paper && <Cell label="Paper book" value={<Tick value={a.paper.valueUsd} format={(n) => `${n.toFixed(0)}`} />} tone={a.paper.pnlPct >= 0.0005 ? 'up' : a.paper.pnlPct <= -0.0005 ? 'down' : undefined} note={`${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}% · ${a.paper.holding} open`} />}
         <Cell label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
         <Cell label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
         {a.record && a.record.closed > 0 && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}
@@ -443,6 +444,7 @@ export function AgentProfilePage() {
   const pick = (id: string) => setParams(id === 'posts' ? {} : { tab: id }, { replace: true, preventScrollReset: true });
   const a = useAgent(username), dq = useAgentDepth(username);
   const me = useMe();
+  const realMode = useRealMode();
   // Only a signed-in human asks; the panel shows when this page is their own agent's.
   const mine = useMyRaised(Boolean(me.data));
   const owned = mine.data?.agent && a.data && mine.data.agent.user.id === a.data.user.id ? mine.data.agent : null;
@@ -461,8 +463,8 @@ export function AgentProfilePage() {
           <>
             <Top a={a.data} d={dq.data} />
             {owned && <OwnerPanel agent={owned} detail={a.data} />}
-            <FlatSection id="agent-equity" title="Net worth" note={a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
-              <EquityChart username={a.data.user.username} />
+            <FlatSection id="agent-equity" title={realMode ? 'Paper book' : 'Net worth'} note={realMode ? (a.data.paper ? `${a.data.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.data.paper.pnlPct * 100).toFixed(1)}% since it started · real Solana coins, no money moves` : 'real Solana coins at live prices, no money moves') : a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
+              <EquityChart username={a.data.user.username} paper={realMode} />
             </FlatSection>
             <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={[...TABS]} /></div>
             <TabPanel value={tab} order={ORDER} id="agent-tab-panel" aria-labelledby={`agent-tab-${tab}`}>

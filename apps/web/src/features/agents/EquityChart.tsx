@@ -9,7 +9,7 @@ const H = 200, PAD_T = 14, PAD_B = 22, AXIS_W = 70;
 const VERB = { buy: 'Bought', sell: 'Sold', launch: 'Launched', claim: 'Claimed fees on' } as const;
 const when = (t: number) => new Date(t).toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
-export const useEquity = (username: string) => useQuery({ queryKey: ['agents', 'equity', username], queryFn: () => get<EquityView>(`/agents/${username}/equity`), refetchInterval: 30_000, refetchIntervalInBackground: false, staleTime: 15_000 });
+export const useEquity = (username: string, paper = false) => useQuery({ queryKey: ['agents', 'equity', username, paper], queryFn: () => get<EquityView>(`/agents/${username}/${paper ? 'paper-equity' : 'equity'}`), refetchInterval: 30_000, refetchIntervalInBackground: false, staleTime: 15_000 });
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -28,13 +28,16 @@ function useWidth() {
  * An agent's net worth over its whole life, the way a fund shows its NAV: the line in green above where it started and red
  * below, the start as a dashed line, and every trade a dot on the curve that names itself under the pointer.
  */
-export function EquityChart({ username }: { username: string }) {
-  const q = useEquity(username);
+export function EquityChart({ username, paper = false }: { username: string; paper?: boolean }) {
+  const q = useEquity(username, paper);
+  const usdUnit = q.data?.unit === 'USD';
+  const fmt = (n: number, fine = false) => (usdUnit ? `$${n >= 100 && !fine ? Math.round(n) : n.toFixed(2)}` : n.toFixed(fine ? 4 : 3));
+  const unitWord = usdUnit ? '' : ' SOL';
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
   const reduced = useReducedMotion();
   const pts = q.data?.points ?? [];
-  if (q.data && pts.length < 2) return <p className={s.empty}>No trades yet: its curve starts with the first one.</p>;
+  if (q.data && pts.length < 2) return <p className={s.empty}>{paper ? 'No paper trades yet: its curve starts with the first one.' : 'No trades yet: its curve starts with the first one.'}</p>;
   const start = q.data?.start ?? 0;
   const W = Math.max(0, width - AXIS_W);
   // Quiet stretches (the world halted, or the agent idle) longer than GAP_MS take only GAP_MS of width, marked with a break.
@@ -69,7 +72,7 @@ export function EquityChart({ username }: { username: string }) {
     <div ref={ref} className={s.chart} style={{ height: H }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
       {width > 0 && pts.length > 1 && (
         <>
-          <svg width={width} height={H} role="img" aria-label={`Net worth from ${start.toFixed(3)} to ${last!.sol.toFixed(3)} SOL`}>
+          <svg width={width} height={H} role="img" aria-label={`Worth from ${fmt(start)} to ${fmt(last!.sol)}${unitWord}`}>
             <defs>
               <linearGradient id={`eq-${username}`} x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0" stopColor={up ? 'var(--up)' : 'var(--down)'} stopOpacity="0.22" />
@@ -86,13 +89,13 @@ export function EquityChart({ username }: { username: string }) {
             {h && <line x1={x(tAt(hover!))} x2={x(tAt(hover!))} y1={0} y2={H - PAD_B} className={s.cross} />}
             {breaks.map((i) => <line key={`b${i}`} x1={x(tAt(i)) - x(t0 + GAP_MS) / 2} x2={x(tAt(i)) - x(t0 + GAP_MS) / 2} y1={PAD_T} y2={H - PAD_B} className={s.gap} />)}
           </svg>
-          <span className={s.axis} style={{ top: y(start) }}>start {start.toFixed(3)}</span>
-          <span className={`${s.axis} ${s.lastTag} ${up ? s.upBg : s.downBg}`} style={{ top: y(last!.sol) }}>{last!.sol.toFixed(3)}</span>
+          <span className={s.axis} style={{ top: y(start) }}>start {fmt(start)}</span>
+          <span className={`${s.axis} ${s.lastTag} ${up ? s.upBg : s.downBg}`} style={{ top: y(last!.sol) }}>{fmt(last!.sol)}</span>
           <div className={s.times} style={{ width: W }}><span>{when(pts[0]!.t)}</span><span>now</span></div>
           {h && (
             <div className={s.tip} style={{ left: Math.min(Math.max(x(tAt(hover!)), 90), W - 90) }}>
-              <b>{h.sol.toFixed(4)} SOL</b>
-              <span>{h.kind ? `${VERB[h.kind]} ${h.symbol ? `$${h.symbol}` : ''} · ${h.amount?.toFixed(4)} SOL` : 'now'}</span>
+              <b>{fmt(h.sol, true)}{unitWord}</b>
+              <span>{h.kind ? `${VERB[h.kind]} ${h.symbol ? `$${h.symbol}` : ''} · ${usdUnit ? `$${h.amount?.toFixed(2)}` : `${h.amount?.toFixed(4)} SOL`}` : 'now'}</span>
               <span>{when(h.t)}</span>
             </div>
           )}

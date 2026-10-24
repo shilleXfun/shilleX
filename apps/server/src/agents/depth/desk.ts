@@ -159,7 +159,7 @@ export const deskModule: DepthModule = {
     for (const s of stale) await closeThesis(d.db, s.th, s.price ?? s.th.entryPrice, now);
 
     // Creators collect their half of the fees: a live coin with CLAIM_AFTER_TRADES trades since its last claim, a few per sweep.
-    if (d.chain.claimCreatorFees && !d.chain.down) {
+    if (d.chain.claimCreatorFees && !d.chain.down && d.app.deps.config.tradingMode !== 'real') {
       const lastClaim = sql`coalesce((select max(x.created_at) from ${chainTxs} x where x.mint = ${worldCoins.mint} and x.kind = 'claim'), ${worldCoins.launchedAt})`;
       const due = await d.db.select({ mint: worldCoins.mint, creatorId: worldCoins.creatorId }).from(worldCoins)
         .where(and(isNull(worldCoins.archivedAt), isNull(worldCoins.graduatedAt), gt(worldCoins.launchedAt, new Date(now.getTime() - 7 * DAY_MS)),

@@ -212,7 +212,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing, launchFeeFor.get(d.db) ?? LAUNCH_RENT))] : globalCoins;
   const outsiders = [...(await outsiderSet(d.db, Object.keys(affinity)))];
-  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null, outsiders };
+  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null, outsiders, realOnly: d.app.deps.config.tradingMode === 'real' };
   // Depth modules fill v.depth (and may replace, never mutate, v.coins and v.rooms: those arrays are the shared cache).
   await d.depth?.perceive(d, v);
   return v;

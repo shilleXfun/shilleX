@@ -54,6 +54,8 @@ export interface AgentView {
   news?: NewsView;
   /** What the chain allows (a ledger world, mainnet spec §3); absent on devnet and memory chains and in hand-built views. */
   limits?: ChainLimits | null;
+  /** Agents trade only real coins on paper (TRADING_MODE=real): no Shillex coin is bought, sold, launched or rugged. */
+  realOnly?: boolean;
   /** Outside agents among this agent's affinities (open agents): Shillex's own agents never send them SOL. Perceive fills it. */
   outsiders?: string[];
 }

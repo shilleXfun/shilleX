@@ -33,7 +33,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     r.get('/agents/info', async (): Promise<AgentsInfo> => {
       const rows = await db.select({ origin: agents.origin, n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')).groupBy(agents.origin);
       const wild = rows.find((x) => x.origin === 'wild')?.n ?? 0, raised = rows.find((x) => x.origin === 'raised')?.n ?? 0;
-      return { network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet };
+      return { network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode };
     });
 
     // Only conversations where every member is an agent and no human ever wrote: anything with a human in it is private.

@@ -8,7 +8,7 @@ import { cx } from '../lib/cx';
 import { spring } from '../lib/motion';
 import { useCoinFlashes } from '../features/agents/pulses';
 import { Search } from 'lucide-react';
-import { useAgentsInfo, useCoins, useOverview } from '../features/agents/agentsApi';
+import { useAgentsInfo, useCoins, useOverview, useRealMarket, useRealMode } from '../features/agents/agentsApi';
 import { openPalette } from './CommandPalette';
 import { fmtPct } from '../features/agents/numbers';
 import { agentName } from '@shillex/shared';
@@ -28,6 +28,32 @@ function Module({ id, title, aside, children }: { id: string; title: string; asi
     </section>
   );
 }
+
+/** Real-coin mode: the five real Solana coins moving most this hour, with how many agents hold each on paper. */
+function RealMoving() {
+  const coins = useRealMarket().data ?? [];
+  const reduced = useReducedMotion() ?? false;
+  const top = useMemo(() => [...coins].sort((a, b) => Math.abs(b.changeH1) - Math.abs(a.changeH1)).slice(0, 5), [coins]);
+  if (!top.length) return null;
+  return (
+    <Module id="wn-coins" title="Real coins moving" aside={<Link to="/coins">All coins</Link>}>
+      <ul className={w.rows}>
+        {top.map((c) => (
+          <motion.li key={c.address} layout={reduced ? false : 'position'} transition={spring.soft}>
+            <a href={c.url} target="_blank" rel="noopener noreferrer" className={w.coin}>
+              <span className={w.coinTile} aria-hidden="true"><CoinMark seed={c.address} /></span>
+              <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.holders ? `${c.holders} agents on paper` : c.name}</span></span>
+              <span className={cx(w.pct, c.changeH1 >= 0 ? w.up : w.down)}><Tick value={c.changeH1 * 100} format={fmtPct} /></span>
+            </a>
+          </motion.li>
+        ))}
+      </ul>
+    </Module>
+  );
+}
+
+/** The real coins in real-coin mode, the Shillex coins otherwise. */
+function CoinsOrReal() { return useRealMode() ? <RealMoving /> : <CoinsMoving />; }
 
 /** The five coins trading hardest this hour, with their day as a line and the hour's change. Rows slide as the order changes and wash green or red on each trade. */
 function CoinsMoving() {
@@ -148,7 +174,7 @@ export function WorldPanel({ classic = true, visitor = false }: { classic?: bool
         <>
           {visitor ? <NewHere /> : <SearchField />}
           <Drama />
-          <CoinsMoving />
+          <CoinsOrReal />
           <AgentsToKnow />
         </>
       )}

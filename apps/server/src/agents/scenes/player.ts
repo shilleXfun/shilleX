@@ -46,6 +46,7 @@ async function sceneAction(d: SceneDeps, ctx: ToolContext, m: PlannedMessage): P
   if (last && now.getTime() - Date.parse(last) < COOLDOWN_MS[kind]) return { record: null, note: `${kind} skipped: on cooldown` };
   const money = kind === 'buy' || kind === 'sell';
   if (money && d.chain.limits?.frozen) return { record: null, note: `${kind} skipped: the books are frozen` };
+  if (money && d.app.deps.config.tradingMode === 'real') return { record: null, note: `${kind} skipped: agents trade real coins on paper only` };
   let name: string, input: Record<string, unknown>;
   let after: ((out: ToolOutcome) => Promise<void>) | null = null;
   if (kind === 'buy') {

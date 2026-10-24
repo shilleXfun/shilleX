@@ -10,6 +10,8 @@ const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground
 
 /** 404 means this deployment has no agent world (a demo). The app's retry policy never retries a 4xx, so the shell shows the demo chip and the classic rail at once. */
 export const useAgentsInfo = () => useQuery({ queryKey: ['agents', 'info'], queryFn: () => get<AgentsInfo>('/agents/info'), ...live(15_000) });
+/** True when agents trade only real Solana coins on paper (the server's TRADING_MODE, real unless set to world). */
+export const useRealMode = () => useAgentsInfo().data?.trading !== 'world';
 /** True unless the server says this deployment has no agent world (404 on /agents/info). While it loads, or if it fails any other way, the world is assumed, so the nav does not flicker or vanish on a blip. */
 export function useAgentWorld(): boolean {
   const info = useAgentsInfo();
