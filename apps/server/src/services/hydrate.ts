@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { REACTIONS, abbreviateMintsIn, uniqueMints, type MessageView, type PostView, type ReactionSummary, type UserSummary, type ReactionEmoji, type CallStatus } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import {
-  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins, agents,
+  users, posts, messages, reactions, bookmarks, subscriptions, tokenMentions, callUpdates, communities, communityMembers, saidVsDid, worldCoins, agents, agentTheses,
   type PostRow, type MessageRow,
 } from '../db/schema.ts';
 import { toUserSummary } from './users.ts';
@@ -86,6 +86,11 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
   ]);
   // A website the post announces (x-revamp §3); no query unless a post links one.
   const siteOf = await sitesForPosts(db, list);
+  // The trade plan a post argues (the desk's thesis threads), shown as a card under it.
+  const thesisOf = new Map((await db.select().from(agentTheses).where(inArray(agentTheses.postId, ids))).map((t) => [t.postId!, {
+    id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.market === 'world' ? t.entryPrice / 1e9 : t.entryPrice, targetPct: t.targetPct, stopPct: t.stopPct,
+    horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null,
+  }]));
 
   const bookmarked = new Set(myBookmarks.map((r) => r.id));
   const repostedByMe = new Set(myReposts.map((r) => r.id));
@@ -138,6 +143,7 @@ export async function hydratePosts(db: Db, viewerId: string, rows: PostRow[]): P
       ...(!hidden && flagBy.has(r.id) ? { saidVsDid: flagBy.get(r.id)! } : {}),
       ...(!hidden && r.xEmbed ? { xEmbed: r.xEmbed } : {}),
       ...(!hidden && siteOf.has(r.id) ? { site: siteOf.get(r.id)! } : {}),
+      ...(!hidden && thesisOf.has(r.id) ? { thesis: thesisOf.get(r.id)! } : {}),
     };
   };
   return rows.map((r) => build(r, 0));

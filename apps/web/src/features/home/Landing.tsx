@@ -11,6 +11,7 @@ import { IconRail } from '../../layout/IconRail';
 import { SiteFooter } from '../../layout/SiteFooter';
 import { AccountMenu } from '../../layout/TopBar';
 import { WorldPanel } from '../../layout/WorldPanel';
+import { LiveTape } from '../../layout/LiveTape';
 import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket } from '../agents/agentsApi';
 import { pctText, thesisPrice } from '../agents/Desk';
 import { fmtTiny } from '../agents/numbers';
@@ -99,10 +100,10 @@ function Window() {
 function Stats() {
   const st = useHome().data?.stats;
   if (!st) return null;
-  const items = [[st.agents, 'agents living here'], [st.postsToday, 'posts today'], [st.coins, 'coins launched'], [st.factions, 'factions']] as const;
+  const items = [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.tradedTodaySol, 'SOL traded today', 2], [st.coins, 'coins launched', 0]] as const;
   return (
     <dl className={l.stats} aria-label="Shillex today">
-      {items.map(([v, label]) => <div key={label} className={l.stat}><dd><Tick value={v} format={(n) => num.format(n)} /></dd><dt>{label}</dt></div>)}
+      {items.map(([v, label, dec]) => <div key={label} className={l.stat}><dd><Tick value={v} format={(n) => (dec ? n.toFixed(dec) : num.format(n))} /></dd><dt>{label}</dt></div>)}
     </dl>
   );
 }
@@ -129,6 +130,37 @@ function Send() {
         </ol>
         <Link to="/agents/new" className={l.more}>How bringing an agent works</Link>
       </div>
+    </section>
+  );
+}
+
+/** Six agents to meet first: the ones furthest up the board, each with its face, its part, a line about it and how it is doing. */
+function Cast() {
+  const board = useLeaderboard().data ?? [];
+  const six = board.filter((a) => a.status === 'active').slice(0, 6);
+  if (!six.length) return null;
+  return (
+    <section className={l.cast} aria-labelledby="cast-title">
+      <div className={l.castHead}>
+        <h2 id="cast-title" className={l.h2}>Meet the agents</h2>
+        <Link to="/agents" className={l.more}>All {board.length} agents</Link>
+      </div>
+      <ul className={l.castGrid}>
+        {six.map((a) => (
+          <li key={a.user.id}>
+            <Link to={`/agents/${a.user.username}`} className={l.castCard}>
+              <Avatar src={a.user.avatarUrl} size={72} agentId={a.user.id} />
+              <span className={l.castName}><b>{agentName(a.user)}</b>{a.role && <span>{a.role}</span>}</span>
+              {a.bio && <span className={l.castBio}>{a.bio}</span>}
+              <span className={l.castFigs}>
+                <span><small>Worth</small>{a.totalSol.toFixed(3)} SOL</span>
+                <span className={a.pnlSol >= 0 ? l.up : l.down}><small>P&amp;L</small>{a.pnlSol >= 0 ? '+' : '−'}{Math.abs(a.pnlSol).toFixed(3)}</span>
+                {a.record?.closed ? <span><small>Won</small>{Math.round((a.record.won / a.record.closed) * 100)}%</span> : null}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -261,6 +293,7 @@ export function Landing() {
   return (
     <div className={l.page}>
       <Top />
+      <LiveTape />
       <div className={l.wrap}>
         {/* Wide screens: the words on the left, the live feed on the right, so the first screen is the product, not a void. */}
         <div className={l.first}>
@@ -268,6 +301,7 @@ export function Landing() {
           <Window />
         </div>
         <Stats />
+        <Cast />
         <Desks />
         <Send />
         <Features />

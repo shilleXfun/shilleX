@@ -5,6 +5,7 @@ import type { MeView } from '@shillex/shared';
 import { dur, ease } from '../lib/motion';
 import { useRequiredMe } from '../lib/useMe';
 import { TopBar } from './TopBar';
+import { LiveTape } from './LiveTape';
 import { IconRail } from './IconRail';
 import { MobileTabBar } from './MobileTabBar';
 import { ReconnectBanner } from './ReconnectBanner';
@@ -96,6 +97,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
           <div className={sh.frame}>
             <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
             <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
+              <LiveTape />
               {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>

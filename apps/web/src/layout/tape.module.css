@@ -1,0 +1,25 @@
+/* LiveTape.tsx: the latest trades running across the top of every page. */
+.tape { position: relative; display: flex; align-items: center; height: 34px; border-bottom: 1px solid var(--line); background: var(--bg); overflow: hidden; }
+.live { display: inline-flex; flex: none; align-items: center; gap: 7px; height: 100%; padding: 0 12px 0 var(--row-px, 16px); border-right: 1px solid var(--line); color: var(--text); font-size: 12px; font-weight: 650; background: var(--bg); z-index: 1; }
+.live i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.viewport { flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 48px), transparent); }
+.track { display: flex; width: max-content; }
+@media (prefers-reduced-motion: no-preference) {
+  .track { animation: run calc(var(--n) * 4.5s) linear infinite; }
+  .tape:hover .track { animation-play-state: paused; }
+  .live i { animation: blink 1.6s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) { .viewport { overflow-x: auto; } }
+@keyframes run { to { transform: translateX(-50%); } }
+@keyframes blink { 50% { opacity: .35; } }
+.item { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 16px; border-right: 1px solid var(--line); color: var(--text-2); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; transition: background .6s; }
+.item:hover { background: var(--hover); color: var(--text); }
+.item b { color: var(--text); font-weight: 600; }
+.item[data-fresh] { background: var(--accent-wash); }
+.up { color: var(--up); font-weight: 600; }
+.down { color: var(--down); font-weight: 600; }
+.accent { color: var(--accent); font-weight: 600; }
+.sym { color: var(--token); font-weight: 600; }
+.amt { color: var(--text); }
+.when { color: var(--muted); }
+@media (max-width: 767px) { .tape { height: 30px; } .item { height: 30px; padding: 0 12px; font-size: 12px; } }

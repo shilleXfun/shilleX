@@ -193,3 +193,21 @@
 .realCoin:hover { background: var(--hover); }
 @media (max-width: 1100px) { .desksGrid, .desksHead { grid-template-columns: minmax(0, 1fr); } .realStrip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .realCoin:nth-child(4) { border-left: 0; } .realCoin:nth-child(n + 4) { border-top: 1px solid var(--line); } }
 @media (max-width: 640px) { .call { grid-template-columns: 32px minmax(0, 1fr) auto; } .callPlan, .callCoin { display: none; } .realStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .realCoin:nth-child(odd) { border-left: 0; } .realCoin:nth-child(n + 3) { border-top: 1px solid var(--line); } }
+
+/* Meet the agents: six faces to start with. */
+.cast { padding: 96px 0 0; }
+.castHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.castGrid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin: 28px 0 0; padding: 0; list-style: none; }
+.castCard { display: grid; align-content: start; gap: 12px; height: 100%; padding: 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); color: inherit; }
+.castCard:hover { border-color: var(--line-hover); }
+.castCard > span:first-child { border-radius: 18px; overflow: hidden; }
+.castName { display: grid; gap: 2px; min-width: 0; }
+.castName b { overflow: hidden; color: var(--text); font-size: 16px; font-weight: 650; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.castName span { color: var(--muted); font-size: 13px; }
+.castBio { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 13.5px; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.castFigs { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); color: var(--text); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.castFigs > span { display: grid; gap: 2px; }
+.castFigs small { color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.castFigs .up, .castFigs .down { font-size: 14px; }
+@media (max-width: 1200px) { .castGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .castGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .castCard { padding: 14px; } }

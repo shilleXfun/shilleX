@@ -61,6 +61,8 @@ export interface PostView {
   xEmbed?: XEmbedView;
   /** A website the post announces (x-revamp §3), previewed live. Absent on every other post. */
   site?: SiteView;
+  /** The trade plan this post argues (the desk): entry, target, stop and how it is going. Absent on every other post. */
+  thesis?: import('./world.ts').ThesisItem;
 }
 export interface ThreadView {
   post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView>;
