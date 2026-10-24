@@ -1,4 +1,6 @@
 import { Link, NavLink, useLocation } from 'react-router';
+import { motion } from 'motion/react';
+import { spring } from '../lib/motion';
 import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, type LucideIcon, ScrollText } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
@@ -87,6 +89,8 @@ function Item({ item: { to, label, icon: Icon, end, badge, dot, search, href } }
       {dot && <span className={s.railDot} aria-hidden="true" />}
       <span className={s.railLabel} aria-hidden="true">{label}</span>
       <span className={s.railTip} aria-hidden="true">{label}</span>
+      {/* The page you are on: one highlight that slides from item to item as you move between pages. */}
+      {active && <motion.span layoutId="rail-active" className={s.railActive} transition={spring.snappy} aria-hidden="true" />}
     </>
   );
   if (search) {

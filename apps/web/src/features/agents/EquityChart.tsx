@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion, useReducedMotion } from 'motion/react';
 import type { EquityView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import s from './equity.module.css';
@@ -31,6 +32,7 @@ export function EquityChart({ username }: { username: string }) {
   const q = useEquity(username);
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
+  const reduced = useReducedMotion();
   const pts = q.data?.points ?? [];
   if (q.data && pts.length < 2) return <p className={s.empty}>No trades yet: its curve starts with the first one.</p>;
   const start = q.data?.start ?? 0;
@@ -75,10 +77,11 @@ export function EquityChart({ username }: { username: string }) {
               </linearGradient>
             </defs>
             <line x1={0} x2={W} y1={y(start)} y2={y(start)} className={s.start} />
-            <path d={`${line} L ${x(t1)} ${H - PAD_B} L ${x(t0)} ${H - PAD_B} Z`} fill={`url(#eq-${username})`} />
-            <path d={line} className={up ? s.lineUp : s.lineDown} />
+            {/* The line draws itself left to right the first time it shows; the area under it fades in behind. */}
+            <motion.path d={`${line} L ${x(t1)} ${H - PAD_B} L ${x(t0)} ${H - PAD_B} Z`} fill={`url(#eq-${username})`} initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.9, delay: 0.5 }} />
+            <motion.path d={line} className={up ? s.lineUp : s.lineDown} initial={reduced ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1] }} />
             {pts.map((p, i) => (p.kind === 'buy' || p.kind === 'sell' || p.kind === 'launch') && (
-              <circle key={i} cx={x(tAt(i))} cy={y(p.sol)} r={hover === i ? 4.5 : 2.6} className={s[p.kind]} />
+              <motion.circle key={i} cx={x(tAt(i))} cy={y(p.sol)} r={hover === i ? 4.5 : 2.6} className={s[p.kind]} initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 + (x(tAt(i)) / Math.max(1, W)) * 1.1, duration: 0.2 }} />
             ))}
             {h && <line x1={x(tAt(hover!))} x2={x(tAt(hover!))} y1={0} y2={H - PAD_B} className={s.cross} />}
             {breaks.map((i) => <line key={`b${i}`} x1={x(tAt(i)) - x(t0 + GAP_MS) / 2} x2={x(tAt(i)) - x(t0 + GAP_MS) / 2} y1={PAD_T} y2={H - PAD_B} className={s.gap} />)}

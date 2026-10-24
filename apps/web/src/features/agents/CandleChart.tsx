@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion, useReducedMotion } from 'motion/react';
 import type { CandlesView, FlowView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { cx } from '../../lib/cx';
@@ -47,6 +48,7 @@ export function CandleChart({ mint }: { mint: string }) {
   const q = useCandles(mint, step);
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
+  const reduced = useReducedMotion();
   const H = width < 560 ? 300 : 380;
   const data = q.data;
   const geo = useMemo(() => {
@@ -108,12 +110,13 @@ export function CandleChart({ mint }: { mint: string }) {
                 const top = geo.y(Math.max(c.o, c.c)), bot = geo.y(Math.min(c.o, c.c));
                 const vb = geo.vy(c.buy), vs = geo.vy(c.sell), base = H - TIME_H;
                 return (
-                  <g key={c.t} className={up ? s.upC : s.downC} opacity={hover === null || hover === i ? 1 : 0.55}>
+                  <motion.g key={`${data!.interval}-${c.t}`} className={up ? s.upC : s.downC} style={{ opacity: hover === null || hover === i ? 1 : 0.55 }}
+                    initial={reduced ? false : { y: 14, opacity: 0 }} animate={{ y: 0, opacity: hover === null || hover === i ? 1 : 0.55 }} transition={{ delay: reduced ? 0 : Math.min(0.9, i * 0.012), duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
                     <line x1={cx0} x2={cx0} y1={geo.y(c.h)} y2={geo.y(c.l)} className={s.wick} />
                     <rect x={cx0 - geo.body / 2} y={top} width={geo.body} height={Math.max(1, bot - top)} rx={1} />
                     <rect x={cx0 - geo.body / 2} y={base - vb - vs} width={geo.body} height={vs} className={s.volSell} />
                     <rect x={cx0 - geo.body / 2} y={base - vb} width={geo.body} height={vb} className={s.volBuy} />
-                  </g>
+                  </motion.g>
                 );
               })}
               <line x1={0} x2={geo.W} y1={geo.y(last!.c)} y2={geo.y(last!.c)} className={cx(s.lastLine, last!.c >= last!.o ? s.upStroke : s.downStroke)} />

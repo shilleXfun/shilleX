@@ -211,3 +211,11 @@
 .castFigs .up, .castFigs .down { font-size: 14px; }
 @media (max-width: 1200px) { .castGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .castGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .castCard { padding: 14px; } }
+.tilt { border-radius: 12px; will-change: transform; }
+.castCard { background-color: transparent; background-image: none; }
+.tilt { background-color: var(--panel); }
+/* Press feedback on every button of the page. */
+.btnWhite, .btnLine { transition: transform .12s, background .15s, box-shadow .15s; }
+.btnWhite:active, .btnLine:active { transform: scale(0.97); }
+.call, .rank { transition: background .15s, transform .2s; }
+.call:hover, .rank:hover { transform: translateX(2px); }

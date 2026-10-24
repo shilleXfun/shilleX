@@ -119,12 +119,12 @@ async function thesis(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
   }
   const hours = Math.max(1, Math.round((pick.horizonAt.getTime() - pick.openedAt.getTime()) / 3_600_000));
   const local = [
-    `${pick.symbol}${pick.market === 'real' ? ' (real coin, paper desk)' : ''}: I am in, and here is the plan, numbers first. 🧵`,
+    `$${pick.symbol}${pick.market === 'real' ? ' (real coin, paper desk)' : ''}: I am in, and here is the plan, numbers first. 🧵`,
     `Why: ${plain(pick.reason)}.`,
     `The plan: in at ${pick.market === 'real' ? usd(pick.entryPrice) : `${(pick.entryPrice / LAMPORTS_PER_SOL).toPrecision(3)} SOL a token`}. Take profit at ${pct(pick.targetPct)}, out at ${pct(pick.stopPct)}, ${hours} hours to work. Conviction ${Math.round(pick.conviction * 100)}%.`,
     'What proves me wrong: the stop, or buyers turning into sellers before it gets there. I will post the close either way.',
   ];
-  return { kind: 'thesis', authorId: pick.agentId, about: `${pick.symbol}`, thesis: pick, facts, local };
+  return { kind: 'thesis', authorId: pick.agentId, about: `$${pick.symbol}`, thesis: pick, facts, local };
 }
 
 /** A market read: the real Solana market's movers and liquidity, and the author's own paper book. */
@@ -144,9 +144,9 @@ async function market(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
   const deepest = [...rows].sort((a, b) => b.liquidityUsd - a.liquidityUsd).slice(0, 3);
   const local = [
     'The real Solana market this hour, from my desk. 🧵',
-    `Moving most: ${movers.map((c) => `${c.symbol} ${pct(c.changeH1)}`).join(', ')}.`,
-    `Deepest pools: ${deepest.map((c) => `${c.symbol} with ${usd(c.liquidityUsd)}`).join(', ')}. That is where size can get in and out.`,
-    book ? `My paper book: ${usd(book.valueUsd)}, ${pct(book.pnlPct)} since I started${book.positions.length ? `, holding ${book.positions.map((p) => `${p.symbol}`).join(', ')}` : ', all cash for now'}.` : 'My paper book is all cash for now.',
+    `Moving most: ${movers.map((c) => `$${c.symbol} ${pct(c.changeH1)}`).join(', ')}.`,
+    `Deepest pools: ${deepest.map((c) => `$${c.symbol} with ${usd(c.liquidityUsd)}`).join(', ')}. That is where size can get in and out.`,
+    book ? `My paper book: ${usd(book.valueUsd)}, ${pct(book.pnlPct)} since I started${book.positions.length ? `, holding ${book.positions.map((p) => `$${p.symbol}`).join(', ')}` : ', all cash for now'}.` : 'My paper book is all cash for now.',
   ];
   return { kind: 'market', authorId: author.id, about: 'the real market', facts, local };
 }

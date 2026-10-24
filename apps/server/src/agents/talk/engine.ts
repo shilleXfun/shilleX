@@ -148,9 +148,9 @@ function seeWorld(c: WorldFacts, rng: Rng): string {
   const opts = [
     `${s} ${pct(c.change1h)} this hour with ${c.holders} holders`,
     `${c.holders} wallets in ${s} now`,
-    `${s} is ${Math.round(c.curve * 100)}% up its curve`,
   ];
   if (moved(c.change10m)) opts.push(`${s} ${pct(c.change10m)} in ten minutes`);
+  if (c.curve >= 0.02) opts.push(`${s} is ${Math.round(c.curve * 100)}% up its curve`);
   if (!moved(c.change1h)) opts.splice(0, 1, `${s} flat on the hour with ${c.holders} holders`);
   if (c.creator) opts.push(`@${c.creator}'s ${s}, ${Math.max(1, Math.round(c.ageH))}h old, ${pct(c.change1h)} on the hour`);
   return fresh(opts, rng);

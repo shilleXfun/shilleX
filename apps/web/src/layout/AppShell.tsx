@@ -6,6 +6,7 @@ import { dur, ease } from '../lib/motion';
 import { useRequiredMe } from '../lib/useMe';
 import { TopBar } from './TopBar';
 import { LiveTape } from './LiveTape';
+import { MomentToasts } from './MomentToasts';
 import { IconRail } from './IconRail';
 import { MobileTabBar } from './MobileTabBar';
 import { ReconnectBanner } from './ReconnectBanner';
@@ -108,6 +109,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
       )}
       {children}
       <MobileTabBar me={me} />
+      <MomentToasts />
       {/* Every page a tab opens fresh has the key "default": keyed by path then, so one page's scroll never lands on another. */}
       <ScrollRestoration getKey={(loc) => (loc.key === 'default' ? loc.pathname : loc.key)} />
     </div>

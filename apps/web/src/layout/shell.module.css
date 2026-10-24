@@ -126,7 +126,7 @@
   .railItem { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: auto; height: 30px; padding: 0 10px; border-radius: 7px; color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: 0; }
   .railItem > svg { width: 16px; height: 16px; }
   .railItem:hover { background: rgb(var(--fg-rgb) / 0.05); }
-  .railItem[aria-current='page'] { background: rgb(var(--fg-rgb) / 0.09); color: var(--text); font-weight: 600; }
+  .railItem[aria-current='page'] { color: var(--text); font-weight: 600; }
   .railMinor .railItem { height: 28px; color: var(--muted); font-size: 13px; }
   .railMinor .railItem > svg { width: 15px; height: 15px; }
   .railItem .railBadge { top: 50%; left: auto; right: 8px; margin-top: -9px; }
@@ -140,3 +140,7 @@
   .railAccount { width: auto; height: 34px; justify-content: start; padding: 0 8px; border-radius: 8px; }
   .accountDot { left: 30px; right: auto; }
 }
+
+/* The sliding highlight behind the page you are on (IconRail's railActive). */
+.railItem { isolation: isolate; }
+.railActive { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgb(var(--fg-rgb) / 0.09); }
