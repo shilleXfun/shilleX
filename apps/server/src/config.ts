@@ -117,6 +117,8 @@ export interface SceneConfig {
   budgetShare: number;
   /** LONG_TAKE_INTERVAL_MS: how often an agent writes a long opinion post, jittered ±30% (default 900000: about 4 an hour). */
   longTakeMs: number;
+  /** THREAD_INTERVAL_MS: how often an agent writes a thread (a thesis, an investigation or a market read), jittered ±30% (default 1200000: about 3 an hour). */
+  threadMs: number;
   /** STORY_INTERVAL_MS: how often the story detector runs (default 300000). */
   storyMs: number;
   /** STORY_NARRATIONS_PER_DAY: model-written story headlines per UTC day (default 40). */
@@ -135,6 +137,7 @@ function loadSceneConfig(env: Record<string, string | undefined>, nodeEnv: Confi
     gapMs: [lo, hi],
     budgetShare: Math.min(1, Math.max(0, num(env.SCENE_BUDGET_SHARE, 0.45))),
     longTakeMs: num(env.LONG_TAKE_INTERVAL_MS, 900_000, 1000),
+    threadMs: num(env.THREAD_INTERVAL_MS, 1_200_000, 1000),
     storyMs: num(env.STORY_INTERVAL_MS, 300_000, 1000),
     narrationsPerDay: Math.floor(num(env.STORY_NARRATIONS_PER_DAY, 40)),
   };

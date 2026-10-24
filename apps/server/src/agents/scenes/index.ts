@@ -7,6 +7,7 @@ import type { SceneDeps } from './cast.ts';
 import { pickIdea, premiseOf, sceneIdeas } from './director.ts';
 import { phrasebookScene, templateTitle } from './fallback.ts';
 import { runLongTake } from './long-take.ts';
+import { runThread } from './thread.ts';
 import { createPlayer } from './player.ts';
 import { PHRASEBOOK_MODEL } from './types.ts';
 import { sceneMaterial, writeScene } from './writer.ts';
@@ -23,7 +24,7 @@ export interface Scenes {
   /** Starts one scene now if fewer than MAX_RUNNING run (the director's tick; also for /admindev and manual checks). */
   direct(): Promise<string | null>;
   onSceneEnd(fn: (sceneId: string) => void): void;
-  stats(): { started: number; model: number; phrasebook: number; longTakes: number; halted: string | null };
+  stats(): { started: number; model: number; phrasebook: number; longTakes: number; threads: number; halted: string | null };
   stop(): Promise<void>;
 }
 
@@ -36,8 +37,8 @@ export interface Scenes {
 export function startScenes(d: SceneDeps): Scenes {
   const player = createPlayer(d);
   let stopped = false, halted: string | null = null;
-  let directing: Promise<string | null> | null = null, playing: Promise<void> | null = null, taking: Promise<unknown> | null = null;
-  const counts = { started: 0, model: 0, phrasebook: 0, longTakes: 0 };
+  let directing: Promise<string | null> | null = null, playing: Promise<void> | null = null, taking: Promise<unknown> | null = null, threading: Promise<unknown> | null = null;
+  const counts = { started: 0, model: 0, phrasebook: 0, longTakes: 0, threads: 0 };
   const timers = new Set<NodeJS.Timeout>();
   const later = (ms: number, fn: () => void) => { const t = setTimeout(() => { timers.delete(t); if (!stopped) fn(); }, ms); t.unref?.(); timers.add(t); };
   const modelOpen = () => Boolean(d.brain) && !halted && !d.moments?.halted();
@@ -95,12 +96,24 @@ export function startScenes(d: SceneDeps): Scenes {
     }
     later(jitter(d.config.longTakeMs, d.rng), longTakeLoop);
   };
+  const threadLoop = () => {
+    if (!threading && modelOpen()) {
+      threading = runThread(d).then((r) => { if (r === 'posted') counts.threads++; })
+        .catch((e) => {
+          const p = accountProblem(e);
+          if (p) { halted = p; console.error(`[scenes] model scenes halted: ${p}`); } else console.error('[scenes] thread failed', (e as Error)?.message ?? e);
+        })
+        .finally(() => { threading = null; });
+    }
+    later(jitter(d.config.threadMs, d.rng), threadLoop);
+  };
 
   void player.resume().catch((e) => console.error('[scenes] resume failed', e)).finally(() => {
     if (stopped) return;
     playerLoop();
     later(Math.min(20_000, d.config.intervalMs), directorLoop);
     later(jitter(Math.min(d.config.longTakeMs, 5 * 60_000), d.rng), longTakeLoop);
+    later(jitter(Math.min(d.config.threadMs, 8 * 60_000), d.rng), threadLoop);
   });
 
   return {
@@ -111,7 +124,7 @@ export function startScenes(d: SceneDeps): Scenes {
       stopped = true;
       for (const t of timers) clearTimeout(t);
       timers.clear();
-      await Promise.allSettled([directing, playing, taking]);
+      await Promise.allSettled([directing, playing, taking, threading]);
     },
   };
 }
