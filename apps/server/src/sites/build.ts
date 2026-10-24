@@ -13,6 +13,8 @@ import { SITE_MAX_BYTES, sanitizeSiteHtml } from './sanitize.ts';
 import { freeSlug, insertSite, originOf, rebuildSite, setAnnouncement, siteUrl } from './store.ts';
 import { SITE_PROMPT_VERSION, buildsToday, factionOf, mayBuild, stillValid, type SiteJob } from './plan.ts';
 import { gatherSiteData, renderSite } from './local.ts';
+import { siteKit, v0Page, worstUsd } from './v0.ts';
+import type { ModelBudget } from '../agents/haiku.ts';
 
 /**
  * An agent builds a real website (x-revamp §3), with no paid model (owner, 2026-10-14): sites/local.ts assembles a
@@ -20,7 +22,7 @@ import { gatherSiteData, renderSite } from './local.ts';
  * agent posts it through the ordinary post path, linking /sites/<slug>. The build is still a sealed turn (cost 0), so
  * SITES_PER_DAY counts it.
  */
-export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy'>;
+export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy'> & { budget?: ModelBudget };
 /** The model name a site turn records: no model, the local builder. */
 const LOCAL_BUILDER = 'local-site-v2';
 
@@ -100,19 +102,40 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<vo
   const trigger = job.site === 'coin' ? { type: 'launch' as const, refId: job.mint, note: 'website' } : { type: 'heartbeat' as const, note: 'website' };
   const { id: turnId } = await startTurn(d.db, { agentId, triggers: [trigger], model: LOCAL_BUILDER, effort: 'low', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
   const toolCalls: ToolCallRecord[] = [];
-  let status: 'acted' | 'failed' = 'failed', note = '', context = `${brief.kind} site`, thrown: unknown = null;
+  let status: 'acted' | 'failed' = 'failed', note = '', context = `${brief.kind} site`, thrown: unknown = null, costUsd = 0;
   try {
     const page = renderSite(data);
-    const { html, removed } = sanitizeSiteHtml(page.html, originOf(publicUrl));
+    let { html, removed } = sanitizeSiteHtml(page.html, originOf(publicUrl));
+    let model = LOCAL_BUILDER;
+    // v0 writes the page when it is set up and the budget allows; anything wrong with its page and the local one stands.
+    const v0 = config.v0;
+    if (v0 && d.budget) {
+      const kit = siteKit(data, { avatar: avatarFor(agent), coin: brief.coinMint ? `/api/agents/coin-image/${brief.coinMint}.svg` : null });
+      const worst = worstUsd(v0, brief.ask.length + kit.length + 4000);
+      if (d.budget.canSpend() && d.budget.canAfford(worst)) {
+        try {
+          const p = await v0Page(v0, brief.ask, kit);
+          costUsd = p.costUsd;
+          const clean = sanitizeSiteHtml(p.html, originOf(publicUrl));
+          const bytes = Buffer.byteLength(clean.html, 'utf8');
+          if (bytes >= 3000 && bytes <= SITE_MAX_BYTES) { html = clean.html; removed = clean.removed; model = p.model; }
+          else note = `v0's page was ${bytes} bytes after cleaning; the local page stands. `;
+        } catch (e) {
+          costUsd = Number((e as { costUsd?: unknown }).costUsd ?? 0) || 0;
+          note = `v0 failed (${(e as Error).message}); the local page stands. `;
+        }
+        d.budget.add(costUsd);
+      }
+    }
     if (Buffer.byteLength(html, 'utf8') > SITE_MAX_BYTES) throw new Error(`the page was over ${SITE_MAX_BYTES / 1000} KB`);
-    const build = { title: page.title.slice(0, 60), blurb: page.blurb, html, turnId, model: LOCAL_BUILDER, now: d.now() };
+    const build = { title: page.title.slice(0, 60), blurb: page.blurb, html, turnId, model, now: d.now() };
     const site = brief.rebuild
       ? await rebuildSite(d.db, brief.rebuild.id, build)
       : await insertSite(d.db, await freeSlug(d.db, brief.slugBase), { ...build, authorId: agentId, kind: brief.kind, coinMint: brief.coinMint, factionId: brief.factionId });
     status = 'acted';
     context = `built ${siteUrl(site.slug)} version ${site.version}`;
     toolCalls.push({ name: 'build_site', input: { kind: brief.kind, title: site.title }, ok: true, result: { url: siteUrl(site.slug), version: site.version, bytes: Buffer.byteLength(html, 'utf8') } });
-    note = removed.length ? `built; removed from the page: ${removed.join(', ')}` : 'built';
+    note += removed.length ? `built with ${model}; removed from the page: ${removed.join(', ')}` : `built with ${model}`;
     // The post goes out through the agent's own post path, with the address at the end; the site shows in it from there.
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl };
     const body = `${brief.rebuild ? brief.post : page.post}\n\n${publicUrl}${siteUrl(site.slug)}`;
@@ -122,7 +145,7 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<vo
     if (postId) await setAnnouncement(d.db, site.id, site.version, postId);
     else note += '; the post about it failed';
   } catch (e) { thrown = e; note = `failed: ${(e as Error).message ?? String(e)}`; }
-  await finishTurn(d.db, turnId, { status, context: [{ kind: 'site', text: context }], reasoning: note, toolCalls, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now() })
+  await finishTurn(d.db, turnId, { status, context: [{ kind: 'site', text: context }], reasoning: note, toolCalls, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd, finishedAt: d.now() })
     .catch((e) => console.error('[sites] build turn left unsealed until restart', turnId, e));
   if (thrown) throw thrown;
 }
