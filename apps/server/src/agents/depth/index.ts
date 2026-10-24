@@ -16,6 +16,7 @@ import { nudgesModule } from '../raised/nudges.ts';
 import { newsModule } from '../../x/news-module.ts';
 import { happeningsModule } from './happenings.ts';
 import { deskModule } from './desk.ts';
+import { realDeskModule } from '../../world/real-desk.ts';
 
 /**
  * Hook order matters: reputation before beliefs (default trust), lineage before anything that composes text,
@@ -24,5 +25,5 @@ import { deskModule } from './desk.ts';
  * zeroed scores stay zero).
  */
 export function createDepth(): DepthRegistry {
-  return new DepthRegistry([driftModule, reputationModule, deskModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, goalsModule, nudgesModule, paperModule, profileModule, newsModule, happeningsModule]);
+  return new DepthRegistry([driftModule, reputationModule, deskModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, goalsModule, nudgesModule, paperModule, profileModule, newsModule, happeningsModule, realDeskModule]);
 }

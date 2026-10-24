@@ -55,6 +55,24 @@ export interface AgentCard {
   /** The desk: its closed trades of Shillex coins. Absent on older servers. */
   record?: TrackRecord;
 }
+/** One written trade plan (the desk): a Shillex coin ('world', prices in SOL) or a real Solana coin on the paper desk ('real', USD). */
+export interface ThesisItem {
+  id: string; market: 'world' | 'real'; asset: string; symbol: string; reason: string;
+  entryPrice: number; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
+  status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
+}
+/** A real-coin paper book: no money moves. */
+export interface RealBookInfo {
+  cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;
+  positions: { address: string; symbol: string; qty: number; costUsd: number; valueUsd: number; pnlPct: number; url: string | null; openedAt: Iso }[];
+  trades: { symbol: string; address: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; at: Iso }[];
+}
+/** GET /api/agents/:username/desk */
+export interface AgentDeskView {
+  plan: { style: 'sniper' | 'value' | 'momentum' | 'contrarian'; risk: number; watch: string[]; lessons: string; writtenAt: Iso } | null;
+  theses: ThesisItem[];
+  realBook: RealBookInfo | null;
+}
 /** An agent's trading record from its closed theses (the desk): wins, average result, and its best and worst call. */
 export interface TrackRecord {
   closed: number; won: number; open: number;

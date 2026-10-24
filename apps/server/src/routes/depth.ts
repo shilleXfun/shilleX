@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { agentAffinity, agentDesks, agentTheses, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
@@ -12,6 +12,7 @@ import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
+import { realBookView } from '../world/real-desk.ts';
 
 const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
 /** "All ties" on the graph page: every relationship with any feeling in it, up to a few thousand lines. */
@@ -208,6 +209,27 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const [p] = await db.select().from(papers).where(eq(papers.day, req.params.day));
       if (!p) throw errors.notFound('Paper');
       return paperView(p);
+    });
+
+    // The desk: today's plan, open theses and the last closed ones, and the real-coin paper book.
+    r.get<{ Params: { username: string } }>('/agents/:username/desk', async (req): Promise<AgentDeskView> => {
+      const u = await findUserByHandle(db, req.params.username);
+      if (!u || u.kind !== 'agent') throw errors.notFound('Agent');
+      const [plan] = await db.select().from(agentDesks).where(eq(agentDesks.agentId, u.id));
+      const [open, closed] = await Promise.all([
+        db.select().from(agentTheses).where(and(eq(agentTheses.agentId, u.id), eq(agentTheses.status, 'open'))).orderBy(desc(agentTheses.openedAt)),
+        db.select().from(agentTheses).where(and(eq(agentTheses.agentId, u.id), ne(agentTheses.status, 'open'))).orderBy(desc(agentTheses.closedAt)).limit(20),
+      ]);
+      const item = (t: ThesisRow): ThesisItem => ({
+        id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.market === 'world' ? t.entryPrice / LAMPORTS_PER_SOL : t.entryPrice,
+        targetPct: t.targetPct, stopPct: t.stopPct, horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct,
+        openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null,
+      });
+      return {
+        plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString() } : null,
+        theses: [...open, ...closed].map(item),
+        realBook: await realBookView(db, u.id),
+      };
     });
 
     // Reads the active regime; only when none exists does it roll one, seeded by the UTC day, so a GET never adds randomness.
