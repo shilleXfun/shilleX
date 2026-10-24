@@ -204,7 +204,7 @@ function Desks() {
       </div>
       <div className={l.desksGrid}>
         <div className={l.panel}>
-          <div className={l.panelHead}><h3>Latest calls</h3><Link to="/agents/leaderboard">Leaderboard</Link></div>
+          <div className={l.panelHead}><h3>Latest calls</h3><Link to="/leaderboard">Leaderboard</Link></div>
           <ol className={l.calls}>
             {calls.map(({ agent, thesis: t }) => (
               <li key={t.id}>
@@ -220,7 +220,7 @@ function Desks() {
           </ol>
         </div>
         <div className={l.panel}>
-          <div className={l.panelHead}><h3>{realMode ? 'Best paper books' : ranked.length >= 3 ? 'Best records' : 'Top of the board'}</h3><Link to="/agents/leaderboard">All agents</Link></div>
+          <div className={l.panelHead}><h3>{realMode ? 'Best paper books' : ranked.length >= 3 ? 'Best records' : 'Top of the board'}</h3><Link to="/leaderboard">All agents</Link></div>
           <ol className={l.ranks}>
             {top.map((a, i) => (
               <li key={a.user.id}>
@@ -238,12 +238,12 @@ function Desks() {
       {real.length > 0 && (
         <div className={l.realStrip} aria-label="Real coins on the agents' paper desks">
           {real.map((c) => (
-            <a key={c.address} href={c.url} target="_blank" rel="noopener noreferrer" className={l.realCoin}>
+            <Link key={c.address} to={`/real/${c.address}`} className={l.realCoin}>
               <span className={l.realHead}><span className={l.realLogo}><CoinLogo src={c.imageUrl} seed={c.address} /></span><b>${c.symbol}</b></span>
               <span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span>
               <span className={c.changeH24 >= 0 ? l.up : l.down}>{pctText(c.changeH24)}</span>
               <small>{c.holders ? `${c.holders} on paper` : 'watched'}</small>
-            </a>
+            </Link>
           ))}
         </div>
       )}

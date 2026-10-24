@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { LAMPORTS_PER_SOL, isValidSolanaAddress, type CandlesView, type RealCoinPageView, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
 import { agentAffinity, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
@@ -13,7 +13,7 @@ import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
 import { MIN_LIQUIDITY_USD, realBookView } from '../world/real-desk.ts';
-import { realMarketNow, realPrices } from '../world/real-market.ts';
+import { REAL_CANDLE_DEFAULT, realCandles, realMarketNow, realPrices } from '../world/real-market.ts';
 
 const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
 /** "All ties" on the graph page: every relationship with any feeling in it, up to a few thousand lines. */
@@ -246,6 +246,43 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const n = new Map(held.map((h) => [h.a, Number(h.n)]));
       // Only what a desk would trade (enough liquidity) or still holds: the trending list is full of coins that already died.
       return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0, imageUrl: c.imageUrl })) };
+    });
+
+    // One real coin's page: its market as last priced, who holds it on paper and how they are doing, every plan on it, its paper trades.
+    r.get<{ Params: { address: string } }>('/real/coins/:address', async (req): Promise<RealCoinPageView> => {
+      const [c] = isValidSolanaAddress(req.params.address) ? await db.select().from(realMarket).where(eq(realMarket.address, req.params.address)) : [];
+      if (!c) throw errors.notFound('Coin');
+      const [pos, theses, trades] = await Promise.all([
+        db.select().from(realPositions).where(eq(realPositions.address, c.address)),
+        db.select().from(agentTheses).where(and(eq(agentTheses.market, 'real'), eq(agentTheses.asset, c.address))).orderBy(desc(agentTheses.openedAt)).limit(80),
+        db.select({ t: realTrades, pnl: agentTheses.pnlPct }).from(realTrades).leftJoin(agentTheses, eq(agentTheses.id, realTrades.thesisId)).where(eq(realTrades.address, c.address)).orderBy(desc(realTrades.at)).limit(40),
+      ]);
+      const people = await userSummaries(db, [...pos.map((p) => p.agentId), ...theses.map((t) => t.agentId), ...trades.map((x) => x.t.agentId)]);
+      const closed = theses.filter((t) => t.status !== 'open' && t.pnlPct !== null);
+      const thesis = (t: ThesisRow): ThesisItem => ({
+        id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.entryPrice, targetPct: t.targetPct, stopPct: t.stopPct,
+        horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null, imageUrl: c.imageUrl,
+      });
+      return {
+        coin: {
+          address: c.address, symbol: c.symbol, name: c.name, url: c.url, imageUrl: c.imageUrl, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24,
+          established: c.source === 'major', holders: pos.length, pairAddress: c.pairAddress, dexId: c.dexId, fdvUsd: c.fdvUsd, volumeH1: c.volumeH1, changeM5: c.changeM5, buysH1: c.buysH1, sellsH1: c.sellsH1,
+          pairCreatedAt: c.pairCreatedAt?.toISOString() ?? null, refreshedAt: c.refreshedAt.toISOString(),
+        },
+        holders: pos.flatMap((p) => { const agent = people.get(p.agentId); const valueUsd = p.qty * c.priceUsd; return agent ? [{ agent, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, openedAt: p.openedAt.toISOString() }] : []; }).sort((a, b) => b.valueUsd - a.valueUsd),
+        theses: [...theses.filter((t) => t.status === 'open'), ...theses.filter((t) => t.status !== 'open').slice(0, 12)].flatMap((t) => { const agent = people.get(t.agentId); return agent ? [{ agent, thesis: thesis(t) }] : []; }),
+        trades: trades.flatMap(({ t, pnl }) => { const agent = people.get(t.agentId); return agent ? [{ id: t.id, agent, address: t.address, symbol: t.symbol, imageUrl: c.imageUrl, side: t.side, usd: t.usd, priceUsd: t.priceUsd, pnlPct: t.side === 'sell' ? pnl : null, at: t.at.toISOString() }] : []; }),
+        record: { closed: closed.length, won: closed.filter((t) => t.pnlPct! > 0).length, avgPct: closed.length ? closed.reduce((n, t) => n + t.pnlPct!, 0) / closed.length : 0 },
+      };
+    });
+
+    // A real coin's candles in USD, from GeckoTerminal by its deepest pool (cached a minute per pool and size).
+    r.get<{ Params: { address: string }; Querystring: { interval?: string } }>('/real/coins/:address/candles', async (req): Promise<CandlesView> => {
+      const [c] = isValidSolanaAddress(req.params.address) ? await db.select({ pool: realMarket.pairAddress, buys: realMarket.buysH1, sells: realMarket.sellsH1, vol: realMarket.volumeH1 }).from(realMarket).where(eq(realMarket.address, req.params.address)) : [];
+      if (!c) throw errors.notFound('Coin');
+      const { interval, rows } = await realCandles(c.pool, Number(req.query.interval) || REAL_CANDLE_DEFAULT);
+      const none = { buySol: 0, sellSol: 0, buys: 0, sells: 0 };
+      return { interval, unit: 'USD', candles: rows.map((x) => ({ t: x.t, o: x.o, h: x.h, l: x.l, c: x.c, buy: x.v, sell: 0, n: 0 })), pressure: { h1: { ...none, buys: c.buys, sells: c.sells }, h24: none } };
     });
 
     // An agent's paper book over time, in USD: cash plus every position at its latest known price, after each paper trade, then now.

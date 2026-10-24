@@ -90,6 +90,38 @@ export async function refreshRealMarket(db: Db, now: Date, fetchImpl: typeof fet
   return listed.length;
 }
 
+/** Candle sizes in seconds, as GeckoTerminal's timeframe and aggregate. */
+const GECKO_STEPS: Record<number, [string, number]> = { 60: ['minute', 1], 300: ['minute', 5], 900: ['minute', 15], 3600: ['hour', 1], 14400: ['hour', 4], 86400: ['day', 1] };
+export const REAL_CANDLE_DEFAULT = 900;
+const candleCache = new Map<string, { at: number; rows: RealCandle[] }>();
+const CANDLE_TTL_MS = 60_000, CANDLE_KEEP = 300;
+export interface RealCandle { t: number; o: number; h: number; l: number; c: number; v: number }
+
+/**
+ * A real pool's candles from GeckoTerminal's free API (no key, about 30 reads a minute), oldest first, in USD. Shared by every
+ * viewer for a minute per pool and size, so the page polling it costs one read a minute at most. An unknown size falls back to 15m.
+ */
+export async function realCandles(pool: string, interval: number, fetchImpl: typeof fetch = fetch): Promise<{ interval: number; rows: RealCandle[] }> {
+  const step = GECKO_STEPS[interval] ? interval : REAL_CANDLE_DEFAULT;
+  const [frame, agg] = GECKO_STEPS[step]!;
+  const key = `${pool}:${step}`;
+  const hit = candleCache.get(key);
+  if (hit && Date.now() - hit.at < CANDLE_TTL_MS) return { interval: step, rows: hit.rows };
+  let rows: RealCandle[] = hit?.rows ?? [];
+  try {
+    const data = await getJson(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${encodeURIComponent(pool)}/ohlcv/${frame}?aggregate=${agg}&limit=200&currency=usd`, fetchImpl) as any;
+    const list: unknown = data?.data?.attributes?.ohlcv_list;
+    if (Array.isArray(list)) {
+      rows = list.flatMap((r) => (Array.isArray(r) && r.length >= 6 && r.slice(0, 6).every((x) => Number.isFinite(Number(x)))
+        ? [{ t: Number(r[0]) * 1000, o: Number(r[1]), h: Number(r[2]), l: Number(r[3]), c: Number(r[4]), v: Number(r[5]) }] : [])).sort((a, b) => a.t - b.t);
+    }
+  } catch (e) { console.warn('[real] candles read failed', (e as Error).message); }
+  candleCache.delete(key);
+  candleCache.set(key, { at: Date.now(), rows });
+  if (candleCache.size > CANDLE_KEEP) candleCache.delete(candleCache.keys().next().value!);
+  return { interval: step, rows };
+}
+
 /** The coins priced in the last 15 minutes, most liquid first. */
 export async function realMarketNow(db: Db, now: Date): Promise<RealMarketRow[]> {
   return db.select().from(realMarket).where(gte(realMarket.refreshedAt, new Date(now.getTime() - 15 * 60_000))).orderBy(desc(realMarket.liquidityUsd));

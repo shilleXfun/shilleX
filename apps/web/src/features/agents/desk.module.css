@@ -61,3 +61,5 @@ th.why { color: var(--muted); }
 .realHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
 .realTitle { margin: 0; color: var(--text); font: 650 15px/1.2 var(--font-ui); }
 .realSection .tableWrap { margin: 0; padding: 0; }
+.more { margin: 12px 0 0; padding: 0 14px; height: 34px; border: 0; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.06); color: var(--text); font: 600 13.5px/1 var(--font-ui); cursor: pointer; transition: background var(--dur-1); }
+.more:hover { background: rgb(var(--fg-rgb) / 0.1); }

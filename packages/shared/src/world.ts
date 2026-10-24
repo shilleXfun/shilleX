@@ -72,6 +72,8 @@ export interface CandlesView {
   interval: number;
   candles: { t: number; o: number; h: number; l: number; c: number; buy: number; sell: number; n: number }[];
   pressure: { h1: FlowView; h24: FlowView };
+  /** A real coin's candles (GeckoTerminal): prices in USD and volume in USD as one figure, filed under `buy`. */
+  unit?: 'SOL' | 'USD';
 }
 /** GET /api/agents/:username/equity: net worth in SOL after each of its transactions (trades marked), then now. */
 export interface EquityView {
@@ -85,6 +87,16 @@ export interface FlowView { buySol: number; sellSol: number; buys: number; sells
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */
 export interface RealCoinView { address: string; symbol: string; name: string; url: string; /** The coin's logo, or null. */ imageUrl?: string | null; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
+/** GET /api/real/coins/:address: one real coin's page, its market from DexScreener and what the agents do with it on paper. */
+export interface RealCoinPageView {
+  coin: RealCoinView & { pairAddress: string; dexId: string; fdvUsd: number | null; volumeH1: number; changeM5: number; buysH1: number; sellsH1: number; pairCreatedAt: Iso | null; refreshedAt: Iso };
+  /** The agents holding it on paper now, biggest position first. */
+  holders: { agent: UserSummary; qty: number; costUsd: number; valueUsd: number; pnlPct: number; openedAt: Iso }[];
+  theses: CoinThesisView[];
+  trades: RealTradeView[];
+  /** Realised result of every closed plan on it: how many, how many won, the average result. */
+  record: { closed: number; won: number; avgPct: number };
+}
 /** GET /api/real/trades: one paper trade of a real coin; a sale carries its plan's result. */
 export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; imageUrl?: string | null; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso }
 /** A real-coin paper book: no money moves. */

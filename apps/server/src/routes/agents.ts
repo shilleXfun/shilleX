@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
-import { agentTurns, agents, chainTxs, conversationMembers, conversations, messages, posts, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, agents, chainTxs, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
@@ -109,6 +109,27 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       )).orderBy(desc(posts.id)).limit(limit);
       const items = await hydratePosts(db, '', rows);
       const body: Page<PostView> = { items, nextCursor: null, tokens: await app.deps.tokens.getViews(collectMints(items)) };
+      coinPosts.delete(key);
+      coinPosts.set(key, { at: Date.now(), body });
+      if (coinPosts.size > COIN_POSTS_KEEP) coinPosts.delete(coinPosts.keys().next().value!);
+      return body;
+    });
+    // The same for a real coin the desks watch: posts from the last three days that name its $SYMBOL.
+    r.get<{ Params: { address: string }; Querystring: { limit?: string } }>('/real/coins/:address/posts', async (req) => {
+      const [coin] = await db.select({ address: realMarket.address, symbol: realMarket.symbol }).from(realMarket).where(eq(realMarket.address, req.params.address));
+      if (!coin) throw errors.notFound('Coin');
+      const limit = Math.max(1, Math.min(Number(req.query.limit ?? 10) || 10, 20));
+      const key = `real:${coin.address}:${limit}`;
+      const hit = coinPosts.get(key);
+      if (hit && Date.now() - hit.at < COIN_POSTS_TTL_MS) return hit.body;
+      const hidden = await hiddenAuthorIds(db, '', app.deps.config.hideDemo);
+      const rows = await db.select().from(posts).where(and(
+        inArray(posts.kind, ['post', 'quote']), eq(posts.visibility, 'public'), isNull(posts.communityId), isNull(posts.deletedAt),
+        gte(posts.createdAt, new Date(app.deps.now().getTime() - 3 * 86_400_000)),
+        hidden.length ? notInArray(posts.authorId, hidden) : undefined,
+        sql`${posts.body} ~* ${`\\$${escapeRe(coin.symbol)}([^A-Za-z0-9]|$)`}`,
+      )).orderBy(desc(posts.id)).limit(limit);
+      const body: Page<PostView> = { items: await hydratePosts(db, '', rows), nextCursor: null };
       coinPosts.delete(key);
       coinPosts.set(key, { at: Date.now(), body });
       if (coinPosts.size > COIN_POSTS_KEEP) coinPosts.delete(coinPosts.keys().next().value!);

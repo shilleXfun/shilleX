@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentDesks, agentTheses, realBooks, realPositions, realTrades, type DeskStyle, type RealMarketRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
@@ -53,7 +53,7 @@ export const PaperExecutor: RealExecutor = {
 const taste = (agentId: string, address: string) => (createHash('sha256').update(`real:${agentId}:${address}`).digest().readUInt16BE(0) / 65535) * 0.3 - 0.15;
 
 /** How much one agent wants one real coin, by its desk style; > 0 is worth buying. `why` is the thesis in a few words. */
-export function realScore(c: RealMarketRow, style: DeskStyle, t: Traits, agentId: string, now: Date): { d: number; why: string } | null {
+export function realScore(c: RealMarketRow, style: DeskStyle, t: Traits, agentId: string, now: Date, crowd = 0): { d: number; why: string } | null {
   if (c.liquidityUsd < MIN_LIQUIDITY_USD || c.volumeH1 < MIN_VOLUME_H1_USD || c.changeH1 <= CRASH_H1) return null;
   const ageH = c.pairCreatedAt ? (now.getTime() - c.pairCreatedAt.getTime()) / 3_600_000 : 9999;
   const flow = c.buysH1 + c.sellsH1 > 20 ? (c.buysH1 - c.sellsH1) / (c.buysH1 + c.sellsH1) : 0; // -1..1
@@ -63,10 +63,27 @@ export function realScore(c: RealMarketRow, style: DeskStyle, t: Traits, agentId
   // Nobody chases: a coin already up a lot in the hour, or in the last five minutes, is where late buyers get dumped on.
   const chase = Math.max(0, c.changeH1 - 0.5) + Math.max(0, c.changeM5 - 0.12) * 2;
   d -= chase;
-  if (style === 'momentum' && c.changeH1 > 0.05 && c.changeH1 < 0.5 && flow > 0.1) { d += 0.35; why = `trend building: ${pct(c.changeH1)} this hour with buyers ahead`; }
-  if (style === 'sniper' && ageH < 12 && flow > 0.15 && turnover > 0.5) { d += 0.4; why = `fresh pair (${Math.round(ageH)} h old) with real volume`; }
-  if (style === 'contrarian' && c.changeH24 < -0.2 && c.changeH1 > -0.05 && c.liquidityUsd > 150_000) { d += 0.4; why = `down ${pct(c.changeH24)} on the day but the selling stopped`; }
-  if (style === 'value' && c.source === 'major' && c.changeH24 < 0 && c.changeH1 > -0.03) { d += 0.35; why = `an established coin on a red day`; }
+  // A crowded trade pays less: every agent already in it is one less buyer later, so the desks spread out instead of herding.
+  d -= 0.06 * crowd;
+  // Each agent words its reason its own way (the same facts, a different read).
+  const say = (...ways: string[]) => ways[Math.floor((taste(agentId, `why:${c.address}`) + 0.15) / 0.3 * ways.length) % ways.length]!;
+  const buys = c.buysH1, sells = c.sellsH1;
+  if (style === 'momentum' && c.changeH1 > 0.05 && c.changeH1 < 0.5 && flow > 0.1) {
+    d += 0.35;
+    why = say(`trend building: ${pct(c.changeH1)} this hour with buyers ahead`, `${buys} buys to ${sells} sells this hour and the price is following`, `${pct(c.changeH1)} on the hour without a blow-off candle yet`, `volume ${usd(c.volumeH1)} this hour and it is still going up`);
+  }
+  if (style === 'sniper' && ageH < 12 && flow > 0.15 && turnover > 0.5) {
+    d += 0.4;
+    why = say(`fresh pair (${Math.round(ageH)} h old) with real volume`, `${Math.round(ageH)} h old, the pool turned over ${turnover.toFixed(1)}x this hour`, `early: ${usd(c.liquidityUsd)} liquidity and buyers ahead`, `new pair, ${buys} buys this hour, in small and out fast`);
+  }
+  if (style === 'contrarian' && c.changeH24 < -0.2 && c.changeH1 > -0.05 && c.liquidityUsd > 150_000) {
+    d += 0.4;
+    why = say(`down ${pct(c.changeH24)} on the day but the selling stopped`, `${pct(c.changeH24)} in 24h, flat this hour: sellers look done`, `everyone hates it at ${pct(c.changeH24)}, the liquidity (${usd(c.liquidityUsd)}) did not leave`, `buying the flush: ${pct(c.changeH24)} then ${pct(c.changeH1)} this hour`);
+  }
+  if (style === 'value' && c.source === 'major' && c.changeH24 < 0 && c.changeH1 > -0.03) {
+    d += 0.35;
+    why = say(`an established coin on a red day`, `$${c.symbol} at ${pct(c.changeH24)} on the day is a discount, not a death`, `deep pool (${usd(c.liquidityUsd)}), red day, patient entry`, `a major coin ${pct(c.changeH24)} off, holding this hour`);
+  }
   // No style-specific reason, no trade: a hunch alone is how the swarm lost money before the desk.
   if (why === 'a hunch') d -= 0.25;
   return { d, why };
@@ -121,7 +138,8 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
   const held = new Set((await d.db.select({ a: realPositions.address }).from(realPositions).where(eq(realPositions.agentId, agentId))).map((r) => r.a));
   if (cash < 20 || held.size >= 5) { await d.db.update(realBooks).set({ cashUsd: cash }).where(eq(realBooks.agentId, agentId)); return; }
   const risk = desk ? (traits.risk + desk.risk) / 2 : traits.risk;
-  const scored = market.filter((c) => !held.has(c.address)).map((c) => ({ c, s: realScore(c, style, { ...traits, risk }, agentId, now) }))
+  const crowd = new Map((await d.db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address)).map((r) => [r.a, Number(r.n)]));
+  const scored = market.filter((c) => !held.has(c.address)).map((c) => ({ c, s: realScore(c, style, { ...traits, risk }, agentId, now, crowd.get(c.address) ?? 0) }))
     .filter((x): x is { c: RealMarketRow; s: { d: number; why: string } } => Boolean(x.s && x.s.d > 0)).sort((a, b) => b.s.d - a.s.d);
   const best = scored[0];
   if (best && d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.75 : 0.6)) {

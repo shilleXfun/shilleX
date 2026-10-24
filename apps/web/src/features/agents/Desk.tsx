@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
-import { relativeTime, type AgentDeskView, type ThesisItem, type TrackRecord } from '@shillex/shared';
+import { relativeTime, type AgentDeskView, type CoinThesisView, type ThesisItem, type TrackRecord } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { CoinLogo } from '../../components/ui/CoinLogo';
@@ -30,7 +31,9 @@ const STYLE: Record<NonNullable<AgentDeskView['plan']>['style'], { label: string
   contrarian: { label: 'Contrarian', how: 'Buys dips in coins whose creators it trusts.' },
 };
 const STATUS: Record<ThesisItem['status'], string> = { open: 'Open', won: 'Won', lost: 'Stopped out', expired: 'Ran out of time', closed: 'Closed' };
-const coinHref = (t: Pick<ThesisItem, 'market' | 'asset'>) => (t.market === 'world' ? `/coins/${t.asset}` : `https://dexscreener.com/solana/${t.asset}`);
+const PLANS_SHOWN = 8;
+/** A coin's page on Shillex: a Shillex coin's own, or a real coin's under /real. */
+export const coinHref = (t: Pick<ThesisItem, 'market' | 'asset'>) => (t.market === 'world' ? `/coins/${t.asset}` : `/real/${t.asset}`);
 
 /** The record in one strip: trades closed, how many won, the average, the best and the worst call. */
 export function RecordStrip({ r }: { r: TrackRecord }) {
@@ -53,7 +56,7 @@ function CoinCell({ t }: { t: ThesisItem }) {
       <span className={s.coinText}><span className={s.ticker}>${t.symbol}</span><span className={s.market}>{t.market === 'world' ? 'Shillex' : 'Real · paper'}</span></span>
     </>
   );
-  return t.market === 'world' ? <Link className={s.coin} to={coinHref(t)}>{inner}</Link> : <a className={s.coin} href={coinHref(t)} target="_blank" rel="noopener noreferrer">{inner}</a>;
+  return <Link className={s.coin} to={coinHref(t)}>{inner}</Link>;
 }
 
 /** Every plan, newest first: what it paid, where it takes profit and gives up, by when, and how it ended. */
@@ -156,9 +159,15 @@ function PaperBook({ book }: { book: NonNullable<AgentDeskView['realBook']> }) {
 
 /** Who has a written plan on this coin: entry, target, stop, and how it is going or how it ended. */
 export function CoinPlans({ mint, symbol }: { mint: string; symbol: string }) {
-  const items = useCoinTheses(mint).data ?? [];
-  if (!items.length) return null;
-  const open = items.filter((x) => x.thesis.status === 'open').length;
+  return <PlansTable items={useCoinTheses(mint).data ?? []} symbol={symbol} />;
+}
+
+/** Every plan on one coin as a table; long lists show their first eight until asked for the rest. */
+export function PlansTable({ items: all, symbol }: { items: CoinThesisView[]; symbol: string }) {
+  const [more, setMore] = useState(false);
+  if (!all.length) return null;
+  const open = all.filter((x) => x.thesis.status === 'open').length;
+  const items = more ? all : all.slice(0, PLANS_SHOWN);
   return (
     <FlatSection id="coin-plans" title={`Plans on $${symbol}`} note={open ? `${open} open` : 'all closed'}>
       <div className={s.tableWrap}>
@@ -178,6 +187,7 @@ export function CoinPlans({ mint, symbol }: { mint: string; symbol: string }) {
           </tbody>
         </table>
       </div>
+      {all.length > PLANS_SHOWN && <button type="button" className={s.more} onClick={() => setMore((m) => !m)}>{more ? 'Show fewer' : `Show all ${all.length} plans`}</button>}
     </FlatSection>
   );
 }
@@ -201,10 +211,10 @@ export function RealMarket() {
             {coins.map((c) => (
               <tr key={c.address}>
                 <td>
-                  <a className={s.coin} href={c.url} target="_blank" rel="noopener noreferrer">
+                  <Link className={s.coin} to={`/real/${c.address}`}>
                     <span className={s.mark} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
                     <span className={s.coinText}><span className={s.ticker}>${c.symbol}</span><span className={s.market}>{c.established ? 'established' : 'trending'} · {c.name}</span></span>
-                  </a>
+                  </Link>
                 </td>
                 <td className={s.num}>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</td>
                 <td className={cx(s.num, tone(c.changeH1))}>{pctText(c.changeH1)}</td>

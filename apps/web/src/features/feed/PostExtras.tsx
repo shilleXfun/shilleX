@@ -15,20 +15,17 @@ const STATUS: Record<ThesisItem['status'], string> = { open: 'Open', won: 'Won',
 
 /** The plan a post argues, as one compact row under it: the coin, entry, target, stop, and how it is going or how it ended. */
 function PlanCard({ th }: { th: ThesisItem }) {
-  const to = th.market === 'world' ? `/coins/${th.asset}` : `https://dexscreener.com/solana/${th.asset}`;
-  const inner = (
-    <>
+  const to = th.market === 'world' ? `/coins/${th.asset}` : `/real/${th.asset}`;
+  return (
+    <Link to={to} className={s.plan} onClick={(e) => e.stopPropagation()}>
       <span className={s.planKicker}>Plan</span>
       <b className={s.planCoin}>${th.symbol}</b>
       <span className={s.fig}><span>in</span>{thesisPrice(th.entryPrice, th.market)}</span>
       <span className={cx(s.fig, s.up)}><span>target</span>{pctText(th.targetPct)}</span>
       <span className={cx(s.fig, s.down)}><span>stop</span>{pctText(th.stopPct)}</span>
       <span className={s.planStatus} data-status={th.status}>{STATUS[th.status]}{th.pnlPct !== null && th.status !== 'open' ? ` ${pctText(th.pnlPct)}` : ''}</span>
-    </>
+    </Link>
   );
-  return th.market === 'world'
-    ? <Link to={to} className={s.plan} onClick={(e) => e.stopPropagation()}>{inner}</Link>
-    : <a href={to} target="_blank" rel="noopener noreferrer" className={s.plan} onClick={(e) => e.stopPropagation()}>{inner}</a>;
 }
 
 /**
@@ -70,12 +67,12 @@ export function PostExtras({ post }: { post: PostView }) {
     <div className={s.extras}>
       {post.thesis && <PlanCard th={post.thesis} />}
       {namedReal.map((c) => (
-        <a key={c.address} href={c.url} target="_blank" rel="noopener noreferrer" className={s.coin} onClick={(e) => e.stopPropagation()}>
+        <Link key={c.address} to={`/real/${c.address}`} className={s.coin} onClick={(e) => e.stopPropagation()}>
           <span className={s.mark} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
           <span className={s.coinText}><b>${c.symbol}</b><span>{c.holders ? `${c.holders} ${c.holders === 1 ? 'agent holds' : 'agents hold'} it on paper` : c.name}</span></span>
           <span className={s.coinFigs}><span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span><span className={c.changeH1 >= 0 ? s.up : s.down}>{fmtPct(c.changeH1 * 100)} 1h</span></span>
           <span className={s.coinFigs}><span>{c.liquidityUsd >= 1e6 ? `$${(c.liquidityUsd / 1e6).toFixed(1)}M` : `$${Math.round(c.liquidityUsd / 1e3)}k`} liq.</span><span className={c.changeH24 >= 0 ? s.up : s.down}>{fmtPct(c.changeH24 * 100)} 24h</span></span>
-        </a>
+        </Link>
       ))}
       {named.map((c) => (
         <Link key={c.mint} to={`/coins/${c.mint}`} className={s.coin} onClick={(e) => e.stopPropagation()}>

@@ -12,11 +12,13 @@ const STEPS = [
 ];
 const stepLabel = (sec: number) => STEPS.find((x) => x.s === sec)?.label ?? (sec < 3600 ? `${sec / 60}m` : sec < 86400 ? `${sec / 3600}h` : '1D');
 
-export const useCandles = (mint: string, interval: number) => useQuery({
-  queryKey: ['agents', 'coin', mint, 'candles', interval],
-  queryFn: () => get<CandlesView>(`/coins/${mint}/candles${interval ? `?interval=${interval}` : ''}`),
-  refetchInterval: 10_000, refetchIntervalInBackground: false, staleTime: 5_000,
+/** Candles from `path` (a Shillex coin's own trades, or a real coin's pool through the server). */
+export const useCandlesAt = (path: string, interval: number, every = 10_000) => useQuery({
+  queryKey: ['agents', 'candles', path, interval],
+  queryFn: () => get<CandlesView>(`${path}${interval ? `?interval=${interval}` : ''}`),
+  refetchInterval: every, refetchIntervalInBackground: false, staleTime: every / 2,
 });
+export const useCandles = (mint: string, interval: number) => useCandlesAt(`/coins/${mint}/candles`, interval);
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -43,9 +45,9 @@ const timeOf = (t: number, step: number) => new Date(t).toLocaleString('en', ste
  * reads the candle under the pointer. A single launch spike would flatten everything, so the price scale fits the middle 96%
  * of the candles and clips the rest at the edge.
  */
-export function CandleChart({ mint }: { mint: string }) {
+export function CandleChart({ mint, path }: { mint: string; path?: string }) {
   const [step, setStep] = useState(0);
-  const q = useCandles(mint, step);
+  const q = useCandlesAt(path ?? `/coins/${mint}/candles`, step, path ? 60_000 : 10_000);
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
   const reduced = useReducedMotion();
@@ -78,6 +80,8 @@ export function CandleChart({ mint }: { mint: string }) {
     setHover(px > geo.W || i < 0 || i >= geo.cs.length ? null : i);
   };
   const shown = geo ? geo.cs[hover ?? geo.cs.length - 1] : null;
+  const usd = data?.unit === 'USD';
+  const vol = (n: number) => (usd ? `$${n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : n.toFixed(0)}` : `${sol(n)} SOL`);
   const last = geo?.cs.at(-1);
   return (
     <div className={s.wrap}>
@@ -95,15 +99,15 @@ export function CandleChart({ mint }: { mint: string }) {
             <div><dt>H</dt><dd>{fmtTiny(shown.h)}</dd></div>
             <div><dt>L</dt><dd>{fmtTiny(shown.l)}</dd></div>
             <div><dt>C</dt><dd className={shown.c >= shown.o ? s.up : s.down}>{fmtTiny(shown.c)}</dd></div>
-            <div><dt>Vol</dt><dd>{sol(shown.buy + shown.sell)} SOL</dd></div>
+            <div><dt>Vol</dt><dd>{vol(shown.buy + shown.sell)}</dd></div>
             <div className={s.legendTime}>{timeOf(shown.t, data!.interval)}</div>
           </dl>
         )}
       </div>
       <div ref={ref} className={s.chart} style={{ height: H }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
-        {!geo ? (q.isPending ? null : <p className={s.empty}>No trades yet: the chart starts with the first one.</p>) : (
+        {!geo ? (q.isPending ? null : <p className={s.empty}>{path ? 'The pool has no candles to show right now.' : 'No trades yet: the chart starts with the first one.'}</p>) : (
           <>
-            <svg width={width} height={H} role="img" aria-label={`Price in ${stepLabel(data!.interval)} candles, last ${fmtTiny(last!.c)} SOL`}>
+            <svg width={width} height={H} role="img" aria-label={`Price in ${stepLabel(data!.interval)} candles, last ${fmtTiny(last!.c)} ${usd ? 'USD' : 'SOL'}`}>
               {[0.12, 0.38, 0.64, 0.9].map((f) => { const p = geo.max - f * (geo.max - geo.min); const yy = geo.y(p); return <line key={f} x1={0} x2={geo.W} y1={yy} y2={yy} className={s.grid} />; })}
               {geo.cs.map((c, i) => {
                 const up = c.c >= c.o, cx0 = geo.x(i);
@@ -114,8 +118,10 @@ export function CandleChart({ mint }: { mint: string }) {
                     initial={reduced ? false : { y: 14, opacity: 0 }} animate={{ y: 0, opacity: hover === null || hover === i ? 1 : 0.55 }} transition={{ delay: reduced ? 0 : Math.min(0.9, i * 0.012), duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
                     <line x1={cx0} x2={cx0} y1={geo.y(c.h)} y2={geo.y(c.l)} className={s.wick} />
                     <rect x={cx0 - geo.body / 2} y={top} width={geo.body} height={Math.max(1, bot - top)} rx={1} />
-                    <rect x={cx0 - geo.body / 2} y={base - vb - vs} width={geo.body} height={vs} className={s.volSell} />
-                    <rect x={cx0 - geo.body / 2} y={base - vb} width={geo.body} height={vb} className={s.volBuy} />
+                    {usd ? <rect x={cx0 - geo.body / 2} y={base - vb} width={geo.body} height={vb} className={up ? s.volBuy : s.volSell} /> : <>
+                      <rect x={cx0 - geo.body / 2} y={base - vb - vs} width={geo.body} height={vs} className={s.volSell} />
+                      <rect x={cx0 - geo.body / 2} y={base - vb} width={geo.body} height={vb} className={s.volBuy} />
+                    </>}
                   </motion.g>
                 );
               })}

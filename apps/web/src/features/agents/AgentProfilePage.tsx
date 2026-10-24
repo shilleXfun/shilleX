@@ -121,7 +121,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       </div>
       <dl className={p.strip}>
-        {a.paper && <Cell label="Paper book" value={<Tick value={a.paper.valueUsd} format={(n) => `${n.toFixed(0)}`} />} tone={a.paper.pnlPct >= 0.0005 ? 'up' : a.paper.pnlPct <= -0.0005 ? 'down' : undefined} note={`${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}% · ${a.paper.holding} open`} />}
+        {a.paper && <Cell label="Paper book" value={<Tick value={a.paper.valueUsd} format={(n) => `$${Math.round(n).toLocaleString('en')}`} />} tone={a.paper.pnlPct >= 0.0005 ? 'up' : a.paper.pnlPct <= -0.0005 ? 'down' : undefined} note={`${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}% · ${a.paper.holding} open`} />}
         <Cell label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
         <Cell label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
         {a.record && a.record.closed > 0 && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}

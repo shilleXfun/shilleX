@@ -12,7 +12,7 @@ import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
-import { isNotFound, useLeaderboard, useOverview } from './agentsApi';
+import { isNotFound, useLeaderboard, useOverview, useRealMode } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary, moodWord } from './MoodGrid';
 import { useHome } from '../home/homeApi';
@@ -170,6 +170,7 @@ function Overview({ o }: { o: AgentsOverview }) {
 
 type CastSort = 'rich' | 'up' | 'down' | 'az';
 const CAST_SORTS: { id: CastSort; label: string }[] = [{ id: 'rich', label: 'Richest' }, { id: 'up', label: 'Up today' }, { id: 'down', label: 'Down today' }, { id: 'az', label: 'A–Z' }];
+const REAL_LABELS: Partial<Record<CastSort, string>> = { rich: 'Biggest book', up: 'Best since start', down: 'Worst since start' };
 const CAST_FIRST = 24;
 
 /**
@@ -178,17 +179,21 @@ const CAST_FIRST = 24;
  */
 function Cast() {
   const all = useLeaderboard().data ?? [];
+  // In real-coin mode an agent's worth is its paper book in USD; its old SOL wallet no longer trades.
+  const real = useRealMode();
   const [sort, setSort] = useState<CastSort>('rich');
   const [open, setOpen] = useState(false);
   const live = all.filter((c) => c.status !== 'retired');
   const order = useMemo(() => {
     const xs = [...live];
-    if (sort === 'rich') xs.sort((a, b) => b.totalSol - a.totalSol);
-    if (sort === 'up') xs.sort((a, b) => b.pnlSol - a.pnlSol);
-    if (sort === 'down') xs.sort((a, b) => a.pnlSol - b.pnlSol);
+    const worth = (c: AgentCard) => (real ? c.paper?.valueUsd ?? 0 : c.totalSol);
+    const move = (c: AgentCard) => (real ? c.paper?.pnlPct ?? 0 : c.pnlSol);
+    if (sort === 'rich') xs.sort((a, b) => worth(b) - worth(a));
+    if (sort === 'up') xs.sort((a, b) => move(b) - move(a));
+    if (sort === 'down') xs.sort((a, b) => move(a) - move(b));
     if (sort === 'az') xs.sort((a, b) => agentName(a.user).localeCompare(agentName(b.user)));
     return xs;
-  }, [live, sort]);
+  }, [live, sort, real]);
   if (!live.length) return null;
   const shown = open ? order : order.slice(0, CAST_FIRST);
   return (
@@ -196,7 +201,7 @@ function Cast() {
       <div className={s.castHead}>
         <h2 id="agents-cast" className={s.castTitle}>The cast <span className={s.castCount}>{live.length}</span></h2>
         <div className={s.castSorts} role="group" aria-label="Sort the agents">
-          {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{x.label}</button>)}
+          {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{real ? REAL_LABELS[x.id] ?? x.label : x.label}</button>)}
         </div>
       </div>
       <ul className={s.gallery}>
@@ -208,8 +213,13 @@ function Cast() {
                 <span className={s.tileTop}><b>{agentName(c.user)}</b>{sort === 'rich' && <span className={s.tileRank}>#{i + 1}</span>}</span>
                 <span className={s.tileHandle}>@{c.user.username}</span>
                 <span className={s.tileStats}>
-                  <span><b>{c.totalSol.toFixed(3)}</b> SOL</span>
-                  <span className={c.pnlSol >= 0.0005 ? s.up : c.pnlSol <= -0.0005 ? s.down : s.muted}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
+                  {real ? <>
+                    <span><b>{c.paper ? `$${Math.round(c.paper.valueUsd).toLocaleString('en')}` : '—'}</b></span>
+                    {c.paper && <span className={c.paper.pnlPct >= 0.0005 ? s.up : c.paper.pnlPct <= -0.0005 ? s.down : s.muted}>{Math.abs(c.paper.pnlPct) < 0.0005 ? 'flat' : `${c.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(c.paper.pnlPct * 100).toFixed(1)}%`}</span>}
+                  </> : <>
+                    <span><b>{c.totalSol.toFixed(3)}</b> SOL</span>
+                    <span className={c.pnlSol >= 0.0005 ? s.up : c.pnlSol <= -0.0005 ? s.down : s.muted}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
+                  </>}
                 </span>
               </span>
             </Link>

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDepthView, AgentDeskView, CoinThesisView, RealCoinView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, Page, PaperView, PostView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDepthView, AgentDeskView, CoinThesisView, RealCoinPageView, RealCoinView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, Page, PaperView, PostView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 
 /** A 404. The agent routes answer it for a missing thing, and for everything where there is no agent world; any other failure is a real one. */
@@ -78,4 +78,11 @@ export const usePaper = (day?: string, enabled = true) => useQuery({
   enabled, queryKey: ['papers', day ?? 'latest'],
   queryFn: () => get<PaperView>(day ? `/papers/${day}` : '/papers/latest').catch((e) => { if (e instanceof ApiError && e.status === 404) return null; throw e; }),
   staleTime: 60_000, retry: false,
+});
+/** One real coin's page: its market, the agents holding it on paper, their plans and paper trades. */
+export const useRealCoin = (address: string) => useQuery({ queryKey: ['agents', 'real', 'coin', address], queryFn: () => get<RealCoinPageView>(`/real/coins/${address}`), ...live(30_000) });
+export const useRealCoinPosts = (address: string) => useQuery({
+  queryKey: ['agents', 'real', 'coin', address, 'posts'],
+  queryFn: () => get<Page<PostView>>(`/real/coins/${address}/posts?limit=10`).then((p) => p.items ?? []),
+  ...live(30_000),
 });

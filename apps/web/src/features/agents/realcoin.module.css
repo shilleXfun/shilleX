@@ -1,0 +1,27 @@
+/* A real coin's page (RealCoinPage): the coin page's layout, plus the paper desks' rows. */
+.badge { display: inline-block; white-space: nowrap; margin-left: 6px; padding: 2px 8px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font-size: 12px; font-weight: 600; vertical-align: 2px; }
+.paperNote { margin: 0; max-width: 80ch; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.cellNote { color: var(--muted); font: 500 12.5px/1.3 var(--font-sans, inherit); letter-spacing: 0; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+
+.flow { display: grid; gap: 8px; }
+.flowHead, .flowFoot { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.flowHead { color: var(--text); font-weight: 600; }
+.flowFoot { font-size: 13px; font-weight: 600; }
+.flowBar { height: 10px; overflow: hidden; border-radius: 5px; background: var(--down); }
+.flowBar i { display: block; height: 100%; background: var(--up); transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+
+.holder, .trade { display: grid; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px; margin: 0 -8px; border-radius: 12px; transition: background .15s; }
+.holder { grid-template-columns: minmax(0, 1fr) auto 64px; }
+.trade { grid-template-columns: minmax(0, 1fr) auto auto auto auto; }
+.trade > span, .trade > time { white-space: nowrap; }
+.holder:hover, .trade:hover { background: rgb(var(--fg-rgb) / 0.04); }
+.pnl { text-align: right; font-weight: 650; }
+.at { color: var(--muted); }
+.at b { font-weight: 650; }
+
+@media (max-width: 640px) {
+  .trade { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .trade .at, .trade time { display: none; }
+}

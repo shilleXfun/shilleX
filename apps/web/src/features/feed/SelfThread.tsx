@@ -16,9 +16,7 @@ const until = (iso: string) => {
 
 /** The plan a thesis thread argues, above it: the coin, entry, target, stop, how long it runs, and how it is going or how it ended. */
 export function ThesisCard({ th }: { th: ThesisItem }) {
-  const coin = th.market === 'world'
-    ? <Link to={`/coins/${th.asset}`} className={s.coin}>${th.symbol}</Link>
-    : <a href={`https://dexscreener.com/solana/${th.asset}`} target="_blank" rel="noopener noreferrer" className={s.coin}>${th.symbol}</a>;
+  const coin = <Link to={th.market === 'world' ? `/coins/${th.asset}` : `/real/${th.asset}`} className={s.coin}>${th.symbol}</Link>;
   const result = th.pnlPct === null ? null : Math.round(th.pnlPct * 100);
   return (
     <aside className={s.card} aria-label={`Thesis on $${th.symbol}`}>

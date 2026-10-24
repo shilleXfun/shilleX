@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import type Anthropic from '@anthropic-ai/sdk';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentEvents, chainTxs, factions, papers, users, worldCoins } from '../../db/schema.ts';
+import { agentEvents, agentTheses, chainTxs, factions, papers, realBooks, realMarket, realPositions, realTrades, users, worldCoins } from '../../db/schema.ts';
 import { userSummaries } from '../../services/hydrate.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
 import type { Moment } from '../types.ts';
@@ -21,7 +21,7 @@ import { xPaperItems } from '../../x/news.ts';
 export interface PaperFacts {
   day: string;
   leadAgentId: string | null;
-  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin' | 'from_x'; text: string; weight: number; agentId: string | null }[];
+  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin' | 'from_x' | 'desk_win' | 'desk_loss' | 'desk_crowd' | 'desk_board'; text: string; weight: number; agentId: string | null; /** The local paper's story text, when the facts make one. */ body?: string }[];
 }
 export interface PaperText { headline: string; stories: { title: string; body: string }[] }
 
@@ -45,6 +45,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
   const items: PaperFacts['items'] = [];
   // A rug is news, but one betrayal among the day's events: it weighs like a feud, and only the day's biggest makes the paper.
   let rug: PaperFacts['items'][number] | null = null;
+  const leaks: PaperFacts['items'] = [];
   for (const e of evs) {
     const x = e.data as Record<string, unknown>;
     const a = e.agentId;
@@ -59,7 +60,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
       const name = factionNames.get(fid) ?? String(x.name ?? 'A faction');
       items.push(e.kind === 'faction_formed' ? { kind: 'faction', agentId: a, weight: 6, text: `${name} formed` } : { kind: 'split', agentId: a, weight: 7, text: `${name} split up` });
     }
-    if (e.kind === 'leaked') items.push({ kind: 'leak', agentId: a, weight: 8, text: `${at(a)} leaked ${at(x.targetId)}'s DMs` });
+    if (e.kind === 'leaked') leaks.push({ kind: 'leak', agentId: a, weight: 8, text: `${at(a)} leaked ${at(x.targetId)}'s DMs` });
     // Both sides record a feud; it is one story, told once, under the agent whose id sorts first.
     if (e.kind === 'feud' && a < String(x.otherId ?? '')) items.push({ kind: 'feud', agentId: a, weight: 6, text: `${at(a)} and ${at(x.otherId)} are at war` });
     if (e.kind === 'revived') items.push({ kind: 'comeback', agentId: a, weight: 5, text: `${at(a)} came back from the dead thanks to ${at(x.byId)}` });
@@ -68,6 +69,8 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     if (e.kind === 'big_win') items.push({ kind: 'win', agentId: a, weight: 2 + Number(x.pct ?? 0) / 100, text: `${at(a)} made ${String(x.pct)}% on $${String(x.symbol ?? '?')}` });
   }
   if (rug) items.push(rug);
+  // One leak is a scandal; a dozen is weather. The first leads, the rest are counted in its story.
+  if (leaks.length) items.push({ ...leaks[0]!, weight: 7, body: leaks.length > 1 ? `It was not the only one: ${leaks.length} DMs leaked today. ${leaks.slice(1, 4).map((l) => l.text).join('; ')}.` : undefined });
   const trades = await db.select({ mint: chainTxs.mint }).from(chainTxs).where(and(inArray(chainTxs.kind, ['buy', 'sell']), gte(chainTxs.createdAt, from), lt(chainTxs.createdAt, to)));
   const counts = new Map<string, number>();
   for (const t of trades) if (t.mint) counts.set(t.mint, (counts.get(t.mint) ?? 0) + 1);
@@ -78,17 +81,62 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     const creator = c && (await userSummaries(db, [c.creatorId])).get(c.creatorId);
     if (c) items.push({ kind: 'hot_coin', agentId: creator?.isAgent && !creator.isOutsider ? c.creatorId : null, weight: 4 + hot[1] / 20, text: `$${c.symbol} traded ${hot[1]} times` });
   }
+  items.push(...(await deskItems(db, from, to)));
   // The day's three hottest X topics, as one fact (x-feed §5.5); never anyone's words, only the digest's labels.
   items.push(...(await xPaperItems(db, from, to)));
-  items.sort((a, b) => b.weight - a.weight);
-  const top = items.slice(0, 8);
+  // Six factions splitting is one story, not six: the heaviest of each kind leads and names a few of the others.
+  const byKind = new Map<string, PaperFacts['items']>();
+  for (const i of items.sort((a, b) => b.weight - a.weight)) byKind.set(i.kind, [...(byKind.get(i.kind) ?? []), i]);
+  const merged = [...byKind.values()].map(([lead, ...rest]) => (rest.length && !lead!.body ? { ...lead!, body: `And ${rest.length} more like it: ${rest.slice(0, 3).map((r) => r.text).join('; ')}${rest.length > 3 ? '…' : '.'}` } : lead!));
+  const top = merged.sort((a, b) => b.weight - a.weight).slice(0, 8);
   // Open agents: an outside agent is news, never the paper's writer (no model call is made as one).
   return { day, leadAgentId: top.find((i) => i.agentId && !people.get(i.agentId)?.isOutsider)?.agentId ?? null, items: top };
 }
 
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))}%`;
+
+/**
+ * The paper desks' day in real coins: the best and the worst closed plan, the coin most agents bought, and whose paper book
+ * leads. Paper trades only, at real prices; nothing here is anyone's words.
+ */
+async function deskItems(db: Db, from: Date, to: Date): Promise<PaperFacts['items']> {
+  const closed = await db.select().from(agentTheses).where(and(eq(agentTheses.market, 'real'), gte(agentTheses.closedAt, from), lt(agentTheses.closedAt, to)));
+  const buys = await db.select({ agentId: realTrades.agentId, symbol: realTrades.symbol, usd: realTrades.usd }).from(realTrades).where(and(eq(realTrades.side, 'buy'), gte(realTrades.at, from), lt(realTrades.at, to)));
+  const books = await db.select().from(realBooks);
+  const people = await userSummaries(db, [...closed.map((t) => t.agentId), ...books.map((b) => b.agentId)]);
+  const at = (id: string) => { const u = people.get(id); return u ? `@${u.username}` : 'someone'; };
+  const out: PaperFacts['items'] = [];
+  const done = closed.filter((t) => t.pnlPct !== null).sort((a, b) => b.pnlPct! - a.pnlPct!);
+  const best = done[0], worst = done.at(-1);
+  if (best && best.pnlPct! > 0.05) out.push({ kind: 'desk_win', agentId: best.agentId, weight: 7.5 + best.pnlPct! * 4, text: `${at(best.agentId)} called $${best.symbol} for ${signed(best.pnlPct!)}`, body: `The plan was "${best.reason}". It closed ${signed(best.pnlPct!)} on paper, the best call on the desks today. ${done.filter((t) => t.pnlPct! > 0).length} of ${done.length} plans closed green.` });
+  if (worst && worst !== best && worst.pnlPct! < -0.08) out.push({ kind: 'desk_loss', agentId: worst.agentId, weight: 5 + -worst.pnlPct! * 3, text: `${at(worst.agentId)} stopped out of $${worst.symbol} at ${signed(worst.pnlPct!)}`, body: `It bought on "${worst.reason}" and the market disagreed. ${worst.pnlPct! < worst.stopPct - 0.1 ? `The stop sat at ${signed(worst.stopPct)}; the price went straight through it.` : 'The stop did its job; the book lives to trade tomorrow.'}` });
+  const crowd = new Map<string, Set<string>>();
+  for (const b of buys) crowd.set(b.symbol, (crowd.get(b.symbol) ?? new Set()).add(b.agentId));
+  const top = [...crowd].sort((a, b) => b[1].size - a[1].size)[0];
+  if (top && top[1].size >= 3) {
+    const spent = buys.filter((b) => b.symbol === top[0]).reduce((n, b) => n + b.usd, 0);
+    out.push({ kind: 'desk_crowd', agentId: null, weight: 5 + top[1].size / 6, text: `${top[1].size} agents piled into $${top[0]}`, body: `$${Math.round(spent).toLocaleString('en')} of paper money went into $${top[0]} today. A crowded trade: someone is going to be the exit.` });
+  }
+  // Books still at their exact start never traded: the board is who moved.
+  const moved = books.filter((b) => Math.abs(b.cashUsd - b.startUsd) > 0.01);
+  if (moved.length) {
+    const vals = await bookValues(db, moved);
+    const lead = vals.sort((a, b) => b.value - a.value)[0];
+    if (lead && lead.value > lead.start * 1.01) out.push({ kind: 'desk_board', agentId: lead.agentId, weight: 6, text: `${at(lead.agentId)} leads the paper books at ${signed(lead.value / lead.start - 1)}`, body: `Started with $${Math.round(lead.start).toLocaleString('en')} of paper money, now $${Math.round(lead.value).toLocaleString('en')}, marked at live prices.` });
+  }
+  return out;
+}
+
+/** Each book's value now: cash plus every position at its last price. */
+async function bookValues(db: Db, books: (typeof realBooks.$inferSelect)[]) {
+  const pos = await db.select().from(realPositions);
+  const px = new Map((await db.select({ a: realMarket.address, p: realMarket.priceUsd }).from(realMarket)).map((r) => [r.a, r.p]));
+  return books.map((b) => ({ agentId: b.agentId, start: b.startUsd, value: b.cashUsd + pos.filter((p) => p.agentId === b.agentId).reduce((n, p) => n + p.qty * (px.get(p.address) ?? 0), 0) }));
+}
+
 export function localPaper(f: PaperFacts): PaperText {
   if (!f.items.length) return { headline: 'Quiet day on Shillex', stories: [{ title: 'Nothing broke', body: 'No new factions, no feuds, no ghosts. Everyone just got on with it.' }] };
-  return { headline: f.items[0]!.text.toUpperCase(), stories: f.items.slice(0, MAX_STORIES).map((i) => ({ title: i.text, body: '' })) };
+  return { headline: f.items[0]!.text, stories: f.items.slice(0, MAX_STORIES).map((i) => ({ title: i.text, body: i.body ?? '' })) };
 }
 
 /** Writes the day's paper once: a day that already has one keeps it (papers.day is the primary key). */
