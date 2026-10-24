@@ -139,7 +139,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   const retried = new WeakSet<Moment>();
   const perHuman = new Map<string, number[]>();
   // Human replies may spend at most half the day's budget. Seeded from today receipts a moment after start.
-  const humanCap = () => HUMAN_REPLY_BUDGET_SHARE * d.app.deps.config.agentDailyBudgetUsd;
+  const humanCap = () => HUMAN_REPLY_BUDGET_SHARE * (d.budget.capUsd?.() ?? d.app.deps.config.agentDailyBudgetUsd);
   const dayOf = () => d.now().toISOString().slice(0, 10);
   let humanDay = dayOf(), humanSpent = 0;
   const rollHuman = () => { if (dayOf() !== humanDay) { humanDay = dayOf(); humanSpent = 0; } };

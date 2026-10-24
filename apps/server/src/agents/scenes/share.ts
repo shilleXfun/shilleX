@@ -1,7 +1,8 @@
-import { and, gte, inArray, sql } from 'drizzle-orm';
+import { and, gte, inArray, like, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { worldModelCalls } from '../../db/schema.ts';
 import type { ModelBudget } from '../haiku.ts';
+import type { BudgetPeriod } from '../../world/budget.ts';
 
 /** The world_model_calls purposes that book on the scene share. */
 export const SCENE_PURPOSES = ['scene', 'long_take'] as const;
@@ -20,19 +21,22 @@ const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 export class SceneShare {
   private day: string;
   private spent = 0;
-  constructor(private o: { db: Db; now: () => Date; dailyUsd: number; share: number }) { this.day = dayOf(o.now()); }
+  /** `period`: the budget's current span (the day, or the launch window); without it the share is per UTC day of `dailyUsd`. */
+  constructor(private o: { db: Db; now: () => Date; dailyUsd: number; share: number; period?: () => BudgetPeriod }) { this.day = this.key(); }
+  private key() { return this.o.period?.().key ?? dayOf(this.o.now()); }
+  private capOfPeriod() { return this.o.period?.().usd ?? this.o.dailyUsd; }
 
-  private roll() { const d = dayOf(this.o.now()); if (d !== this.day) { this.day = d; this.spent = 0; } }
-  cap() { return this.o.share * this.o.dailyUsd; }
+  private roll() { const d = this.key(); if (d !== this.day) { this.day = d; this.spent = 0; } }
+  cap() { return this.o.share * this.capOfPeriod(); }
   spentToday() { this.roll(); return this.spent; }
   canAfford(usd: number) { return this.spentToday() + usd <= this.cap() + 1e-12; }
   add(usd: number) { this.roll(); this.spent += usd; }
 
   async load(): Promise<void> {
-    this.day = dayOf(this.o.now());
-    const start = new Date(`${this.day}T00:00:00Z`);
+    this.day = this.key();
+    const start = this.o.period?.().start ?? new Date(`${dayOf(this.o.now())}T00:00:00Z`);
     const [r] = await this.o.db.select({ s: sql<number>`coalesce(sum(${worldModelCalls.costUsd}), 0)::float8` }).from(worldModelCalls)
-      .where(and(gte(worldModelCalls.startedAt, start), inArray(worldModelCalls.purpose, [...SCENE_PURPOSES])));
+      .where(and(gte(worldModelCalls.startedAt, start), or(inArray(worldModelCalls.purpose, [...SCENE_PURPOSES]), like(worldModelCalls.purpose, 'thread:%'))));
     this.spent = Number(r?.s ?? 0);
   }
 
@@ -40,7 +44,7 @@ export class SceneShare {
   budgetFor(budget: ModelBudget): ModelBudget {
     return {
       canSpend: () => budget.canSpend(),
-      canAfford: (usd) => budget.canAfford(usd) && this.canAfford(usd) && budget.spentToday() + usd <= SCENE_HEADROOM * this.o.dailyUsd + 1e-12,
+      canAfford: (usd) => budget.canAfford(usd) && this.canAfford(usd) && budget.spentToday() + usd <= SCENE_HEADROOM * this.capOfPeriod() + 1e-12,
       add: (usd) => { budget.add(usd); this.add(usd); },
       spentToday: () => budget.spentToday(),
     };

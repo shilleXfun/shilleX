@@ -149,13 +149,13 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const aborted = await abortRunningTurns(db, now());
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
   // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
-  const budget = modelBudget(db, config.agentDailyBudgetUsd, now);
+  const budget = modelBudget(db, config.agentDailyBudgetUsd, now, config.budgetWindow);
   await budget.load();
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
   const gate = new RaisedGate({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
-  const share = new SceneShare({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.scenes.budgetShare });
+  const share = new SceneShare({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
   let scenesH: Scenes | null = null, storiesH: Stories | null = null;
   const population = new Population(db, now);

@@ -42,6 +42,8 @@ export function startScenes(d: SceneDeps): Scenes {
   const timers = new Set<NodeJS.Timeout>();
   const later = (ms: number, fn: () => void) => { const t = setTimeout(() => { timers.delete(t); if (!stopped) fn(); }, ms); t.unref?.(); timers.add(t); };
   const modelOpen = () => Boolean(d.brain) && !halted && !d.moments?.halted();
+  // A launch window (a cap well above the daily one) writes threads and long takes four times as often.
+  const boost = () => ((d.budget.capUsd?.() ?? 0) > 2 * d.app.deps.config.agentDailyBudgetUsd ? 4 : 1);
 
   async function createScene(): Promise<string | null> {
     const [{ n }] = await d.db.select({ n: sql<number>`count(*)::int` }).from(scenes).where(isNull(scenes.endedAt)) as [{ n: number }];
@@ -94,7 +96,7 @@ export function startScenes(d: SceneDeps): Scenes {
         })
         .finally(() => { taking = null; });
     }
-    later(jitter(d.config.longTakeMs, d.rng), longTakeLoop);
+    later(jitter(d.config.longTakeMs / boost(), d.rng), longTakeLoop);
   };
   const threadLoop = () => {
     if (!threading && modelOpen()) {
@@ -105,7 +107,7 @@ export function startScenes(d: SceneDeps): Scenes {
         })
         .finally(() => { threading = null; });
     }
-    later(jitter(d.config.threadMs, d.rng), threadLoop);
+    later(jitter(d.config.threadMs / boost(), d.rng), threadLoop);
   };
 
   void player.resume().catch((e) => console.error('[scenes] resume failed', e)).finally(() => {

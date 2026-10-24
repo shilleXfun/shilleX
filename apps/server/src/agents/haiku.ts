@@ -3,14 +3,14 @@ import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
 import { ClaudeBrain, priceOf, type BrainResponse } from '../world/brain.ts';
-import { Budget } from '../world/budget.ts';
+import { Budget, type BudgetWindow } from '../world/budget.ts';
 import { anthropicClient } from '../lib/anthropic.ts';
 
 export const HAIKU = 'claude-haiku-5-5';
-export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean }
+export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean; /** The current period's cap (the day, or the launch window). */ capUsd?(): number }
 /** No retries inside the client: a retried attempt may have been billed without billedCall seeing it. A failed call is one call, booked at its worst case. */
 export const haikuBrain = (apiKey: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0));
-export const modelBudget = (db: Db, dailyUsd: number, now: () => Date) => new Budget(db, dailyUsd, now, { hardStop: true });
+export const modelBudget = (db: Db, dailyUsd: number, now: () => Date, window: BudgetWindow | null = null) => new Budget(db, dailyUsd, now, { hardStop: true, window });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
 export type CostTarget = { turnId: string } | { worldCallId: string };
@@ -31,7 +31,7 @@ const answeredWithError = (e: unknown) => e instanceof Anthropic.APIError && typ
  * case otherwise (a network error, a timeout, an abort or a dropped response may have been billed). The budget in memory and
  * `spent` (the turn's total, for its receipt) get the same figure.
  */
-export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number } } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
+export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   await addCost(x.db, x, x.worstUsd);
   let res: BrainResponse;
   try { res = await call(); }
@@ -41,7 +41,7 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
     else await addCost(x.db, x, -x.worstUsd).catch((err) => console.error('[agents] could not release a model call reservation', 'worldCallId' in x ? x.worldCallId : x.turnId, err));
     throw e;
   }
-  const cost = priceOf(HAIKU, res.usage);
+  const cost = priceOf(x.model ?? HAIKU, res.usage);
   x.budget.add(cost);
   x.spent.usd += cost;
   await addCost(x.db, x, cost - x.worstUsd);

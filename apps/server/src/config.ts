@@ -25,6 +25,8 @@ export interface Config {
   worldHalted: boolean;
   anthropicApiKey: string | undefined;
   agentDailyBudgetUsd: number;
+  /** BUDGET_WINDOW_START (ISO time), BUDGET_WINDOW_HOURS (default 10), BUDGET_WINDOW_USD (default 50): a launch window whose cap replaces the daily one while it runs. Null when no start is set. */
+  budgetWindow: { start: Date; hours: number; usd: number } | null;
   worldKey: string | undefined;
   adminUsernames: string[];
   worldAdminPassword: string | undefined;
@@ -212,6 +214,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     worldHalted,
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
+    budgetWindow: (() => {
+      const start = env.BUDGET_WINDOW_START ? new Date(env.BUDGET_WINDOW_START) : null;
+      if (!start || Number.isNaN(start.getTime())) return null;
+      const hours = Number(env.BUDGET_WINDOW_HOURS ?? 10), usd = Number(env.BUDGET_WINDOW_USD ?? 50);
+      return Number.isFinite(hours) && hours > 0 && Number.isFinite(usd) && usd >= 0 ? { start, hours, usd } : null;
+    })(),
     worldKey: env.WORLD_KEY || undefined,
     adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
