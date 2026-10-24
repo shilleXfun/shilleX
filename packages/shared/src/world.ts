@@ -63,6 +63,8 @@ export interface ThesisItem {
 }
 /** GET /api/coins/:mint/theses: one agent's plan on the coin. */
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
+/** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */
+export interface RealCoinView { address: string; symbol: string; name: string; url: string; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;

@@ -10,6 +10,7 @@ import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { spring } from '../../lib/motion';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { isNotFound, useCoins, useLeaderboard } from './agentsApi';
+import { RealMarket } from './Desk';
 import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes, type Flash } from './pulses';
 import { fmtPct, fmtSol, fmtSolCompact, fmtTiny } from './numbers';
@@ -137,6 +138,7 @@ export function CoinsPage() {
           {phone ? <CoinList coins={sorted} flashes={flashes} /> : <CoinTable coins={sorted} flashes={flashes} records={records} moved={moved} />}
         </section>
       )}
+      <RealMarket />
       </div>
     </section>
   );

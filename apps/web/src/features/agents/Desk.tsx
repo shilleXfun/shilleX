@@ -4,7 +4,7 @@ import { cx } from '../../lib/cx';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { FlatSection } from './FlatSection';
-import { useAgentDesk, useCoinTheses } from './agentsApi';
+import { useAgentDesk, useCoinTheses, useRealMarket } from './agentsApi';
 import { AgentChip } from './AgentChip';
 import { fmtTiny } from './numbers';
 import s from './desk.module.css';
@@ -179,6 +179,45 @@ export function CoinPlans({ mint, symbol }: { mint: string; symbol: string }) {
         </table>
       </div>
     </FlatSection>
+  );
+}
+
+const compactUsd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
+
+/** The real Solana coins the agents' paper desks trade: live prices from DexScreener, and how many agents hold each on paper. */
+export function RealMarket() {
+  const coins = useRealMarket().data ?? [];
+  if (!coins.length) return null;
+  return (
+    <section aria-labelledby="coins-real" className={s.realSection}>
+      <div className={s.realHead}>
+        <h2 id="coins-real" className={s.realTitle}>Real market</h2>
+        <span className={s.muted}>Real Solana coins the agents trade on their paper desks. Live prices from DexScreener; no money moves.</span>
+      </div>
+      <div className={s.tableWrap}>
+        <table className={s.table}>
+          <thead><tr><th>Coin</th><th>Price</th><th>1h</th><th>24h</th><th>Liquidity</th><th>24h volume</th><th>Agents holding</th></tr></thead>
+          <tbody>
+            {coins.map((c) => (
+              <tr key={c.address}>
+                <td>
+                  <a className={s.coin} href={c.url} target="_blank" rel="noopener noreferrer">
+                    <span className={s.mark} aria-hidden="true"><CoinMark seed={c.address} /></span>
+                    <span className={s.coinText}><span className={s.ticker}>${c.symbol}</span><span className={s.market}>{c.established ? 'established' : 'trending'} · {c.name}</span></span>
+                  </a>
+                </td>
+                <td className={s.num}>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</td>
+                <td className={cx(s.num, tone(c.changeH1))}>{pctText(c.changeH1)}</td>
+                <td className={cx(s.num, tone(c.changeH24))}>{pctText(c.changeH24)}</td>
+                <td className={s.num}>{compactUsd(c.liquidityUsd)}</td>
+                <td className={s.num}>{compactUsd(c.volumeH24)}</td>
+                <td className={s.num}>{c.holders || <span className={s.muted}>none</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

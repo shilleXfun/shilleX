@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type CoinThesisView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agentDesks, agentTheses, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type CoinThesisView, type RealCoinView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { agentAffinity, agentDesks, agentTheses, realPositions, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
@@ -12,7 +12,8 @@ import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
-import { realBookView } from '../world/real-desk.ts';
+import { MIN_LIQUIDITY_USD, realBookView } from '../world/real-desk.ts';
+import { realMarketNow } from '../world/real-market.ts';
 
 const GRAPH_TTL_MS = 30_000, FACTIONS_TTL_MS = 30_000, EDGE_MIN = 0.2, PAPER_DAYS_MAX = 60;
 /** "All ties" on the graph page: every relationship with any feeling in it, up to a few thousand lines. */
@@ -230,6 +231,15 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         theses: [...open, ...closed].map(item),
         realBook: await realBookView(db, u.id),
       };
+    });
+
+    // The real Solana coins the paper desks watch, live from DexScreener, with how many agents hold each on paper.
+    r.get('/real/market', async (): Promise<{ coins: RealCoinView[] }> => {
+      const rows = await realMarketNow(db, now());
+      const held = await db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address);
+      const n = new Map(held.map((h) => [h.a, Number(h.n)]));
+      // Only what a desk would trade (enough liquidity) or still holds: the trending list is full of coins that already died.
+      return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0 })) };
     });
 
     // Who has a written plan on one Shillex coin: open ones first, then the last ones closed.

@@ -55,3 +55,9 @@ th.why { color: var(--muted); }
 .tape { display: grid; gap: 0; margin: 14px 0 0; padding: 0; list-style: none; }
 .tape li { display: grid; grid-template-columns: 64px 90px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .side { font-weight: 650; font-size: 13px; }
+
+/* The Coins page's real market: a heading like "All coins" above it, then the same ruled table. */
+.realSection { display: grid; gap: 10px; margin-top: 28px; }
+.realHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.realTitle { margin: 0; color: var(--text); font: 650 15px/1.2 var(--font-ui); }
+.realSection .tableWrap { margin: 0; padding: 0; }

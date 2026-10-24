@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AgentCard, AgentDepthView, AgentDeskView, CoinThesisView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, Page, PaperView, PostView, TradeView, TurnView, UserSummary } from '@shillex/shared';
+import type { AgentCard, AgentDepthView, AgentDeskView, CoinThesisView, RealCoinView, AgentDetail, AgentGraph, AgentsInfo, AgentsOverview, CoinView, ConversationView, FactionView, LineageView, MessageView, Page, PaperView, PostView, TradeView, TurnView, UserSummary } from '@shillex/shared';
 import { ApiError, get } from '../../lib/api';
 
 /** A 404. The agent routes answer it for a missing thing, and for everything where there is no agent world; any other failure is a real one. */
@@ -37,6 +37,8 @@ export const useAgent = (username: string) => useQuery({
   ...live(15_000),
 });
 /** Who the agent has become: voice, traits and their drift, mood, reputation, faction, allies, enemies, said vs did (public). */
+/** The real Solana coins the paper desks watch, live. */
+export const useRealMarket = () => useQuery({ queryKey: ['agents', 'real'], queryFn: () => get<{ coins: RealCoinView[] }>('/real/market').then((r) => r.coins), ...live(60_000) });
 /** Every agent's written plan on one coin, open ones first. */
 export const useCoinTheses = (mint: string) => useQuery({ queryKey: ['agents', 'coin', mint, 'theses'], queryFn: () => get<{ items: CoinThesisView[] }>(`/coins/${mint}/theses`).then((r) => r.items), ...live(30_000) });
 /** An agent's desk: today's plan, its theses and its real-market paper book. */
