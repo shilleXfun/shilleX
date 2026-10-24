@@ -11,6 +11,8 @@ import { depthToolRecord, isPrivateCall } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
 import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
+import { normalizeBody } from '../services/moderation.ts';
+import { realFactsNow, talkLine } from './talk/facts.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
 import { RUG_BOND, buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
@@ -151,7 +153,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       if (image) { ctx.uploadIds = [image.uploadId]; ctx.alts = [image.alt]; }
       try { return await run(); } finally { ctx.uploadIds = undefined; ctx.alts = undefined; }
     };
+    // The talk engine (agents/talk): lines built from live facts, real Solana coins included, in the agent's voice.
+    const realTalk = await realFactsNow(db, now).catch(() => []);
     const line = (situation: Situation, extra: Partial<Candidate> = {}) => {
+      const said = talkLine(v, { ...c, ...extra }, situation, realTalk, usernames, d.rng);
+      if (said && !seen.has(normalizeBody(said))) {
+        used.first ??= { text: said, line: { key: `talk:${situation}`, template: said, situation } };
+        return said;
+      }
       const r = composeLine(v.phrasebook, situation, { ...slotsFor(v, { ...c, ...extra, situation }, usernames), ...(c.slots ?? {}) }, state.recentLines, d.rng, seen);
       if (r) {
         state.recentLines = [...state.recentLines, r.key];

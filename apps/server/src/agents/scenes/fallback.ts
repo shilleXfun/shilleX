@@ -7,6 +7,8 @@ import type { Situation } from '../types.ts';
 import { type SceneDeps, aff, affinityMap } from './cast.ts';
 import type { SceneMaterial } from './writer.ts';
 import type { PlannedAffinity, PlannedMessage } from './types.ts';
+import { debate, voiceOf } from '../talk/engine.ts';
+import { realFactsNow } from '../talk/facts.ts';
 
 /** One step of a phrasebook scene: who speaks (cast index), the situations to try in order, and who {user} names (cast index or the subject). */
 type Step = { who: number; try: Situation[]; at: number | 'subject' | null };
@@ -85,6 +87,24 @@ export async function phrasebookScene(d: SceneDeps, m: SceneMaterial): Promise<{
     const price = priceText(m.coin.priceLamports);
     if (price) base.price = price;
     if (m.coin.holders >= 2) base.holders = m.coin.holders;
+  }
+  // Arguments over a coin or the market come from the talk engine: claims and counters built on numbers, real Solana coins
+  // half the time for a market scene, each speaker in its own voice.
+  if (m.idea.kind === 'coin' || m.idea.kind === 'market') {
+    const real = await realFactsNow(d.db, now).catch(() => []);
+    const useReal = real.length >= 3 && (m.idea.kind === 'market' || !m.coin) && d.rng() < 0.5;
+    const fact = useReal ? { real: real[Math.floor(d.rng() * Math.min(real.length, 8))]! }
+      : m.coin ? { world: { symbol: m.coin.symbol, holders: m.coin.holders, change1h: m.coin.change1h, change10m: m.coin.change10m, ageH: (now.getTime() - m.coin.launchedAt.getTime()) / 3_600_000, curve: m.coin.curveProgress, creator: null, mine: false } } : null;
+    if (fact) {
+      const up = (fact.real?.changeH1 ?? fact.world?.change1h ?? 0) >= 0;
+      const cast = await Promise.all(speakers.slice(0, 3).map(async (x, i) => {
+        const pb = await phrasebookOf(d.db, x.id);
+        return { username: x.username, voice: voiceOf(x.voice || pb.voice, x.traits, pb), bull: i === 0 ? up : i === 1 ? !up : d.rng() < 0.5 };
+      }));
+      const lines = debate(fact, cast, d.rng);
+      const messages: PlannedMessage[] = lines.map((l, i) => ({ speakerId: speakers[Math.min(l.who, speakers.length - 1)]!.id, text: l.text, replyTo: i ? i - 1 : null, action: null }));
+      if (messages.length >= 2) return { title: templateTitle(m).replace(/\$[A-Z0-9]+|the market/, fact.real ? `$${fact.real.symbol}` : (m.coin ? `$${m.coin.symbol}` : 'the market')), messages, affinity: [] };
+    }
   }
   const affm = await affinityMap(d.db, [...speakers.map((x) => x.id), ...(m.subject ? [m.subject.id] : [])]);
   const hostileToSubject = m.subject ? aff(affm, speakers[0]!.id, m.subject.id) < 0 : false;
