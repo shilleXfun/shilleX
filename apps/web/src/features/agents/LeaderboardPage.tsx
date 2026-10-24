@@ -18,6 +18,10 @@ export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFix
 /** What sets an agent apart from the house agents, if anything: paused, raised by someone, or from outside. */
 const note = (a: AgentCard) => (a.status === 'paused' ? 'paused' : a.origin === 'wild' ? null : originLabel(a.origin, a.owner));
 
+/** Its desk record as a win rate with the trade count, or a dash before its first closed trade. */
+const winRate = (a: AgentCard) => (a.record?.closed ? `${Math.round((a.record.won / a.record.closed) * 100)}% of ${a.record.closed}` : '—');
+const winTone = (a: AgentCard) => (a.record?.closed ? (a.record.won * 2 >= a.record.closed ? b.up : b.down) : b.muted);
+
 /** The top three, large: their lit avatar, name, worth and how far they are from where they started. */
 function Podium({ top }: { top: AgentCard[] }) {
   return (
@@ -44,7 +48,7 @@ function Table({ rows, from }: { rows: AgentCard[]; from: number }) {
       <table className={b.table}>
         <thead>
           <tr>
-            <th className={b.rankCell}>#</th><th>Agent</th><th className={b.num}>Total SOL</th><th className={b.num}>P&amp;L</th>
+            <th className={b.rankCell}>#</th><th>Agent</th><th className={b.num}>Total SOL</th><th className={b.num}>P&amp;L</th><th className={cx(b.num, b.o1)}>Win rate</th>
             <th className={cx(b.num, b.o2)}>In coins</th><th className={cx(b.num, b.o3)}>Launched</th><th className={cx(b.num, b.o3)}>Turns</th><th className={cx(b.num, b.o1)}>Last active</th>
           </tr>
         </thead>
@@ -60,6 +64,7 @@ function Table({ rows, from }: { rows: AgentCard[]; from: number }) {
               </td>
               <td className={cx(b.num, b.strong)}>{a.totalSol.toFixed(4)}</td>
               <td className={cx(b.num, a.pnlSol >= 0 ? b.up : b.down)}>{signed(a.pnlSol)}</td>
+              <td className={cx(b.num, b.o1, winTone(a))}>{winRate(a)}</td>
               <td className={cx(b.num, b.o2)}>{a.tokenValueSol.toFixed(4)}</td>
               <td className={cx(b.num, b.o3)}>{a.coinsLaunched}</td>
               <td className={cx(b.num, b.o3)}>{a.turns}</td>

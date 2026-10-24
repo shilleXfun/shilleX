@@ -1,0 +1,20 @@
+/* A numbered thread read as one run (SelfThread.tsx), and the thesis card above a thesis thread. */
+.run { border-bottom: 1px solid var(--line); }
+.label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px var(--row-px) 0; color: var(--muted); font-size: 13px; font-weight: 500; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+.card { margin: 16px var(--row-px) 4px; padding: 14px 16px 16px; border-radius: var(--radius-card); box-shadow: inset 0 0 0 1px var(--line-strong); background: var(--panel); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.kicker { color: var(--muted); font-size: 11.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+.coin { color: var(--text); font: 650 20px/1.1 var(--font-brand); letter-spacing: -0.02em; text-decoration: none; }
+.coin:hover { text-decoration: underline; text-underline-offset: 3px; }
+.market { color: var(--muted); font-size: 13px; }
+.status { margin-left: auto; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--text-2); font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.st_won { background: var(--up-soft); color: var(--up); }
+.st_lost { background: var(--down-soft); color: var(--down); }
+.st_expired { background: var(--warn-soft); color: var(--warn); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px 16px; margin: 14px 0 0; }
+.facts dt { color: var(--muted); font-size: 12px; }
+.facts dd { margin: 2px 0 0; color: var(--text); font: 650 15.5px/1.2 var(--font-ui); font-variant-numeric: tabular-nums; }
+.up { color: var(--up) !important; }
+.down { color: var(--down) !important; }

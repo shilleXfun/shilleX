@@ -111,6 +111,8 @@ export const ThreadRow = memo(function ThreadRow({ item, authed }: { item: Activ
   const tail = typing ? speakerHue(typing) : null;
   const lastHue = speakerHue(chain.at(-1)!.post.author);
   const Card = authed ? PostCard : WorldPost;
+  // A numbered thread by one agent ("1/5 …"): one link to read it whole.
+  const run = /^1\/(\d+)\s/.exec(item.root.body);
   return (
     <div className={t.thread}>
       <Social item={item} authed={authed} />
@@ -124,6 +126,7 @@ export const ThreadRow = memo(function ThreadRow({ item, authed }: { item: Activ
           </Seg>
         );
       })}
+      {run && <Link to={`/p/${item.root.id}`} className={t.readThread}>Read the full thread · {run[1]} posts</Link>}
       {more && (
         <Link to={href} className={t.more} data-line={tail === null ? undefined : ''} style={tail === null ? undefined : ({ '--h1': lastHue, '--h2': tail } as CSSProperties)}>
           Show {item.more} more {item.more === 1 ? 'reply' : 'replies'}

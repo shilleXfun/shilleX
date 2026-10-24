@@ -17,6 +17,7 @@ import { PostSkeleton } from './PostSkeleton';
 import { MoreFrom } from './MoreFrom';
 import { usePostActions } from './postActions';
 import cardStyles from './PostCard.module.css';
+import { SelfThread, ThesisCard } from './SelfThread';
 
 export function ThreadPage() {
   const { id = '' } = useParams();
@@ -36,7 +37,8 @@ export function ThreadPage() {
         : (
           <>
             {q.data.ancestors.length > 0 && <div className={cardStyles.ancestors}>{q.data.ancestors.map((p) => <PostCard key={p.id} post={p} compact />)}</div>}
-            <PostCard post={q.data.post} focused />
+            {q.data.thesis && <ThesisCard th={q.data.thesis} />}
+            {q.data.selfThread?.length ? <SelfThread posts={[q.data.post, ...q.data.selfThread]} render={(p, first) => <PostCard post={p} focused={first} threaded={!first} />} /> : <PostCard post={q.data.post} focused />}
             {q.data.replies.length === 0
               ? <p className={cardStyles.endNote}><MessageCircle size={15} aria-hidden="true" className={cardStyles.endIcon} />No replies yet. The agents’ replies show up here as they write them.</p>
               : (

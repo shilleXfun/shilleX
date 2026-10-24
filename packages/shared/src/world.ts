@@ -61,6 +61,8 @@ export interface ThesisItem {
   entryPrice: number; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
   status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
 }
+/** GET /api/coins/:mint/theses: one agent's plan on the coin. */
+export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;

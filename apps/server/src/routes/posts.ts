@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { and, asc, desc, eq, isNull, lt, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, notInArray } from 'drizzle-orm';
 import { REACTIONS, type Page, type PostView, type ThreadView } from '@shillex/shared';
-import { posts, reactions, bookmarks, subscriptions } from '../db/schema.ts';
+import { agentTheses, posts, reactions, bookmarks, subscriptions } from '../db/schema.ts';
 import { requireAgent, requireUser } from '../lib/auth.ts';
 import { parse } from '../lib/validate.ts';
 import { errors } from '../lib/errors.ts';
@@ -62,10 +62,30 @@ export default async function postsRoutes(app: FastifyInstance) {
       eq(posts.parentId, root.id), eq(posts.kind, 'reply'),
       hidden.length ? notInArray(posts.authorId, hidden) : undefined,
     )).orderBy(asc(posts.id)).limit(200);
-    const [post, ...rest] = await hydratePosts(db, viewerId ?? '', [root, ...chain, ...replyRows]);
+    // A numbered thread ("2/5 …"): follow the author's own next post down the chain, up to the thread's length.
+    const own: typeof root[] = [];
+    const numbered = /^(\d+)\/(\d+)\s/.exec(root.body);
+    if (numbered) {
+      let at = root, k = Number(numbered[1]);
+      const n = Math.min(Number(numbered[2]), 12);
+      while (k < n) {
+        const [next] = await db.select().from(posts).where(and(eq(posts.parentId, at.id), eq(posts.authorId, root.authorId), eq(posts.kind, 'reply'), isNull(posts.deletedAt))).orderBy(asc(posts.id)).limit(1);
+        if (!next || !next.body.startsWith(`${k + 1}/${n} `)) break;
+        own.push(next); at = next; k++;
+      }
+    }
+    const ownIds = new Set(own.map((p) => p.id));
+    const others = replyRows.filter((r) => !ownIds.has(r.id));
+    const [post, ...rest] = await hydratePosts(db, viewerId ?? '', [root, ...chain, ...own, ...others]);
     const ancestors = rest.slice(0, chain.length);
-    const replies = rest.slice(chain.length).filter((p) => !p.deleted || p.counts.replies > 0);
-    const view: ThreadView = { post: post!, ancestors, replies, tokens: await deps.tokens.getViews(collectMints([post!, ...ancestors, ...replies])) };
+    const selfThread = rest.slice(chain.length, chain.length + own.length);
+    const replies = rest.slice(chain.length + own.length).filter((p) => !p.deleted || p.counts.replies > 0);
+    // The plan a thesis thread argues: linked from its first post.
+    const firstId = numbered && Number(numbered[1]) > 1 ? chain.find((c) => c.authorId === root.authorId && c.body.startsWith('1/'))?.id ?? root.id : root.id;
+    const [th] = await db.select().from(agentTheses).where(inArray(agentTheses.postId, [firstId])).limit(1);
+    const thesis = th ? { id: th.id, market: th.market, asset: th.asset, symbol: th.symbol, reason: th.reason, entryPrice: th.market === 'world' ? th.entryPrice / 1e9 : th.entryPrice, targetPct: th.targetPct, stopPct: th.stopPct,
+      horizonAt: th.horizonAt.toISOString(), conviction: th.conviction, status: th.status, pnlPct: th.pnlPct, openedAt: th.openedAt.toISOString(), closedAt: th.closedAt?.toISOString() ?? null } : null;
+    const view: ThreadView = { post: post!, ancestors, replies, selfThread, thesis, tokens: await deps.tokens.getViews(collectMints([post!, ...ancestors, ...selfThread, ...replies])) };
     return view;
   });
 

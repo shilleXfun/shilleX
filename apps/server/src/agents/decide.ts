@@ -109,7 +109,7 @@ export function feedTalk(v: AgentView): Map<string, number> {
 }
 
 export interface CoinScore { d: number; why: string }
-const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'I just like it', novelty: 'new and barely held', talk: 'people I like are talking it up', trust: 'its creator has a clean record', dip: 'it dipped and the creator is solid', watch: 'it is on my watchlist' };
+const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'it fits my taste', novelty: 'new and barely held', talk: 'people I like are talking it up', trust: 'its creator has a clean record', dip: 'it dipped and the creator is solid', watch: 'it is on my watchlist' };
 /** How much each desk style leans on momentum and on new coins: a contrarian buys the dip, a sniper gets in first. */
 const STYLE: Record<DeskStyleName, { momentum: number; novelty: number; dip: number }> = {
   momentum: { momentum: 1, novelty: 0.6, dip: 0 }, sniper: { momentum: 0.5, novelty: 2, dip: 0 },
@@ -262,7 +262,10 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
       const room = Math.floor(MAX_POSITION_SHARE * worth - held);
       // A ledger world caps one trade (mainnet spec §3); devnet has no cap.
       const lamports = Math.min(spendable, Math.max(MIN_TRADE, size), room, v.limits?.maxTradeLamports ?? Infinity);
-      const plan = planFor(t, v.depth.desk?.style ?? 'momentum', conviction, best.why);
+      // The thesis in words: the main reason, then the facts it rests on.
+      const ageH = Math.max(0, (nowMs - Date.parse(best.c.launchedAt)) / HOUR);
+      const facts = `${best.c.holders} holders, ${pct(best.c.change1h)} this hour, ${ageH < 1 ? 'under an hour old' : `${Math.round(ageH)} h old`}${(v.depth.reputation[best.c.creatorId] ?? 0) > 0.15 ? ', creator in good standing' : ''}`;
+      const plan = planFor(t, v.depth.desk?.style ?? 'momentum', conviction, `${best.why[0]!.toUpperCase()}${best.why.slice(1)}: ${facts}`);
       if (lamports >= MIN_TRADE) add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId }, thesis: plan,
         reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change1h)} this hour, ${best.c.holders} holders, conviction ${f2(conviction)}; target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}` });
     }

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { LAMPORTS_PER_SOL, type AgentDepthView, type AgentDeskView, type CoinThesisView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
 import { agentAffinity, agentDesks, agentTheses, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
@@ -229,6 +229,22 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString() } : null,
         theses: [...open, ...closed].map(item),
         realBook: await realBookView(db, u.id),
+      };
+    });
+
+    // Who has a written plan on one Shillex coin: open ones first, then the last ones closed.
+    r.get<{ Params: { mint: string } }>('/coins/:mint/theses', async (req): Promise<{ items: CoinThesisView[] }> => {
+      const rows = await db.select().from(agentTheses).where(and(eq(agentTheses.market, 'world'), eq(agentTheses.asset, req.params.mint))).orderBy(desc(agentTheses.openedAt)).limit(40);
+      const people = await userSummaries(db, rows.map((t) => t.agentId));
+      const sorted = [...rows.filter((t) => t.status === 'open'), ...rows.filter((t) => t.status !== 'open').slice(0, 10)];
+      return {
+        items: sorted.flatMap((t) => {
+          const agent = people.get(t.agentId);
+          return agent ? [{ agent, thesis: {
+            id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.entryPrice / LAMPORTS_PER_SOL, targetPct: t.targetPct, stopPct: t.stopPct,
+            horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null,
+          } }] : [];
+        }),
       };
     });
 

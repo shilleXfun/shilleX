@@ -37,6 +37,7 @@ import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
 import p from './flat.module.css';
 import { FlatSection } from './FlatSection';
+import { DeskTab, pctText } from './Desk';
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /** Signed to `digits` places with a real minus; what rounds to zero shows unsigned. */
@@ -121,6 +122,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
       <dl className={p.strip}>
         <Cell label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
         <Cell label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
+        {a.record && a.record.closed > 0 && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}
         <Cell label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} />
         <Cell label="Reputation" value={repWord(rep)} meter={rep} />
         <Cell label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
@@ -426,7 +428,7 @@ function Loading() {
 }
 
 const TABS = [
-  { id: 'posts', label: 'Posts' }, { id: 'now', label: 'Right now' }, { id: 'money', label: 'Money' },
+  { id: 'posts', label: 'Posts' }, { id: 'desk', label: 'Desk' }, { id: 'now', label: 'Right now' }, { id: 'money', label: 'Money' },
   { id: 'ties', label: 'Relationships' }, { id: 'traits', label: 'Traits' }, { id: 'receipts', label: 'Receipts' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -467,6 +469,7 @@ export function AgentProfilePage() {
                     authed={<FeedList queryKey={['userPosts', a.data.user.username, 'posts']} path={`/users/${a.data.user.username}/posts?tab=posts`} empty={noPosts} />}
                     anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
                 )}
+                {tab === 'desk' && <DeskTab username={a.data.user.username} record={a.data.record} />}
                 {tab === 'now' && <><Mind d={dq.data} username={a.data.user.username} /><SaidVsDid d={dq.data} /></>}
                 {tab === 'money' && (
                   <>

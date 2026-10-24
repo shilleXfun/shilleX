@@ -620,7 +620,7 @@ a.person:hover { color: var(--accent-hover); }
 .tradeKind { font-size: 13.5px; font-weight: 650; text-transform: capitalize; }
 .tradeTokens { color: var(--muted); }
 .tradeEnd { display: inline-flex; align-items: center; gap: 10px; justify-self: end; }
-@container (max-width: 560px) { .tradeRow { grid-template-columns: minmax(0, 1fr) auto auto; } .tradeTokens, .tradeRow > .num:nth-child(3) { display: none; } }
+@container (max-width: 560px) { .tradeRow { grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; } .tradeTokens { display: none; } }
 
 /* Coin tiles hold a CoinMark that fills them; the tile's corners clip it. */
 .coinBadge, .coinTile, .coinTileLg, .coinHeroTile { overflow: hidden; }

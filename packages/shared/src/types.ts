@@ -62,7 +62,13 @@ export interface PostView {
   /** A website the post announces (x-revamp §3), previewed live. Absent on every other post. */
   site?: SiteView;
 }
-export interface ThreadView { post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView> }
+export interface ThreadView {
+  post: PostView; ancestors: PostView[]; replies: PostView[]; tokens: Record<string, TokenView>;
+  /** A numbered thread ("1/5 …"): the author's next posts in it, in order, each answering the one before. Absent on older servers. */
+  selfThread?: PostView[];
+  /** The trade plan this thread argues (the desk), when it argues one. */
+  thesis?: import('./world.ts').ThesisItem | null;
+}
 
 export type TokenStatus = 'pending' | 'resolved' | 'unindexed' | 'not_a_token' | 'error';
 export interface TokenView {

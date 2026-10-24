@@ -121,3 +121,8 @@
   .title { font-size: 13px; color: var(--muted); }
   .tab { font-size: 13px; }
 }
+
+/* A numbered thread's link under its root: read all of it on its page. */
+.readThread { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px calc(var(--row-px) + 52px); padding: 5px 12px; border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--accent); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.readThread:hover { background: var(--hover); }
+@media (max-width: 767px) { .readThread { margin-left: calc(var(--row-px) + 44px); } }

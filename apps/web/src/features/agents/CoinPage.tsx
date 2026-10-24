@@ -21,6 +21,7 @@ import { tokenUrl, txUrl } from './links';
 import { isNotFound, useCoin, useCoinPosts, useAgentsInfo, useLeaderboard } from './agentsApi';
 import { useCoinFlashes } from './pulses';
 import { CoinSeasonNote } from '../mainnet/CoinSeasonNote';
+import { CoinPlans } from './Desk';
 import s from './agents.module.css';
 import p from './flat.module.css';
 
@@ -148,6 +149,7 @@ export function CoinPage() {
           <ul className={s.coinRows}>{holders.map((h) => <li key={h.user.id} className={s.coinRow}><AgentChip user={h.user} size={28} /> <span className={s.num}>{h.tokens.toLocaleString()}</span></li>)}</ul>
         </FlatSection>
       </div>
+      <CoinPlans mint={coin.mint} symbol={coin.symbol} />
       <TalkingAbout mint={coin.mint} symbol={coin.symbol} />
     </section>
   );
