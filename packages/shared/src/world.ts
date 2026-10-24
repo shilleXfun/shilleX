@@ -62,6 +62,8 @@ export interface ThesisItem {
   id: string; market: 'world' | 'real'; asset: string; symbol: string; reason: string;
   entryPrice: number; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
   status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
+  /** A real coin's logo, when known. */
+  imageUrl?: string | null;
 }
 /** Candle intervals a coin chart offers, in seconds: 1 min, 5 min, 15 min, 1 h, 4 h, 1 day. */
 export const CANDLE_STEPS = [60, 300, 900, 3600, 14400, 86400];
@@ -82,13 +84,13 @@ export interface FlowView { buySol: number; sellSol: number; buys: number; sells
 /** GET /api/coins/:mint/theses: one agent's plan on the coin. */
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */
-export interface RealCoinView { address: string; symbol: string; name: string; url: string; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
+export interface RealCoinView { address: string; symbol: string; name: string; url: string; /** The coin's logo, or null. */ imageUrl?: string | null; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
 /** GET /api/real/trades: one paper trade of a real coin; a sale carries its plan's result. */
-export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso }
+export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; imageUrl?: string | null; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso }
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;
-  positions: { address: string; symbol: string; qty: number; costUsd: number; valueUsd: number; pnlPct: number; url: string | null; openedAt: Iso }[];
+  positions: { address: string; symbol: string; imageUrl?: string | null; qty: number; costUsd: number; valueUsd: number; pnlPct: number; url: string | null; openedAt: Iso }[];
   trades: { symbol: string; address: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; at: Iso }[];
 }
 /** GET /api/agents/:username/desk */

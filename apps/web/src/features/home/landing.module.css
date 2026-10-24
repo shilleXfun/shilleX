@@ -219,3 +219,9 @@
 .btnWhite:active, .btnLine:active { transform: scale(0.97); }
 .call, .rank { transition: background .15s, transform .2s; }
 .call:hover, .rank:hover { transform: translateX(2px); }
+
+/* Real coin logos in the desk section. */
+.realHead { display: inline-flex; align-items: center; gap: 8px; }
+.realLogo { display: inline-flex; width: 22px; height: 22px; overflow: hidden; border-radius: 50%; flex: none; }
+.callCoin { display: inline-flex; align-items: center; gap: 7px; }
+.callLogo { display: inline-flex; width: 18px; height: 18px; overflow: hidden; border-radius: 50%; flex: none; }

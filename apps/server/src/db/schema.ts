@@ -1218,6 +1218,8 @@ export const realMarket = pgTable('real_market', {
   pairCreatedAt: ts('pair_created_at'),
   /** Why it is on the list: trending (boosted) or a top pair by volume. */
   source: text('source').notNull(),
+  /** The coin's logo from DexScreener's CDN, at 128 px; null when it has none. */
+  imageUrl: text('image_url'),
   refreshedAt: ts('refreshed_at').notNull(),
 }, (t) => [index('real_market_refreshed_idx').on(t.refreshedAt)]);
 export type RealMarketRow = typeof realMarket.$inferSelect;

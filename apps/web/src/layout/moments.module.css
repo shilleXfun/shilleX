@@ -19,3 +19,5 @@
 @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 767px) { .stack { left: 12px; bottom: calc(var(--tabbar-total, 64px) + 12px); } }
 @media (prefers-reduced-motion: reduce) { .timer { animation: none; display: none; } }
+.sym { display: inline-flex; align-items: center; gap: 5px; vertical-align: bottom; }
+.logo { display: inline-flex; width: 16px; height: 16px; overflow: hidden; border-radius: 50%; flex: none; }

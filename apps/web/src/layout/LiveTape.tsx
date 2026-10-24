@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { agentName, relativeTime } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
+import { CoinLogo } from '../components/ui/CoinLogo';
 import { useTape, type TapeItem } from './tapeData';
 import s from './tape.module.css';
 
@@ -29,7 +30,7 @@ export function LiveTape() {
       <Avatar src={t.agent.avatarUrl} size={18} agentId={t.agent.id} />
       <b>{agentName(t.agent)}</b>
       <span className={t.kind === 'sell' ? s.down : t.kind === 'buy' ? s.up : s.accent}>{VERB[t.kind]}</span>
-      <span className={s.sym}>${t.symbol}</span>
+      <span className={s.sym}>{t.logo && <span className={s.logo}><CoinLogo src={t.logo} seed={t.seed} /></span>}${t.symbol}</span>
       {t.kind !== 'launch' && <span className={s.amt}>{t.amount}</span>}
       {t.result !== null && <span className={t.result >= 0 ? s.up : s.down}>{pct(t.result)}</span>}
       <time className={s.when} dateTime={t.at}>{relativeTime(t.at)}</time>

@@ -14,6 +14,7 @@ import { WorldPanel } from '../../layout/WorldPanel';
 import { LiveTape } from '../../layout/LiveTape';
 import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket, useRealMode } from '../agents/agentsApi';
 import { pctText, thesisPrice } from '../agents/Desk';
+import { CoinLogo } from '../../components/ui/CoinLogo';
 import { fmtTiny } from '../agents/numbers';
 import { fmtPct } from '../agents/numbers';
 import { CopyLine } from '../join/CopyLine';
@@ -210,7 +211,7 @@ function Desks() {
                 <Link to={`/agents/${agent.username}?tab=desk`} className={l.call}>
                   <Avatar src={agent.avatarUrl} size={32} agentId={agent.id} />
                   <span className={l.callWho}><b>{agentName(agent)}</b><span>{t.market === 'real' ? 'real coin, paper · ' : ''}{relativeTime(t.closedAt ?? t.openedAt)} ago</span></span>
-                  <span className={l.callCoin}>${t.symbol}</span>
+                  <span className={l.callCoin}>{t.market === 'real' && <span className={l.callLogo}><CoinLogo src={t.imageUrl} seed={t.asset} /></span>}${t.symbol}</span>
                   <span className={l.callPlan}>in {thesisPrice(t.entryPrice, t.market)}<span className={l.up}>{pctText(t.targetPct)}</span><span className={l.down}>{pctText(t.stopPct)}</span></span>
                   <span className={l.callResult} data-status={t.status}>{RESULT[t.status]}{t.pnlPct !== null && t.status !== 'open' ? ` ${pctText(t.pnlPct)}` : ''}</span>
                 </Link>
@@ -238,7 +239,7 @@ function Desks() {
         <div className={l.realStrip} aria-label="Real coins on the agents' paper desks">
           {real.map((c) => (
             <a key={c.address} href={c.url} target="_blank" rel="noopener noreferrer" className={l.realCoin}>
-              <b>${c.symbol}</b>
+              <span className={l.realHead}><span className={l.realLogo}><CoinLogo src={c.imageUrl} seed={c.address} /></span><b>${c.symbol}</b></span>
               <span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span>
               <span className={c.changeH24 >= 0 ? l.up : l.down}>{pctText(c.changeH24)}</span>
               <small>{c.holders ? `${c.holders} on paper` : 'watched'}</small>

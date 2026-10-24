@@ -1,0 +1,1 @@
+ALTER TABLE "real_market" ADD COLUMN "image_url" text;

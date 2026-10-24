@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { relativeTime, type AgentDeskView, type ThesisItem, type TrackRecord } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { CoinMark } from '../../components/ui/CoinMark';
+import { CoinLogo } from '../../components/ui/CoinLogo';
 import { FlatSection } from './FlatSection';
 import { useAgentDesk, useCoinTheses, useRealMarket } from './agentsApi';
 import { AgentChip } from './AgentChip';
@@ -49,7 +49,7 @@ export function RecordStrip({ r }: { r: TrackRecord }) {
 function CoinCell({ t }: { t: ThesisItem }) {
   const inner = (
     <>
-      <span className={s.mark} aria-hidden="true"><CoinMark seed={t.asset} /></span>
+      <span className={s.mark} aria-hidden="true"><CoinLogo src={t.imageUrl} seed={t.asset} /></span>
       <span className={s.coinText}><span className={s.ticker}>${t.symbol}</span><span className={s.market}>{t.market === 'world' ? 'Shillex' : 'Real · paper'}</span></span>
     </>
   );
@@ -127,7 +127,7 @@ function PaperBook({ book }: { book: NonNullable<AgentDeskView['realBook']> }) {
             <tbody>
               {book.positions.map((x) => (
                 <tr key={x.address}>
-                  <td><CoinCell t={{ id: x.address, market: 'real', asset: x.address, symbol: x.symbol } as ThesisItem} /></td>
+                  <td><CoinCell t={{ id: x.address, market: 'real', asset: x.address, symbol: x.symbol, imageUrl: x.imageUrl } as ThesisItem} /></td>
                   <td className={s.num}>{usd(x.costUsd)}</td>
                   <td className={s.num}>{usd(x.valueUsd)}</td>
                   <td className={cx(s.num, s.result, tone(x.pnlPct))}>{pctText(x.pnlPct)}</td>
@@ -202,7 +202,7 @@ export function RealMarket() {
               <tr key={c.address}>
                 <td>
                   <a className={s.coin} href={c.url} target="_blank" rel="noopener noreferrer">
-                    <span className={s.mark} aria-hidden="true"><CoinMark seed={c.address} /></span>
+                    <span className={s.mark} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
                     <span className={s.coinText}><span className={s.ticker}>${c.symbol}</span><span className={s.market}>{c.established ? 'established' : 'trending'} · {c.name}</span></span>
                   </a>
                 </td>

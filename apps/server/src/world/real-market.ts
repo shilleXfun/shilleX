@@ -22,6 +22,11 @@ export const MAJORS = [
 ];
 const API = 'https://api.dexscreener.com';
 const num = (v: unknown, d = 0) => { const n = typeof v === 'string' ? Number(v) : v; return typeof n === 'number' && Number.isFinite(n) ? n : d; };
+/** A logo only from DexScreener's own CDN, asked for at 128 px. */
+const logoOf = (v: unknown): string | null => {
+  if (typeof v !== 'string') return null;
+  try { const u = new URL(v); if (u.protocol !== 'https:' || !/(^|\.)dexscreener\.com$/.test(u.hostname)) return null; u.searchParams.set('width', '128'); u.searchParams.set('height', '128'); return u.toString(); } catch { return null; }
+};
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/[\u0000-\u001f]/g, '').slice(0, max) : '');
 
 async function getJson(url: string, fetchImpl: typeof fetch): Promise<unknown> {
@@ -63,7 +68,7 @@ export async function pairsFor(addresses: string[], source: (a: string) => strin
         priceUsd: price, liquidityUsd: num(p.liquidity?.usd), fdvUsd: p.fdv == null ? null : num(p.fdv),
         volumeH1: num(p.volume?.h1), volumeH24: num(p.volume?.h24), changeM5: num(p.priceChange?.m5) / 100, changeH1: num(p.priceChange?.h1) / 100, changeH24: num(p.priceChange?.h24) / 100,
         buysH1: Math.round(num(p.txns?.h1?.buys)), sellsH1: Math.round(num(p.txns?.h1?.sells)),
-        pairCreatedAt: num(p.pairCreatedAt) ? new Date(num(p.pairCreatedAt)) : null, source: source(a), refreshedAt: now,
+        pairCreatedAt: num(p.pairCreatedAt) ? new Date(num(p.pairCreatedAt)) : null, source: source(a), refreshedAt: now, imageUrl: logoOf(p.info?.imageUrl),
       });
     }
   }

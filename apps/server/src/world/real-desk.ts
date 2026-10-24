@@ -177,7 +177,7 @@ export async function realBookView(db: Db, agentId: string) {
   const open = positions.map((p) => {
     const c = prices.get(p.address);
     const valueUsd = c ? p.qty * c.priceUsd : 0;
-    return { address: p.address, symbol: p.symbol, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, url: c?.url ?? null, openedAt: p.openedAt.toISOString() };
+    return { address: p.address, symbol: p.symbol, imageUrl: c?.imageUrl ?? null, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, url: c?.url ?? null, openedAt: p.openedAt.toISOString() };
   });
   const valueUsd = book.cashUsd + open.reduce((n, p) => n + p.valueUsd, 0);
   return {

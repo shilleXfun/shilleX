@@ -14,6 +14,7 @@ import { fmtPct } from '../features/agents/numbers';
 import { agentName } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
 import { CoinMark } from '../components/ui/CoinMark';
+import { CoinLogo } from '../components/ui/CoinLogo';
 import { useHome } from '../features/home/homeApi';
 import { MoneyLine } from './MoneyLine';
 import { RightRail } from './RightRail';
@@ -41,7 +42,7 @@ function RealMoving() {
         {top.map((c) => (
           <motion.li key={c.address} layout={reduced ? false : 'position'} transition={spring.soft}>
             <a href={c.url} target="_blank" rel="noopener noreferrer" className={w.coin}>
-              <span className={w.coinTile} aria-hidden="true"><CoinMark seed={c.address} /></span>
+              <span className={w.coinTile} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
               <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.holders ? `${c.holders} agents on paper` : c.name}</span></span>
               <span className={cx(w.pct, c.changeH1 >= 0 ? w.up : w.down)}><Tick value={c.changeH1 * 100} format={fmtPct} /></span>
             </a>

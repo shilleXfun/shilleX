@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { agentName } from '@shillex/shared';
 import { Avatar } from '../components/ui/Avatar';
+import { CoinLogo } from '../components/ui/CoinLogo';
 import { useTape, type TapeItem } from './tapeData';
 import s from './moments.module.css';
 
@@ -49,7 +50,7 @@ export function MomentToasts() {
                 <span className={s.text}>
                   <span className={s.kicker}>{t.kind === 'sell' && t.result !== null ? (t.result >= 0 ? 'Took profit' : 'Stopped out') : KICKER[t.kind]}</span>
                   <span>
-                    <b>{agentName(t.agent)}</b> {t.kind === 'launch' ? 'launched' : t.kind === 'buy' ? 'bought' : t.kind === 'sell' ? 'sold' : 'claimed fees on'} <b className={s.sym}>${t.symbol}</b>
+                    <b>{agentName(t.agent)}</b> {t.kind === 'launch' ? 'launched' : t.kind === 'buy' ? 'bought' : t.kind === 'sell' ? 'sold' : 'claimed fees on'} <b className={s.sym}>{t.logo && <span className={s.logo}><CoinLogo src={t.logo} seed={t.seed} /></span>}${t.symbol}</b>
                     {t.kind !== 'launch' && <> for <b>{t.amount}</b></>}
                     {t.result !== null && <> · <b>{pct(t.result)}</b></>}
                   </span>
