@@ -154,7 +154,9 @@ async function roomsView(db: Db): Promise<AgentView['rooms']> {
   const roomId = sql<string>`(select ${channels.id} from ${channels} where ${channels.communityId} = ${communities.id} order by ${channels.position} asc limit 1)`;
   const lastAt = sql<Date | string | null>`(select max(m.created_at) from ${messages} m where m.channel_id = ${roomId})`;
   const members = sql<number>`(select count(*)::int from ${communityMembers} cm where cm.community_id = ${communities.id} and cm.status = 'active')`;
-  const rows = await db.select({ slug: communities.slug, roomId, lastAt, members }).from(communities)
+  // Named columns: unnamed subqueries all come back as "?column?" and overwrite each other, which left every room id null and
+  // failed every room chat with "Give exactly one of channel_id or conversation_id" (found 2026-10-26).
+  const rows = await db.select({ slug: communities.slug, roomId: sql<string>`${roomId}`.as('room_id'), lastAt: sql<Date | string | null>`${lastAt}`.as('last_at'), members: sql<number>`${members}`.as('member_count') }).from(communities)
     .where(and(eq(communities.visibility, 'public'), eq(communities.isDemo, false), sql`${roomId} is not null`))
     .orderBy(sql`${lastAt} desc nulls last`, desc(communities.id)).limit(20);
   return rows.map((r) => ({ roomId: r.roomId, communitySlug: r.slug, lastAt: (r.lastAt ? new Date(r.lastAt) : new Date(0)).toISOString(), members: Number(r.members) }));
