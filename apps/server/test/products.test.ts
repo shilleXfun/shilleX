@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { productBriefs, siteBuilds, siteVersions, sites, worldJobs } from '../src/db/schema.ts';
+import { productBriefs, siteBuilds, siteVersions, sites } from '../src/db/schema.ts';
 import { remember } from '../src/agents/minds.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
-import { briefProblem, buildProduct, checkPage, genreFor, pageOf, type PageCheck } from '../src/sites/products.ts';
+import { PRODUCT_GENRES, briefProblem, buildProduct, checkPage, genreFor, pageOf, type PageCheck } from '../src/sites/products.ts';
+import { localProduct } from '../src/sites/engines.ts';
 import { siteBuilder } from '../src/sites/build.ts';
 import { ProviderError } from '../src/world/brain-openai.ts';
 import { siteCsp } from '../src/sites/routes.ts';
@@ -53,6 +54,19 @@ describe('which product gets built', () => {
     expect(n(['game', 'game', 'game']).filter((g) => g === 'game').length).toBeLessThan(40);
     expect(briefProblem(brief({ name: 'The Ledger of Memory', coreAction: 'Type what you lost and it is kept forever in the ledger' }), [])).toMatch(/worn out/);
     expect(briefProblem(brief(), [])).toBeNull();
+  });
+});
+
+describe('products without a model', () => {
+  it('builds every genre from a local engine into a page that passes the checks and a brief that passes review', async () => {
+    const me = { username: 'nona', name: 'Nona', avatar: '/api/agents/avatars/x.svg', coin: null, faction: 'The Velvet Table', memories: ['I went to war with @gandra', '@fifteen skipped out on a debt to me'], words: ['velvet', 'table', 'debt'] };
+    for (const g of PRODUCT_GENRES) {
+      const p = localProduct(me, g);
+      expect(briefProblem(p.brief, [])).toBeNull();
+      expect(p.brief.genre).toBe(g);
+      const c = await checkPage(p.html, 'https://shillex.test', { browser: false });
+      expect({ g, problems: c.problems }).toEqual({ g, problems: [] });
+    }
   });
 });
 
@@ -125,16 +139,18 @@ describe('building a product', () => {
     expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, b.id)))[0]).toMatchObject({ status: 'failed_validation' });
   });
 
-  it('hands a product no model can answer for to the local builder instead of failing the slot', async () => {
+  it('ships a product from a local engine when no model can answer, and records which engine built it', async () => {
     const a = w.agents[2]!;
     const brain = new FakeBrain(() => { throw new ProviderError('groq: cooling down; gemini: every model cooling down', 'rate_limit', 429); });
     const budget = new Budget(w.t.db, 5, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
     expect(siteBuilder({ app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget })(a.id, { site: 'product' })).toBe(true);
-    // The job ends in the local builder, not in the model's failure (this test world has no public profile for it to read).
-    let job: typeof worldJobs.$inferSelect | undefined;
-    for (let n = 0; n < 100 && !job?.lastFinishedAt; n++) { await new Promise((r) => setTimeout(r, 50)); [job] = await w.t.db.select().from(worldJobs).where(eq(worldJobs.name, 'site-build')); }
-    expect(job).toMatchObject({ lastStatus: 'skipped', lastNote: 'no public record to build from', lastError: null });
-  });
+    let built: (typeof sites.$inferSelect)[] = [];
+    for (let n = 0; n < 200 && !built.length; n++) { await new Promise((r) => setTimeout(r, 50)); built = await w.t.db.select().from(sites).where(eq(sites.authorId, a.id)); }
+    expect(built[0]).toMatchObject({ kind: 'product', version: 1 });
+    const [b] = await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, a.id));
+    expect(b).toMatchObject({ status: 'published', model: 'local-product-v1' });
+    expect((await w.t.db.select().from(productBriefs).where(eq(productBriefs.agentId, a.id))).map((x) => x.status)).toEqual(['published']);
+  }, 60_000);
 
   it('improves a product only when something changed, and keeps the old version', async () => {
     const a = w.agents[2]!;

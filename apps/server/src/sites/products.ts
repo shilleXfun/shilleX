@@ -7,13 +7,15 @@ import { priceOf, type AgentBrain, type BrainRequest } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import { runTool, type ToolContext } from '../world/tools.ts';
 import { actorFor } from '../agents/act.ts';
-import { HAIKU, billedCall, modelName, type ModelBudget } from '../agents/haiku.ts';
+import { BudgetClosed, HAIKU, billedCall, modelName, type ModelBudget } from '../agents/haiku.ts';
+import { ProviderError } from '../world/brain-openai.ts';
 import { MEMORY_HEADING, recallLines } from '../agents/minds.ts';
 import { calibration } from '../agents/depth/desk.ts';
 import { agentsOnly, memberById, memberLines, plain } from '../agents/scenes/cast.ts';
 import { SITE_MAX_BYTES, sanitizeSiteHtml } from './sanitize.ts';
 import { freeSlug, insertSite, originOf, rebuildSite, setAnnouncement, siteUrl } from './store.ts';
-import { SITE_PROMPT_VERSION } from './plan.ts';
+import { SITE_PROMPT_VERSION, factionOf } from './plan.ts';
+import { localProduct } from './engines.ts';
 import { captureSite, renderCheck } from './shots.ts';
 import type { SiteDeps } from './build.ts';
 
@@ -171,7 +173,8 @@ export function pageOf(text: string): { html: string | null; notes: string | nul
   return { html: start >= 0 && end > start ? text.slice(start, end + 7) : null, notes };
 }
 
-type ProductDeps = SiteDeps & { brain: AgentBrain; budget: ModelBudget; /** Draws the genre (tests pin it). */ rng?: () => number };
+/** No brain or no budget: every model call fails as "no model", and a new product is built by a local engine instead. */
+type ProductDeps = Omit<SiteDeps, 'brain' | 'budget'> & { brain: AgentBrain | null; budget: ModelBudget | null; /** Draws the genre (tests pin it). */ rng?: () => number };
 interface Ledger { turnId: string; spent: { usd: number }; calls: number }
 /** A whole page takes a while to write: this long before the call is given up (it may have been billed, so it is not re-sent). */
 const PAGE_TIMEOUT_MS = 240_000;
@@ -180,10 +183,12 @@ const MAX_CALLS = 5;
 
 async function call(d: ProductDeps, l: Ledger, req: BrainRequest, maxTokens: number): Promise<string> {
   if (l.calls >= MAX_CALLS) throw Object.assign(new Error('the build used its model calls'), { category: 'budget' });
+  if (!d.brain || !d.budget) throw new ProviderError('no model is set up', 'transient');
+  const brain = d.brain, budget = d.budget;
   l.calls++;
   const input = JSON.stringify(req.messages).length / 4 + req.system.reduce((n, b) => n + b.text.length, 0) / 4;
   const worstUsd = priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 });
-  const res = await billedCall({ db: d.db, budget: d.budget, turnId: l.turnId, worstUsd, spent: l.spent }, () => d.brain.decide({ ...req, maxTokens }));
+  const res = await billedCall({ db: d.db, budget, turnId: l.turnId, worstUsd, spent: l.spent }, () => brain.decide({ ...req, maxTokens }));
   return res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
 }
 
@@ -299,6 +304,22 @@ export async function improvementReason(db: SiteDeps['db'], site: SiteRow, views
  * Conceive and build a new product, or improve one, for this agent. Returns a job outcome; throws only on failures a retry could
  * fix (the job ledger records and backs off). Publishing happens last, so nothing half-made is ever shown.
  */
+/** The model name a product built by a local engine records. */
+const LOCAL_PRODUCT = 'local-product-v1';
+/** A failure that means no model could answer at all, as opposed to a page that failed its checks. */
+const noModel = (e: unknown) => e instanceof ProviderError || e instanceof BudgetClosed;
+const STOP_WORDS = new Set(['with', 'that', 'this', 'from', 'they', 'them', 'their', 'went', 'were', 'have', 'into', 'about', 'still', 'again', 'while', 'after', 'never', 'every']);
+
+/** A local engine's product for this agent: its name, faction, memories and own words, and a genre handed out like a model's. */
+async function localFor(d: ProductDeps, agentId: string, facts: { username: string; coin: { mint: string; symbol: string } | null; avatar: string }) {
+  const [u] = await d.db.select({ name: users.displayName }).from(users).where(eq(users.id, agentId));
+  const faction = await factionOf(d.db, agentId);
+  const memories = (await d.db.select({ text: agentMemories.text }).from(agentMemories).where(eq(agentMemories.agentId, agentId)).orderBy(desc(agentMemories.weight), desc(agentMemories.at)).limit(6)).map((m) => plain(m.text).slice(0, 140));
+  const words = [...new Set([faction?.name ?? '', ...memories, facts.coin?.symbol ?? ''].join(' ').toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4 && !STOP_WORDS.has(w)))].slice(0, 24);
+  const recent = (await existingProducts(d)).slice(0, 6).map((o) => o.genre);
+  return localProduct({ username: facts.username, name: plain(u?.name || facts.username), avatar: facts.avatar, coin: facts.coin, faction: faction ? plain(faction.name) : null, memories, words }, genreFor(recent, d.rng));
+}
+
 export async function buildProduct(d: ProductDeps, agentId: string, job: { site: 'product' } | { site: 'improve'; siteId: string }): Promise<{ status: 'ok' | 'skipped'; note: string }> {
   const now = d.now();
   const facts = await selfFacts(d, agentId);
@@ -324,14 +345,30 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: { site:
   let outcome: { status: 'ok' | 'skipped'; note: string } = { status: 'skipped', note: '' }, thrown: unknown = null, turnStatus: 'acted' | 'failed' | 'quiet' = 'failed';
   try {
     let brief = briefRow?.brief ?? null;
-    if (!brief) {
-      const c = await conceive(d, l, agentId, facts.text, facts.username);
-      brief = c.brief;
-      [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: 'building', model: modelName(), createdAt: now, updatedAt: now }).returning();
-      await d.db.update(siteBuilds).set({ briefId: briefRow!.id }).where(eq(siteBuilds.id, buildId));
+    let page: Awaited<ReturnType<typeof makePage>>;
+    let madeBy = modelName();
+    try {
+      if (!brief) {
+        const c = await conceive(d, l, agentId, facts.text, facts.username);
+        brief = c.brief;
+        [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: 'building', model: modelName(), createdAt: now, updatedAt: now }).returning();
+        await d.db.update(siteBuilds).set({ briefId: briefRow!.id }).where(eq(siteBuilds.id, buildId));
+      }
+      const current = site ? (await d.db.select({ html: siteVersions.html }).from(siteVersions).where(and(eq(siteVersions.siteId, site.id), eq(siteVersions.version, site.version))))[0]?.html : undefined;
+      page = await makePage(d, l, { username: facts.username, brief, kit: kitFor(facts.avatar, facts.coin), current, changes });
+    } catch (e) {
+      // No model could answer (every free quota spent, none set up, the budget closed) or both ideas were refused: a new
+      // product still ships, built by a local engine from the agent's own record (plan E2). An improvement waits for a model.
+      if (job.site !== 'product' || !(noModel(e) || (e as { category?: string }).category === 'permanent')) throw e;
+      if (briefRow) await d.db.update(productBriefs).set({ status: 'failed', note: `no model built it: ${(e as Error).message.slice(0, 200)}`, updatedAt: d.now() }).where(eq(productBriefs.id, briefRow.id));
+      const local = await localFor(d, agentId, facts);
+      brief = local.brief;
+      madeBy = LOCAL_PRODUCT;
+      [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: 'building', model: madeBy, createdAt: now, updatedAt: now }).returning();
+      await d.db.update(siteBuilds).set({ briefId: briefRow!.id, model: madeBy }).where(eq(siteBuilds.id, buildId));
+      const check = await checkPage(local.html, d.app.deps.config.publicUrl);
+      page = { html: check.hard ? null : check.html, problems: check.problems, notes: local.notes, attempts: 1 };
     }
-    const current = site ? (await d.db.select({ html: siteVersions.html }).from(siteVersions).where(and(eq(siteVersions.siteId, site.id), eq(siteVersions.version, site.version))))[0]?.html : undefined;
-    const page = await makePage(d, l, { username: facts.username, brief, kit: kitFor(facts.avatar, facts.coin), current, changes });
     if (!page.html) {
       await d.db.update(siteBuilds).set({ status: 'failed_validation', problems: page.problems, attempts: page.attempts, costUsd: l.spent.usd, finishedAt: d.now(), note: 'the published version, if any, stays' }).where(eq(siteBuilds.id, buildId));
       if (!site) await d.db.update(productBriefs).set({ status: 'failed', note: page.problems.join('; ').slice(0, 500), updatedAt: d.now() }).where(eq(productBriefs.id, briefRow!.id));
@@ -339,7 +376,7 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: { site:
       turnStatus = 'quiet';
     } else {
       const title = plain(brief.name).slice(0, 60), blurb = plain(brief.tagline).slice(0, 200);
-      const build = { title, blurb, html: page.html, turnId, model: modelName(), now: d.now() };
+      const build = { title, blurb, html: page.html, turnId, model: madeBy, now: d.now() };
       const published = site ? await rebuildSite(d.db, site.id, build)
         : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: 'product', coinMint: facts.coin?.mint ?? null, factionId: null });
       await d.db.update(siteVersions).set({ notes: page.notes ? plain(page.notes).slice(0, 300) : null }).where(and(eq(siteVersions.siteId, published.id), eq(siteVersions.version, published.version)));

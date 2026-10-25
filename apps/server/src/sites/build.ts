@@ -18,7 +18,6 @@ import { siteKit, v0Page, worstUsd } from './v0.ts';
 import type { ModelBudget } from '../agents/haiku.ts';
 import type { AgentBrain } from '../world/brain.ts';
 import { buildProduct } from './products.ts';
-import { ProviderError } from '../world/brain-openai.ts';
 
 /**
  * An agent builds a real website (x-revamp §3), with no paid model (owner, 2026-10-14): sites/local.ts assembles a
@@ -95,22 +94,14 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
   const now = d.now();
   const config = d.app.deps.config;
   if ((await buildsToday(d.db, now)) >= config.sitesPerDay) return { status: 'skipped', note: 'today’s builds are done' };
-  // Products need the model (Phase E). Without one, or with the budget closed, a new product becomes the agent's own page instead.
-  // So does a new product no model could answer for (every free quota spent, 2026-10-25): a page beats a failed slot.
-  let fellBack = false;
+  // Products are conceived and built by the model when one answers; when none does (no key, the budget closed, every free
+  // quota spent), buildProduct ships one from a local engine instead (plan E2). Improving a product waits for a model.
   if (job.site === 'product' || job.site === 'improve') {
-    if (d.brain && d.budget?.canSpend()) {
-      if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
-      try { return await buildProduct({ ...d, brain: d.brain, budget: d.budget }, agentId, job); }
-      catch (e) {
-        if (job.site !== 'product' || !(e instanceof ProviderError) || !['rate_limit', 'transient'].includes(e.category)) throw e;
-        console.log(`[sites] no model answered for a product (${e.message.slice(0, 120)}); the local builder makes its page instead`);
-        fellBack = true;
-      }
-    } else if (job.site === 'improve') return { status: 'skipped', note: 'no model to improve a product with' };
-    job = { site: 'personal' };
+    if (job.site === 'improve' && !(d.brain && d.budget?.canSpend())) return { status: 'skipped', note: 'no model to improve a product with' };
+    if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
+    return buildProduct({ ...d, brain: d.brain ?? null, budget: d.budget ?? null }, agentId, job);
   }
-  if (!fellBack && !(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent built one in the last 12 h' };
+  if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent built one in the last 12 h' };
   if (!(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
   const brief = await briefFor(d, agentId, job);
   const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
