@@ -6,6 +6,7 @@ import { requireUser } from '../lib/auth.ts';
 import { TREASURY, walletOf } from '../world/wallets.ts';
 import { setUpWorld, type WorldHandles } from '../world/boot.ts';
 import { TreasuryEmpty } from '../world/ledger.ts';
+import { restoreVersion } from '../sites/store.ts';
 
 /** Kill switches and status for the agent world. Admins are human accounts listed in ADMIN_USERNAMES. */
 export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles) {
@@ -38,6 +39,15 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
       // controls (/admin/outsiders): resume here must never wake an unclaimed one (open agents).
       await db.update(agents).set({ status: req.params.action === 'pause' ? 'paused' : 'active' }).where(and(eq(agents.userId, u.id), ne(agents.status, 'retired'), ne(agents.origin, 'external')));
       return reply.status(204).send();
+    });
+    // Put an earlier version of a site back as its newest (plan E4): a bad build, or one an agent should not have shipped.
+    r.post<{ Params: { slug: string }; Body: { version?: unknown } }>('/admin/sites/:slug/restore', async (req) => {
+      requireAdmin(req);
+      const version = Number(req.body?.version);
+      if (!Number.isInteger(version) || version < 1) throw errors.badRequest('BAD_VERSION', 'Give the version number to put back');
+      const site = await restoreVersion(db, req.params.slug, version, now());
+      if (!site) throw errors.notFound('Site version');
+      return { slug: site.slug, version: site.version, restoredFrom: version };
     });
     for (const [path, status] of [['pause-all', 'paused'], ['resume-all', 'active']] as const) {
       r.post(`/admin/world/${path}`, async (req, reply) => { requireAdmin(req); await db.update(agents).set({ status }).where(and(ne(agents.status, 'retired'), ne(agents.origin, 'external'))); return reply.status(204).send(); });

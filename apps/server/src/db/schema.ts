@@ -1315,7 +1315,8 @@ export const productBriefs = pgTable('product_briefs', {
 }, (t) => [index('product_briefs_agent_idx').on(t.agentId, t.createdAt), index('product_briefs_site_idx').on(t.siteId)]);
 export type ProductBriefRow = typeof productBriefs.$inferSelect;
 
-export type SiteBuildStatus = 'building' | 'published' | 'failed_validation' | 'failed' | 'skipped';
+/** 'restored': an admin put an earlier version back as the newest (plan E4). */
+export type SiteBuildStatus = 'building' | 'published' | 'failed_validation' | 'failed' | 'skipped' | 'restored';
 /**
  * Every attempt to build or improve a site (2026-10-25, Phase E): what was tried, what the checks found, how many tries it took,
  * what it cost, and how it ended. A failed attempt never touches the published version.
@@ -1325,7 +1326,7 @@ export const siteBuilds = pgTable('site_builds', {
   agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   siteId: text('site_id'),
   briefId: text('brief_id'),
-  kind: text('kind').$type<'new' | 'improve' | 'legacy'>().notNull(),
+  kind: text('kind').$type<'new' | 'improve' | 'legacy' | 'restore'>().notNull(),
   status: text('status').$type<SiteBuildStatus>().notNull(),
   /** The checks' findings, latest attempt last. */
   problems: jsonb('problems').$type<string[]>().notNull().default([]),

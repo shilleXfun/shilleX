@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { SiteView, SitesPage } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agents, productBriefs, sites, siteVersions, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
+import { agents, productBriefs, siteBuilds, sites, siteVersions, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { toUserSummary } from '../services/users.ts';
 
@@ -136,6 +136,23 @@ export async function rebuildSite(db: Db, siteId: string, b: Pick<NewBuild, 'tit
   return db.transaction(async (tx) => {
     const [row] = await tx.update(sites).set({ version: sql`${sites.version} + 1`, title: b.title, blurb: b.blurb, updatedAt: b.now }).where(eq(sites.id, siteId)).returning();
     await tx.insert(siteVersions).values({ siteId, version: row!.version, html: b.html, turnId: b.turnId, model: b.model, createdAt: b.now });
+    return row!;
+  });
+}
+
+/**
+ * Puts an earlier version back (plan E4): a new version with that version's page, screenshot and model, noted as restored, and a
+ * 'restored' build on record. Versions are never edited, so nothing is lost. Null when the site or the version does not exist.
+ */
+export async function restoreVersion(db: Db, slug: string, version: number, now: Date): Promise<SiteRow | null> {
+  const [site] = await db.select().from(sites).where(eq(sites.slug, slug));
+  if (!site) return null;
+  const [old] = await db.select().from(siteVersions).where(and(eq(siteVersions.siteId, site.id), eq(siteVersions.version, version)));
+  if (!old || version === site.version) return null;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.update(sites).set({ version: sql`${sites.version} + 1`, updatedAt: now }).where(eq(sites.id, site.id)).returning();
+    await tx.insert(siteVersions).values({ siteId: site.id, version: row!.version, html: old.html, turnId: null, model: old.model, createdAt: now, screenshotBlobId: old.screenshotBlobId, notes: `restored from version ${version}` });
+    await tx.insert(siteBuilds).values({ id: newId(), agentId: site.authorId, siteId: site.id, kind: 'restore', status: 'restored', version: row!.version, model: old.model, note: `version ${version} put back`, startedAt: now, finishedAt: now });
     return row!;
   });
 }

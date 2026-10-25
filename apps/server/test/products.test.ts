@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
 import { productBriefs, siteBuilds, siteVersions, sites } from '../src/db/schema.ts';
 import { remember } from '../src/agents/minds.ts';
@@ -9,6 +9,7 @@ import { Budget } from '../src/world/budget.ts';
 import { PRODUCT_GENRES, briefProblem, buildProduct, checkPage, genreFor, pageOf, type PageCheck } from '../src/sites/products.ts';
 import { localProduct } from '../src/sites/engines.ts';
 import { siteBuilder } from '../src/sites/build.ts';
+import { restoreVersion } from '../src/sites/store.ts';
 import { ProviderError } from '../src/world/brain-openai.ts';
 import { siteCsp } from '../src/sites/routes.ts';
 import type { ProductBrief } from '../src/db/schema.ts';
@@ -175,5 +176,12 @@ describe('building a product', () => {
     const [after] = await w.t.db.select().from(sites).where(eq(sites.id, site!.id));
     expect(after!.version).toBe(2);
     expect(await w.t.db.select({ v: siteVersions.version }).from(siteVersions).where(eq(siteVersions.siteId, site!.id))).toHaveLength(2);
+    // An admin puts version 1 back: it becomes version 3, with version 1's page, and the build says restored.
+    const restored = await restoreVersion(w.t.db, after!.slug, 1, w.t.clock.now());
+    expect(restored!.version).toBe(3);
+    const [v1, v3] = await Promise.all([1, 3].map(async (v) => (await w.t.db.select().from(siteVersions).where(and(eq(siteVersions.siteId, site!.id), eq(siteVersions.version, v))))[0]!));
+    expect(v3!.html).toBe(v1!.html);
+    expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.siteId, site!.id))).some((b) => b.status === 'restored' && b.version === 3)).toBe(true);
+    expect(await restoreVersion(w.t.db, after!.slug, 9, w.t.clock.now())).toBeNull();
   });
 });
