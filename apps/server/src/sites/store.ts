@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { SiteView, SitesPage } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agents, sites, siteVersions, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
+import { agents, productBriefs, sites, siteVersions, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { toUserSummary } from '../services/users.ts';
 
@@ -10,7 +10,7 @@ export const siteUrl = (slug: string) => `/sites/${slug}`;
 export const originOf = (url: string) => { try { return new URL(url).origin; } catch { return ''; } };
 export const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 /** Words that are not a site's name: what a later route or a page under /sites could need. */
-const RESERVED = new Set(['new', 'raw', 'api', 'admin', 'about', 'gallery', 'shillex']);
+const RESERVED = new Set(['new', 'raw', 'api', 'admin', 'about', 'gallery', 'shillex', 'builds', 'data']);
 
 /**
  * Shown: not taken down, and not by an agent retired for reports (spec 2026-10-13-user-agents §9). Sites of agents retired
@@ -21,17 +21,27 @@ const shown = and(isNull(sites.removedAt), or(isNull(agents.retireReason), ne(ag
 export async function siteViews(db: Db, rows: SiteRow[]): Promise<SiteView[]> {
   if (!rows.length) return [];
   const mints = [...new Set(rows.map((r) => r.coinMint).filter((m): m is string => Boolean(m)))];
-  const [authors, coins] = await Promise.all([
+  const ids = rows.map((r) => r.id);
+  const [authors, coins, shots, briefs] = await Promise.all([
     db.select().from(users).where(inArray(users.id, [...new Set(rows.map((r) => r.authorId))])),
     mints.length ? db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol }).from(worldCoins).where(inArray(worldCoins.mint, mints)) : Promise.resolve([]),
+    // Each site's newest screenshot (sites/shots.ts): the current build's, or the last build that has one.
+    db.select({ siteId: siteVersions.siteId, version: siteVersions.version, blob: siteVersions.screenshotBlobId }).from(siteVersions)
+      .where(and(inArray(siteVersions.siteId, ids), sql`${siteVersions.screenshotBlobId} is not null`)),
+    db.select({ siteId: productBriefs.siteId, genre: productBriefs.genre }).from(productBriefs).where(and(inArray(productBriefs.siteId, ids), eq(productBriefs.status, 'published'))),
   ]);
+  const shot = new Map<string, { version: number; blob: string }>();
+  for (const s of shots) if (s.blob && (shot.get(s.siteId)?.version ?? 0) < s.version) shot.set(s.siteId, { version: s.version, blob: s.blob });
+  const genre = new Map(briefs.map((b) => [b.siteId, b.genre]));
   const author = new Map(authors.map((u) => [u.id, toUserSummary(u)]));
   const symbol = new Map(coins.map((c) => [c.mint, c.symbol]));
   return rows.flatMap((r) => {
     const a = author.get(r.authorId);
     if (!a) return [];
     const coin = r.coinMint && symbol.has(r.coinMint) ? { mint: r.coinMint, symbol: symbol.get(r.coinMint)! } : null;
-    return [{ slug: r.slug, title: r.title, blurb: r.blurb, url: siteUrl(r.slug), author: a, version: r.version, coin, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() }];
+    const sh = shot.get(r.id);
+    return [{ slug: r.slug, title: r.title, blurb: r.blurb, url: siteUrl(r.slug), author: a, version: r.version, coin, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
+      kind: r.kind, screenshotUrl: sh ? `/api/blobs/${sh.blob}` : null, genre: genre.get(r.id) ?? null }];
   });
 }
 

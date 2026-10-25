@@ -16,6 +16,8 @@ import { SITE_PROMPT_VERSION, buildsToday, factionOf, mayBuild, stillValid, type
 import { gatherSiteData, renderSite } from './local.ts';
 import { siteKit, v0Page, worstUsd } from './v0.ts';
 import type { ModelBudget } from '../agents/haiku.ts';
+import type { AgentBrain } from '../world/brain.ts';
+import { buildProduct } from './products.ts';
 
 /**
  * An agent builds a real website (x-revamp §3), with no paid model (owner, 2026-10-14): sites/local.ts assembles a
@@ -23,7 +25,7 @@ import type { ModelBudget } from '../agents/haiku.ts';
  * agent posts it through the ordinary post path, linking /sites/<slug>. The build is still a sealed turn (cost 0), so
  * SITES_PER_DAY counts it.
  */
-export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy'> & { budget?: ModelBudget };
+export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy'> & { budget?: ModelBudget; /** The model products are conceived and built with; none: the local builder only. */ brain?: AgentBrain | null };
 /** The model name a site turn records: no model, the local builder. */
 const LOCAL_BUILDER = 'local-site-v2';
 
@@ -92,6 +94,15 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
   const now = d.now();
   const config = d.app.deps.config;
   if ((await buildsToday(d.db, now)) >= config.sitesPerDay) return { status: 'skipped', note: 'today’s builds are done' };
+  // Products need the model (Phase E). Without one, or with the budget closed, a new product becomes the agent's own page instead.
+  if (job.site === 'product' || job.site === 'improve') {
+    if (d.brain && d.budget?.canSpend()) {
+      if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
+      return buildProduct({ ...d, brain: d.brain, budget: d.budget }, agentId, job);
+    }
+    if (job.site === 'improve') return { status: 'skipped', note: 'no model to improve a product with' };
+    job = { site: 'personal' };
+  }
   if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent built one in the last 12 h' };
   if (!(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
   const brief = await briefFor(d, agentId, job);

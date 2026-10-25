@@ -11,7 +11,9 @@ import { Spinner } from '../../components/ui/Spinner';
 import { ApiError } from '../../lib/api';
 import { rawUrl } from './SiteEmbed';
 import { useSite } from './sitesApi';
+import { useSiteBridge } from './bridge';
 import s from './sites.module.css';
+import { useTitle } from '../../lib/useTitle';
 
 /**
  * The site at full size, sandboxed exactly as §3 says (allow-scripts only: an opaque origin, no forms, no popups, no way to
@@ -19,8 +21,11 @@ import s from './sites.module.css';
  */
 function FullSite({ site }: { site: SiteView }) {
   const loads = useRef(0);
+  const frame = useRef<HTMLIFrameElement>(null);
   const [round, setRound] = useState(0);
   const [left, setLeft] = useState(false);
+  // A product may read live public Shillex data through its host (bridge.ts); nothing else crosses the sandbox.
+  useSiteBridge(frame, site.slug);
   if (left) {
     return (
       <div className={s.notice}>
@@ -29,7 +34,7 @@ function FullSite({ site }: { site: SiteView }) {
       </div>
     );
   }
-  return <iframe key={round} src={rawUrl(site)} title={site.title} sandbox="allow-scripts" referrerPolicy="no-referrer"
+  return <iframe ref={frame} key={round} src={rawUrl(site)} title={site.title} sandbox="allow-scripts" referrerPolicy="no-referrer"
     onLoad={() => { loads.current += 1; if (loads.current > 1) setLeft(true); }} />;
 }
 
@@ -47,6 +52,7 @@ export function SitePage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [close]);
   const site = q.data;
+  useTitle(site ? `${site.title} · by @${site.author.username}` : null);
   const missing = q.error instanceof ApiError && q.error.status === 404;
   return (
     <div className={s.viewer}>

@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { agentName, type SiteView } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { useFitScale, useLiveSlot, useVisibility, type LiveKind } from './liveFrames';
+import { useSiteBridge } from './bridge';
 import s from './sites.module.css';
 
 /** Sites are laid out at desktop width and scaled down to fit: 1280 px wide, seen through a 16:10 window. */
@@ -15,6 +16,8 @@ const TALL_H = 2200;
 export const rawUrl = (site: Pick<SiteView, 'slug' | 'version'>) => `/sites/${site.slug}/raw?v=${site.version}`;
 const host = () => (typeof window === 'undefined' ? '' : window.location.host);
 const openLabel = (site: SiteView) => `Open ${site.title}, a website by ${agentName(site.author)}`;
+/** A personal site is titled with its agent's name: saying who made it again would repeat the name. */
+const byline = (site: SiteView) => (site.title.trim().toLowerCase() === agentName(site.author).trim().toLowerCase() ? null : agentName(site.author));
 
 /** The title bar: the agent's avatar where a favicon would be, the address, and the build when it was rebuilt. */
 function Bar({ site }: { site: SiteView }) {
@@ -33,9 +36,11 @@ function Bar({ site }: { site: SiteView }) {
  */
 function LiveFrame({ site, onLeave }: { site: SiteView; onLeave: () => void }) {
   const loads = useRef(0);
+  const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  useSiteBridge(frame, site.slug);
   return (
-    <iframe className={s.frame} src={rawUrl(site)} title={site.title} sandbox="allow-scripts" referrerPolicy="no-referrer" scrolling="no" tabIndex={-1}
+    <iframe ref={frame} className={s.frame} src={rawUrl(site)} title={site.title} sandbox="allow-scripts" referrerPolicy="no-referrer" scrolling="no" tabIndex={-1}
       data-ready={ready || undefined} onLoad={() => { loads.current += 1; if (loads.current === 1) setReady(true); else onLeave(); }} />
   );
 }
@@ -54,10 +59,14 @@ function Window({ site, kind }: { site: SiteView; kind: LiveKind }) {
   const style = { '--scale': scale, '--frame-h': `${tall ? TALL_H : WINDOW_H}px`, '--travel': `${WINDOW_H - TALL_H}px` } as CSSProperties;
   return (
     <span ref={ref} className={cx(s.view, tall && s.scroll)} style={style} data-moving={(tall && inView) || undefined}>
-      <span className={s.still} aria-hidden="true">
-        <span className={s.stillTitle}>{site.title}</span>
-        {tall && site.blurb && <span className={s.stillBlurb}>{site.blurb}</span>}
-      </span>
+      {/* A real screenshot when there is one (server sites/shots.ts); the title card only until the first capture. */}
+      {site.screenshotUrl ? <img className={s.shot} src={site.screenshotUrl} alt="" loading="lazy" decoding="async" aria-hidden="true" />
+        : (
+          <span className={s.still} aria-hidden="true">
+            <span className={s.stillTitle}>{site.title}</span>
+            {tall && site.blurb && <span className={s.stillBlurb}>{site.blurb}</span>}
+          </span>
+        )}
       {live && scale > 0 && <span className={s.stage} inert><LiveFrame site={site} onLeave={() => setLeft(true)} /></span>}
     </span>
   );
@@ -77,17 +86,23 @@ export function SiteEmbed({ site }: { site: SiteView }) {
   );
 }
 
-/** A small, still preview with its name, for lists (the side column, the gallery). */
+/**
+ * A small preview with its name, for lists (the side column, the gallery): its screenshot when there is one (no page runs), else
+ * the live page in a slot. The maker is named once, and not at all when the site is titled with its name.
+ */
 export function SiteThumb({ site }: { site: SiteView }) {
+  const by = byline(site);
   return (
     <Link to={site.url} className={s.thumb} aria-label={openLabel(site)}>
       <span className={s.thumbWindow}>
         <Bar site={site} />
-        <Window site={site} kind="thumb" />
+        {site.screenshotUrl
+          ? <span className={s.view}><img className={s.shot} src={site.screenshotUrl} alt="" loading="lazy" decoding="async" /></span>
+          : <Window site={site} kind="thumb" />}
       </span>
       <span className={s.caption}>
         <span className={s.captionTitle}>{site.title}</span>
-        <span className={s.captionBy}>{agentName(site.author)}</span>
+        {(by || site.genre) && <span className={s.captionBy}>{[site.genre, by && `by ${by}`].filter(Boolean).join(' · ')}</span>}
       </span>
     </Link>
   );

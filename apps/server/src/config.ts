@@ -101,6 +101,8 @@ export interface LlmConfig {
   /** 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
   mode: 'openai' | 'anthropic' | 'none';
   providers: ProviderConfig[];
+  /** LLM_BUILD_PROVIDER: the provider site builds ask first (one listed in LLM_PROVIDERS), or null for the usual order. */
+  buildProvider: string | null;
 }
 
 /** Known OpenAI-compatible providers: where they live, sensible models, what they support. Any field can be overridden by env. */
@@ -143,7 +145,9 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
   }
   const asked = val('LLM_PROVIDER')?.toLowerCase();
   const mode: LlmConfig['mode'] = asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked : providers.length ? 'openai' : val('ANTHROPIC_API_KEY') ? 'anthropic' : 'none';
-  return { mode, providers };
+  // Site builds go to Gemini by default when it is configured: its pages were far better in the 2026-10-25 comparison.
+  const build = val('LLM_BUILD_PROVIDER')?.toLowerCase() ?? (providers.some((p) => p.name === 'gemini') ? 'gemini' : null);
+  return { mode, providers, buildProvider: build && providers.some((p) => p.name === build) ? build : null };
 }
 
 export interface ExternalConfig {

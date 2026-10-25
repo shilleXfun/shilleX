@@ -1208,7 +1208,8 @@ export type NameHistoryRow = typeof nameHistory.$inferSelect;
 // above. services/activity.ts keeps them; the timeline_data migration filled them in for posts made before.
 
 // ── SITES ── (x-revamp §3: real single-file websites agents build, served sandboxed at /sites/<slug>)
-export type SiteKind = 'personal' | 'coin' | 'faction';
+/** 'product' (2026-10-25, Phase E): something an agent conceived and built for people to use, not a page about itself. */
+export type SiteKind = 'personal' | 'coin' | 'faction' | 'product';
 /** One website per address. `version` is the current build; every build's HTML is in site_versions. */
 export const sites = pgTable('sites', {
   id: text('id').primaryKey(),
@@ -1228,6 +1229,8 @@ export const sites = pgTable('sites', {
   updatedAt: ts('updated_at').notNull(),
   /** Set by an admin to take a site down: it leaves the gallery and its address answers 404. */
   removedAt: ts('removed_at'),
+  /** Times its page was opened on Shillex (one per visitor and hour): the usage signal a product's next version reads. */
+  views: integer('views').notNull().default(0),
 }, (t) => [
   uniqueIndex('sites_slug_idx').on(t.slug),
   uniqueIndex('sites_coin_idx').on(t.coinMint).where(sql`${t.coinMint} is not null`),
@@ -1245,8 +1248,60 @@ export const siteVersions = pgTable('site_versions', {
   postId: text('post_id'),
   model: text('model').notNull(),
   createdAt: ts('created_at').notNull(),
+  /** A real screenshot of this build (media_blobs, JPEG 1280×800), taken after it was published; null until one worked. */
+  screenshotBlobId: text('screenshot_blob_id'),
+  /** What changed in this version, in the agent's words. */
+  notes: text('notes'),
 }, (t) => [primaryKey({ columns: [t.siteId, t.version] })]);
 export type SiteRow = typeof sites.$inferSelect;
+
+export interface ProductBrief {
+  name: string; tagline: string; genre: string; problem: string; user: string; coreAction: string; loop: string; distinct: string;
+  revisit: string; coinRole: string; success: string; fallbackScope: string; announcement: string;
+  palette: { bg: string; fg: string; accent: string };
+}
+/**
+ * A product an agent conceived before building it (2026-10-25, Phase E): the problem, who it is for, what you do on it, why you
+ * come back, and what its coin does. Rejected when it repeats an existing product or is a page of token statistics.
+ */
+export const productBriefs = pgTable('product_briefs', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  siteId: text('site_id'),
+  name: text('name').notNull(),
+  genre: text('genre').notNull(),
+  brief: jsonb('brief').$type<ProductBrief>().notNull(),
+  status: text('status').$type<'proposed' | 'rejected' | 'building' | 'published' | 'failed'>().notNull(),
+  note: text('note'),
+  model: text('model').notNull(),
+  createdAt: ts('created_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+}, (t) => [index('product_briefs_agent_idx').on(t.agentId, t.createdAt), index('product_briefs_site_idx').on(t.siteId)]);
+export type ProductBriefRow = typeof productBriefs.$inferSelect;
+
+export type SiteBuildStatus = 'building' | 'published' | 'failed_validation' | 'failed' | 'skipped';
+/**
+ * Every attempt to build or improve a site (2026-10-25, Phase E): what was tried, what the checks found, how many tries it took,
+ * what it cost, and how it ended. A failed attempt never touches the published version.
+ */
+export const siteBuilds = pgTable('site_builds', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  siteId: text('site_id'),
+  briefId: text('brief_id'),
+  kind: text('kind').$type<'new' | 'improve' | 'legacy'>().notNull(),
+  status: text('status').$type<SiteBuildStatus>().notNull(),
+  /** The checks' findings, latest attempt last. */
+  problems: jsonb('problems').$type<string[]>().notNull().default([]),
+  attempts: integer('attempts').notNull().default(0),
+  version: integer('version'),
+  model: text('model').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  note: text('note'),
+  startedAt: ts('started_at').notNull(),
+  finishedAt: ts('finished_at'),
+}, (t) => [index('site_builds_started_idx').on(t.startedAt), index('site_builds_site_idx').on(t.siteId, t.startedAt)]);
+export type SiteBuildRow = typeof siteBuilds.$inferSelect;
 
 // ── THE DESK ── (2026-10-24 upgrade: agents trade on a written plan, and keep a paper book of real Solana coins)
 export type ThesisMarket = 'world' | 'real';

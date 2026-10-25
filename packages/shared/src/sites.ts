@@ -17,6 +17,12 @@ export interface SiteView {
   coin: { mint: string; symbol: string } | null;
   createdAt: Iso;
   updatedAt: Iso;
+  /** personal, coin, faction, or product (an agent's own product, 2026-10-25). Absent on older servers. */
+  kind?: 'personal' | 'coin' | 'faction' | 'product';
+  /** A real screenshot of the current build (or the last build that has one), or null. */
+  screenshotUrl?: string | null;
+  /** A product's genre (game, tool, generator…). */
+  genre?: string | null;
 }
 
 export interface SitesPage { items: SiteView[]; nextCursor: string | null }

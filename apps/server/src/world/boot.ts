@@ -45,6 +45,7 @@ import { runJob } from './jobs.ts';
 import { backfillMemories } from '../agents/minds.ts';
 import { xDigestHandler } from '../x/digest.ts';
 import { restyleSites, siteBuilder } from '../sites/build.ts';
+import { backfillShots } from '../sites/shots.ts';
 import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
 import { deskMomentHandler } from '../agents/depth/desk.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
@@ -204,7 +205,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
       setTimeout(() => { void restyleSites({ app, db, chain, events, worldKey: key, now, busy }).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
       // Websites are built straight away by the free local builder, never through the model queue (docs/system-audit.md §3).
-      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget });
+      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain });
+      // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.
+      setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, buildSite, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));

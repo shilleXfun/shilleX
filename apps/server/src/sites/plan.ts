@@ -19,7 +19,8 @@ export const COIN_WINDOW_MS = 6 * 3_600_000;
 /** How often the engine's tick looks for something to build. */
 export const PLAN_EVERY_MS = 5 * 60_000;
 
-export type SiteJob = { site: 'coin'; mint: string } | { site: 'personal' } | { site: 'faction'; factionId: string } | { site: 'rebuild'; siteId: string };
+/** 'product' and 'improve' (2026-10-25, Phase E): a product the agent conceives and builds, or the next version of one. */
+export type SiteJob = { site: 'coin'; mint: string } | { site: 'personal' } | { site: 'faction'; factionId: string } | { site: 'rebuild'; siteId: string } | { site: 'product' } | { site: 'improve'; siteId: string };
 
 const dayStart = (now: Date) => new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
 
@@ -57,6 +58,14 @@ export async function stillValid(db: Db, agentId: string, job: SiteJob, now: Dat
     const [has] = await db.select({ id: sites.id }).from(sites).where(eq(sites.factionId, job.factionId)).limit(1);
     return f?.id === job.factionId && !has;
   }
+  if (job.site === 'product') {
+    const [has] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.authorId, agentId), eq(sites.kind, 'product'), isNull(sites.removedAt))).limit(1);
+    return !has;
+  }
+  if (job.site === 'improve') {
+    const [s] = await db.select({ authorId: sites.authorId, kind: sites.kind, removedAt: sites.removedAt }).from(sites).where(eq(sites.id, job.siteId));
+    return Boolean(s && s.authorId === agentId && s.kind === 'product' && !s.removedAt);
+  }
   if (job.site === 'personal') {
     const [has] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.authorId, agentId), eq(sites.kind, 'personal'))).limit(1);
     return !has;
@@ -65,7 +74,10 @@ export async function stillValid(db: Db, agentId: string, job: SiteJob, now: Dat
   return Boolean(s && s.authorId === agentId && !s.removedAt && now.getTime() - s.updatedAt.getTime() >= REBUILD_AFTER_MS);
 }
 
-/** What this agent could build now and then: its faction's first site, its own first site, or a rebuild of an old one. */
+/**
+ * What this agent could build now and then: its own product (first, and most likely), the next version of it, its faction's first
+ * site, its own first page, or a rebuild of an old page. Without a model, sites/build.ts turns a product job into its page.
+ */
 async function ambientJob(db: Db, agentId: string, now: Date, rng: () => number): Promise<SiteJob | null> {
   const options: { job: SiteJob; weight: number }[] = [];
   const f = await factionOf(db, agentId);
@@ -75,9 +87,12 @@ async function ambientJob(db: Db, agentId: string, now: Date, rng: () => number)
   }
   const own = await db.select({ id: sites.id, kind: sites.kind, updatedAt: sites.updatedAt }).from(sites)
     .where(and(eq(sites.authorId, agentId), isNull(sites.removedAt))).orderBy(sites.updatedAt);
-  if (!own.some((s) => s.kind === 'personal')) options.push({ job: { site: 'personal' }, weight: 1 });
-  const old = own.find((s) => now.getTime() - s.updatedAt.getTime() >= REBUILD_AFTER_MS);
-  if (old) options.push({ job: { site: 'rebuild', siteId: old.id }, weight: 0.6 });
+  const product = own.find((s) => s.kind === 'product');
+  if (!product) options.push({ job: { site: 'product' }, weight: 3 });
+  else if (now.getTime() - product.updatedAt.getTime() >= REBUILD_AFTER_MS) options.push({ job: { site: 'improve', siteId: product.id }, weight: 1.5 });
+  if (!own.some((s) => s.kind === 'personal')) options.push({ job: { site: 'personal' }, weight: 0.5 });
+  const old = own.find((s) => s.kind !== 'product' && now.getTime() - s.updatedAt.getTime() >= REBUILD_AFTER_MS);
+  if (old) options.push({ job: { site: 'rebuild', siteId: old.id }, weight: 0.3 });
   let x = rng() * options.reduce((n, o) => n + o.weight, 0);
   for (const o of options) { x -= o.weight; if (x <= 0) return o.job; }
   return options.at(-1)?.job ?? null;

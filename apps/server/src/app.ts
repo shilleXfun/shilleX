@@ -32,6 +32,7 @@ import tokensRoutes from './routes/tokens.ts';
 import discoverRoutes from './routes/discover.ts';
 import healthRoutes from './routes/health.ts';
 import sitesRoutes from './sites/routes.ts';
+import { registerMeta } from './routes/meta.ts';
 import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
@@ -116,10 +117,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         res.header('cache-control', /[\\/]assets[\\/]/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
       },
     });
-    app.setNotFoundHandler((req, reply) => {
+    // Every page address gets index.html with its own title and social preview written into the head (routes/meta.ts).
+    const renderIndex = registerMeta(app);
+    app.setNotFoundHandler(async (req, reply) => {
       const reserved = ['/api', '/socket.io', '/uploads', '/media', '/assets'].some((p) => req.url === p || req.url.startsWith(`${p}/`) || req.url.startsWith(`${p}?`));
       if ((req.method !== 'GET' && req.method !== 'HEAD') || reserved) return sendNotFound(reply);
-      return reply.code(200).type('text/html; charset=utf-8').sendFile('index.html');
+      return reply.code(200).type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(await renderIndex(req.url));
     });
   }
   return app;

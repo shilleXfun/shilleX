@@ -14,6 +14,8 @@
 
 /* ── The window onto the page: its still, then the page scaled from 1280 px ── */
 .view { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; container-type: inline-size; background: var(--panel); }
+/* A real screenshot of the site (server sites/shots.ts), top of the page first. */
+.shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; background: var(--panel); }
 .still { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 6cqw 6cqw 7cqw; }
 .stillTitle { display: -webkit-box; overflow: hidden; color: var(--text); font: 700 clamp(15px, 8cqw, 44px)/0.95 var(--font-brand); letter-spacing: -0.03em; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .stillBlurb { max-width: 52ch; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
@@ -108,8 +110,9 @@
   .safety { order: 3; flex-basis: 100%; margin-left: 0; padding: 5px 10px; font-size: 12px; }
 }
 
-/* Flat (2026-10-15): the sites edge to edge on hairlines, the newest one featured across the page with its words beside it. */
-.grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 0; margin: -20px calc(var(--row-px) * -1) 0; }
+/* Flat (2026-10-15): the sites edge to edge on hairlines, the newest one featured across the page with its words beside it. The flat
+   page has no side padding (lumen .page), so the grid needs no negative margins: they pushed it --row-px past the screen on phones. */
+.grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 0; margin: 0; }
 @container (min-width: 560px) { .grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); } }
 .grid > .card { padding: 22px var(--row-px) 26px; border: 0; border-radius: 0; background: none; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
 @container (min-width: 900px) {

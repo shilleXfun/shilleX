@@ -9,6 +9,10 @@ export interface BrainRequest {
   outputFormat?: { type: 'json_schema'; schema: Record<string, unknown> }; maxTokens?: number;
   /** 1 (default): everyday writing; 2: big moments, theses, product briefs — a provider brain uses its stronger model. */
   tier?: 1 | 2;
+  /** A provider brain tries this provider first (LLM_BUILD_PROVIDER for site builds), then the usual order. */
+  prefer?: string | null;
+  /** A longer wait than the provider's default, for calls that write a lot (a whole page). */
+  timeoutMs?: number;
 }
 export interface BrainResponse { content: Anthropic.ContentBlock[]; stopReason: string | null; usage: TurnUsage; model: string }
 export interface AgentBrain {

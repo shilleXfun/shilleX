@@ -30,7 +30,9 @@ describe('world engine reliability (docs/system-audit.md §3)', () => {
     const asked: [string, SiteJob][] = [];
     const agent = w.agents[0]!;
     await planSites(deps({ moments: haltedQueue({ n: 0 }), buildSite: (id, job) => { asked.push([id, job]); return true; } }), agent.id);
-    expect(asked).toEqual([[agent.id, { site: 'personal' }]]);
+    // Its first product (or, by chance, its own page): either way the build starts though the model queue refuses everything.
+    expect(asked.map(([id]) => id)).toEqual([agent.id]);
+    expect(['product', 'personal']).toContain(asked[0]![1].site);
   });
 
   it('drains queued model moments even when every tick fails (the RPC outage of 2026-10-17)', async () => {

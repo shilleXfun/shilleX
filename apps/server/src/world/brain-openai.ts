@@ -137,7 +137,8 @@ export function chatBody(p: ProviderConfig, model: string, req: BrainRequest) {
 /** One call to one provider. Throws ProviderError; never retries. */
 export async function callProvider(p: ProviderConfig, model: string, req: BrainRequest, fetchImpl: typeof fetch = fetch): Promise<BrainResponse> {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), p.timeoutMs);
+  const wait = Math.max(p.timeoutMs, req.timeoutMs ?? 0);
+  const timer = setTimeout(() => ctl.abort(), wait);
   let res: Response;
   try {
     res = await fetchImpl(`${p.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -148,7 +149,7 @@ export async function callProvider(p: ProviderConfig, model: string, req: BrainR
   } catch (e) {
     clearTimeout(timer);
     const aborted = (e as Error)?.name === 'AbortError';
-    throw new ProviderError(aborted ? `${p.name} did not answer within ${p.timeoutMs} ms` : `${p.name} could not be reached: ${(e as Error)?.message}`, 'transient', undefined, p.name);
+    throw new ProviderError(aborted ? `${p.name} did not answer within ${wait} ms` : `${p.name} could not be reached: ${(e as Error)?.message}`, 'transient', undefined, p.name);
   }
   const text = await res.text().finally(() => clearTimeout(timer));
   if (!res.ok) {
@@ -226,7 +227,8 @@ export class RoutedBrain implements AgentBrain {
   async decide(req: BrainRequest & { tier?: Tier }): Promise<BrainResponse> {
     const tier: Tier = req.tier ?? 1;
     const est = Math.ceil(JSON.stringify(req.messages).length / 4 + req.system.reduce((n, b) => n + b.text.length, 0) / 4) + (req.maxTokens ?? 4000);
-    const usable = this.providers.filter((p) => this.why(p) === null && (!req.tools.length || p.tools));
+    const usable = this.providers.filter((p) => this.why(p) === null && (!req.tools.length || p.tools))
+      .sort((a, b) => Number(b.name === req.prefer) - Number(a.name === req.prefer));
     if (!usable.length) throw new ProviderError('No model provider is usable: check the LLM_* settings on /api/health/world', 'auth', 401);
     const key = req.tools.length ? null : createHash('sha256').update(JSON.stringify([tier, req.system, req.messages, req.outputFormat ?? null, req.maxTokens ?? null])).digest('hex');
     const t = this.now().getTime();
