@@ -2,7 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
-import { ClaudeBrain, priceOf, type BrainResponse } from '../world/brain.ts';
+import { ClaudeBrain, PRICE_OF_HAIKU, hasPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
+import { RoutedBrain } from '../world/brain-openai.ts';
+import type { Config } from '../config.ts';
 import { Budget, type BudgetWindow } from '../world/budget.ts';
 import { anthropicClient } from '../lib/anthropic.ts';
 
@@ -10,6 +12,30 @@ export const HAIKU = 'claude-haiku-5-5';
 export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean; /** The current period's cap (the day, or the launch window). */ capUsd?(): number }
 /** No retries inside the client: a retried attempt may have been billed without billedCall seeing it. A failed call is one call, booked at its worst case. */
 export const haikuBrain = (apiKey: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0));
+/**
+ * The model every receipt names and the factor worst cases are scaled by (2026-10-25, Phase B). Worst cases are written in Haiku
+ * prices across the code; a provider dearer than Haiku scales them up, a cheaper or free one leaves them (the reservation is then
+ * generous and is settled to the real cost after the call).
+ */
+let modelLabel = HAIKU, worstScale = 1;
+export const modelName = () => modelLabel;
+
+/** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only). */
+export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'>, now: () => Date): AgentBrain | null {
+  let brain: AgentBrain | null = null;
+  if (config.llm.mode === 'openai' && config.llm.providers.length) {
+    const haiku = PRICE_OF_HAIKU();
+    for (const p of config.llm.providers) {
+      if (p.priceInPerM === null || p.priceOutPerM === null) continue;
+      for (const m of new Set([p.model, p.modelStrong])) if (m) registerPrice(m, p.priceInPerM, p.priceOutPerM);
+      worstScale = Math.max(worstScale, p.priceOutPerM / haiku.output, p.priceInPerM / haiku.input);
+    }
+    brain = new RoutedBrain(config.llm.providers, now);
+  } else if (config.llm.mode === 'anthropic' && config.anthropicApiKey) brain = haikuBrain(config.anthropicApiKey);
+  modelLabel = brain?.name ?? HAIKU;
+  return brain;
+}
+
 export const modelBudget = (db: Db, dailyUsd: number, now: () => Date, window: BudgetWindow | null = null) => new Budget(db, dailyUsd, now, { hardStop: true, window });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
@@ -37,23 +63,25 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
  * The budget in memory and `spent` (the turn's total, for its receipt) get the same figure.
  */
 export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
-  if (!(x.budget.canSpend() && x.budget.canAfford(x.worstUsd))) throw new BudgetClosed(`no room under the model cap for a call of up to $${x.worstUsd.toFixed(4)}`);
+  const worst = x.worstUsd * worstScale;
+  if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to ${worst.toFixed(4)}`);
   const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
-  book(x.worstUsd);
-  try { await addCost(x.db, x, x.worstUsd); }
-  catch (e) { book(-x.worstUsd); throw e; }
+  book(worst);
+  try { await addCost(x.db, x, worst); }
+  catch (e) { book(-worst); throw e; }
   let res: BrainResponse;
   try { res = await call(); }
   catch (e) {
     if (answeredWithError(e)) {
-      book(-x.worstUsd);
+      book(-worst);
       // If the reservation cannot be taken back from the receipt, it stays there: the cap errs safe.
-      await addCost(x.db, x, -x.worstUsd).catch((err) => console.error('[agents] could not release a model call reservation', 'worldCallId' in x ? x.worldCallId : x.turnId, err));
+      await addCost(x.db, x, -worst).catch((err) => console.error('[agents] could not release a model call reservation', 'worldCallId' in x ? x.worldCallId : x.turnId, err));
     }
     throw e;
   }
-  const cost = priceOf(x.model ?? HAIKU, res.usage);
-  book(cost - x.worstUsd);
-  await addCost(x.db, x, cost - x.worstUsd);
+  // Priced as the model that answered when its price is known (a provider model, registered at boot), else as the caller says.
+  const cost = priceOf(hasPrice(res.model) ? res.model : x.model ?? HAIKU, res.usage);
+  book(cost - worst);
+  await addCost(x.db, x, cost - worst);
   return res;
 }

@@ -1,7 +1,7 @@
 import { isNull, sql } from 'drizzle-orm';
 import { scenes } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
-import { HAIKU } from '../haiku.ts';
+import { modelName } from '../haiku.ts';
 import { accountProblem } from '../moments.ts';
 import { createModelHalt } from '../halt.ts';
 import { runJob, type JobOutcome } from '../../world/jobs.ts';
@@ -72,11 +72,11 @@ export function startScenes(d: SceneDeps): Scenes {
     await d.db.insert(scenes).values({
       id, kind: idea.kind, premise, title: body.title ?? templateTitle(m), cast: idea.cast, coinMint: idea.coinMint,
       planned: body.messages, affinity: body.affinity, posted: 0, nextAt: now, startedAt: now,
-      costUsd: written?.costUsd ?? 0, model: written ? HAIKU : PHRASEBOOK_MODEL,
+      costUsd: written?.costUsd ?? 0, model: written ? modelName() : PHRASEBOOK_MODEL,
     });
     counts.started++;
     if (written) counts.model++; else counts.phrasebook++;
-    console.log(`[scenes] ${idea.kind} scene ${id} (${written ? 'haiku' : 'phrasebook'}, ${body.messages.length} lines): ${premise.why.slice(0, 140)}`);
+    console.log(`[scenes] ${idea.kind} scene ${id} (${written ? modelName() : 'phrasebook'}, ${body.messages.length} lines): ${premise.why.slice(0, 140)}`);
     return id;
   }
 

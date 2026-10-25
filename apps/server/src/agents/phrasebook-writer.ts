@@ -7,7 +7,7 @@ import { priceOf, type AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { ToolOutcome } from '../world/tools.ts';
 import { IMPERSONATED } from '../lib/reserved.ts';
-import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
+import { HAIKU, modelName, billedCall, type ModelBudget } from './haiku.ts';
 import { ALLOWED_SLOTS, FALLBACK_SITUATIONS } from './phrasebook.ts';
 import { scrubBook, scrubProfile } from './raised/scrub.ts';
 import { TRAITS, recentEvents, setTraits } from './state.ts';
@@ -241,7 +241,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
   const worstCase = priceOf(HAIKU, { input: 0, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 });
   if (!d.budget.canSpend() || !d.budget.canAfford(worstCase)) return 'skipped';
   const { db } = d;
-  const { id: turnId } = await startTurn(db, { agentId, triggers: [{ type: 'heartbeat', note: 'phrasebook' }], model: HAIKU, effort: 'low', promptVersion: PHRASEBOOK_PROMPT_VERSION, snapshotId: null, now: d.now() });
+  const { id: turnId } = await startTurn(db, { agentId, triggers: [{ type: 'heartbeat', note: 'phrasebook' }], model: modelName(), effort: 'low', promptVersion: PHRASEBOOK_PROMPT_VERSION, snapshotId: null, now: d.now() });
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const toolCalls: ToolCallRecord[] = [];
   const spent = { usd: 0 };
@@ -272,8 +272,8 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
     else {
       const [prev] = await db.select({ version: phrasebooks.version }).from(phrasebooks).where(eq(phrasebooks.agentId, agentId));
       const version = (prev?.version ?? 0) + 1;
-      await db.insert(phrasebooks).values({ agentId, version, book, model: HAIKU, writtenAt: d.now() })
-        .onConflictDoUpdate({ target: phrasebooks.agentId, set: { version, book, model: HAIKU, writtenAt: d.now() } });
+      await db.insert(phrasebooks).values({ agentId, version, book, model: modelName(), writtenAt: d.now() })
+        .onConflictDoUpdate({ target: phrasebooks.agentId, set: { version, book, model: modelName(), writtenAt: d.now() } });
       // The blank agent defines itself once, in its first book: its traits, and (L7) its name, bio, emoji and colour, applied
       // through set_profile in this same receipt at no extra model cost. After that only drift (lived experience) moves its
       // traits, so a refresh's traits are ignored. Its name stays too, unless it still has none (a book from before profiles, or

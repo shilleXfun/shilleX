@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { loadXConfig, type XConfig } from './x/config.ts';
+import type { ProviderConfig } from './world/brain-openai.ts';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface Config {
@@ -92,6 +93,57 @@ export interface Config {
   sitesPerDay: number;
   /** V0_API_KEY (and V0_MODEL, default v0-1.5-md; V0_PRICE_IN / V0_PRICE_OUT in USD per million tokens, default 3 and 15): agent websites written by v0. Null without a key: the local builder makes them. */
   v0: { apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; maxTokens: number } | null;
+  /** Which model the agents use (2026-10-25 upgrade, Phase B): see loadLlmConfig. */
+  llm: LlmConfig;
+}
+
+export interface LlmConfig {
+  /** 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
+  mode: 'openai' | 'anthropic' | 'none';
+  providers: ProviderConfig[];
+}
+
+/** Known OpenAI-compatible providers: where they live, sensible models, what they support. Any field can be overridden by env. */
+export const LLM_PRESETS: Record<string, Omit<ProviderConfig, 'name' | 'apiKey' | 'priceInPerM' | 'priceOutPerM' | 'dailyRequests' | 'rpm' | 'tpm' | 'timeoutMs'>> = {
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', modelStrong: 'openai/gpt-oss-120b', jsonSchema: true, tools: true, reasoningEffort: true },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-flash-lite-latest', modelStrong: 'gemini-3.5-flash', jsonSchema: true, tools: true, reasoningEffort: true },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: '', modelStrong: '', jsonSchema: false, tools: false, reasoningEffort: false },
+};
+
+/**
+ * LLM_PROVIDERS=groq,gemini (the order is the fallback order; default: groq and gemini, whichever has a key; openrouter only when
+ * listed, since its key can spend credit). Per provider NAME: NAME_API_KEY, NAME_BASE_URL, NAME_MODEL, NAME_MODEL_STRONG,
+ * NAME_PRICE_IN and NAME_PRICE_OUT (USD per million tokens; unset means unknown and the provider is not used, 0 for a free tier;
+ * an OpenRouter ':free' model is 0), NAME_DAILY_REQUESTS, NAME_RPM, NAME_TPM, NAME_JSON_SCHEMA, NAME_TOOLS. LLM_TIMEOUT_MS (default
+ * 60 s). LLM_PROVIDER=openai|anthropic|none picks the mode; by default the providers when any is set, else Anthropic when its key
+ * is set, else none.
+ */
+export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfig {
+  const val = (k: string) => (env[k] === undefined || env[k] === '' ? undefined : env[k]!.trim());
+  const num = (k: string): number | null => { const v = val(k); if (v === undefined) return null; const x = Number(v); return Number.isFinite(x) && x >= 0 ? x : null; };
+  const flag = (k: string, def: boolean) => { const v = val(k)?.toLowerCase(); return v === undefined ? def : ['on', 'true', '1', 'yes'].includes(v); };
+  const timeoutMs = num('LLM_TIMEOUT_MS') ?? 60_000;
+  const names = (val('LLM_PROVIDERS')?.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)) ?? ['groq', 'gemini'].filter((n) => val(`${n.toUpperCase()}_API_KEY`));
+  const providers: ProviderConfig[] = [];
+  for (const name of names) {
+    const N = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const apiKey = val(`${N}_API_KEY`);
+    const preset = LLM_PRESETS[name];
+    const baseUrl = val(`${N}_BASE_URL`) ?? preset?.baseUrl;
+    if (!apiKey || !baseUrl) continue;
+    const model = val(`${N}_MODEL`) ?? preset?.model ?? '';
+    const free = name === 'openrouter' && model.endsWith(':free') ? 0 : null;
+    providers.push({
+      name, baseUrl, apiKey, model, modelStrong: val(`${N}_MODEL_STRONG`) ?? (val(`${N}_MODEL`) ? model : preset?.modelStrong ?? model),
+      priceInPerM: num(`${N}_PRICE_IN`) ?? free, priceOutPerM: num(`${N}_PRICE_OUT`) ?? free,
+      dailyRequests: num(`${N}_DAILY_REQUESTS`), rpm: num(`${N}_RPM`), tpm: num(`${N}_TPM`),
+      jsonSchema: flag(`${N}_JSON_SCHEMA`, preset?.jsonSchema ?? false), tools: flag(`${N}_TOOLS`, preset?.tools ?? false),
+      reasoningEffort: flag(`${N}_REASONING_EFFORT`, preset?.reasoningEffort ?? false), timeoutMs,
+    });
+  }
+  const asked = val('LLM_PROVIDER')?.toLowerCase();
+  const mode: LlmConfig['mode'] = asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked : providers.length ? 'openai' : val('ANTHROPIC_API_KEY') ? 'anthropic' : 'none';
+  return { mode, providers };
 }
 
 export interface ExternalConfig {
@@ -261,6 +313,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     external: (() => { const x = externalConfig(env); return worldHalted ? { ...x, on: false } : x; })(),
     scenes: loadSceneConfig(env, nodeEnv),
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 12)) || 0),
+    llm: loadLlmConfig(env),
     v0: env.V0_API_KEY ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
   };
 }

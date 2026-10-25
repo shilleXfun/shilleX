@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { agentTurns, agents, siteVersions, wallets } from '../db/schema.ts';
 import { jobStates, redact } from './jobs.ts';
 import type { WorldHandles } from './boot.ts';
+import { RoutedBrain } from './brain-openai.ts';
 
 /** No good engine tick for this long, while the engine runs, is a warning. */
 export const TICK_WARN_MS = 15 * 60_000;
@@ -46,6 +47,7 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     if (lastSiteAt && t.getTime() - lastSiteAt.getTime() > every + SITE_GRACE_MS) warnings.push(`No website built for ${hours(t.getTime() - lastSiteAt.getTime())} (one is due every ${hours(every)}).`);
   }
   if (siteJob && siteJob.failures >= 2) warnings.push(`Website builds failed ${siteJob.failures} times in a row (${siteJob.errorCategory}): ${siteJob.lastError ?? ''}`);
+  if (w.brain instanceof RoutedBrain && !w.brain.status().some((p) => p.why === null)) warnings.push(`No model provider is usable: ${w.brain.status().map((p) => `${p.name}: ${p.why}`).join('; ')}`);
   if (pause?.reason) warnings.push(`Model calls are paused until ${pause.until}: ${redact(pause.reason)}`);
   if (w.engine && w.budget.level() === 'stopped') warnings.push('The model budget of this period is spent: model posts wait, the free engine and site builder go on.');
   for (const j of jobs) {
@@ -62,7 +64,8 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     eligibleAgents: Number(eligible?.n ?? 0),
     sites: { perDay: config.sitesPerDay, lastBuiltAt: iso(lastSiteAt), lastStatus: siteJob?.lastStatus ?? null, lastNote: siteJob?.lastNote ?? null, failuresInRow: siteJob?.failures ?? 0 },
     model: {
-      brain: w.brain ? 'on' : 'off',
+      brain: w.brain ? w.brain.name ?? 'on' : 'off',
+      providers: w.brain instanceof RoutedBrain ? w.brain.status().map((p) => ({ ...p, lastError: p.lastError ? redact(p.lastError) : null })) : [],
       paused: pause?.reason ? { reason: redact(pause.reason), until: pause.until } : null,
       pausesInRow: pause?.trips ?? 0,
       queued: w.moments?.size() ?? 0,

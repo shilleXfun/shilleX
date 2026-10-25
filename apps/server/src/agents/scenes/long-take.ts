@@ -8,7 +8,7 @@ import { runTool } from '../../world/tools.ts';
 import { actorFor } from '../act.ts';
 import { pickWeighted } from '../decide.ts';
 import { depthToolRecord } from '../depth/receipt.ts';
-import { HAIKU, billedCall } from '../haiku.ts';
+import { modelName, billedCall } from '../haiku.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { coinsNow } from '../perceive.ts';
 import { type SceneDeps, affinityMap, agentsOnly, coinBrief, coinLines, eligibleAgents, marketLine, memberLines, memberOf, namesOf, plain } from './cast.ts';
@@ -121,7 +121,7 @@ export async function runLongTake(d: SceneDeps): Promise<'posted' | 'skipped' | 
     const r = await exclusiveTurn(d, author.id, async () => {
       const [agent] = await d.db.select().from(users).where(eq(users.id, author.id));
       if (!agent) return false;
-      const { id: turnId } = await startTurn(d.db, { agentId: author.id, triggers: [{ type: 'heartbeat', note: 'long take' }], model: HAIKU, effort: 'low', promptVersion: LONG_TAKE_PROMPT_VERSION, snapshotId: null, now: d.now() });
+      const { id: turnId } = await startTurn(d.db, { agentId: author.id, triggers: [{ type: 'heartbeat', note: 'long take' }], model: modelName(), effort: 'low', promptVersion: LONG_TAKE_PROMPT_VERSION, snapshotId: null, now: d.now() });
       const toolCalls: ToolCallRecord[] = [];
       let ok = false;
       try {

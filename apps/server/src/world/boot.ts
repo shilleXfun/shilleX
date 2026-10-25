@@ -24,7 +24,7 @@ import { paperMomentHandler } from '../agents/depth/paper.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
-import { haikuBrain, modelBudget } from '../agents/haiku.ts';
+import { brainFromConfig, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
@@ -192,7 +192,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const rng = mulberry32(Date.now() % 2 ** 31);
       // Hand-overs queued before this moment died with the previous process: the engine must see those messages again.
       const bootAt = now();
-      const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
+      // The configured providers (Groq, Gemini…), Claude Haiku, or none: config.llm (agents/haiku.ts brainFromConfig).
+      const brain = opts.brain ?? brainFromConfig(config, now);
       handles.brain = brain;
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
@@ -211,7 +212,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => halt.reason() });
         scenesH.onSceneEnd(() => storiesH?.soon());
       }
-      return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
+      return brain ? `started with ${brain.name ?? 'the model'}` : 'started without a model (no LLM provider is configured; see LLM_PROVIDERS)';
     },
   };
   app.worldHealth = () => worldHealth(app, handles);

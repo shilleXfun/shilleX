@@ -7,7 +7,7 @@ import { finishTurn, startTurn } from '../../world/provenance.ts';
 import { runTool, type ToolOutcome } from '../../world/tools.ts';
 import { actorFor } from '../act.ts';
 import type { EngineDeps } from '../engine.ts';
-import { HAIKU, billedCall, type ModelBudget } from '../haiku.ts';
+import { modelName, billedCall, type ModelBudget } from '../haiku.ts';
 import { MOMENT_MAX_TOKENS, MOMENT_PROMPT_VERSION, MOMENT_WORST, exclusiveTurn } from '../moments.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
 import { depthToolRecord } from './receipt.ts';
@@ -78,7 +78,7 @@ export async function oneShotTool(d: ModelDeps, agentId: string, purpose: string
   const r = await exclusiveTurn(d, agentId, async () => {
     if (!d.budget.canSpend() || !d.budget.canAfford(MOMENT_WORST)) return null;
     // The receipt opens before the call and billedCall books the cost on it, so Budget.load() counts the call after a crash.
-    const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
+    const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: purpose }], model: modelName(), effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const spent = { usd: 0 };
     const seal = (status: 'quiet' | 'failed', usage: TurnUsage) =>
       finishTurn(d.db, turnId, { status, context: [{ kind: 'moment', text: purpose }], reasoning: purpose, toolCalls: [], usage, costUsd: spent.usd, finishedAt: d.now() });

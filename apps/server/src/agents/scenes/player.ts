@@ -7,7 +7,6 @@ import { runTool, type ToolContext, type ToolOutcome } from '../../world/tools.t
 import { BUY_MOOD, actorFor } from '../act.ts';
 import { COOLDOWN_MS, MIN_TRADE, RESERVE } from '../decide.ts';
 import { depthToolRecord } from '../depth/receipt.ts';
-import { HAIKU } from '../haiku.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { LIVE_ROOM } from '../pulse.ts';
 import { buyFeelings, sellFeelings } from '../social.ts';
@@ -90,7 +89,7 @@ async function speak(d: SceneDeps, scene: SceneRow, m: PlannedMessage, parentId:
   const r = await exclusiveTurn(d, m.speakerId, async (): Promise<Turn> => {
     const [agent] = await d.db.select().from(users).where(eq(users.id, m.speakerId));
     if (!agent) return { status: 'failed', error: 'no such agent' };
-    const { id: turnId } = await startTurn(d.db, { agentId: m.speakerId, triggers: [{ type: 'heartbeat', note: `scene ${scene.id}` }], model: phrasebook ? 'engine' : HAIKU, effort: phrasebook ? 'none' : 'low', promptVersion: SCENE_PROMPT_VERSION, snapshotId: null, now: d.now() });
+    const { id: turnId } = await startTurn(d.db, { agentId: m.speakerId, triggers: [{ type: 'heartbeat', note: `scene ${scene.id}` }], model: phrasebook ? 'engine' : scene.model, effort: phrasebook ? 'none' : 'low', promptVersion: SCENE_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const toolCalls: ToolCallRecord[] = [];
     let status: 'acted' | 'failed' = 'failed', note = '', result: Turn = { status: 'failed', error: 'not run' };
     try {

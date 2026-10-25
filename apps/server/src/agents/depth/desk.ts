@@ -3,7 +3,7 @@ import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'driz
 import type { Db } from '../../db/client.ts';
 import { agentDesks, agentTheses, chainTxs, realMarket, realPositions, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
-import { HAIKU } from '../haiku.ts';
+import { modelName } from '../haiku.ts';
 import type { MomentHandler } from '../moments.ts';
 import { eligibleAgents } from '../scenes/cast.ts';
 import type { Traits } from '../types.ts';
@@ -99,7 +99,7 @@ async function handleDesk(d: ModelDeps, agentId: string, t: Traits) {
   if (!input || !style || typeof input.lessons !== 'string') return localDesk(d.db, agentId, t, now);
   const known = new Set(coins.map((c) => c.symbol.toUpperCase()));
   const watch = (Array.isArray(input.watch) ? input.watch : []).filter((x): x is string => typeof x === 'string').map((x) => x.replace(/^\$/, '').toUpperCase()).filter((x) => known.has(x));
-  await writeDesk(d.db, agentId, { style, risk: Number(input.risk) || t.risk, watch, lessons: input.lessons, model: HAIKU }, now);
+  await writeDesk(d.db, agentId, { style, risk: Number(input.risk) || t.risk, watch, lessons: input.lessons, model: modelName() }, now);
 }
 
 /** The `desk` handler passed to createMoments({ handlers }) in bootAgents. */

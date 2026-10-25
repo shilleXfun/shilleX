@@ -8,7 +8,7 @@ import { isReservedUsername } from '../lib/reserved.ts';
 import { TOOLS, runTool, type ToolContext } from '../world/tools.ts';
 import { actorFor, busyFor } from './act.ts';
 import type { EngineDeps } from './engine.ts';
-import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
+import { HAIKU, modelName, billedCall, type ModelBudget } from './haiku.ts';
 import { phrasebookOf } from './phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, cleanModelText, needsPhrasebook, writePhrasebook } from './phrasebook-writer.ts';
 import { rememberEvent } from './state.ts';
@@ -19,6 +19,7 @@ import type { RaisedGate } from './raised/gate.ts';
 import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
 import { keyDriven } from './external/keys.ts';
 import { createModelHalt } from './halt.ts';
+import { ProviderError } from '../world/brain-openai.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
 // A rug's aftermath post waits behind graduations and factions: a betrayal is one big moment among several, not the first.
@@ -56,6 +57,8 @@ export const wrap = (text: string) => `<world_content>${text.replaceAll('</world
 
 /** Errors that will fail every call until a human fixes the account, so the queue halts instead of burning calls. */
 export function accountProblem(e: unknown): string | null {
+  // A provider brain (world/brain-openai.ts) says what kind of failure it was: only these need a human.
+  if (e instanceof ProviderError) return ['auth', 'credit', 'model', 'bad_request'].includes(e.category) ? e.message : null;
   const status = (e as { status?: number })?.status;
   const msg = (e as Error)?.message ?? '';
   if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
@@ -177,7 +180,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     const budget = d.raised?.budgetFor(agentId, o.purpose, d.budget, o.humanId) ?? d.budget;
     if (!(budget.canSpend() && budget.canAfford(MOMENT_WORST))) return NONE;
     const pb = await phrasebookOf(d.db, agentId);
-    const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: HAIKU, effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
+    const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: o.purpose }], model: modelName(), effort: 'low', promptVersion: MOMENT_PROMPT_VERSION, snapshotId: null, now: d.now() });
     const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl };
     const tools = TOOLS.filter((t) => o.tools.includes(t.name));
     const may = (typeof o.mention === 'string' ? [o.mention] : o.mention ?? []).filter(Boolean);
@@ -197,7 +200,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         // The cost is on the receipt before any tool runs, and a call that throws counts its worst case.
         const before = spent.usd;
         let res: BrainResponse;
-        try { res = await billedCall({ db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+        try { res = await billedCall({ db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS, tier: o.style === BIG_MOMENT_STYLE ? 2 : 1 })); }
         finally { if (o.purpose === HUMAN_PURPOSE) addHumanSpend(spent.usd - before); }
         for (const k of Object.keys(usage) as (keyof typeof usage)[]) usage[k] += res.usage[k];
         for (const b of res.content) {

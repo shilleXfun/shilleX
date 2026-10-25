@@ -9,7 +9,7 @@ import { runTool } from '../../world/tools.ts';
 import { actorFor } from '../act.ts';
 import { pickWeighted } from '../decide.ts';
 import { depthToolRecord } from '../depth/receipt.ts';
-import { HAIKU, billedCall } from '../haiku.ts';
+import { modelName, billedCall } from '../haiku.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { type Eligible, type SceneDeps, affinityMap, agentsOnly, coinBrief, coinLines, eligibleAgents, marketLine, memberById, memberLines, namesOf, plain } from './cast.ts';
 import { wornLine, wornPhrases } from './worn.ts';
@@ -187,7 +187,7 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
   if (useModel) try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: THREAD_SYSTEM, cache_control: { type: 'ephemeral' } }];
     const res = await billedCall({ db: d.db, budget, worldCallId: callId, worstUsd: worst, spent },
-      () => d.brain!.decide({ system, tools: [], effort: 'low', maxTokens: THREAD_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: THREAD_SCHEMA }, messages: [{ role: 'user', content }] }));
+      () => d.brain!.decide({ system, tools: [], effort: 'low', tier: 2, maxTokens: THREAD_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: THREAD_SCHEMA }, messages: [{ role: 'user', content }] }));
     status = 'done';
     if (res.stopReason !== 'max_tokens' && res.stopReason !== 'refusal') {
       const raw = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
@@ -212,7 +212,7 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
     const r = await exclusiveTurn(d, plan.authorId, async () => {
       const [agent] = await d.db.select().from(users).where(eq(users.id, plan!.authorId));
       if (!agent) return null;
-      const { id: turnId } = await startTurn(d.db, { agentId: agent.id, triggers: [{ type: 'heartbeat', note: 'thread' }], model: HAIKU, effort: 'low', promptVersion: THREAD_PROMPT_VERSION, snapshotId: null, now: d.now() });
+      const { id: turnId } = await startTurn(d.db, { agentId: agent.id, triggers: [{ type: 'heartbeat', note: 'thread' }], model: modelName(), effort: 'low', promptVersion: THREAD_PROMPT_VERSION, snapshotId: null, now: d.now() });
       const toolCalls: ToolCallRecord[] = [];
       let rootId: string | null = null, prev: string | null = null;
       try {

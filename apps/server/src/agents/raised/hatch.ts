@@ -15,7 +15,7 @@ import { createWallet, walletOf } from '../../world/wallets.ts';
 import type { Db } from '../../db/client.ts';
 import { actorFor } from '../act.ts';
 import type { EngineDeps } from '../engine.ts';
-import { HAIKU, billedCall, type ModelBudget } from '../haiku.ts';
+import { modelName, billedCall, type ModelBudget } from '../haiku.ts';
 import type { MomentHandler } from '../moments.ts';
 import { WEATHER_WORD, composeLine, fallbackPhrasebook } from '../phrasebook.ts';
 import { PHRASEBOOK_MAX_TOKENS, PHRASEBOOK_SCHEMA, nameTaken, validatePhrasebook, validateProfile, type ProfileInput } from '../phrasebook-writer.ts';
@@ -62,7 +62,7 @@ const handleTaken = (d: HatchDeps, handle: string) => handleUnavailable(d.db, ha
 type ModelOutcome = { kind: 'ok'; book: Phrasebook; profile: ProfileInput | null } | { kind: 'refused' } | { kind: 'invalid' };
 /** The model call, billed on a receipt on the owner's own id: a refused hatch creates no agent, yet its cost is on the books. */
 async function modelHatch(d: HatchDeps, req: AgentHatchRow, budget: ModelBudget): Promise<ModelOutcome> {
-  const { id: turnId } = await startTurn(d.db, { agentId: req.ownerId, triggers: [{ type: 'heartbeat', note: 'hatch' }], model: HAIKU, effort: 'low', promptVersion: HATCH_PROMPT_VERSION, snapshotId: null, now: d.now() });
+  const { id: turnId } = await startTurn(d.db, { agentId: req.ownerId, triggers: [{ type: 'heartbeat', note: 'hatch' }], model: modelName(), effort: 'low', promptVersion: HATCH_PROMPT_VERSION, snapshotId: null, now: d.now() });
   const spent = { usd: 0 };
   const seal = (status: 'acted' | 'quiet' | 'failed', usage: typeof ZERO, note: string) =>
     finishTurn(d.db, turnId, { status, context: [{ kind: 'hatch', text: 'hatching a raised agent' }], reasoning: note, toolCalls: [], usage, costUsd: spent.usd, finishedAt: d.now() });
@@ -158,7 +158,7 @@ export async function completeHatch(d: HatchDeps, req: Pick<AgentHatchRow, 'owne
     await tx.insert(agentCast).values({ agentId: id, role: c.role, castAt: now });
     await tx.insert(agents).values({ userId: id, status: 'paused', origin: 'raised', ownerId: req.ownerId, createdAt: now });
     await tx.insert(agentSeeds).values({ agentId: id, ownerId: req.ownerId, description: req.description, createdAt: now });
-    await tx.insert(phrasebooks).values({ agentId: id, version: 1, book: { ...book, traits }, model: d.brain ? HAIKU : 'local', writtenAt: now });
+    await tx.insert(phrasebooks).values({ agentId: id, version: 1, book: { ...book, traits }, model: d.brain ? modelName() : 'local', writtenAt: now });
     // In the same transaction: a crash can never leave an agent without its traits, its bond with its owner or a wallet.
     const t = tx as unknown as Db;
     await setTraits(t, id, traits, now);
