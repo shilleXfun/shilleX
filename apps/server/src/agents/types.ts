@@ -74,6 +74,8 @@ export interface DepthView {
   moodBias: number;                                                                    // weather mood shift, -0.3..0.3, not persisted
   feudsWith: string[];                                                                 // agents this one started a feud with in the last hour (L5)
   lastCallbackAt: string | null;                                                       // when this agent last posted a callback (L6)
+  /** Whom it believes (-1..1) by agent id, trust only (agents/minds.ts); absent before the trust module ran. */
+  trust?: Record<string, number>;
   /** What it is after right now (goals module); tilts its moves. */
   goal?: { kind: AgentGoalKind; why: string; targetId: string | null; mint: string | null; symbol: string | null };
   /** The desk (depth/desk.ts): today's trading plan, and the written plan behind each coin it holds, by mint. */

@@ -1,13 +1,19 @@
 import { and, desc, eq, gte, inArray, isNotNull, lte } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { chainTxs, debts, posts, saidVsDid, users, worldCoins } from '../../db/schema.ts';
+import { agentCommitments, agentTheses, chainTxs, debts, posts, saidVsDid, users, worldCoins } from '../../db/schema.ts';
 import { stanceOf } from './beliefs.ts';
 import type { DepthModule } from './registry.ts';
 
-export interface RepFacts { rugs: number; honestCalls: number; wrongCalls: number; hypocrisy: number; repaid: number; defaulted: number; lent: number }
+/**
+ * The record a reputation is read from. Since 2026-10-25 (Phase C) also the promises it made in public and kept or broke, and the
+ * calls its written plans made: a win is worth less than a broken promise costs, and a loss less than a win earns, so a reasonable
+ * thesis that lost is not ruinous and one lucky trade is not a career.
+ */
+export interface RepFacts { rugs: number; honestCalls: number; wrongCalls: number; hypocrisy: number; repaid: number; defaulted: number; lent: number; kept?: number; broken?: number; won?: number; lost?: number }
 
 export function reputationScore(f: RepFacts): number {
-  return Math.tanh(0.25 * f.honestCalls - 0.15 * f.wrongCalls - 0.6 * f.rugs - 0.3 * f.hypocrisy + 0.3 * f.repaid - 0.6 * f.defaulted + 0.1 * f.lent);
+  return Math.tanh(0.25 * f.honestCalls - 0.15 * f.wrongCalls - 0.6 * f.rugs - 0.3 * f.hypocrisy + 0.3 * f.repaid - 0.6 * f.defaulted + 0.1 * f.lent
+    + 0.05 * (f.kept ?? 0) - 0.5 * (f.broken ?? 0) + 0.08 * (f.won ?? 0) - 0.04 * (f.lost ?? 0));
 }
 
 const SIX_H = 6 * 3600_000;
@@ -46,7 +52,13 @@ export async function repFacts(db: Db, userId: string, now: Date): Promise<RepFa
   const repaid = (await db.select({ id: debts.id }).from(debts).where(and(eq(debts.borrowerId, userId), isNotNull(debts.repaidAt)))).length;
   const defaulted = (await db.select({ id: debts.id }).from(debts).where(and(eq(debts.borrowerId, userId), isNotNull(debts.defaultedAt)))).length;
   const lent = (await db.select({ id: debts.id }).from(debts).where(eq(debts.lenderId, userId))).length;
-  return { rugs, honestCalls, wrongCalls, hypocrisy, repaid, defaulted, lent };
+  const promises = await db.select({ status: agentCommitments.status }).from(agentCommitments).where(eq(agentCommitments.agentId, userId));
+  const closed = await db.select({ pnl: agentTheses.pnlPct }).from(agentTheses).where(and(eq(agentTheses.agentId, userId), isNotNull(agentTheses.pnlPct)));
+  return {
+    rugs, honestCalls, wrongCalls, hypocrisy, repaid, defaulted, lent,
+    kept: promises.filter((p) => p.status === 'kept').length, broken: promises.filter((p) => p.status === 'broken').length,
+    won: closed.filter((t) => (t.pnl ?? 0) > 0).length, lost: closed.filter((t) => (t.pnl ?? 0) <= 0).length,
+  };
 }
 
 export class ReputationCache {

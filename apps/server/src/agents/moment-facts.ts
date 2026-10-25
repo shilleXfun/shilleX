@@ -1,5 +1,6 @@
 import type { EngineDeps } from './engine.ts';
 import { aff, affinityMap, agentsOnly, agoText, coinBrief, coinLines, exchangesBetween, feelingWord, marketLine, memberById, memberLines, namesOf } from './scenes/cast.ts';
+import { MEMORY_HEADING, recallLines } from './minds.ts';
 
 /**
  * How a big-moment post is written (launch, rug, graduation, feud, faction manifesto): a real post, not a one-liner. Replaces
@@ -34,6 +35,9 @@ export async function momentFacts(d: Pick<EngineDeps, 'db' | 'chain' | 'now'>, a
       if (ex.length) parts.push(`YOUR RECENT REPLIES TO EACH OTHER:\n${ex.map((x) => `- ${x.fromId === agentId ? 'you' : `@${other.username}`} ${agoText(x.at, now)}: "${x.body}"`).join('\n')}`);
     }
   }
+  // What it remembers (agents/minds.ts): real records only, so a post can say "last time you…" and be right.
+  const mem = await recallLines(d.db, agentId, { aboutId: o.otherId ?? null, asset: o.mint ?? null, limit: 5 }, now);
+  if (mem.length) parts.push(`${MEMORY_HEADING}\n${mem.join('\n')}`);
   const { text, agents } = await agentsOnly(d.db, parts.join('\n\n'));
   return { text, mentions: agents.map((r) => r.username).filter((u) => u.toLowerCase() !== me?.username.toLowerCase()) };
 }

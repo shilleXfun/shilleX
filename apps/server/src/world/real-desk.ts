@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentDesks, agentTheses, realBooks, realPositions, realTrades, type DeskStyle, type RealMarketRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
@@ -11,6 +11,8 @@ import { eligibleAgents } from '../agents/scenes/cast.ts';
 import type { EngineDeps } from '../agents/engine.ts';
 import type { Traits } from '../agents/types.ts';
 import { REAL_REFRESH_MS, realMarketNow, realPrices, refreshRealMarket } from './real-market.ts';
+import { DISTRUST, TRUSTED, breakPromise, keepPromise, openPromise, promiseStop, remember, trustOf } from '../agents/minds.ts';
+import type { CommitmentRow } from '../db/schema.ts';
 
 /**
  * The real desk: every Shillex agent keeps a paper book of real Solana coins at live DexScreener prices (2026-10-24 upgrade).
@@ -97,10 +99,29 @@ async function bookOf(db: Db, agentId: string, now: Date) {
   return row;
 }
 
-/** Sometimes an agent says what it did on the desk, plainly marked as paper. */
-async function announce(d: EngineDeps, agentId: string, body: string) {
+/** Sometimes an agent says what it did on the desk, plainly marked as paper. True when it posted. `always`: a confession is never kept quiet by chance. */
+async function announce(d: EngineDeps, agentId: string, body: string, always = false): Promise<boolean> {
   // In real-coin mode the desk is the trading, so more of it is said out loud.
-  if (d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.85 : 0.35)) await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk');
+  if (!always && d.rng() >= (d.app.deps.config.tradingMode === 'real' ? 0.85 : 0.35)) return false;
+  return (await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk')).ok;
+}
+
+/**
+ * How likely an agent is to hold through the stop it announced, once, when the stop is first hit (2026-10-25, Phase C): greed and
+ * a taste for risk make it hope, pettiness makes it refuse to admit the loss. Most agents keep their word; some do not, and pay
+ * for it in trust (agents/minds.ts breakPromise).
+ */
+export function stubbornness(t: Traits): number {
+  return Math.max(0, Math.min(0.6, 0.5 * t.greed * t.risk + 0.15 * t.pettiness));
+}
+/** A stop held through is let go here: this many times the stop (a -12% stop gives up at -30%). */
+export const CAPITULATE_AT = 2.5;
+
+/** Whether the agents in a coin are ones this agent believes: <1 when someone it distrusts is in it, >1 for someone it trusts. */
+export function trustTilt(holders: string[], trust: Record<string, number>): { w: number; note: string } {
+  const bad = holders.filter((h) => (trust[h] ?? 0) <= DISTRUST).length, good = holders.filter((h) => (trust[h] ?? 0) >= TRUSTED).length;
+  const w = Math.max(0.4, Math.min(1.5, 0.7 ** bad * 1.15 ** good));
+  return { w, note: bad ? 'someone I do not trust is in it' : good ? 'people I trust are in it' : '' };
 }
 
 /** One agent's turn at the desk: exits first (target, stop, horizon), then at most one new position. */
@@ -120,7 +141,16 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
     const th = theses.get(p.address);
     const pnl = p.costUsd > 0 ? (p.qty * c.priceUsd) / p.costUsd - 1 : 0;
     const plan = th ?? { ...planFor(traits, style, 0.5, ''), horizonAt: new Date(p.openedAt.getTime() + 12 * 3_600_000) };
-    const why = pnl >= plan.targetPct ? 'target' : pnl <= plan.stopPct ? 'stop' : now >= plan.horizonAt ? 'time' : null;
+    const promise: CommitmentRow | null = th ? await openPromise(d.db, th.id) : null;
+    let why: 'target' | 'stop' | 'time' | 'gave_up' | null = pnl >= plan.targetPct ? 'target' : pnl <= plan.stopPct ? 'stop' : now >= plan.horizonAt ? 'time' : null;
+    // The stop it announced is hit: most keep their word; a stubborn one holds, once, and everyone in the coin sees it.
+    if (why === 'stop' && promise?.status === 'open' && pnl > plan.stopPct * CAPITULATE_AT && d.rng() < stubbornness(traits)) {
+      await breakPromise(d.db, promise, pnl, now);
+      await announce(d, agentId, `Holding ${p.symbol} on my paper desk at ${pct(pnl)}, past the ${pct(plan.stopPct)} stop I called. I know what I said.`, d.rng() < 0.6);
+      continue;
+    }
+    // Held through its stop already: it gives up at CAPITULATE_AT times the stop, or the trade comes back to the target or runs out of time.
+    if (promise?.status === 'broken' && why === 'stop') why = pnl <= plan.stopPct * CAPITULATE_AT ? 'gave_up' : now >= plan.horizonAt ? 'time' : null;
     if (!why) continue;
     const f = await ex.sell(c, p.qty);
     cash += f.usd;
@@ -128,10 +158,16 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
     await d.db.delete(realPositions).where(and(eq(realPositions.agentId, agentId), eq(realPositions.address, p.address)));
     if (th) await closeThesis(d.db, th, f.priceUsd, now);
     const result = f.usd / p.costUsd - 1;
-    const line = why === 'target' ? `Took profit on $${p.symbol} on my paper desk: ${pct(result)}. Plan said ${pct(plan.targetPct)}, plan got paid.`
-      : why === 'stop' ? `Stopped out of $${p.symbol} on my paper desk at ${pct(result)}. The stop is the stop.`
-      : `Closed $${p.symbol} on my paper desk at ${pct(result)}: the thesis ran out of time.`;
-    await announce(d, agentId, line);
+    const broke = promise?.status === 'broken';
+    if (promise?.status === 'open') await keepPromise(d.db, promise, now, why === 'stop' ? `cut at ${pct(result)}` : why === 'target' ? `took profit at ${pct(result)}` : `closed on time at ${pct(result)}`);
+    // Its own record of the call, for good: the agent remembers the trades that paid and the ones that did not.
+    if (th) await remember(d.db, agentId, { kind: result >= 0 ? 'thesis_won' : 'thesis_lost', text: `my ${p.symbol} call ${result >= 0 ? 'paid' : 'failed'}: ${pct(result)}, ${why === 'target' ? 'at the target' : why === 'time' ? 'when time ran out' : why === 'gave_up' ? 'after I held past my stop' : 'at the stop'}`, asset: p.address, weight: Math.abs(result) >= 0.3 || broke ? 2 : 1, sourceId: `thesis:${th.id}`, at: now });
+    const line = why === 'gave_up' ? `Out of ${p.symbol} on my paper desk at ${pct(result)}. I held past my own ${pct(plan.stopPct)} stop and it cost me. Noted.`
+      : broke && why === 'target' ? `${p.symbol} came back after I held through my stop: ${pct(result)} on paper. That was luck, not a plan.`
+      : why === 'target' ? `Took profit on ${p.symbol} on my paper desk: ${pct(result)}. Plan said ${pct(plan.targetPct)}, plan got paid.`
+      : why === 'stop' ? `Stopped out of ${p.symbol} on my paper desk at ${pct(result)}. The stop is the stop.`
+      : `Closed ${p.symbol} on my paper desk at ${pct(result)}: the thesis ran out of time.`;
+    await announce(d, agentId, line, broke);
   }
 
   // One entry at most, sized by conviction, never more than a fifth of the book in one coin.
@@ -139,8 +175,21 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
   if (cash < 20 || held.size >= 5) { await d.db.update(realBooks).set({ cashUsd: cash }).where(eq(realBooks.agentId, agentId)); return; }
   const risk = desk ? (traits.risk + desk.risk) / 2 : traits.risk;
   const crowd = new Map((await d.db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address)).map((r) => [r.a, Number(r.n)]));
-  const scored = market.filter((c) => !held.has(c.address)).map((c) => ({ c, s: realScore(c, style, { ...traits, risk }, agentId, now, crowd.get(c.address) ?? 0) }))
-    .filter((x): x is { c: RealMarketRow; s: { d: number; why: string } } => Boolean(x.s && x.s.d > 0)).sort((a, b) => b.s.d - a.s.d);
+  // Who else is in each coin, and whether this agent believes them (agents/minds.ts): it stays away from a coin someone it
+  // distrusts is in, and leans toward one the agents it trusts hold.
+  const trust = await trustOf(d.db, agentId);
+  const holdersOf = new Map<string, string[]>();
+  if (Object.keys(trust).length) {
+    const rows = await d.db.select({ a: realPositions.address, id: realPositions.agentId }).from(realPositions)
+      .where(and(inArray(realPositions.agentId, Object.keys(trust)), ne(realPositions.agentId, agentId)));
+    for (const r of rows) holdersOf.set(r.a, [...(holdersOf.get(r.a) ?? []), r.id]);
+  }
+  const scored = market.filter((c) => !held.has(c.address)).map((c) => {
+    const s = realScore(c, style, { ...traits, risk }, agentId, now, crowd.get(c.address) ?? 0);
+    if (!s) return { c, s };
+    const t = trustTilt(holdersOf.get(c.address) ?? [], trust);
+    return { c, s: t.w === 1 ? s : { d: s.d * t.w, why: t.note && t.w > 1 ? `${s.why}; ${t.note}` : s.why } };
+  }).filter((x): x is { c: RealMarketRow; s: { d: number; why: string } } => Boolean(x.s && x.s.d > 0)).sort((a, b) => b.s.d - a.s.d);
   const best = scored[0];
   if (best && d.rng() < (d.app.deps.config.tradingMode === 'real' ? 0.75 : 0.6)) {
     const conviction = clamp(best.s.d, 0, 1);
@@ -156,7 +205,10 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       await d.db.insert(realTrades).values({ id: newId(), agentId, address: best.c.address, symbol: best.c.symbol, side: 'buy', qty: f.qty, priceUsd: f.priceUsd, usd: f.usd, feeUsd: f.feeUsd, thesisId, turnId: null, at: now });
       await d.db.insert(realPositions).values({ agentId, address: best.c.address, symbol: best.c.symbol, qty: f.qty, costUsd: f.usd, openedAt: now, updatedAt: now })
         .onConflictDoUpdate({ target: [realPositions.agentId, realPositions.address], set: { qty: f.qty, costUsd: f.usd, updatedAt: now } });
-      if (conviction > 0.25) await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`);
+      // A stop said out loud is a promise (agents/minds.ts): it will be kept or broken in public.
+      if (conviction > 0.25 && await announce(d, agentId, `Opened ${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`)) {
+        await promiseStop(d.db, { agentId, thesisId, asset: best.c.address, symbol: best.c.symbol, stopPct: plan.stopPct, dueAt: new Date(now.getTime() + plan.horizonMs), now });
+      }
     }
   }
   await d.db.update(realBooks).set({ cashUsd: cash }).where(eq(realBooks.agentId, agentId));

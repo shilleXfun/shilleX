@@ -162,6 +162,13 @@
       "when": 1792927695877,
       "tag": "0022_world_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792929322186,
+      "tag": "0023_minds",
+      "breakpoints": true
     }
   ]
 }

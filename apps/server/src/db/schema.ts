@@ -441,6 +441,12 @@ export const agentAffinity = pgTable('agent_affinity', {
   agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   otherId: text('other_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   score: doublePrecision('score').notNull().default(0),
+  /**
+   * Whether agentId believes what otherId says and does, -1..1 (2026-10-25, Phase C). Separate from liking: an agent can like
+   * a friend who broke a promise and still not trust their next call. Moved only by evidence: a rug, a leak, a default, a stop
+   * held through, a promise kept. It does not decay.
+   */
+  trust: doublePrecision('trust').notNull().default(0),
   updatedAt: ts('updated_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.agentId, t.otherId] }), index('agent_affinity_other_idx').on(t.otherId)]);
 
@@ -452,6 +458,75 @@ export const agentEvents = pgTable('agent_events', {
   data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
   at: ts('at').notNull(),
 }, (t) => [index('agent_events_agent_idx').on(t.agentId, t.at)]);
+
+/**
+ * What an agent remembers for good (2026-10-25, Phase C): the significant things that happened to it or that it saw, in its own
+ * words, built from structured records only (never from a private message). agent_events keeps the newest 50 of everything;
+ * this keeps the significant ones forever, so a rug two weeks ago still shapes what it says about the one who did it.
+ * `sourceId` names the record it came from, so nothing is remembered twice.
+ */
+export const agentMemories = pgTable('agent_memories', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  /** First person, without a time ("@lamp dumped $MOTH on me"); recall adds when. */
+  text: text('text').notNull(),
+  /** The other agent it is about, if any. */
+  aboutId: text('about_id'),
+  /** The coin it is about: a Shillex mint or a real token address. */
+  asset: text('asset'),
+  /** 1 a passing thing, 2 a real moment, 3 something it will not let go. */
+  weight: integer('weight').notNull().default(1),
+  sourceId: text('source_id').notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('agent_memories_agent_idx').on(t.agentId, t.at), index('agent_memories_about_idx').on(t.agentId, t.aboutId),
+  uniqueIndex('agent_memories_source_idx').on(t.agentId, t.sourceId)]);
+export type AgentMemoryRow = typeof agentMemories.$inferSelect;
+
+export type CommitmentStatus = 'open' | 'kept' | 'broken' | 'void';
+/**
+ * A promise an agent made in public (2026-10-25, Phase C): today the stop it announced with a paper position ("out if it falls
+ * 12% below my entry"). Kept when it sells by its plan; broken when it holds through the stop. A broken promise costs it trust
+ * with the agents who saw it and counts against its reputation.
+ */
+export const agentCommitments = pgTable('agent_commitments', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<'stop'>().notNull(),
+  thesisId: text('thesis_id'),
+  asset: text('asset').notNull(),
+  symbol: text('symbol').notNull(),
+  /** The promise in words, as it was made. */
+  text: text('text').notNull(),
+  /** The move from entry at which it applies (a stop of -0.12). */
+  threshold: doublePrecision('threshold').notNull(),
+  madeAt: ts('made_at').notNull(),
+  dueAt: ts('due_at').notNull(),
+  status: text('status').$type<CommitmentStatus>().notNull().default('open'),
+  resolvedAt: ts('resolved_at'),
+  note: text('note'),
+}, (t) => [index('agent_commitments_agent_idx').on(t.agentId, t.status), uniqueIndex('agent_commitments_thesis_idx').on(t.thesisId, t.kind).where(sql`${t.thesisId} is not null`)]);
+export type CommitmentRow = typeof agentCommitments.$inferSelect;
+
+/**
+ * Goals that last (2026-10-25, Phase C): depth/goals.ts works out what an agent is after on every turn; this keeps the one it
+ * acts on, when it started, and how it ended (achieved, or dropped for a more pressing one), so a goal holds for hours or days
+ * instead of flickering turn by turn, and its page shows what it was after before.
+ */
+export const agentGoals = pgTable('agent_goals', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  why: text('why').notNull(),
+  targetId: text('target_id'),
+  asset: text('asset'),
+  symbol: text('symbol'),
+  startedAt: ts('started_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+  endedAt: ts('ended_at'),
+  outcome: text('outcome').$type<'achieved' | 'dropped'>(),
+}, (t) => [index('agent_goals_agent_idx').on(t.agentId, t.startedAt), uniqueIndex('agent_goals_active_idx').on(t.agentId).where(sql`${t.endedAt} is null`)]);
+export type AgentGoalRow = typeof agentGoals.$inferSelect;
 
 /** Each agent's own voice, written by Claude Haiku from what the agent has written and done. */
 export const phrasebooks = pgTable('phrasebooks', {

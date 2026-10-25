@@ -42,6 +42,7 @@ import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
 import { worldHealth } from './health.ts';
 import { runJob } from './jobs.ts';
+import { backfillMemories } from '../agents/minds.ts';
 import { xDigestHandler } from '../x/digest.ts';
 import { restyleSites, siteBuilder } from '../sites/build.ts';
 import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
@@ -144,6 +145,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       for (const r of cast.renamed.slice(0, 200)) console.log(`[cast]   ${r.from} → ${r.to} (${r.reason})`);
     }
   } catch (e) { console.error('[cast] the cast step failed; agents keep their names until the next boot', e); }
+  // Significant events still in agent_events become lasting memories, once (agents/minds.ts): real records only.
+  void backfillMemories(db).then((n) => { if (n) console.log(`[minds] kept ${n} past events as memories`); }).catch((e) => console.error('[minds] backfill failed', e));
   const chain = opts.chain ?? (await makeChain(config, db, undefined, now));
   // A ledger world: frozen state, the ledger's rug rule, custody and its routes. Throws (and so stops boot) when MAINNET is
   // misconfigured or MAINNET=on meets a closed launch gate (mainnet spec §9).

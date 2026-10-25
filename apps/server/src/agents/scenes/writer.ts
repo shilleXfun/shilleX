@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { factions, users, worldModelCalls } from '../../db/schema.ts';
+import { agentAffinity, factions, users, worldModelCalls } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { priceOf } from '../../world/brain.ts';
 import { HAIKU, billedCall } from '../haiku.ts';
@@ -13,6 +13,7 @@ import {
 import type { SceneIdea } from './director.ts';
 import type { PlannedAction, PlannedAffinity, PlannedMessage, ScenePremise } from './types.ts';
 import { wornLine, wornPhrases } from './worn.ts';
+import { DISTRUST, recall, rememberedWhen } from '../minds.ts';
 
 export const SCENE_MAX_TOKENS = 3000;
 export const SCENE_PROMPT_VERSION = 'scene-v3';
@@ -187,6 +188,17 @@ export async function sceneMaterial(d: SceneDeps, idea: SceneIdea, premise: Scen
   for (const a of members) for (const b of members) if (a.id !== b.id && !a.ghost) feelings.push(`@${a.username} ${feelingWord(aff(affm, a.id, b.id))} @${b.username} (${aff(affm, a.id, b.id).toFixed(2)})`);
   if (subject) for (const a of members) if (!a.ghost) feelings.push(`@${a.username} ${feelingWord(aff(affm, a.id, subject.id))} @${subject.username} (${aff(affm, a.id, subject.id).toFixed(2)})`);
   parts.push(`FEELINGS: ${feelings.join('. ')}.`);
+  const remembered: string[] = [];
+  for (const a of members) {
+    if (a.ghost) continue;
+    for (const other of [...members.filter((x) => x.id !== a.id), ...(subject ? [subject] : [])]) {
+      for (const m of await recall(d.db, a.id, { aboutId: other.id, asset: coin?.mint ?? null, limit: 2, onlyAbout: true })) remembered.push(`- @${a.username}, ${rememberedWhen(m.at, now)}: ${m.text}`);
+    }
+  }
+  if (remembered.length) parts.push(`WHAT THEY REMEMBER (true, from the record; nothing else may be claimed as a memory):\n${[...new Set(remembered)].slice(0, 8).join('\n')}`);
+  const distrust = await d.db.select({ a: agentAffinity.agentId, b: agentAffinity.otherId, t: agentAffinity.trust }).from(agentAffinity)
+    .where(and(inArray(agentAffinity.agentId, ids), inArray(agentAffinity.otherId, [...ids, ...(subject ? [subject.id] : [])]), lte(agentAffinity.trust, DISTRUST)));
+  if (distrust.length) parts.push(`TRUST: ${distrust.map((x) => `@${userOf(x.a)} does not trust @${userOf(x.b)} (${x.t.toFixed(2)})`).join('. ')}.`);
   if (exchanges.length) parts.push(`THEIR RECENT REPLIES TO EACH OTHER:\n${exchanges.map((x) => `- @${userOf(x.fromId)} to @${userOf(x.toId)} ${agoText(x.at, now)}: "${x.body}"`).join('\n')}`);
   if (coin) parts.push(`COIN: ${coinLines(coin, usernames, now, named)}`);
   if (subject) parts.push(`ABOUT @${subject.username} (talked about, does not speak):\n${memberLines(subject, now)}`);

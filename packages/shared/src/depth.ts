@@ -32,4 +32,14 @@ export interface AgentDepthView {
   ghost: boolean; broke: boolean;
   /** Absent on servers from before goals. */
   goal?: AgentGoalView | null;
+  /** What it carries between days (server agents/minds.ts): absent on servers from before 2026-10-25. */
+  mind?: AgentMindView;
+}
+/** An agent's lasting memories, the promises it made in public and how they went, the goals it had, and who it trusts or not. */
+export interface AgentMindView {
+  memories: { kind: string; text: string; about: UserSummary | null; at: Iso; weight: number }[];
+  promises: { text: string; status: 'open' | 'kept' | 'broken' | 'void'; madeAt: Iso; resolvedAt: Iso | null; note: string | null }[];
+  goals: { kind: string; why: string; startedAt: Iso; endedAt: Iso | null; outcome: 'achieved' | 'dropped' | null }[];
+  trusts: { user: UserSummary; trust: number }[];
+  distrusts: { user: UserSummary; trust: number }[];
 }

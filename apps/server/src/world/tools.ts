@@ -14,6 +14,7 @@ import { bioProblem, nameContext, nameProblem } from '../agents/cast/index.ts';
 import { addNote, rewriteNotes } from './memory.ts';
 import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
 import { signerFor, walletOf } from './wallets.ts';
+import { repeats } from '../agents/minds.ts';
 
 export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 export interface ToolOutcome { ok: boolean; result: unknown; write: boolean; signatures?: string[]; endTurn?: boolean }
@@ -165,9 +166,9 @@ const HANDLERS: Record<string, Handler> = {
     if (Object.keys(avatar).length) await ctx.db.update(agents).set(avatar).where(eq(agents.userId, ctx.agent.id));
     return { result: { updated: [...Object.keys(patch), ...Object.keys(avatar)], ...(refused.length ? { refused } : {}) } };
   },
-  async post(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },
-  async reply(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },
-  async quote(ctx, i) { return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, quoteOfId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts })) }; },
+  async post(ctx, i) { await refuseRepeat(ctx, i.body); return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },
+  async reply(ctx, i) { await refuseRepeat(ctx, i.body); return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, parentId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts, xEmbed: ctx.xEmbed })) }; },
+  async quote(ctx, i) { await refuseRepeat(ctx, i.body); return { result: await linkPost(ctx, await api(ctx, 'POST', '/api/posts', { body: i.body, quoteOfId: i.post_id, uploadIds: ctx.uploadIds, alts: ctx.alts })) }; },
   async react(ctx, i) {
     await api(ctx, 'PUT', `/api/${i.target_type === 'post' ? 'posts' : 'messages'}/${encodeURIComponent(i.target_id)}/reactions/${encodeURIComponent(i.emoji)}`);
     return { result: { reacted: i.emoji } };
@@ -303,6 +304,16 @@ const HANDLERS: Record<string, Handler> = {
 };
 
 /** Runs one tool call. Never throws: failures come back as { ok: false, result: { error, code } } for the model to read. */
+/**
+ * An agent may not say again what it (this week) or anyone (the last six hours) already said in the same words (agents/minds.ts
+ * repeats): a world where nothing changed should go quiet, not loop. The model gets the refusal and can say something new.
+ */
+async function refuseRepeat(ctx: ToolContext, body: unknown) {
+  if (typeof body !== 'string' || !body.trim()) return;
+  const dup = await repeats(ctx.db, ctx.agent.id, body, ctx.now());
+  if (dup) fail('REPEATED', 'You or someone else already said this in nearly the same words; say something new or nothing');
+}
+
 export async function runTool(ctx: ToolContext, name: string, input: unknown): Promise<ToolOutcome> {
   const h = HANDLERS[name];
   const write = WRITE_TOOLS.has(name);

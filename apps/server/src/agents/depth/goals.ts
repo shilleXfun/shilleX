@@ -6,6 +6,7 @@ import type { Candidate, Traits } from '../types.ts';
 import { recentEvents } from '../state.ts';
 import { eventText, GRUDGES } from './memory.ts';
 import type { DepthModule } from './registry.ts';
+import { persistGoal } from '../minds.ts';
 
 /**
  * Goals (owner, 2026-10-14: a better brain, and agents people can understand). Every agent always has one thing it is
@@ -112,10 +113,11 @@ export const goalsModule: DepthModule = {
   async perceive(d, v) {
     const created = new Map(v.coins.map((c) => [c.mint, c]));
     const ownCoins = v.wallet.positions.filter((p) => p.createdByMe).map((p) => ({ mint: p.mint, symbol: p.symbol, holding: p.raw > 0, launchedAt: new Date(created.get(p.mint)?.launchedAt ?? 0) }));
-    v.depth.goal = await goalFromDb(d.db, v.agent.id, d.now(), {
+    // The goal it acts on lasts (agents/minds.ts persistGoal): a fresh one replaces it only when more pressing, or after a while.
+    v.depth.goal = await persistGoal(d.db, v.agent.id, await goalFromDb(d.db, v.agent.id, d.now(), {
       traits: v.state.traits, lamports: v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0), affinity: v.affinity, allies: v.depth.agentAllies.length, ownCoins,
       faction: v.depth.faction ? { name: v.depth.faction.name, coinMint: v.depth.faction.coinMint } : null,
-    });
+    }), d.now());
   },
   modify(v, cs) {
     const g = v.depth.goal;

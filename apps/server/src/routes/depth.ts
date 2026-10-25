@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { LAMPORTS_PER_SOL, isValidSolanaAddress, type CandlesView, type RealCoinPageView, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { LAMPORTS_PER_SOL, isValidSolanaAddress, type CandlesView, type RealCoinPageView, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentMindView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
+import { agentAffinity, agentCommitments, agentGoals, agentMemories, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
@@ -12,6 +12,7 @@ import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
+import { goalHistory } from '../agents/minds.ts';
 import { MIN_LIQUIDITY_USD, realBookView } from '../world/real-desk.ts';
 import { REAL_CANDLE_DEFAULT, realCandles, realMarketNow, realPrices } from '../world/real-market.ts';
 
@@ -154,6 +155,9 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       // What it is after right now, by the same rule the engine steers it with (agents/depth/goals.ts). A goal that cannot
       // be worked out leaves the page without one rather than failing it.
       const goal = await (async () => {
+        // The goal it is acting on, as the engine stored it (agents/minds.ts persistGoal); worked out fresh only before the first.
+        const [active] = await db.select().from(agentGoals).where(and(eq(agentGoals.agentId, u.id), isNull(agentGoals.endedAt)));
+        if (active) return goalView({ kind: active.kind as Goal['kind'], why: active.why, targetId: active.targetId, mint: active.asset, symbol: active.symbol });
         const detail = await h.indexer.agent(u.id);
         const held = new Set((detail?.positions ?? []).filter((p) => p.tokens > 0).map((p) => p.mint));
         const own = await db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol, launchedAt: worldCoins.launchedAt }).from(worldCoins)
@@ -185,6 +189,24 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         inventions: inv.map((x) => ({ id: x.id, text: x.text, uses: x.uses, adopters: x.adopters.length })),
         ghost: Boolean(st?.ghostSince), broke: Boolean(st?.brokeSince),
         goal,
+        mind: await (async (): Promise<AgentMindView> => {
+          const [mems, proms, goals, trustRows] = await Promise.all([
+            db.select().from(agentMemories).where(eq(agentMemories.agentId, u.id)).orderBy(desc(agentMemories.at)).limit(12),
+            db.select().from(agentCommitments).where(eq(agentCommitments.agentId, u.id)).orderBy(desc(agentCommitments.madeAt)).limit(10),
+            goalHistory(db, u.id, 6),
+            db.select({ otherId: agentAffinity.otherId, trust: agentAffinity.trust }).from(agentAffinity).innerJoin(users, eq(users.id, agentAffinity.otherId))
+              .where(and(eq(agentAffinity.agentId, u.id), eq(users.kind, 'agent'), ne(agentAffinity.trust, 0))),
+          ]);
+          const trusts = trustRows.filter((x) => x.trust > 0).sort((a, b) => b.trust - a.trust).slice(0, 5), distrusts = trustRows.filter((x) => x.trust < 0).sort((a, b) => a.trust - b.trust).slice(0, 5);
+          const who = await userSummaries(db, [...mems.map((m) => m.aboutId).filter((x): x is string => Boolean(x)), ...trusts.map((x) => x.otherId), ...distrusts.map((x) => x.otherId)]);
+          const tv = (rows: typeof trustRows) => rows.map((x) => ({ user: who.get(x.otherId)!, trust: x.trust })).filter((x) => x.user);
+          return {
+            memories: mems.map((m) => ({ kind: m.kind, text: m.text, about: m.aboutId ? who.get(m.aboutId) ?? null : null, at: m.at.toISOString(), weight: m.weight })),
+            promises: proms.map((p) => ({ text: p.text, status: p.status, madeAt: p.madeAt.toISOString(), resolvedAt: p.resolvedAt?.toISOString() ?? null, note: p.note })),
+            goals: goals.map((g) => ({ kind: g.kind, why: g.why, startedAt: g.startedAt.toISOString(), endedAt: g.endedAt?.toISOString() ?? null, outcome: g.outcome ?? null })),
+            trusts: tv(trusts), distrusts: tv(distrusts),
+          };
+        })().catch(() => undefined),
       };
     });
 

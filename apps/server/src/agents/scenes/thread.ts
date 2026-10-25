@@ -15,6 +15,7 @@ import { type Eligible, type SceneDeps, affinityMap, agentsOnly, coinBrief, coin
 import { wornLine, wornPhrases } from './worn.ts';
 import { runningCast } from './views.ts';
 import { cleanLine, sceneWorstUsd } from './writer.ts';
+import { MEMORY_HEADING, recallLines } from '../minds.ts';
 
 /**
  * Threads (2026-10-24 upgrade: "huge theses on coins, calling someone out with a post and 4 replies, like ZachXBT"). A few times
@@ -170,7 +171,8 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
   if (!plan) return 'skipped';
   const author = await memberById(d, plan.authorId);
   if (!author) return 'skipped';
-  const scrubbed = await agentsOnly(d.db, [`THE AUTHOR:\n${memberLines(author, now)}`, `KIND: ${plan.kind}`, ...plan.facts].join('\n\n'));
+  const mem = await recallLines(d.db, author.id, { asset: plan.thesis?.asset ?? null, limit: 4 }, now);
+  const scrubbed = await agentsOnly(d.db, [`THE AUTHOR:\n${memberLines(author, now)}`, `KIND: ${plan.kind}`, ...plan.facts, ...(mem.length ? [`${MEMORY_HEADING}\n${mem.join('\n')}`] : [])].join('\n\n'));
   const names = new Map(scrubbed.agents.map((a) => [a.username.toLowerCase(), a.id]));
   const usernames = new Map(scrubbed.agents.map((a) => [a.id, a.username]));
   const content = `<world_content>\n${scrubbed.text.replaceAll('</world_content>', '')}\n</world_content>${wornLine(await wornPhrases(d.db, now))}\n\nWrite @${author.username}'s ${plan.kind} thread about ${plan.about}.`;

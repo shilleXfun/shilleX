@@ -5,6 +5,7 @@ import { agentAffinity, agentEvents, agentState, type AgentStateRow } from '../d
 import { newId } from '../lib/ids.ts';
 import type { Feeling } from './social.ts';
 import type { AgentView, Trait, Traits } from './types.ts';
+import { promoteEvent } from './minds.ts';
 
 export const TRAITS: Trait[] = ['risk', 'chattiness', 'loyalty', 'pettiness', 'greed', 'humor', 'curiosity'];
 const ENERGY_PER_MINUTE = 0.03; // a resting agent is back to full in about half an hour
@@ -83,10 +84,13 @@ export async function affinitiesOf(db: Db, agentId: string): Promise<Record<stri
 }
 
 export async function rememberEvent(db: Db, agentId: string, kind: string, data: Record<string, unknown>, now: Date): Promise<void> {
-  await db.insert(agentEvents).values({ id: newId(), agentId, kind, data, at: now });
+  const id = newId();
+  await db.insert(agentEvents).values({ id, agentId, kind, data, at: now });
   const old = await db.select({ id: agentEvents.id }).from(agentEvents).where(eq(agentEvents.agentId, agentId))
     .orderBy(desc(agentEvents.at), desc(agentEvents.id)).offset(EVENTS_KEPT);
   if (old.length) await db.delete(agentEvents).where(inArray(agentEvents.id, old.map((o) => o.id)));
+  // A significant event is also kept for good and moves trust (minds.ts); the newest-50 window above forgets it otherwise.
+  await promoteEvent(db, agentId, { id, kind, data, at: now }).catch((e) => console.error('[minds] could not keep a memory', kind, (e as Error).message));
 }
 
 export async function recentEvents(db: Db, agentId: string, limit = EVENTS_KEPT) {

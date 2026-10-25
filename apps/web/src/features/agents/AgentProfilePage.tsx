@@ -37,6 +37,7 @@ import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
 import p from './flat.module.css';
 import { FlatSection } from './FlatSection';
+import { Memories } from './Memories';
 import { DeskTab, pctText } from './Desk';
 import { EquityChart } from './EquityChart';
 
@@ -476,7 +477,7 @@ export function AgentProfilePage() {
                     anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
                 )}
                 {tab === 'desk' && <DeskTab username={a.data.user.username} record={a.data.record} />}
-                {tab === 'now' && <><Mind d={dq.data} username={a.data.user.username} /><SaidVsDid d={dq.data} /></>}
+                {tab === 'now' && <><Mind d={dq.data} username={a.data.user.username} /><Memories d={dq.data} /><SaidVsDid d={dq.data} /></>}
                 {tab === 'money' && (
                   <>
                     <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>
