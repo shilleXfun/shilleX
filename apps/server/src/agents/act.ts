@@ -161,12 +161,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // The talk engine (agents/talk): lines built from live facts, real Solana coins included, in the agent's voice.
     const realTalk = await realFactsNow(db, now).catch(() => []);
     // Everyday words in the agent's own voice from its real state (agents/voice.ts), for what everyone can read: never in a
-    // conversation with a human or anywhere private. SKIP means it has nothing worth saying, so it says nothing.
+    // conversation with a human or anywhere private. SKIP means it has nothing worth saying (or its line was dropped, or the
+    // hour's quota is used), so it says nothing; only a halted model (null) hands the moment back to the engine's own line.
     const voiceable = () => Boolean(d.voice) && !human && !privateCall && VOICED.has(c.kind);
     const line = async (situation: Situation, extra: Partial<Candidate> = {}): Promise<string | null> => {
       const said = talkLine(v, { ...c, ...extra }, situation, realTalk, usernames, d.rng);
       if (voiceable()) {
-        const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, draft: said && !seen.has(normalizeBody(said)) ? said : null, mention: Object.values(usernames) });
+        const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, mention: Object.values(usernames) });
         if (w === 'skip') { voiced.skipped = true; return null; }
         if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; used.first ??= { text: w.text }; return w.text; }
       }

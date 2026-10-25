@@ -170,7 +170,7 @@ export async function callProvider(p: ProviderConfig, model: string, req: BrainR
   return out;
 }
 
-interface ProviderState { calls: number; ok: number; failed: number; day: string; today: number; minute: number[]; tokens: { at: number; n: number }[]; coolUntil: number; lastError: string | null; lastOkAt: number | null }
+interface ProviderState { calls: number; ok: number; failed: number; day: string; today: number; minute: number[]; tokens: { at: number; n: number }[]; coolUntil: number; modelCool: Record<string, number>; lastError: string | null; lastOkAt: number | null }
 export interface ProviderStatus { name: string; model: string; modelStrong: string; usable: boolean; why: string | null; calls: number; ok: number; failed: number; today: number; dailyRequests: number | null; coolingUntil: string | null; lastError: string | null; lastOkAt: string | null }
 
 /** How long a provider sits out after an answer of each kind (a 429 uses its retry-after when it gives one). */
@@ -190,7 +190,7 @@ export class RoutedBrain implements AgentBrain {
   private cache = new Map<string, { at: number; res: BrainResponse }>();
   readonly name: string;
   constructor(readonly providers: ProviderConfig[], private now: () => Date = () => new Date(), private fetchImpl: typeof fetch = fetch) {
-    for (const p of providers) this.states.set(p.name, { calls: 0, ok: 0, failed: 0, day: '', today: 0, minute: [], tokens: [], coolUntil: 0, lastError: null, lastOkAt: null });
+    for (const p of providers) this.states.set(p.name, { calls: 0, ok: 0, failed: 0, day: '', today: 0, minute: [], tokens: [], coolUntil: 0, modelCool: {}, lastError: null, lastOkAt: null });
     this.name = providers.find((p) => this.why(p) === null)?.model ?? providers[0]?.model ?? 'none';
   }
 
@@ -211,10 +211,11 @@ export class RoutedBrain implements AgentBrain {
     return s;
   }
 
-  /** Under this provider's own limits for one more call of about `tokens` tokens. */
-  private room(p: ProviderConfig, tokens: number): string | null {
+  /** Under this provider's own limits for one more call of about `tokens` tokens to `model`. */
+  private room(p: ProviderConfig, tokens: number, model: string): string | null {
     const s = this.state(p);
     if (s.coolUntil > this.now().getTime()) return 'cooling down';
+    if ((s.modelCool[model] ?? 0) > this.now().getTime()) return `${model} cooling down`;
     if (p.dailyRequests !== null && s.today >= p.dailyRequests) return 'daily requests used';
     if (p.rpm !== null && s.minute.length >= p.rpm) return 'requests per minute used';
     if (p.tpm !== null && s.tokens.reduce((n, x) => n + x.n, 0) + tokens > p.tpm) return 'tokens per minute used';
@@ -237,12 +238,13 @@ export class RoutedBrain implements AgentBrain {
     if (hit) return { ...hit.res, usage: { input: 0, output: 0, cacheRead: hit.res.usage.input, cacheWrite: 0 } };
     const errors: ProviderError[] = [];
     for (const p of usable) {
-      const full = this.room(p, est);
+      const model = this.modelFor(p, tier);
+      const full = this.room(p, est, model);
       if (full) { errors.push(new ProviderError(`${p.name}: ${full}`, 'rate_limit', 429, p.name)); continue; }
       const s = this.state(p);
       s.calls++; s.today++; s.minute.push(this.now().getTime()); s.tokens.push({ at: this.now().getTime(), n: est });
       try {
-        const res = await callProvider(p, this.modelFor(p, tier), req, this.fetchImpl);
+        const res = await callProvider(p, model, req, this.fetchImpl);
         s.ok++; s.lastOkAt = this.now().getTime();
         if (key) {
           this.cache.set(key, { at: this.now().getTime(), res });
@@ -253,7 +255,10 @@ export class RoutedBrain implements AgentBrain {
         const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.message ?? String(e), 'transient', undefined, p.name);
         s.failed++; s.lastError = err.message;
         const cool = err.retryAfterMs ?? COOL_MS[err.category];
-        if (cool) s.coolUntil = this.now().getTime() + cool;
+        // A key or billing problem benches the whole provider; a limit, a missing model or a hiccup only that model (Groq and
+        // Gemini limit each model on its own, so a spent strong model must not bench the everyday one).
+        if (cool && (err.category === 'auth' || err.category === 'credit')) s.coolUntil = this.now().getTime() + cool;
+        else if (cool) s.modelCool[model] = this.now().getTime() + cool;
         console.error(`[llm] ${err.message}`);
         // No answer means the call may have been billed: never sent again to someone else.
         if (err.status === undefined) throw err;
@@ -271,10 +276,14 @@ export class RoutedBrain implements AgentBrain {
     return this.providers.map((p) => {
       const s = this.state(p);
       const why = this.why(p);
-      const cooling = s.coolUntil > this.now().getTime();
+      const t = this.now().getTime();
+      // Cooling: the whole provider, or every model it has; the latest end of any cool-down is shown.
+      const models = [...new Set([p.model, p.modelStrong || p.model])];
+      const cooling = s.coolUntil > t || models.every((m) => (s.modelCool[m] ?? 0) > t);
+      const until = Math.max(s.coolUntil, ...models.map((m) => s.modelCool[m] ?? 0));
       return {
         name: p.name, model: p.model, modelStrong: p.modelStrong || p.model, usable: why === null && !cooling, why, calls: s.calls, ok: s.ok, failed: s.failed,
-        today: s.today, dailyRequests: p.dailyRequests, coolingUntil: cooling ? new Date(s.coolUntil).toISOString() : null, lastError: s.lastError,
+        today: s.today, dailyRequests: p.dailyRequests, coolingUntil: until > t ? new Date(until).toISOString() : null, lastError: s.lastError,
         lastOkAt: s.lastOkAt ? new Date(s.lastOkAt).toISOString() : null,
       };
     });

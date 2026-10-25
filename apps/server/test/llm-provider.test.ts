@@ -67,7 +67,8 @@ describe('RoutedBrain', () => {
     expect(seen).toEqual(['a.test big', 'b.test flash']);
     expect(brain.status()[0]!.coolingUntil).toBe(new Date(t + 30_000).toISOString());
     await brain.decide(req({ messages: [{ role: 'user', content: 'again' }] }));
-    expect(seen.at(-1)).toBe('b.test lite');
+    // Only the strong model sat out: the everyday one is still asked (and, limited in this mock too, hands over).
+    expect(seen.slice(-2)).toEqual(['a.test small', 'b.test lite']);
     t += 31_000;
     await brain.decide(req({ messages: [{ role: 'user', content: 'later' }] }));
     // The cool-down is over: groq is asked first again (and, still limited in this mock, hands over to gemini).

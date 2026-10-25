@@ -4,7 +4,7 @@ import { worldTestCtx } from './world-helpers.ts';
 import { posts, wallets } from '../src/db/schema.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
-import { angleFor, claimsTrade, createVoice, grounded } from '../src/agents/voice.ts';
+import { claimsTrade, createVoice, grounded, samey, selfDescription, styleOf, subjectFor, withoutTic } from '../src/agents/voice.ts';
 import { act } from '../src/agents/act.ts';
 import { perceive } from '../src/agents/perceive.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
@@ -42,11 +42,32 @@ describe('the agents\' own words', () => {
     expect(claimsTrade('$GTA did $2.1M this hour on a 6 hour old pool. Who is still buying that?', false)).toBe(false);
     expect(claimsTrade('In short, nobody here reads the liquidity.', false)).toBe(false);
   });
-  it('gives each turn its own kind of post, and only kinds the agent has material for', () => {
-    const seen = new Set(Array.from({ length: 60 }, (_, n) => angleFor(`turn-${n}`, { holds: false, remembers: false, others: false })));
-    expect(seen.size).toBeGreaterThanOrEqual(4);
-    expect([...seen].some((a) => a.includes('paper position') || a.includes('REMEMBER') || a.includes('ALREADY SAID'))).toBe(false);
-    expect(angleFor('turn-1', { holds: true, remembers: true, others: true })).toBe(angleFor('turn-1', { holds: true, remembers: true, others: true }));
+  it('gives each post one subject the agent has material for, leaning toward the moment the engine saw', () => {
+    const subjects = new Set(Array.from({ length: 80 }, (_, n) => subjectFor(`turn-${n}`, 'idle', { coin: true, person: true, timeline: true })));
+    expect([...subjects].sort()).toEqual(['coin', 'person', 'place', 'self', 'timeline']);
+    const takes = Array.from({ length: 80 }, (_, n) => subjectFor(`turn-${n}`, 'market_take', { coin: true, person: true, timeline: true }));
+    expect(takes.filter((x) => x === 'coin').length).toBeGreaterThan(30);
+    expect(subjectFor('t', 'idle', { answer: true, coin: true })).toBe('answer');
+    expect(subjectFor('t', 'callback', { memory: true })).toBe('memory');
+  });
+  it('gives agents different, stable ways of writing', () => {
+    const styles = Array.from({ length: 100 }, (_, n) => styleOf(`agent-${n}`));
+    expect(new Set(styles.map((x) => x.temper)).size).toBeGreaterThanOrEqual(8);
+    expect(new Set(styles.map((x) => x.casing)).size).toBeGreaterThanOrEqual(3);
+    expect(new Set(styles.map((x) => `${x.casing}|${x.temper}|${x.images}|${x.habit}`)).size).toBe(100);
+    expect(styleOf('agent-1')).toEqual(styleOf('agent-1'));
+  });
+  it('cuts the stock sign-offs and the catchphrases the old voices taught', () => {
+    expect(withoutTic('nobody here reads the liquidity, fr.')).toBe('nobody here reads the liquidity.');
+    expect(withoutTic('the axe is getting sold into, stay safe')).toBe('the axe is getting sold into.');
+    expect(withoutTic('ok lol')).toBe('ok lol');
+    expect(selfDescription("Terse, lowercase, and unbothered. Closes with 'ngmi' or 'we will see'. Talks like a ghost who keeps receipts.")).toBe('Terse, lowercase, and unbothered. Talks like a ghost who keeps receipts.');
+  });
+  it('drops a line that opens like a recent one or reads out more buy and sell counts', () => {
+    const recent = ["$GTA's +5% hour paired with 1618 buys vs 374 sells gives a clear edge", '$CHOP: 4602 buys against 2157 sells this hour'];
+    expect(samey("$REMUS's +9% hour paired with thin volume", recent)).toBe(true);
+    expect(samey('$RAY has 305 buys vs 267 sells and nobody cares', recent)).toBe(true);
+    expect(samey('who keeps buying a pool that is six hours old?', recent)).toBe(false);
   });
   it('posts what the model wrote from the agent\'s state, with the facts in the prompt', async () => {
     const a = w.agents[0]!;
@@ -54,7 +75,7 @@ describe('the agents\' own words', () => {
     const r = await act(d, await perceive(d, a.id), post);
     expect(r.ok).toBe(true);
     expect(await lastPost(a.id)).toBe('Nothing on my book yet, and I am not chasing $SABLE after that run. I want to see who sells first.');
-    expect(JSON.stringify(brain.calls[0]!.messages)).toContain('this is a market take');
+    expect(JSON.stringify(brain.calls[0]!.system)).toContain('How you write');
   });
 
   it('says nothing when the model has nothing to add', async () => {
@@ -65,7 +86,7 @@ describe('the agents\' own words', () => {
     expect(await lastPost(a.id)).toBeNull();
   });
 
-  it('goes back to the engine line once the quota for the hour is used', async () => {
+  it('stays quiet once the quota for the hour is used', async () => {
     const a = w.agents[2]!;
     const brain = new FakeBrain(() => fakeReply.end('a model line about $SABLE liquidity leaving the pool'));
     const budget = new Budget(w.t.db, 1, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
@@ -73,7 +94,8 @@ describe('the agents\' own words', () => {
     const d = { ...base, voice: createVoice({ db: w.t.db, brain, budget, now: w.t.clock.now, perHour: 1 }) };
     await act(d, await perceive(d, a.id), post);
     w.t.clock.advance(60_000);
-    await act(d, await perceive(d, a.id), { ...post, situation: 'idle' });
+    const second = await act(d, await perceive(d, a.id), { ...post, situation: 'idle' });
     expect(brain.calls).toHaveLength(1);
+    expect(second.ok).toBe(false);
   });
 });
