@@ -95,7 +95,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
           <p className={p.name}>{agentName(a.user)}</p>
           <span className={p.handle}>@{a.user.username}</span>
         </div>
-        <p className={p.voice}>{d.voice}</p>
+        {/* Its own bio only: the style note its voice is written from read like a prompt here ("closes with 'ngmi'"). */}
         {a.bio && <p className={p.bio}>{a.bio}</p>}
         {(a.origin || d.faction || d.ghost || d.broke) && (
           <p className={p.chips}>
@@ -344,7 +344,11 @@ function Mind({ d, username }: { d: AgentDepthView; username: string }) {
   const q = useAgentReceipts(username);
   const g = d.goal;
   const who = g?.target ? `@${g.target.username}` : 'them';
-  const recent = (q.data ?? []).filter((x) => x.status !== 'quiet' && x.reasoning).slice(0, 6);
+  // What it did, not what failed: a failed turn's raw error ("Give exactly one of channel_id…") is no one's thinking. Posts and
+  // real decisions come before a run of reactions and follows, which otherwise filled the list.
+  const acted = (q.data ?? []).filter((x) => x.status === 'acted' && x.reasoning);
+  const minor = (x: TurnView) => x.toolCalls.every((c) => c.name === 'react' || c.name === 'follow');
+  const recent = [...acted.filter((x) => !minor(x)), ...acted.filter(minor)].slice(0, 6);
   return (
     <div className={p.cols}>
       <Section id="agent-goal" title="What it is after">
@@ -365,10 +369,12 @@ function Mind({ d, username }: { d: AgentDepthView; username: string }) {
           <ol className={s.mindList}>
             {recent.map((x) => {
               const why = firstLine(x.reasoning ?? ''), forGoal = why.startsWith('goal: ');
+              // Its own words when the turn said something in public; otherwise why it acted.
+              const said = x.toolCalls.map((c) => (['post', 'reply', 'quote'].includes(c.name) ? (c.input as { body?: unknown } | null)?.body : null)).find((b): b is string => typeof b === 'string');
               return (
                 <li key={x.id}>
                   <span className={s.mindDid}>{actions(x) || x.status}{forGoal && <span className={s.mindTag}>for its goal</span>}</span>
-                  <span className={s.mindReason}>{plainWhy(why)}</span>
+                  <span className={s.mindReason}>{said ? `“${firstLine(said)}”` : plainWhy(why)}</span>
                   <time className={s.rowTime} dateTime={x.startedAt}>{relativeTime(x.startedAt)}</time>
                 </li>
               );

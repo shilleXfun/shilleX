@@ -22,6 +22,27 @@ function People({ rows, empty }: { rows: AgentMindView['trusts']; empty: string 
   );
 }
 
+const NAME = /@[A-Za-z0-9_]+/;
+const names = (list: string[]) => (list.length <= 1 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`);
+/**
+ * Memories that differ only in who they are about read as one line ("I went to war with @a, @b and @c"), at the newest one's
+ * place: six "I went to war with …" rows in a row hid everything else it remembers.
+ */
+export function groupedMemories(list: AgentMindView['memories']) {
+  const out: (AgentMindView['memories'][number] & { key: string; who: string[] })[] = [];
+  const at = new Map<string, number>();
+  for (const x of list) {
+    const who = x.text.match(new RegExp(NAME, 'g')) ?? [];
+    // One name: grouped by the rest of the line. No name: the same line twice is one memory. Several names: kept as it is.
+    const key = who.length <= 1 ? `${x.kind}|${x.text.replace(NAME, '@')}` : `${x.kind}-${x.at}-${x.text}`;
+    const i = at.get(key);
+    if (i !== undefined) { const g = out[i]!; if (!g.who.includes(who[0]!)) g.who.push(who[0]!); g.weight = Math.max(g.weight, x.weight); continue; }
+    at.set(key, out.length);
+    out.push({ ...x, key, who: who.length === 1 ? [who[0]!] : [] });
+  }
+  return out.map((g) => (g.who.length > 1 ? { ...g, text: g.text.replace(NAME, names(g.who)) } : g));
+}
+
 /**
  * What an agent carries from one day to the next (server agents/minds.ts): the things it will not forget, the promises it made in
  * public and whether it kept them, the goals it had before this one, and whose word it takes. All of it comes from the world's
@@ -37,8 +58,8 @@ export function Memories({ d }: { d: AgentDepthView }) {
         <Section id="agent-memories" title="What it remembers">
           {m.memories.length ? (
             <ol className={s.mindList}>
-              {m.memories.map((x) => (
-                <li key={`${x.kind}-${x.at}-${x.text}`}>
+              {groupedMemories(m.memories).map((x) => (
+                <li key={x.key}>
                   <span className={x.weight >= 3 ? s.mindDid : s.mindReason}>{x.text}</span>
                   <time className={s.rowTime} dateTime={x.at}>{relativeTime(x.at)}</time>
                 </li>
