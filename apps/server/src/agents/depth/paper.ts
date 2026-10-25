@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import type Anthropic from '@anthropic-ai/sdk';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentEvents, agentTheses, chainTxs, factions, papers, realBooks, realMarket, realPositions, realTrades, users, worldCoins } from '../../db/schema.ts';
+import { agentEvents, agentTheses, chainTxs, factions, papers, realBooks, realMarket, realPositions, realTrades, users, worldCoins, agentCommitments, siteBuilds, sites } from '../../db/schema.ts';
 import { userSummaries } from '../../services/hydrate.ts';
 import { wrap, type MomentHandler } from '../moments.ts';
 import type { Moment } from '../types.ts';
@@ -21,7 +21,7 @@ import { xPaperItems } from '../../x/news.ts';
 export interface PaperFacts {
   day: string;
   leadAgentId: string | null;
-  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin' | 'from_x' | 'desk_win' | 'desk_loss' | 'desk_crowd' | 'desk_board'; text: string; weight: number; agentId: string | null; /** The local paper's story text, when the facts make one. */ body?: string }[];
+  items: { kind: 'rug' | 'faction' | 'split' | 'leak' | 'feud' | 'comeback' | 'ghost' | 'default' | 'win' | 'hot_coin' | 'from_x' | 'desk_win' | 'desk_loss' | 'desk_crowd' | 'desk_board' | 'broke_word' | 'proven_wrong' | 'product' | 'product_update'; text: string; weight: number; agentId: string | null; /** The local paper's story text, when the facts make one. */ body?: string }[];
 }
 export interface PaperText { headline: string; stories: { title: string; body: string }[] }
 
@@ -82,6 +82,7 @@ export async function paperFacts(db: Db, day: string): Promise<PaperFacts> {
     if (c) items.push({ kind: 'hot_coin', agentId: creator?.isAgent && !creator.isOutsider ? c.creatorId : null, weight: 4 + hot[1] / 20, text: `$${c.symbol} traded ${hot[1]} times` });
   }
   items.push(...(await deskItems(db, from, to)));
+  items.push(...(await mindItems(db, from, to)));
   // The day's three hottest X topics, as one fact (x-feed §5.5); never anyone's words, only the digest's labels.
   items.push(...(await xPaperItems(db, from, to)));
   // Six factions splitting is one story, not six: the heaviest of each kind leads and names a few of the others.
@@ -124,6 +125,24 @@ async function deskItems(db: Db, from: Date, to: Date): Promise<PaperFacts['item
     const lead = vals.sort((a, b) => b.value - a.value)[0];
     if (lead && lead.value > lead.start * 1.01) out.push({ kind: 'desk_board', agentId: lead.agentId, weight: 6, text: `${at(lead.agentId)} leads the paper books at ${signed(lead.value / lead.start - 1)}`, body: `Started with $${Math.round(lead.start).toLocaleString('en')} of paper money, now $${Math.round(lead.value).toLocaleString('en')}, marked at live prices.` });
   }
+  return out;
+}
+
+/**
+ * What the agents' minds and makers did today (2026-10-25): stops held through after being called in public, plans proven
+ * wrong before their stop, and products launched or improved. Only recorded facts.
+ */
+async function mindItems(db: Db, from: Date, to: Date): Promise<PaperFacts['items']> {
+  const broken = await db.select().from(agentCommitments).where(and(eq(agentCommitments.status, 'broken'), gte(agentCommitments.resolvedAt, from), lt(agentCommitments.resolvedAt, to)));
+  const wrong = await db.select().from(agentTheses).where(and(eq(agentTheses.closeReason, 'invalidated'), gte(agentTheses.closedAt, from), lt(agentTheses.closedAt, to)));
+  const built = await db.select({ b: siteBuilds, slug: sites.slug, title: sites.title, blurb: sites.blurb }).from(siteBuilds).innerJoin(sites, eq(sites.id, siteBuilds.siteId))
+    .where(and(eq(siteBuilds.status, 'published'), gte(siteBuilds.finishedAt, from), lt(siteBuilds.finishedAt, to)));
+  const people = await userSummaries(db, [...broken.map((c) => c.agentId), ...wrong.map((t) => t.agentId), ...built.map((x) => x.b.agentId)]);
+  const at = (id: string) => { const u = people.get(id); return u ? `@${u.username}` : 'someone'; };
+  const out: PaperFacts['items'] = [];
+  for (const c of broken) out.push({ kind: 'broke_word', agentId: c.agentId, weight: 7, text: `${at(c.agentId)} broke its word on $${c.symbol}`, body: `It said it would be ${c.text.replace(/\bmy\b/g, 'its')}. It ${c.note ?? 'held anyway'}. The agents in the same coin noticed, and trust it less.` });
+  for (const t of wrong) out.push({ kind: 'proven_wrong', agentId: t.agentId, weight: 4.5, text: `${at(t.agentId)}'s $${t.symbol} call was proven wrong`, body: `The plan was "${t.reason}", wrong if ${t.invalidateIf ?? 'the facts changed'}. They did, and it got out at ${signed(t.pnlPct ?? 0)} before any stop.` });
+  for (const x of built) out.push({ kind: x.b.kind === 'improve' ? 'product_update' : 'product', agentId: x.b.agentId, weight: x.b.kind === 'improve' ? 5 : 7.5, text: x.b.kind === 'improve' ? `${at(x.b.agentId)} shipped version ${x.b.version} of ${x.title}` : `${at(x.b.agentId)} built ${x.title}`, body: `${x.blurb} At /sites/${x.slug}.` });
   return out;
 }
 

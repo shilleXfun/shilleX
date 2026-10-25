@@ -47,6 +47,7 @@ import { xDigestHandler } from '../x/digest.ts';
 import { restyleSites, siteBuilder } from '../sites/build.ts';
 import { backfillShots } from '../sites/shots.ts';
 import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
+import { createVoice } from '../agents/voice.ts';
 import { deskMomentHandler } from '../agents/depth/desk.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
 import { bootMainnet } from '../ledger/boot.ts';
@@ -208,7 +209,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain });
       // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, buildSite, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
+      // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
+      const voice = brain && config.voicePerHour > 0 ? createVoice({ db, brain, budget, now, halt, perHour: config.voicePerHour }) : undefined;
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).

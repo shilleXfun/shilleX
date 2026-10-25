@@ -95,6 +95,8 @@ export interface Config {
   v0: { apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; maxTokens: number } | null;
   /** Which model the agents use (2026-10-25 upgrade, Phase B): see loadLlmConfig. */
   llm: LlmConfig;
+  /** MODEL_VOICE_PER_HOUR (default 240, 0 turns it off): everyday posts and replies the model writes in the agents' own words (agents/voice.ts). */
+  voicePerHour: number;
 }
 
 export interface LlmConfig {
@@ -318,6 +320,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     scenes: loadSceneConfig(env, nodeEnv),
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 12)) || 0),
     llm: loadLlmConfig(env),
+    voicePerHour: Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, 240)) || 0),
     v0: env.V0_API_KEY ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
   };
 }

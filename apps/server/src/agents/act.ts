@@ -85,6 +85,9 @@ export function slotsFor(v: AgentView, c: Candidate, usernames: Record<string, s
  */
 const privateTarget = (db: EngineDeps['db'], name: string, input: Record<string, unknown>) => isPrivateCall(db, name, input).catch(() => true);
 
+/** What the model may voice: words everyone (or only agents) can read. */
+const VOICED: ReadonlySet<ActionKind> = new Set(['post', 'reply', 'chat', 'dm']);
+
 export interface ActResult { ok: boolean; turnId: string; postId?: string; error?: string; text?: string; line?: { key: string; template: string; situation: Situation } }
 
 export async function act(d: EngineDeps, v: AgentView, c: Candidate): Promise<ActResult> {
@@ -121,7 +124,9 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   let postId: string | undefined;
   let privateCall = false;
   // An object, not a let: TypeScript does not see assignments made inside the closures below.
-  const used: { first: { text: string; line: { key: string; template: string; situation: Situation } } | null } = { first: null };
+  // A model-written line has no `line`: it is not a phrasebook template, so lineage must not hand it to other agents.
+  const used: { first: { text: string; line?: { key: string; template: string; situation: Situation } } | null } = { first: null };
+  const voiced = { by: null as string | null, costUsd: 0, skipped: false };
   // Lines anyone already has on the feed are not posted again (L6), compared like the duplicate-post rule.
   const seen = feedSeen(v.feed);
   try {
@@ -155,8 +160,16 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     };
     // The talk engine (agents/talk): lines built from live facts, real Solana coins included, in the agent's voice.
     const realTalk = await realFactsNow(db, now).catch(() => []);
-    const line = (situation: Situation, extra: Partial<Candidate> = {}) => {
+    // Everyday words in the agent's own voice from its real state (agents/voice.ts), for what everyone can read: never in a
+    // conversation with a human or anywhere private. SKIP means it has nothing worth saying, so it says nothing.
+    const voiceable = () => Boolean(d.voice) && !human && !privateCall && VOICED.has(c.kind);
+    const line = async (situation: Situation, extra: Partial<Candidate> = {}): Promise<string | null> => {
       const said = talkLine(v, { ...c, ...extra }, situation, realTalk, usernames, d.rng);
+      if (voiceable()) {
+        const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, draft: said && !seen.has(normalizeBody(said)) ? said : null, mention: Object.values(usernames) });
+        if (w === 'skip') { voiced.skipped = true; return null; }
+        if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; used.first ??= { text: w.text }; return w.text; }
+      }
       if (said && !seen.has(normalizeBody(said))) {
         used.first ??= { text: said, line: { key: `talk:${situation}`, template: said, situation } };
         return said;
@@ -169,7 +182,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       return r?.text ?? null;
     };
     const postLine = async (situation: Situation, imageFor: Candidate = c) => {
-      const text = line(situation);
+      const text = await line(situation);
       if (!text) return null;
       return withImage(text, async () => ((await call('post', { body: text })).result as { post_id: string }).post_id, imageFor);
     };
@@ -213,7 +226,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     } else switch (c.kind) {
       case 'post': {
         postId = (await postLine(c.situation ?? 'idle')) ?? undefined;
-        if (!postId) note = 'nothing fresh to say';
+        if (!postId) note = voiced.skipped ? 'nothing worth saying' : 'nothing fresh to say';
         break;
       }
       case 'reply': {
@@ -229,7 +242,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
             break;
           }
         }
-        const text = line(c.situation ?? 'reply_agree');
+        const text = await line(c.situation ?? 'reply_agree');
         if (!text) {
           // Nothing fresh to say: a reaction answers instead, and perceive counts a reacted-to mention as answered,
           // so it stops winning turns (the silence loop).
@@ -250,12 +263,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         await call('follow', { username: usernames[c.target!.userId!], follow: c.kind === 'follow' });
         break;
       case 'chat': {
-        const text = line(c.situation ?? 'idle');
-        if (!text) { note = 'nothing fresh to say'; break; }
         // A conversation with a human in it (anyone can be added to a group) is private, as a DM is, and so is a room whose
         // community is private or has a human in it (perceive's room list is cached, and a community can go private): the receipt
-        // records { private: true } and the result carries no text or line. A failed lookup counts as private.
+        // records { private: true } and the result carries no text or line. A failed lookup counts as private. Decided before
+        // the words, so a private room is never voiced by the model.
         privateCall = await privateTarget(db, 'chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null });
+        const text = await line(c.situation ?? 'idle');
+        if (!text) { note = 'nothing fresh to say'; break; }
         // A room (community channel) or an agent group conversation (a faction chat); only a room can be joined on the fly.
         const send = () => call('chat', { channel_id: c.target!.roomId ?? null, conversation_id: c.target!.conversationId ?? null, body: text, reply_to_id: null });
         try { await send(); }
@@ -278,8 +292,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
             break;
           }
         }
-        const text = line(c.situation ?? 'reply_agree');
         privateCall = human;
+        const text = await line(c.situation ?? 'reply_agree');
         if (!text) {
           // As with mentions: react to the last message, and the DM counts as answered (kept private when a human is in it).
           if (c.target?.messageId) { await reactTo('message', c.target.messageId, c.target.userId); note = 'nothing fresh to say; reacted instead'; }
@@ -393,8 +407,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   let done: ActResult;
   try {
     await finishTurn(db, turnId, {
-      status, context: [], reasoning: note ? `${why}; ${note}` : why, toolCalls,
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now(),
+      status, context: [], reasoning: `${note ? `${why}; ${note}` : why}${voiced.by ? `; in its own words (${voiced.by})` : ''}`, toolCalls,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: voiced.costUsd, finishedAt: d.now(),
     });
     done = { ok: status === 'acted', turnId, error: status === 'failed' ? note : undefined, ...outcome };
   } catch (e) {

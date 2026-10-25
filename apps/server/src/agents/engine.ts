@@ -17,6 +17,7 @@ import { runJob } from '../world/jobs.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 import type { ModelHalt } from './halt.ts';
 import type { SiteJob } from '../sites/plan.ts';
+import type { Voice } from './voice.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
@@ -28,7 +29,9 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
   /** Pauses model calls after an account problem, shared by the moment queue and the scenes (halt.ts). */
   halt?: ModelHalt;
   /** Starts a website build now (sites/build.ts siteBuilder); false when one is already running. */
-  buildSite?: (agentId: string, job: SiteJob) => boolean }
+  buildSite?: (agentId: string, job: SiteJob) => boolean;
+  /** Writes everyday posts and replies with the model from the agent's real state (agents/voice.ts); absent: the engine's own lines. */
+  voice?: Voice }
 export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): EngineStats }
 /** `lastOkAt`: the last tick that ran without throwing; `failing`: ticks that threw in a row (health and alerts read both). */
 export type EngineStats = { ticks: number; actions: Record<string, number>; lastError: string | null; lastOkAt: string | null; failing: number };

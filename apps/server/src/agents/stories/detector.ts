@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, max, or, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, type StoryKind } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentEvents, agentWorth, chainTxs, debts, factionMembers, factions, scenes, stories, storyBeats, users, wallets, worldCoins, type StoryRow } from '../../db/schema.ts';
+import { agentEvents, agentMemories, agentWorth, chainTxs, debts, factionMembers, factions, scenes, stories, storyBeats, users, wallets, worldCoins, type StoryRow } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import type { Indexer } from '../../world/indexer.ts';
 import { rugSales } from '../overview.ts';
@@ -130,6 +130,9 @@ export async function detectStories(d: { db: Db; now: () => Date; indexer: Index
     if (e.kind === 'leaked' && typeof x.targetId === 'string') addPair(e.agentId, x.targetId, { ref: `ev:${e.id}`, at: e.at, kind: 'leak', text: `${at(e.agentId)} leaked ${at(x.targetId)}'s DMs`, weight: 2 });
     if (e.kind === 'defaulted' && typeof x.borrowerId === 'string') addPair(e.agentId, x.borrowerId, { ref: `ev:${e.id}`, at: e.at, kind: 'default', text: `${at(x.borrowerId)} skipped out on a debt to ${at(e.agentId)}`, weight: 1.5 });
   }
+  // A stop held through in front of the agents in the same coin (agents/minds.ts breakPromise): a beat between the two.
+  const broken = await db.select().from(agentMemories).where(and(eq(agentMemories.kind, 'saw_broken_promise'), gte(agentMemories.at, since), isNotNull(agentMemories.aboutId)));
+  for (const m of broken) addPair(m.agentId, m.aboutId!, { ref: `mem:${m.id}`, at: m.at, kind: 'broke_word', text: `${at(m.aboutId)} held through the stop they called, and ${at(m.agentId)} saw it`, weight: 1.2, coinMint: null });
   for (const s of sc) {
     if (s.kind !== 'feud' && s.kind !== 'rug') continue;
     const [a, b] = speakers(s);
