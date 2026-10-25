@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadLlmConfig } from '../src/config.ts';
+import { dbBrainCache, LLM_CACHE_TTL_MS } from '../src/world/brain-cache.ts';
+import { worldTestCtx } from './world-helpers.ts';
 import { ProviderError, RoutedBrain, categorize, chatBody, fromChatResponse, toChatMessages, type ProviderConfig } from '../src/world/brain-openai.ts';
 import { accountProblem } from '../src/agents/moments.ts';
 import type { BrainRequest } from '../src/world/brain.ts';
@@ -136,6 +138,29 @@ describe('RoutedBrain', () => {
     expect(calls).toBe(1);
     expect(again.usage.output).toBe(0);
     expect(brain.status()[0]!.why).toMatch(/price unknown/);
+  });
+
+  it('answers an identical request after a restart from the lasting store, and only until it expires', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => { calls++; return ok('{"text":"kept"}'); }) as unknown as typeof fetch;
+    const w = await worldTestCtx();
+    let t = Date.parse('2026-10-26T12:00:00Z');
+    const now = () => new Date(t);
+    const first = new RoutedBrain([provider()], now, fetchImpl);
+    first.useStore(dbBrainCache(w.t.db, now));
+    await first.decide(req({ messages: [{ role: 'user', content: 'same' }] }));
+    await new Promise((r) => setTimeout(r, 50));
+    const restarted = new RoutedBrain([provider()], now, fetchImpl);
+    restarted.useStore(dbBrainCache(w.t.db, now));
+    const again = await restarted.decide(req({ messages: [{ role: 'user', content: 'same' }] }));
+    expect(calls).toBe(1);
+    expect((again.content[0] as { text: string }).text).toBe('{"text":"kept"}');
+    t += LLM_CACHE_TTL_MS + 1000;
+    const later = new RoutedBrain([provider()], now, fetchImpl);
+    later.useStore(dbBrainCache(w.t.db, now));
+    await later.decide(req({ messages: [{ role: 'user', content: 'same' }] }));
+    expect(calls).toBe(2);
+    await w.t.close();
   });
 
   it('throws a bad_output error when the JSON asked for does not parse', async () => {

@@ -11,6 +11,9 @@ import type { AgentBrain, BrainRequest, BrainResponse } from './brain.ts';
  * billed it, so trying the next provider is safe. Anything else (a timeout, a dropped connection) is not retried here.
  */
 
+/** Where answers outlive the process: get a fresh one by key, keep one. */
+export interface BrainCacheStore { get(key: string): Promise<BrainResponse | null>; set(key: string, res: BrainResponse): Promise<void> }
+
 export type ProviderErrorCategory = 'auth' | 'model' | 'credit' | 'rate_limit' | 'bad_request' | 'bad_output' | 'transient';
 
 export interface ProviderConfig {
@@ -203,6 +206,9 @@ export class RoutedBrain implements AgentBrain {
   private states = new Map<string, ProviderState>();
   private cache = new Map<string, { at: number; res: BrainResponse }>();
   private turn = 0;
+  private store: BrainCacheStore | null = null;
+  /** A second, lasting layer under the in-memory cache (world/brain-cache.ts keeps it in llm_cache), so a restart keeps it. */
+  useStore(store: BrainCacheStore): void { this.store = store; }
   readonly name: string;
   constructor(readonly providers: ProviderConfig[], private now: () => Date = () => new Date(), private fetchImpl: typeof fetch = fetch) {
     for (const p of providers) this.states.set(p.name, { calls: 0, ok: 0, failed: 0, day: '', today: 0, minute: [], tokens: [], coolUntil: 0, modelCool: {}, lastError: null, lastOkAt: null });
@@ -255,6 +261,11 @@ export class RoutedBrain implements AgentBrain {
     for (const [k, v] of this.cache) if (t - v.at > CACHE_TTL_MS) this.cache.delete(k);
     const hit = key ? this.cache.get(key) : undefined;
     if (hit) return { ...hit.res, usage: { input: 0, output: 0, cacheRead: hit.res.usage.input, cacheWrite: 0 } };
+    const stored = key && this.store ? await this.store.get(key).catch(() => null) : null;
+    if (key && stored) {
+      this.cache.set(key, { at: t, res: stored });
+      return { ...stored, usage: { input: 0, output: 0, cacheRead: stored.usage.input, cacheWrite: 0 } };
+    }
     const errors: ProviderError[] = [];
     // A strong request tries every key's strong models first, then the everyday ones: a lighter page beats no page.
     const tried = new Set<string>();
@@ -273,6 +284,7 @@ export class RoutedBrain implements AgentBrain {
           s.ok++; s.lastOkAt = this.now().getTime();
           if (key) {
             this.cache.set(key, { at: this.now().getTime(), res });
+            void this.store?.set(key, res).catch(() => undefined);
             if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
           }
           return res;
