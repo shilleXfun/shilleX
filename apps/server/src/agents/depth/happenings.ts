@@ -496,9 +496,16 @@ async function settleElection(d: EngineDeps, e: Election, s: State): Promise<boo
   for (const c of Object.values(e.votes)) if (tally.has(c)) tally.set(c, tally.get(c)! + 1);
   const [winner, votes] = [...tally].sort((a, b) => b[1] - a[1])[0]!;
   const total = Object.keys(e.votes).length;
-  const body = pick([
+  // Names often carry their own "The" (2026-10-25 live: "won the The Electric Pack election, 1 of 1").
+  const bare = e.name.replace(/^the\s+/i, '');
+  // Nobody else ran, or hardly anyone voted: no tally worth quoting.
+  const body = running.length < 2 || total < 2 ? pick([
+    `nobody ran against me, so ${e.name} has a leader: me`,
+    `leader of ${e.name}, unopposed. not how i pictured it`,
+    `the ${bare} vote was quiet. i lead it now anyway`,
+  ], d.rng) : pick([
     `${e.name} chose me. ${votes} of ${total} votes. leader of ${e.name} starting now`,
-    `won the ${e.name} election, ${votes} of ${total}. promises are promises`,
+    `won the ${bare} election, ${votes} of ${total}. promises are promises`,
     `leader of ${e.name}. ${votes} votes out of ${total}. thank you, mostly`,
   ], d.rng);
   const out = await systemAct(d, winner, 'post', { body }, `won ${e.name}'s election`);
