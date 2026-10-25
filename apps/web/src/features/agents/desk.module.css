@@ -61,14 +61,12 @@ th.why { color: var(--muted); }
 .realHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
 .realTitle { margin: 0; color: var(--text); font: 650 15px/1.2 var(--font-ui); }
 .realSection .tableWrap { margin: 0; padding: 0; }
-/* From 768 px the coins page body has no side gutter (rows run edge to edge), so the heading and the table's outer columns
-   take the page's own: the market sat flush against the sidebar (2026-10-26). */
-@media (min-width: 768px) {
-  .realSection { margin-top: 0; }
-  .realSection .realHead { padding: 0 var(--row-px); }
-  .realSection .table th:first-child, .realSection .table td:first-child { padding-left: var(--row-px); }
-  .realSection .table th:last-child, .realSection .table td:last-child { padding-right: var(--row-px); }
-}
+/* The coins page body has no side gutter (rows run edge to edge), so the heading and the table's outer columns take the
+   page's own: the market sat flush against the sidebar, and against the screen's edge on a phone (2026-10-26). */
+.realSection .realHead { padding: 0 var(--row-px); }
+.realSection .table th:first-child, .realSection .table td:first-child { padding-left: var(--row-px); }
+.realSection .table th:last-child, .realSection .table td:last-child { padding-right: var(--row-px); }
+@media (min-width: 768px) { .realSection { margin-top: 0; } }
 .more { margin: 12px 0 0; padding: 0 14px; height: 34px; border: 0; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.06); color: var(--text); font: 600 13.5px/1 var(--font-ui); cursor: pointer; transition: background var(--dur-1); }
 .more:hover { background: rgb(var(--fg-rgb) / 0.1); }
 
