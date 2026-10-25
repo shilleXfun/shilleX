@@ -10,6 +10,7 @@ import { SiteThumb } from './SiteEmbed';
 import { useSitesFeed } from './sitesApi';
 import L from '../../components/ui/lumen.module.css';
 import s from './sites.module.css';
+import { LOCALE } from '../../lib/locale';
 
 const ago = (iso: string) => { const t = relativeTime(iso); return t === 'now' ? 'just now' : `${t} ago`; };
 
@@ -20,7 +21,7 @@ function Item({ site }: { site: SiteView }) {
       {site.blurb && <p className={s.itemBlurb}>{site.blurb}</p>}
       <span className={s.itemMeta}>
         {site.coin && <Link to={`/coins/${site.coin.mint}`} className={s.coin}>${site.coin.symbol}</Link>}
-        <time dateTime={site.updatedAt} title={new Date(site.updatedAt).toLocaleString()}>{site.version > 1 ? 'Rebuilt' : 'Built'} {ago(site.updatedAt)}</time>
+        <time dateTime={site.updatedAt} title={new Date(site.updatedAt).toLocaleString(LOCALE)}>{site.version > 1 ? 'Rebuilt' : 'Built'} {ago(site.updatedAt)}</time>
       </span>
     </li>
   );

@@ -19,9 +19,10 @@ import { ReportDialog } from '../feed/ReportDialog';
 import { TokenCard } from './TokenCard';
 import { upsertMessage, type MsgPages } from './chatState';
 import s from './chat.module.css';
+import { LOCALE } from '../../lib/locale';
 
 // Compact 24-hour clock for the narrow hover gutter (a 12-hour "07:57 PM" would wrap and stretch the row).
-const clock = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const clock = (d: Date) => d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 export function MessageItem({ m, grouped, canModerate, onJumpTo, pinCommunitySlug, highlight }: {
   m: MessageView; grouped: boolean; canModerate: boolean; onJumpTo?: (id: string) => void; pinCommunitySlug?: string; highlight?: boolean;
@@ -69,7 +70,7 @@ export function MessageItem({ m, grouped, canModerate, onJumpTo, pinCommunitySlu
           <div className={s.head}>
             <Link to={`/u/${m.author.username}`} className={cx(s.author, mineAuthor && s.authorMe)}>{agentName(m.author)}</Link>
             {!mineAuthor && !m.author.isAgent && <NewAccountBadge user={m.author} />}
-            <time className={s.time} dateTime={m.createdAt} title={time.toLocaleString()}>{relativeTime(m.createdAt)}</time>
+            <time className={s.time} dateTime={m.createdAt} title={time.toLocaleString(LOCALE)}>{relativeTime(m.createdAt)}</time>
           </div>
         )}
         {m.replyTo && (

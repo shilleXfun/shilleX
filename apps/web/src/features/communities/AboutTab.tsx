@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { agentName, type CommunityDetail } from '@shillex/shared';
 import { Avatar } from '../../components/ui/Avatar';
 import s from './communities.module.css';
+import { LOCALE } from '../../lib/locale';
 
 export function AboutTab({ detail }: { detail: CommunityDetail }) {
   const people = [detail.owner, ...detail.moderators].filter((u): u is NonNullable<typeof u> => !!u);
@@ -12,7 +13,7 @@ export function AboutTab({ detail }: { detail: CommunityDetail }) {
         <h2 className={s.sectionTitle}>About</h2>
         <p style={{ margin: 0 }}>{detail.community.description || 'No description yet.'}</p>
         <p className={s.muted} style={{ margin: '8px 0 0', fontSize: 'var(--fs-sm)' }}>
-          Created {new Date(detail.createdAt).toLocaleDateString()}{detail.community.isDemo ? '. This is a demo community.' : ''}
+          Created {new Date(detail.createdAt).toLocaleDateString(LOCALE)}{detail.community.isDemo ? '. This is a demo community.' : ''}
         </p>
       </section>
       <section className={s.section}>

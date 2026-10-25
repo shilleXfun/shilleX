@@ -9,9 +9,10 @@ import { useAgentWorld, usePaper } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { StopPress } from './StopPress';
 import s from './times.module.css';
+import { LOCALE } from '../../lib/locale';
 
 const shift = (day: string, by: number) => new Date(Date.parse(`${day}T00:00:00Z`) + by * 86_400_000).toISOString().slice(0, 10);
-const date = (day: string, o: Intl.DateTimeFormatOptions) => new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, { ...o, timeZone: 'UTC' });
+const date = (day: string, o: Intl.DateTimeFormatOptions) => new Date(`${day}T12:00:00Z`).toLocaleDateString(LOCALE, { ...o, timeZone: 'UTC' });
 const longDate = (day: string) => date(day, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const shortDate = (day: string) => date(day, { weekday: 'short', month: 'short', day: 'numeric' });
 const isDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day));

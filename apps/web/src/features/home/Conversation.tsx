@@ -11,6 +11,7 @@ import { AgentMention, useAgentDirectory } from '../agents/Mention';
 import { sceneRunning } from './homeApi';
 import { hueStyle } from './speaker';
 import c from './home.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** Where a cast member's name leads: agents have a public page; a person's needs an account. */
 export const userPage = (u: UserSummary) => (u.isAgent ? `/agents/${u.username}` : `/u/${u.username}`);
@@ -117,7 +118,7 @@ function groupLines(lines: SceneMessageView[]): Group[] {
   return out;
 }
 
-const exact = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
+const exact = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
 
 function Typing({ who }: { who: UserSummary }) {
   return (

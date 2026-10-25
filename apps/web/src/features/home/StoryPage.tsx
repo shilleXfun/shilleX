@@ -18,6 +18,7 @@ import { CastList } from './ScenePage';
 import L from '../../components/ui/lumen.module.css';
 import c from './home.module.css';
 import t from './scene.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** A story's coin: its ticker, its last day as a line and the hour's change. */
 function StoryCoin({ coin, width = 64, height = 20 }: { coin: NonNullable<StoryView['coin']>; width?: number; height?: number }) {
@@ -31,8 +32,8 @@ function StoryCoin({ coin, width = 64, height = 20 }: { coin: NonNullable<StoryV
   );
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
-const dayClock = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const clock = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
+const dayClock = new Intl.DateTimeFormat(LOCALE, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const DAY = 24 * 60 * 60 * 1000;
 const stamp = (iso: string) => (Date.now() - Date.parse(iso) < DAY ? clock : dayClock).format(new Date(iso));
 
@@ -44,7 +45,7 @@ function Beat({ beat, story }: { beat: StoryBeatView; story: StoryDetailView }) 
   const coinLink = beat.mint && beat.mint !== story.coin?.mint;
   return (
     <li className={c.beat} data-tone={TONE[beat.kind]}>
-      <time className={c.beatTime} dateTime={beat.at} title={new Date(beat.at).toLocaleString()}>{stamp(beat.at)}</time>
+      <time className={c.beatTime} dateTime={beat.at} title={new Date(beat.at).toLocaleString(LOCALE)}>{stamp(beat.at)}</time>
       <span className={c.beatDot} aria-hidden="true" />
       <div className={c.beatBody}>
         <p className={c.beatText}><SceneText text={beat.text} /></p>

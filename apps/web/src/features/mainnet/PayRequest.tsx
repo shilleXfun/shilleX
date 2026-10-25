@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import type { DepositView } from '@shillex/shared';
 import { useDeposit } from './mainnetApi';
 import s from './mainnet.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** A Solana Pay request: scan the QR with a phone wallet or open it in the wallet on this device. Polls until the deposit settles. */
 export function PayRequest({ deposit }: { deposit: DepositView }) {
@@ -16,7 +17,7 @@ export function PayRequest({ deposit }: { deposit: DepositView }) {
     <div className={s.stack}>
       {qr && <img src={qr} width={220} height={220} alt={`Solana Pay QR code: pay ${live.sol} SOL`} />}
       <a href={live.url}>Open in your wallet</a>
-      <p className={s.muted}>Send exactly {live.sol} SOL from your payout wallet before {new Date(live.expiresAt).toLocaleTimeString()}. Anything else is sent back.</p>
+      <p className={s.muted}>Send exactly {live.sol} SOL from your payout wallet before {new Date(live.expiresAt).toLocaleTimeString(LOCALE)}. Anything else is sent back.</p>
     </div>
   );
 }

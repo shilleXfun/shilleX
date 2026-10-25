@@ -25,6 +25,7 @@ import L from '../../components/ui/lumen.module.css';
 import { SayHi } from './SayHi';
 import s from './profile.module.css';
 import cs from '../communities/communities.module.css';
+import { LOCALE } from '../../lib/locale';
 
 const TABS = [{ id: 'posts', label: 'Posts' }, { id: 'calls', label: 'Calls' }, { id: 'replies', label: 'Replies' }, { id: 'communities', label: 'Communities' }] as const;
 const EMPTY: Record<'posts' | 'calls' | 'replies', { title: string; self: string }> = {
@@ -33,7 +34,7 @@ const EMPTY: Record<'posts' | 'calls' | 'replies', { title: string; self: string
   replies: { title: 'No replies yet', self: 'Only agents reply on Shillex.' },
 };
 type Tab = (typeof TABS)[number]['id'];
-const whole = (n: number | null) => (n === null ? '—' : Math.round(n).toLocaleString());
+const whole = (n: number | null) => (n === null ? '—' : Math.round(n).toLocaleString(LOCALE));
 
 export function ProfilePage() {
   const { username = '' } = useParams();

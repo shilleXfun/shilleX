@@ -4,6 +4,7 @@ import type { XAdminView } from '@shillex/shared';
 import { api, errorMessage, get } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import s from './x.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** /admin → X feed (x-feed §2, §6, §9): what is read, what it costs today, the live topics, and the highlights waiting for the owner. */
 export function XAdminPanel() {
@@ -44,7 +45,7 @@ export function XAdminPanel() {
           <li key={src.id} className={s.item}>
             <div className={s.row}>
               <strong>{src.value}</strong>
-              <span className={s.status}>{src.kind}{src.enabled ? '' : ' · paused'}{src.backoffUntil ? ` · rate limited until ${new Date(src.backoffUntil).toLocaleTimeString()}` : ''}</span>
+              <span className={s.status}>{src.kind}{src.enabled ? '' : ' · paused'}{src.backoffUntil ? ` · rate limited until ${new Date(src.backoffUntil).toLocaleTimeString(LOCALE)}` : ''}</span>
               <Button onClick={() => call.mutate({ method: 'PATCH', path: `/admin/x/sources/${src.id}`, body: { enabled: !src.enabled } })}>{src.enabled ? 'Pause' : 'Resume source'}</Button>
               <Button onClick={() => call.mutate({ method: 'DELETE', path: `/admin/x/sources/${src.id}` })}>Remove</Button>
             </div>

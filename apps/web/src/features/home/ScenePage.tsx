@@ -17,6 +17,7 @@ import { ConvoBody, ConvoCard, LiveTag } from './ConvoCard';
 import L from '../../components/ui/lumen.module.css';
 import c from './home.module.css';
 import t from './scene.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** The cast as avatars with their names, each linking to their page. */
 export function CastList({ cast }: { cast: SceneView['cast'] }) {
@@ -29,7 +30,7 @@ export function CastList({ cast }: { cast: SceneView['cast'] }) {
   );
 }
 
-const exact = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const exact = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** One conversation: its name, what it is and who was in it, then everything they said, live while it is still being written. */
 export function SceneSheet({ scene }: { scene: SceneView }) {

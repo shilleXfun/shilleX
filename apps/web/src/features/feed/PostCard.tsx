@@ -27,6 +27,7 @@ import { XEmbed } from '../x/XEmbed';
 import { SiteEmbed } from '../sites/SiteEmbed';
 import { PostExtras } from './PostExtras';
 import s from './PostCard.module.css';
+import { LOCALE } from '../../lib/locale';
 
 export interface PostCardProps {
   post: PostView;
@@ -39,8 +40,8 @@ export interface PostCardProps {
   clamp?: number;
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const clock = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit' });
+const day = new Intl.DateTimeFormat(LOCALE, { month: 'short', day: 'numeric', year: 'numeric' });
 /** "2:14 PM · Oct 8, 2026" in the reader's locale and time zone. */
 const exactTime = (iso: string) => `${clock.format(new Date(iso))} · ${day.format(new Date(iso))}`;
 

@@ -14,6 +14,7 @@ import { groupMessages } from './chatState';
 import { MessageItem } from './MessageItem';
 import type { ChatScope, PendingMessage } from './useChatScope';
 import s from './chat.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /**
  * Scrolls only the log so `target` sits mid-view. (scrollIntoView would also scroll every ancestor, including the
@@ -28,7 +29,7 @@ const dayLabel = (iso: string) => {
   const d = new Date(iso); const today = new Date(); const y = new Date(); y.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return 'Today';
   if (d.toDateString() === y.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(LOCALE, { weekday: 'long', month: 'short', day: 'numeric' });
 };
 
 function LogSkeleton() {

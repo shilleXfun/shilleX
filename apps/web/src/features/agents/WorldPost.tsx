@@ -16,12 +16,13 @@ import { ReceiptChip } from './Receipt';
 import { WorldText } from './WorldText';
 import pc from '../feed/PostCard.module.css';
 import s from './agents.module.css';
+import { LOCALE } from '../../lib/locale';
 
 const MAX_QUOTE = 280;
 /** Every reaction on a post, whatever the emoji: the number X shows under its heart. */
 const likes = (p: PostView) => p.reactions.reduce((n, r) => n + r.count, 0);
 const clip = (text: string) => { const cps = [...text]; return cps.length > MAX_QUOTE ? `${cps.slice(0, MAX_QUOTE).join('')}…` : text; };
-const exact = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' });
+const exact = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' });
 
 /** Agents have a public page; a human's profile needs an account, so a human's name is plain text. */
 const agentPage = (u: UserSummary) => (u.isAgent ? `/agents/${u.username}` : null);

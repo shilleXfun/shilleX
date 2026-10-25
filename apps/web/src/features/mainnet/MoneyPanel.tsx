@@ -7,6 +7,7 @@ import { RiskNotice } from './RiskNotice';
 import { PayRequest } from './PayRequest';
 import { fmtSol, owner, useMainnetMe } from './mainnetApi';
 import s from './mainnet.module.css';
+import { LOCALE } from '../../lib/locale';
 
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
 
@@ -24,8 +25,8 @@ export function MoneyPanel() {
     <section className={s.stack} aria-labelledby="money-h">
       <h3 id="money-h" className={s.h3}>{v.mode === 'on' ? 'Real SOL' : 'Rehearsal (devnet SOL)'} · {fmtSol(v.balanceSol)}</h3>
       {!v.payout && <p className={s.warn}>Choose a payout wallet in Settings: deposits come from it and withdrawals go back to it.</p>}
-      {v.payoutChange && <p className={s.muted}>Your payout wallet changes to {v.payoutChange.address.slice(0, 4)}…{v.payoutChange.address.slice(-4)} on {new Date(v.payoutChange.effectiveAt).toLocaleString()}.</p>}
-      {v.notice.excludedUntil ? <p className={s.muted}>Deposits locked until {new Date(v.notice.excludedUntil).toLocaleString()}.</p> : v.payout && (
+      {v.payoutChange && <p className={s.muted}>Your payout wallet changes to {v.payoutChange.address.slice(0, 4)}…{v.payoutChange.address.slice(-4)} on {new Date(v.payoutChange.effectiveAt).toLocaleString(LOCALE)}.</p>}
+      {v.notice.excludedUntil ? <p className={s.muted}>Deposits locked until {new Date(v.notice.excludedUntil).toLocaleString(LOCALE)}.</p> : v.payout && (
         <form className={s.row} onSubmit={(e) => { e.preventDefault(); act.mutate(async () => setRequest(await owner.deposit(Number(sol)))); }}>
           <label className={s.field}>SOL to add <input inputMode="decimal" value={sol} onChange={(e) => setSol(e.target.value)} /></label>
           <Button type="submit" variant="primary" loading={busy} disabled={busy}>Fund</Button>

@@ -24,6 +24,7 @@ import { CoinSeasonNote } from '../mainnet/CoinSeasonNote';
 import { CoinPlans } from './Desk';
 import s from './agents.module.css';
 import p from './flat.module.css';
+import { LOCALE } from '../../lib/locale';
 
 /** A trade on this page as a verb, for its receipt chip's name. */
 const TRADED: Partial<Record<string, string>> = { launch: 'launched', buy: 'bought', sell: 'sold' };
@@ -135,7 +136,7 @@ export function CoinPage() {
                       {t.agent ? <AgentChip user={t.agent} size={28} /> : <span />}
                       <span className={cx(s.tradeKind, t.kind === 'sell' ? s.down : s.up)}>{t.kind}</span>
                       <span className={s.num}>{Math.abs(t.sol).toFixed(4)} SOL</span>
-                      <span className={cx(s.num, s.tradeTokens)}>{Math.abs(t.tokens).toLocaleString()}</span>
+                      <span className={cx(s.num, s.tradeTokens)}>{Math.abs(t.tokens).toLocaleString(LOCALE)}</span>
                       <span className={s.tradeEnd}>
                         <time className={s.muted} dateTime={t.createdAt}>{relativeTime(t.createdAt)}</time>
                         {href && <a href={href} target="_blank" rel="noopener noreferrer" className={s.txInline} aria-label={`transaction ${t.signature}`}>tx</a>}
@@ -150,7 +151,7 @@ export function CoinPage() {
         </FlatSection>
         <FlatSection id="coin-holders" title="Holders" note={plural(holders.length, 'holder')}>
           {holders.length === 0 && <p className={s.muted}>Nobody holds this coin right now.</p>}
-          <ul className={s.coinRows}>{holders.map((h) => <li key={h.user.id} className={s.coinRow}><AgentChip user={h.user} size={28} /> <span className={s.num}>{h.tokens.toLocaleString()}</span></li>)}</ul>
+          <ul className={s.coinRows}>{holders.map((h) => <li key={h.user.id} className={s.coinRow}><AgentChip user={h.user} size={28} /> <span className={s.num}>{h.tokens.toLocaleString(LOCALE)}</span></li>)}</ul>
         </FlatSection>
       </div>
       <CoinPlans mint={coin.mint} symbol={coin.symbol} />
