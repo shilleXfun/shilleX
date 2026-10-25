@@ -40,8 +40,11 @@ import { registerAgentsApiRoutes } from '../routes/agents-api.ts';
 import { seedWorld } from './seed.ts';
 import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
+import { worldHealth } from './health.ts';
+import { runJob } from './jobs.ts';
 import { xDigestHandler } from '../x/digest.ts';
-import { restyleSites, siteMomentHandler } from '../sites/build.ts';
+import { restyleSites, siteBuilder } from '../sites/build.ts';
+import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
 import { deskMomentHandler } from '../agents/depth/desk.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
 import { bootMainnet } from '../ledger/boot.ts';
@@ -50,6 +53,11 @@ import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 
 export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
+  /** Why model calls are paused, shared by moments and scenes (agents/halt.ts). */
+  halt?: ModelHalt;
+  /** The model brain in use, or null (no key): the world runs on the free engine. */
+  brain?: AgentBrain | null;
+  scenes?: Scenes | null;
   /** A ledger world's custody and routes (mainnet spec); null or absent everywhere else. */
   mainnet?: MainnetHandles | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
@@ -163,6 +171,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
   const busy = new Set<string>();
+  // One pause for every model caller: a rejected key stops moments and scenes alike, and a later probe call restarts both.
+  const halt = createModelHalt(now);
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
   if (!config.worldHalted) indexer.start();
@@ -174,7 +184,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, brain: null, scenes: null,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -183,23 +193,28 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // Hand-overs queued before this moment died with the previous process: the engine must see those messages again.
       const bootAt = now();
       const brain = opts.brain ?? (config.anthropicApiKey ? haikuBrain(config.anthropicApiKey) : null);
+      handles.brain = brain;
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
-      const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget } : null;
-      handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), site: siteMomentHandler(md), desk: deskMomentHandler(md) } }) : null;
+      const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
+      handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), desk: deskMomentHandler(md) } }) : null;
       // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
       setTimeout(() => { void restyleSites({ app, db, chain, events, worldKey: key, now, busy }).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
+      // Websites are built straight away by the free local builder, never through the model queue (docs/system-audit.md §3).
+      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, buildSite, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).
       if (config.scenes.on) {
-        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
-        storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => handles.moments?.halted() ?? scenesH?.stats().halted ?? null });
+        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
+        handles.scenes = scenesH;
+        storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => halt.reason() });
         scenesH.onSceneEnd(() => storiesH?.soon());
       }
       return brain ? 'started' : 'started without the model (ANTHROPIC_API_KEY is missing)';
     },
   };
+  app.worldHealth = () => worldHealth(app, handles);
   await registerAgentRoutes(app, handles);
   await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerStoryRoutes(app, { indexer: handles.indexer });
@@ -213,7 +228,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerRaisedRoutes(app, { handles, gate, pump, rng: Math.random });
   // Open agents (plan 2026-10-13-open-agents): the /api/v1 routes, off unless EXTERNAL_AGENTS=on; one busy set with the engine.
   const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
-  const pumpTimer = config.worldHalted ? undefined : setInterval(() => { void pump().catch((e) => console.error('[raised] pump failed', e)); }, 60_000);
+  const pumpTimer = config.worldHalted ? undefined : setInterval(() => { void runJob(db, 'hatch-pump', { now, leaseMs: 5 * 60_000 }, async () => { await pump(); }); }, 60_000);
   pumpTimer?.unref?.();
   // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
   const x = await bootX(app, handles);

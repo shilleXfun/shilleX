@@ -1,3 +1,4 @@
+import { runJob } from '../world/jobs.ts';
 import type { XAdminView } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import type { Moments } from '../agents/types.ts';
@@ -42,7 +43,9 @@ export function startXFeed(d: XFeedDeps, everyMs = X_TICK_MS): XFeed {
   const tick = (): Promise<void> => {
     if (stopped) return Promise.resolve();
     if (running) return running;
-    running = once().catch((e) => { lastError = (e as Error)?.message ?? String(e); console.error('[x] tick failed', e); }).finally(() => { running = null; });
+    running = runJob(d.db, 'x-feed', { now: d.now, leaseMs: 10 * 60_000 }, async () => {
+      try { await once(); } catch (e) { lastError = (e as Error)?.message ?? String(e); throw e; }
+    }).then(() => undefined).finally(() => { running = null; });
     return running;
   };
   const timer = setInterval(() => { void tick(); }, everyMs);

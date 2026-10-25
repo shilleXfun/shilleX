@@ -155,6 +155,13 @@
       "when": 1792857070738,
       "tag": "0021_real_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792927695877,
+      "tag": "0022_world_jobs",
+      "breakpoints": true
     }
   ]
 }

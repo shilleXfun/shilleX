@@ -21,29 +21,39 @@ async function addCost(db: Db, t: CostTarget, usd: number): Promise<void> {
   else await db.update(agentTurns).set({ costUsd: sql`${agentTurns.costUsd} + ${usd}` }).where(eq(agentTurns.id, t.turnId));
 }
 
-/** The API answered with an error status (400, 401, 403, 404, 413, 429, 5xx, 529): such a request is not billed. */
-const answeredWithError = (e: unknown) => e instanceof Anthropic.APIError && typeof e.status === 'number';
+/** The provider answered with an error status (400, 401, 403, 404, 413, 429, 5xx, 529): such a request is not billed. */
+const answeredWithError = (e: unknown) => e instanceof Anthropic.APIError ? typeof e.status === 'number' : typeof (e as { status?: unknown })?.status === 'number';
+
+/** The cap (or this caller's share of it) has no room for this call's worst case right now. Nothing was sent. */
+export class BudgetClosed extends Error { readonly category = 'budget' }
 
 /**
- * One model call that the daily cap survives (engine M1, server-rest M5). Its worst case is written to the turn's stored cost
- * before the call, so a crash mid-call still counts it after a restart; a call that answers is settled to what it cost before
- * the caller runs any tool. A call that throws costs nothing when the API answered with an error status, and keeps its worst
- * case otherwise (a network error, a timeout, an abort or a dropped response may have been billed). The budget in memory and
- * `spent` (the turn's total, for its receipt) get the same figure.
+ * One model call that the daily cap survives (engine M1, server-rest M5). The call's worst case is reserved in the budget in
+ * memory before the first await, so callers running at once (moments, scenes, stories) each see the others' reservations and
+ * together never pass the cap (2026-10-25); a call with no room throws BudgetClosed and sends nothing. The worst case is also
+ * written to the receipt before the call, so a crash mid-call still counts it after a restart; a call that answers is settled
+ * to what it cost before the caller runs any tool. A call that throws costs nothing when the provider answered with an error
+ * status, and keeps its worst case otherwise (a network error, a timeout, an abort or a dropped response may have been billed).
+ * The budget in memory and `spent` (the turn's total, for its receipt) get the same figure.
  */
 export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
-  await addCost(x.db, x, x.worstUsd);
+  if (!(x.budget.canSpend() && x.budget.canAfford(x.worstUsd))) throw new BudgetClosed(`no room under the model cap for a call of up to $${x.worstUsd.toFixed(4)}`);
+  const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
+  book(x.worstUsd);
+  try { await addCost(x.db, x, x.worstUsd); }
+  catch (e) { book(-x.worstUsd); throw e; }
   let res: BrainResponse;
   try { res = await call(); }
   catch (e) {
-    if (!answeredWithError(e)) { x.budget.add(x.worstUsd); x.spent.usd += x.worstUsd; }
-    // If the reservation cannot be taken back, it stays: the cap errs safe.
-    else await addCost(x.db, x, -x.worstUsd).catch((err) => console.error('[agents] could not release a model call reservation', 'worldCallId' in x ? x.worldCallId : x.turnId, err));
+    if (answeredWithError(e)) {
+      book(-x.worstUsd);
+      // If the reservation cannot be taken back from the receipt, it stays there: the cap errs safe.
+      await addCost(x.db, x, -x.worstUsd).catch((err) => console.error('[agents] could not release a model call reservation', 'worldCallId' in x ? x.worldCallId : x.turnId, err));
+    }
     throw e;
   }
   const cost = priceOf(x.model ?? HAIKU, res.usage);
-  x.budget.add(cost);
-  x.spent.usd += cost;
+  book(cost - x.worstUsd);
   await addCost(x.db, x, cost - x.worstUsd);
   return res;
 }

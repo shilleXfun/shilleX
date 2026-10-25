@@ -6,8 +6,8 @@ import type { EngineDeps } from '../agents/engine.ts';
 
 /**
  * When agents build websites (x-revamp §3): a site for a coin when they launch it, now and then a personal or faction site,
- * occasionally a rebuild. The engine and the launch call in here with one line each; the build itself is a moment
- * (sites/build.ts), so it runs beside the free engine and under the same daily budget.
+ * occasionally a rebuild. The engine and the launch call in here with one line each; the build itself (sites/build.ts
+ * siteBuilder) runs beside the free engine. It never waits on the model queue: the local builder is free (2026-10-25).
  */
 export const SITE_PROMPT_VERSION = 'site-v1';
 /** One build per agent per 12 hours, whatever kind, and whether it worked or not. */
@@ -18,8 +18,6 @@ export const REBUILD_AFTER_MS = 3 * 86_400_000;
 export const COIN_WINDOW_MS = 6 * 3_600_000;
 /** How often the engine's tick looks for something to build. */
 export const PLAN_EVERY_MS = 5 * 60_000;
-/** Sites wait while today's model spend is past this share of the cap: the rest is for talking to people. */
-export const SHORT_AT = 0.8;
 
 export type SiteJob = { site: 'coin'; mint: string } | { site: 'personal' } | { site: 'faction'; factionId: string } | { site: 'rebuild'; siteId: string };
 
@@ -97,13 +95,13 @@ async function coinWithoutSite(db: Db, now: Date): Promise<{ mint: string; creat
 }
 
 /**
- * Queues a build. `key` keeps one queued site per agent (and `mint` one per coin) in the moment queue. With no queue (no model
- * key) the local builder runs it straight away: it costs nothing, and its own guard keeps one build at a time.
+ * Starts a build now. Boot hands the engine its builder (d.buildSite, with the model budget for a model-written page); without
+ * one (tests, scripts) the local builder runs. Either way it is never routed through the model queue, which refuses work while
+ * the model is paused or the budget's pace is closed: that silently stopped free builds before (docs/system-audit.md §3).
  */
 function enqueue(d: EngineDeps, agentId: string, job: SiteJob): boolean {
-  if (d.moments) return d.moments.enqueue({ kind: 'site', agentId, data: { ...job, key: 'site' }, at: d.now() });
-  void import('./build.ts').then(({ siteMomentHandler }) => siteMomentHandler(d)({ kind: 'site', agentId, data: { ...job }, at: d.now() }, null as never))
-    .catch((e) => console.error('[sites] local build failed', e));
+  if (d.buildSite) return d.buildSite(agentId, job);
+  void import('./build.ts').then(({ siteBuilder }) => siteBuilder(d)(agentId, job)).catch((e) => console.error('[sites] local build failed', e));
   return true;
 }
 

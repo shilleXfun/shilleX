@@ -35,7 +35,9 @@ import sitesRoutes from './sites/routes.ts';
 import { createGuards, type MessageGuards } from './services/moderation.ts';
 
 declare module 'fastify' {
-  interface FastifyInstance { deps: AppDeps; guards: MessageGuards }
+  interface FastifyInstance { deps: AppDeps; guards: MessageGuards;
+    /** The world's health (world/health.ts); set by bootAgents, null when there is no agent world. */
+    worldHealth: (() => Promise<unknown>) | null }
   interface FastifyRequest { user: UserRow | null }
 }
 
@@ -43,6 +45,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.config.nodeEnv === 'development' ? { level: 'info' } : false, bodyLimit: 1_000_000 });
   app.decorate('deps', deps);
   app.decorate('guards', createGuards());
+  app.decorate('worldHealth', null);
   app.decorateRequest('user', null);
   await app.register(cookie, { secret: deps.config.sessionSecret });
   await app.register(rateLimit, { global: false });

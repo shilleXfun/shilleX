@@ -17,6 +17,8 @@ export interface StoryDeps {
   /** Why model calls are halted (an account problem the moment queue or the scenes saw), or null. */
   halted?: () => string | null;
 }
+import { runJob } from '../../world/jobs.ts';
+
 export interface Stories { run(): Promise<void>; soon(): void; stop(): Promise<void> }
 const MAX_EVENTS = 20;
 
@@ -43,7 +45,8 @@ export function startStories(d: StoryDeps): Stories {
   }
   function run(): Promise<void> {
     if (running) return running;
-    running = once().catch((e) => console.error('[stories] run failed', e)).finally(() => { running = null; });
+    // Under the 'stories' job lease and record (world/jobs.ts): one run across processes, failures logged and backed off.
+    running = runJob(d.db, 'stories', { now: d.now, leaseMs: 10 * 60_000 }, once).then(() => undefined).finally(() => { running = null; });
     return running;
   }
   const loop = () => { void run().finally(() => later(d.config.storyMs, loop)); };

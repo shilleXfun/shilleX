@@ -7,7 +7,8 @@ import { runTool, type ToolContext } from '../world/tools.ts';
 import { avatarFor } from '../services/users.ts';
 import { actorFor } from '../agents/act.ts';
 import type { EngineDeps } from '../agents/engine.ts';
-import { exclusiveTurn, type MomentHandler } from '../agents/moments.ts';
+import { exclusiveTurn } from '../agents/moments.ts';
+import { PermanentJobError, runJob, type JobOutcome } from '../world/jobs.ts';
 import { agentsOnly, agoText, coinBrief, coinLines, marketLine, memberById, memberLines, namesOf, plain } from '../agents/scenes/cast.ts';
 import { SITE_MAX_BYTES, sanitizeSiteHtml } from './sanitize.ts';
 import { freeSlug, insertSite, originOf, rebuildSite, setAnnouncement, siteUrl } from './store.ts';
@@ -87,17 +88,18 @@ async function briefFor(d: SiteDeps, agentId: string, job: SiteJob): Promise<Bri
     ask: `Build ${at}'s own website: who it is, what it believes and wants, and what it has lived through lately, in its own voice.` };
 }
 
-async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<void> {
+async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<JobOutcome> {
   const now = d.now();
   const config = d.app.deps.config;
-  if ((await buildsToday(d.db, now)) >= config.sitesPerDay) return;
-  if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return;
+  if ((await buildsToday(d.db, now)) >= config.sitesPerDay) return { status: 'skipped', note: 'today’s builds are done' };
+  if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent built one in the last 12 h' };
+  if (!(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
   const brief = await briefFor(d, agentId, job);
   const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
-  if (!brief || !agent) return;
+  if (!brief || !agent) return { status: 'skipped', note: 'no brief for this agent' };
   const [cast] = await d.db.select({ role: agentCast.role }).from(agentCast).where(eq(agentCast.agentId, agentId));
   const data = await gatherSiteData(d.app, { username: agent.username, role: cast?.role ?? null }, brief.kind, brief.coinMint, now);
-  if (!data) return;
+  if (!data) return { status: 'skipped', note: 'no public record to build from' };
   const publicUrl = config.publicUrl.replace(/\/+$/, '');
   const trigger = job.site === 'coin' ? { type: 'launch' as const, refId: job.mint, note: 'website' } : { type: 'heartbeat' as const, note: 'website' };
   const { id: turnId } = await startTurn(d.db, { agentId, triggers: [trigger], model: LOCAL_BUILDER, effort: 'low', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
@@ -127,7 +129,7 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<vo
         d.budget.add(costUsd);
       }
     }
-    if (Buffer.byteLength(html, 'utf8') > SITE_MAX_BYTES) throw new Error(`the page was over ${SITE_MAX_BYTES / 1000} KB`);
+    if (Buffer.byteLength(html, 'utf8') > SITE_MAX_BYTES) throw new PermanentJobError(`the page was over ${SITE_MAX_BYTES / 1000} KB`);
     const build = { title: page.title.slice(0, 60), blurb: page.blurb, html, turnId, model, now: d.now() };
     const site = brief.rebuild
       ? await rebuildSite(d.db, brief.rebuild.id, build)
@@ -148,32 +150,30 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<vo
   await finishTurn(d.db, turnId, { status, context: [{ kind: 'site', text: context }], reasoning: note, toolCalls, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd, finishedAt: d.now() })
     .catch((e) => console.error('[sites] build turn left unsealed until restart', turnId, e));
   if (thrown) throw thrown;
-}
-
-function jobOf(data: Record<string, unknown>): SiteJob | null {
-  if (data.site === 'coin' && typeof data.mint === 'string') return { site: 'coin', mint: data.mint };
-  if (data.site === 'faction' && typeof data.factionId === 'string') return { site: 'faction', factionId: data.factionId };
-  if (data.site === 'rebuild' && typeof data.siteId === 'string') return { site: 'rebuild', siteId: data.siteId };
-  if (data.site === 'personal') return { site: 'personal' };
-  return null;
+  return { status: 'ok', note: context };
 }
 
 const building = new WeakSet<SiteDeps['app']>();
+/** A build may hold the job this long; a process that died mid-build frees it for the next slot after that. */
+const BUILD_LEASE_MS = 10 * 60_000;
 
 /**
- * The `site` handler passed to createMoments({ handlers }) in bootAgents. It ignores `run`: a page needs its own structured call.
- * One build at a time, run beside the queue rather than inside it: writing a page takes about a minute, and agents' replies to
- * people must not wait behind it. A busy agent, or a build already running, is skipped; the planner asks again later (a new coin
- * stays eligible for hours).
+ * Starts a site build for this agent now (sites/plan.ts calls it). The local builder costs nothing, so this never goes through
+ * the model queue: a paused model or a spent budget must not stop it (2026-10-25 root cause). One build at a time, beside the
+ * engine rather than inside a tick (a page takes a while), under the 'site-build' job lease so a second process cannot build
+ * the same slot. False when a build is already running here; the planner asks again on its next look.
  */
-export function siteMomentHandler(d: SiteDeps): MomentHandler {
-  return async (m) => {
-    const job = jobOf(m.data);
-    if (!job || building.has(d.app)) return;
+export function siteBuilder(d: SiteDeps): (agentId: string, job: SiteJob) => boolean {
+  return (agentId, job) => {
+    if (building.has(d.app)) return false;
     building.add(d.app);
-    void exclusiveTurn(d, m.agentId, () => buildSite(d, m.agentId, job))
-      .catch((e) => console.error('[sites] build failed', m.agentId, e))
+    void runJob(d.db, 'site-build', { now: d.now, leaseMs: BUILD_LEASE_MS }, async () => {
+      const r = await exclusiveTurn(d, agentId, () => buildSite(d, agentId, job));
+      return r.ran ? r.value : { status: 'skipped', note: `the agent was ${r.reason}` };
+    })
+      .then((r) => { if (!r.ran) console.log(`[sites] build not started: ${r.reason}`); })
       .finally(() => building.delete(d.app));
+    return true;
   };
 }
 

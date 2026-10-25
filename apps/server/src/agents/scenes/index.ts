@@ -3,6 +3,8 @@ import { scenes } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { HAIKU } from '../haiku.ts';
 import { accountProblem } from '../moments.ts';
+import { createModelHalt } from '../halt.ts';
+import { runJob, type JobOutcome } from '../../world/jobs.ts';
 import type { SceneDeps } from './cast.ts';
 import { pickIdea, premiseOf, sceneIdeas } from './director.ts';
 import { phrasebookScene, templateTitle } from './fallback.ts';
@@ -36,12 +38,14 @@ export interface Scenes {
  */
 export function startScenes(d: SceneDeps): Scenes {
   const player = createPlayer(d);
-  let stopped = false, halted: string | null = null;
+  let stopped = false;
+  // The world's shared pause (halt.ts) when boot passes one, so a rejected key stops scenes and moments alike, then retries.
+  const halt = d.halt ?? createModelHalt(d.now);
   let directing: Promise<string | null> | null = null, playing: Promise<void> | null = null, taking: Promise<unknown> | null = null, threading: Promise<unknown> | null = null;
   const counts = { started: 0, model: 0, phrasebook: 0, longTakes: 0, threads: 0 };
   const timers = new Set<NodeJS.Timeout>();
   const later = (ms: number, fn: () => void) => { const t = setTimeout(() => { timers.delete(t); if (!stopped) fn(); }, ms); t.unref?.(); timers.add(t); };
-  const modelOpen = () => Boolean(d.brain) && !halted && !d.moments?.halted();
+  const modelOpen = () => Boolean(d.brain) && !halt.reason() && !d.moments?.halted();
   // A launch window (a cap well above the daily one) writes threads and long takes four times as often.
   const boost = () => ((d.budget.capUsd?.() ?? 0) > 2 * d.app.deps.config.agentDailyBudgetUsd ? 4 : 1);
 
@@ -55,10 +59,10 @@ export function startScenes(d: SceneDeps): Scenes {
     if (!m) return null;
     let written: Awaited<ReturnType<typeof writeScene>> = null;
     if (modelOpen()) {
-      try { written = await writeScene(d, m); }
+      try { written = await writeScene(d, m); if (written) halt.ok(); }
       catch (e) {
         const p = accountProblem(e);
-        if (p) { halted = p; console.error(`[scenes] model scenes halted: ${p}`); }
+        if (p) halt.trip(p);
         else console.error('[scenes] writing a scene failed; composing it from phrasebooks', (e as Error)?.message ?? e);
       }
     }
@@ -82,30 +86,38 @@ export function startScenes(d: SceneDeps): Scenes {
     return directing;
   }
 
-  const directorLoop = () => { void direct().finally(() => later(jitter(d.config.intervalMs, d.rng), directorLoop)); };
+  const job = { now: d.now, leaseMs: 10 * 60_000 };
+  /** A scene job's outcome; an account problem pauses the model (halt.ts) and is recorded as a provider error. */
+  const modelJob = async (run: () => Promise<'posted' | 'skipped' | 'failed'>): Promise<JobOutcome> => {
+    try {
+      const r = await run();
+      if (r === 'failed') throw new Error('it wrote nothing it could post');
+      return { status: r === 'posted' ? 'ok' : 'skipped', note: r };
+    } catch (e) {
+      const p = accountProblem(e);
+      if (p) { halt.trip(p); throw Object.assign(new Error(p), { category: 'provider' }); }
+      throw e;
+    }
+  };
+  const directorLoop = () => {
+    void runJob(d.db, 'scene-director', job, async () => { const id = await direct(); return id ? { note: `scene ${id}` } : { status: 'skipped' }; })
+      .finally(() => later(jitter(d.config.intervalMs, d.rng), directorLoop));
+  };
   const playerLoop = () => {
     if (!playing) playing = player.step().catch((e) => console.error('[scenes] player failed', e)).finally(() => { playing = null; });
     later(PLAYER_MS, playerLoop);
   };
   const longTakeLoop = () => {
     if (!taking && modelOpen()) {
-      taking = runLongTake(d).then((r) => { if (r === 'posted') counts.longTakes++; })
-        .catch((e) => {
-          const p = accountProblem(e);
-          if (p) { halted = p; console.error(`[scenes] model scenes halted: ${p}`); } else console.error('[scenes] long take failed', (e as Error)?.message ?? e);
-        })
+      taking = runJob(d.db, 'long-take', job, () => modelJob(async () => { const r = await runLongTake(d); if (r === 'posted') counts.longTakes++; if (r === 'posted') halt.ok(); return r; }))
         .finally(() => { taking = null; });
     }
     later(jitter(d.config.longTakeMs / boost(), d.rng), longTakeLoop);
   };
   const threadLoop = () => {
     // Threads run without the model too: runThread composes them from the facts when it cannot write them.
-    if (!threading && !halted && !d.moments?.halted()) {
-      threading = runThread(d).then((r) => { if (r === 'posted') counts.threads++; })
-        .catch((e) => {
-          const p = accountProblem(e);
-          if (p) { halted = p; console.error(`[scenes] model scenes halted: ${p}`); } else console.error('[scenes] thread failed', (e as Error)?.message ?? e);
-        })
+    if (!threading && !halt.reason() && !d.moments?.halted()) {
+      threading = runJob(d.db, 'thread', job, () => modelJob(async () => { const r = await runThread(d); if (r === 'posted') counts.threads++; return r; }))
         .finally(() => { threading = null; });
     }
     later(jitter(d.config.threadMs / boost(), d.rng), threadLoop);
@@ -122,7 +134,7 @@ export function startScenes(d: SceneDeps): Scenes {
   return {
     direct,
     onSceneEnd: (fn) => player.onEnd(fn),
-    stats: () => ({ ...counts, halted }),
+    stats: () => ({ ...counts, halted: halt.reason() }),
     async stop() {
       stopped = true;
       for (const t of timers) clearTimeout(t);

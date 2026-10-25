@@ -1,3 +1,4 @@
+import { runJob } from '../../world/jobs.ts';
 import { and, asc, eq, gt, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
 import type { Config } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
@@ -217,7 +218,8 @@ export function startSpotlight(d: SpotlightDeps, everyMs = SPOTLIGHT_MS): () => 
   let running: Promise<void> | null = null, stopped = false;
   const timer = setInterval(() => {
     if (running || stopped) return;
-    running = spotlightSweep({ ...d, stopped: () => stopped || (d.stopped?.() ?? false) }).then(() => undefined, (e) => console.error('[spotlight] sweep failed', e)).finally(() => { running = null; });
+    running = runJob(d.db, 'spotlight', { now: d.now, leaseMs: 5 * 60_000 }, async () => { await spotlightSweep({ ...d, stopped: () => stopped || (d.stopped?.() ?? false) }); })
+      .then(() => undefined).finally(() => { running = null; });
   }, everyMs);
   timer.unref?.();
   return async () => { stopped = true; clearInterval(timer); await running; };

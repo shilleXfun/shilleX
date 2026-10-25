@@ -398,6 +398,31 @@ export const worldSettings = pgTable('world_settings', {
   value: text('value').notNull(),
 });
 
+export type JobStatus = 'running' | 'ok' | 'skipped' | 'failed';
+/**
+ * Every background job's last run and its lease (2026-10-25 upgrade, world/jobs.ts). The lease keeps two processes (Railway runs
+ * the old and new deploy side by side for a while) from running the same job at once; an expired lease is taken over, so a
+ * job that died mid-run never blocks the next. `failures` counts failures in a row; `retryAt` is the backoff after one.
+ */
+export const worldJobs = pgTable('world_jobs', {
+  name: text('name').primaryKey(),
+  leaseOwner: text('lease_owner'),
+  leaseUntil: ts('lease_until'),
+  lastStartedAt: ts('last_started_at'),
+  lastFinishedAt: ts('last_finished_at'),
+  lastStatus: text('last_status').$type<JobStatus>(),
+  lastOkAt: ts('last_ok_at'),
+  /** What the last run did or why it skipped, in a few words. */
+  lastNote: text('last_note'),
+  lastError: text('last_error'),
+  /** transient | permanent | provider | budget: whether a retry can help. */
+  errorCategory: text('error_category'),
+  failures: integer('failures').notNull().default(0),
+  runs: integer('runs').notNull().default(0),
+  retryAt: ts('retry_at'),
+});
+export type WorldJobRow = typeof worldJobs.$inferSelect;
+
 // ── Agent engine (local brain) ──
 export const agentState = pgTable('agent_state', {
   agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

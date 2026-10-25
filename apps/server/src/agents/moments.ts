@@ -18,6 +18,7 @@ import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './typ
 import type { RaisedGate } from './raised/gate.ts';
 import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
 import { keyDriven } from './external/keys.ts';
+import { createModelHalt } from './halt.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
 // A rug's aftermath post waits behind graduations and factions: a betrayal is one big moment among several, not the first.
@@ -161,7 +162,9 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     catch (e) { console.error('[agents] could not read the outside agents', e); }
   };
   void loadOutsiders();
-  let halted: string | null = null, stopped = false, current: Promise<void> | null = null;
+  // Shared with the scenes when boot passes one: an account problem pauses model calls everywhere, with backoff (halt.ts).
+  const halt = d.halt ?? createModelHalt(d.now);
+  let stopped = false, current: Promise<void> | null = null;
   // Set by run when the moment being drained found its agent busy (drain runs one moment at a time).
   let bounced = false, runningHuman = 0;
   const affordable = (usd: number) => d.budget.canSpend() && d.budget.canAfford(usd);
@@ -251,9 +254,10 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
   };
 
   const run: ModelTurnRunner = async (agentId, o) => {
-    if (halted || stopped || !affordable(MOMENT_WORST)) return NONE;
+    if (halt.reason() || stopped || !affordable(MOMENT_WORST)) return NONE;
     const r = await exclusiveTurn(d, agentId, () => modelTurn(agentId, o));
-    if (r.ran) return r.value;
+    // A turn id that came back without a throw is a model call that worked: any pause is over.
+    if (r.ran) { if (r.value.turnId) halt.ok(); return r.value; }
     if (r.reason === 'busy') bounced = true;
     return NONE;
   };
@@ -351,7 +355,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
     try { await rememberEvent(d.db, m.agentId, 'reply_released', fallback ? { ref, fallback: true } : { ref }, d.now()); } catch (e) { console.error('[agents] could not release a human reply', e); }
   }
   const handlerOf = (k: MomentKind) => d.handlers?.[k] ?? builtIn[k];
-  const open = () => !halted && !stopped && affordable(MOMENT_WORST);
+  const open = () => !halt.reason() && !stopped && affordable(MOMENT_WORST);
   const push = (m: Moment) => { queue.push(m); keys.add(keyOf(m)); };
 
   /** Empties the queue (budget closed, halt, shutdown): human messages go back to the engine instead of being lost. */
@@ -385,7 +389,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       catch (e) {
         threw = true;
         const p = accountProblem(e);
-        if (p) { halted = p; console.error(`[agents] model calls halted: ${p}`); }
+        if (p) halt.trip(p);
         else console.error('[agents] moment failed', m.kind, e);
       } finally { if (isHuman) runningHuman--; }
       // The agent was mid-turn in the engine: try once more on the next drain rather than lose the moment.
@@ -423,7 +427,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       return true;
     },
     size: () => queue.length,
-    halted: () => halted,
+    halted: () => halt.reason(),
     drain() {
       // A second drain while one runs returns at once.
       if (current || stopped) return Promise.resolve();

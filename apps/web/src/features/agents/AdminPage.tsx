@@ -12,6 +12,8 @@ export function AdminPage() {
   const status = useQuery({ queryKey: ['admin', 'world'], queryFn: () => get<Record<string, unknown>>('/admin/world'), retry: false, refetchInterval: 10_000 });
   const [username, setUsername] = useState('admin'), [password, setPassword] = useState(''), [agent, setAgent] = useState('');
   const login = useMutation({ mutationFn: () => post('/auth/login', { username, password }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }) });
+  // Whether the world is alive (server world/health.ts): the warnings first, the details under them.
+  const health = useQuery({ queryKey: ['admin', 'health'], queryFn: () => get<{ ok: boolean; warnings: string[] } & Record<string, unknown>>('/health/world'), refetchInterval: 15_000 });
   const raised = useQuery({ queryKey: ['admin', 'raised'], queryFn: () => get<Record<string, unknown>>('/admin/raised'), retry: false, refetchInterval: 10_000 });
   const act = useMutation({ mutationFn: (path: string) => post(path), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }) });
   if (status.error instanceof ApiError && (status.error.status === 401 || status.error.status === 403)) {
@@ -29,6 +31,13 @@ export function AdminPage() {
   return (
     <section className={s.page}>
       <h1 className={s.h1}>Admin</h1>
+      {health.data && (
+        <>
+          <h2 className={s.h1}>World health</h2>
+          {health.data.warnings.length ? <ul role="alert">{health.data.warnings.map((w) => <li key={w} className={s.warn}>{w}</li>)}</ul> : <p>No warnings.</p>}
+          <details><summary>Details</summary><pre className={s.json}>{JSON.stringify(health.data, null, 2)}</pre></details>
+        </>
+      )}
       <pre className={s.json}>{JSON.stringify(status.data ?? {}, null, 2)}</pre>
       {raised.data && <><h2 className={s.h1}>Raised agents</h2><pre className={s.json}>{JSON.stringify(raised.data, null, 2)}</pre></>}
       <OutsidersAdmin />

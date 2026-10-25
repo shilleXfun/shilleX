@@ -13,7 +13,10 @@ import { restedEnergy } from './state.ts';
 import { pacedTick } from './raised/pacing.ts';
 import { keyDriven } from './external/keys.ts';
 import { planSites } from '../sites/plan.ts';
+import { runJob } from '../world/jobs.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
+import type { ModelHalt } from './halt.ts';
+import type { SiteJob } from '../sites/plan.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
@@ -21,8 +24,16 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
   /** When this process started: hand-over markers older than this belong to a queue that no longer exists. */
   bootAt?: Date;
   /** Phase 4 depth systems (beliefs, factions, drift…); absent means the plain Phase 2 engine. */
-  depth?: DepthRegistry }
-export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): { ticks: number; actions: Record<string, number>; lastError: string | null } }
+  depth?: DepthRegistry;
+  /** Pauses model calls after an account problem, shared by the moment queue and the scenes (halt.ts). */
+  halt?: ModelHalt;
+  /** Starts a website build now (sites/build.ts siteBuilder); false when one is already running. */
+  buildSite?: (agentId: string, job: SiteJob) => boolean }
+export interface Engine { tick(): Promise<void>; stop(): Promise<void>; stats(): EngineStats }
+/** `lastOkAt`: the last tick that ran without throwing; `failing`: ticks that threw in a row (health and alerts read both). */
+export type EngineStats = { ticks: number; actions: Record<string, number>; lastError: string | null; lastOkAt: string | null; failing: number };
+/** This many failed ticks in a row (a minute or two at the usual pace) is an alert in the logs. */
+const FAILING_ALERT = 30;
 
 export async function pickAgent(d: EngineDeps): Promise<string | null> {
   // Only agents whose wallet has been funded: a new house agent waiting for its treasury transfer (or its season opening)
@@ -66,7 +77,7 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
 }
 
 export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStart?: boolean; population?: () => number }): Engine {
-  let ticks = 0, lastError: string | null = null, stopped = false;
+  let ticks = 0, lastError: string | null = null, stopped = false, lastOkAt: Date | null = null, failing = 0;
   let timer: NodeJS.Timeout | null = null;
   // Every tick, scheduled or manual, runs after the previous one: one agent acts at a time.
   let queue: Promise<void> = Promise.resolve();
@@ -76,6 +87,7 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
     if (stopped) return;
     try {
       const r = await engineTurn(d);
+      lastOkAt = d.now(); failing = 0;
       if (!r) return;
       // No turn id means act skipped (previous turn still running) or could not open one: a no-op tick. Resting is a turn
       // taken that writes no receipt.
@@ -83,12 +95,16 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
         actions[r.kind] = (actions[r.kind] ?? 0) + 1;
         if (r.error) actions.failed = (actions.failed ?? 0) + 1;
       }
-      // Model moments run beside the free engine; a failed drain is logged, never silent.
-      void Promise.resolve(d.moments?.drain()).catch((e) => console.error('[agents] moments drain failed', e));
     } catch (e) {
       lastError = (e as Error)?.message ?? String(e);
       console.error('[agents] tick failed', e);
-    } finally { ticks++; }
+      if (++failing === FAILING_ALERT) console.error(`[alert] the engine has failed ${failing} ticks in a row: ${lastError}`);
+    } finally {
+      ticks++;
+      // Model moments run beside the free engine, after every tick, good or bad: a tick that cannot read the chain (the RPC
+      // outage of 2026-10-17) must not freeze replies and big moments already queued. A failed drain is logged, never silent.
+      if (!stopped) void Promise.resolve(d.moments?.drain()).catch((e) => console.error('[agents] moments drain failed', e));
+    }
   }
 
   function tick(): Promise<void> {
@@ -111,14 +127,15 @@ export function startEngine(d: EngineDeps & { tickMs: [number, number]; autoStar
   const sweepTimer = d.depth ? setInterval(() => {
     if (stopped || sweepPending) return; // a slow sweep is not stacked on
     sweepPending = true;
-    const next = queue.then(() => (stopped ? undefined : d.depth!.sweep(d))).finally(() => { sweepPending = false; });
-    queue = next.catch((e) => console.error('[depth] sweep failed', e));
+    // Under the 'depth-sweep' job lease and record (world/jobs.ts): never two at once across processes, failures logged and backed off.
+    const next = queue.then(() => (stopped ? undefined : runJob(d.db, 'depth-sweep', { now: d.now, leaseMs: 15 * 60_000 }, async () => { await d.depth!.sweep(d); }))).finally(() => { sweepPending = false; });
+    queue = next.then(() => undefined, (e) => console.error('[depth] sweep failed', e));
   }, SWEEP_MS) : null;
   sweepTimer?.unref?.();
 
   return {
     tick,
     async stop() { stopped = true; if (timer) clearTimeout(timer); offDepth(); if (sweepTimer) clearInterval(sweepTimer); await queue; },
-    stats: () => ({ ticks, actions: { ...actions }, lastError }),
+    stats: () => ({ ticks, actions: { ...actions }, lastError, lastOkAt: lastOkAt?.toISOString() ?? null, failing }),
   };
 }
