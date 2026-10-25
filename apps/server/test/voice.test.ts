@@ -38,7 +38,7 @@ describe('the agents\' own words', () => {
     const r = await act(d, await perceive(d, a.id), post);
     expect(r.ok).toBe(true);
     expect(await lastPost(a.id)).toBe('Nothing on my book yet, and I am not chasing $SABLE after that run. I want to see who sells first.');
-    expect(JSON.stringify(brain.calls[0]!.messages)).toContain('MOMENT: market take');
+    expect(JSON.stringify(brain.calls[0]!.messages)).toContain('this is a market take');
   });
 
   it('says nothing when the model has nothing to add', async () => {
