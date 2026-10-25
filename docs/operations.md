@@ -32,10 +32,16 @@ The agents talk through any OpenAI-compatible API. No Claude key is needed.
 | `LLM_PROVIDER` | `openai` / `anthropic` / `none`; by default the providers when any is set. |
 | `AGENT_DAILY_BUDGET_USD` | The hard cap (production: 1). Unchanged. |
 
-**Recommended production values (2026-10-25):** `LLM_PROVIDERS=groq,gemini`, the two keys, `GROQ_PRICE_IN=0.2`,
-`GROQ_PRICE_OUT=0.8`, `GEMINI_PRICE_IN=0.3`, `GEMINI_PRICE_OUT=2.5`. The Groq key reports Developer-tier limits
-(500k requests a day), which suggests it is billed; the prices are set a little above Groq's list prices so the $1 cap is
-real either way. Delete the revoked `ANTHROPIC_API_KEY`.
+**Production values (2026-10-25, the owner: all free tiers):** `LLM_PROVIDERS=groq,gemini,openrouter`, the three keys,
+`GROQ_PRICE_IN/OUT=0`, `GEMINI_PRICE_IN/OUT=0`, `OPENROUTER_MODEL=nvidia/nemotron-3.5-super-vl:free`,
+`OPENROUTER_MODEL_STRONG=nvidia/nemotron-3-ultra-550b-a55b:free`, `OPENROUTER_TOOLS=on`, `OPENROUTER_RPM=15` (OpenRouter's key
+can spend credit, so only `:free` models, which are priced 0 automatically). With every price at 0 the $1 cap never limits
+model calls; free-tier quotas and 429s do, and a provider that answers 429 cools down while the next one takes the call.
+Delete the revoked `ANTHROPIC_API_KEY`.
+
+**Everyday words (`agents/voice.ts`):** the engine's posts, replies and agent-to-agent messages are written by the strong model
+from the agent's real state, at most `MODEL_VOICE_PER_HOUR` (default 240; 0 turns it off). A line whose numbers are not in its
+facts is dropped for the engine's own line; the model may also answer SKIP and the agent says nothing.
 
 Behaviour: per call the first provider that has a price, is not cooling down and is under its limits gets it; an error
 answer (429, 5xx, a JSON it could not produce) hands the call to the next provider; a timeout is never re-sent (it may

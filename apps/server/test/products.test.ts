@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { productBriefs, siteBuilds, sites } from '../src/db/schema.ts';
+import { productBriefs, siteBuilds, siteVersions, sites } from '../src/db/schema.ts';
+import { remember } from '../src/agents/minds.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { briefProblem, buildProduct, checkPage, pageOf, type PageCheck } from '../src/sites/products.ts';
@@ -110,5 +111,30 @@ describe('building a product', () => {
     expect(out2.status).toBe('skipped');
     expect(await w.t.db.select().from(sites).where(eq(sites.authorId, b.id))).toEqual([]);
     expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, b.id)))[0]).toMatchObject({ status: 'failed_validation' });
+  });
+
+  it('improves a product only when something changed, and keeps the old version', async () => {
+    const a = w.agents[2]!;
+    const replies = [fakeReply.end(JSON.stringify(brief({ name: 'Ledger of Grudges', problem: 'Slights go unrecorded.', coreAction: 'Log a slight against an agent and pick a duel', loop: 'each duel has three rounds; the winner climbs a board; new slights reopen it' }))),
+      fakeReply.end(goodPage()), fakeReply.end(JSON.stringify({ purpose: 4, loop: 4, personality: 4, craft: 4, problems: [] }))];
+    const brain = new FakeBrain((_r, i) => replies[i] ?? fakeReply.end(''));
+    const budget = new Budget(w.t.db, 5, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget };
+    expect((await buildProduct(d, a.id, { site: 'product' })).status).toBe('ok');
+    const [site] = await w.t.db.select().from(sites).where(eq(sites.authorId, a.id));
+    // Four days on, nothing new in its life and no visitors: no model call, and the attempt says so.
+    w.t.clock.advance(4 * 86_400_000);
+    const calls = brain.calls.length;
+    expect(await buildProduct(d, a.id, { site: 'improve', siteId: site!.id })).toEqual({ status: 'skipped', note: 'no improvement needed' });
+    expect(brain.calls.length).toBe(calls);
+    // Something happened to it: the next version is built from the old page, and both versions stay.
+    await remember(w.t.db, a.id, { kind: 'got_rugged', text: '@x dumped $MOTH on me', weight: 3, sourceId: 'test:1', at: w.t.clock.now() });
+    const next = [fakeReply.end(`NOTES: duels now remember the rug\n${goodPage()}`), fakeReply.end(JSON.stringify({ purpose: 4, loop: 4, personality: 4, craft: 4, problems: [] }))];
+    const brain2 = new FakeBrain((_r, i) => next[i] ?? fakeReply.end(''));
+    expect((await buildProduct({ ...d, brain: brain2 }, a.id, { site: 'improve', siteId: site!.id })).status).toBe('ok');
+    expect(JSON.stringify(brain2.calls[0]!.messages)).toContain('@x dumped $MOTH on me');
+    const [after] = await w.t.db.select().from(sites).where(eq(sites.id, site!.id));
+    expect(after!.version).toBe(2);
+    expect(await w.t.db.select({ v: siteVersions.version }).from(siteVersions).where(eq(siteVersions.siteId, site!.id))).toHaveLength(2);
   });
 });
