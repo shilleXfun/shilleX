@@ -47,6 +47,13 @@ export const MAINNET_GENESIS = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
 const BALANCE_TTL_MS = 15 * 60_000;
 /** While the RPC is out it is asked again at most this often, so turns do not each wait out its retries. */
 const RETRY_MS = 60_000;
+/**
+ * Fresh wallet reads start at most this often (each is two RPC requests). The free public devnet RPC allows about ten requests a
+ * second per IP; a boot that read all 100 wallets at once drew a storm of 429s (2026-10-25). Paced, a cold start warms in ~40 s.
+ */
+export const READ_GAP_MS = 400;
+/** Reads waiting beyond this many are not queued: the caller gets the stale value or an RPC_BUSY error at once. */
+const READ_QUEUE_MAX = 150;
 
 export class DevnetChain implements Chain {
   readonly network = 'devnet' as const;
@@ -54,6 +61,17 @@ export class DevnetChain implements Chain {
   private networkChecked = false;
   private reads = new Map<string, { at: number; b: WalletBalances }>();
   private failedAt = 0;
+  private nextReadAt = 0;
+  private queued = 0;
+  /** Waits for this read's slot in the pace (READ_GAP_MS apart); false when too many are already waiting. */
+  private async slot(): Promise<boolean> {
+    if (this.queued >= READ_QUEUE_MAX) return false;
+    const t = Date.now(), at = Math.max(t, this.nextReadAt);
+    this.nextReadAt = at + READ_GAP_MS;
+    this.queued++;
+    try { if (at > t) await new Promise((r) => setTimeout(r, at - t)); } finally { this.queued--; }
+    return true;
+  }
   /** From a failed wallet read until one succeeds (an RPC out of credits): trades could not land, so the engine keeps agents to talk. */
   get down() { return this.failedAt > 0; }
   /** The next read asks the RPC again; the old value stays as the stand-in if it cannot answer. */
@@ -134,6 +152,13 @@ export class DevnetChain implements Chain {
       if (hit) return hit.b;
       throw new ChainError('RPC_DOWN', 'The Solana RPC is not answering; trades wait until it does');
     }
+    if (!(await this.slot())) {
+      if (hit) return hit.b;
+      throw new ChainError('RPC_BUSY', 'Too many wallet reads are waiting for the RPC; try again shortly');
+    }
+    // Another caller may have read this wallet while this one waited.
+    const fresh = this.reads.get(publicKey);
+    if (fresh && Date.now() - fresh.at < BALANCE_TTL_MS) return fresh.b;
     try {
       const [lamports, accts] = await Promise.all([this.conn.getBalance(owner), this.conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID })]);
       const tokens = accts.value.map((a) => ({ mint: a.account.data.parsed.info.mint as string, raw: Number(a.account.data.parsed.info.tokenAmount.amount) })).filter((x) => x.raw > 0);
@@ -219,7 +244,9 @@ export class DevnetChain implements Chain {
  * The agents' chain. A devnet chain refuses to start against mainnet-beta's genesis. If the RPC cannot be reached at boot
  * the world still starts (agents wait out an RPC outage as before), and the check runs again before the first transaction.
  */
-export async function makeChain(config: Config, db: Db, connect = (url: string) => new Connection(url, 'confirmed'), now: () => Date = () => new Date()): Promise<Chain> {
+/** web3.js's own retry on a 429 waits and re-sends in a loop; off, so a rate-limited read falls back to the cached value at once. */
+const defaultConnect = (url: string) => new Connection(url, { commitment: 'confirmed', disableRetryOnRateLimit: true });
+export async function makeChain(config: Config, db: Db, connect = defaultConnect, now: () => Date = () => new Date()): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
   // Shillex's own books (mainnet spec Â§2): no RPC at all, and so nothing to check the network of.
   if (config.worldChain === 'ledger') return new LedgerChain(db, now, rulesFromConfig(config));
