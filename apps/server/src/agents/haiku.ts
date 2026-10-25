@@ -64,7 +64,7 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
  */
 export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   const worst = x.worstUsd * worstScale;
-  if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to ${worst.toFixed(4)}`);
+  if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to $${worst.toFixed(4)}`);
   const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
   book(worst);
   try { await addCost(x.db, x, worst); }

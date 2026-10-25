@@ -146,7 +146,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
     // The stop it announced is hit: most keep their word; a stubborn one holds, once, and everyone in the coin sees it.
     if (why === 'stop' && promise?.status === 'open' && pnl > plan.stopPct * CAPITULATE_AT && d.rng() < stubbornness(traits)) {
       await breakPromise(d.db, promise, pnl, now);
-      await announce(d, agentId, `Holding ${p.symbol} on my paper desk at ${pct(pnl)}, past the ${pct(plan.stopPct)} stop I called. I know what I said.`, d.rng() < 0.6);
+      await announce(d, agentId, `Holding $${p.symbol} on my paper desk at ${pct(pnl)}, past the ${pct(plan.stopPct)} stop I called. I know what I said.`, d.rng() < 0.6);
       continue;
     }
     // Held through its stop already: it gives up at CAPITULATE_AT times the stop, or the trade comes back to the target or runs out of time.
@@ -161,12 +161,12 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
     const broke = promise?.status === 'broken';
     if (promise?.status === 'open') await keepPromise(d.db, promise, now, why === 'stop' ? `cut at ${pct(result)}` : why === 'target' ? `took profit at ${pct(result)}` : `closed on time at ${pct(result)}`);
     // Its own record of the call, for good: the agent remembers the trades that paid and the ones that did not.
-    if (th) await remember(d.db, agentId, { kind: result >= 0 ? 'thesis_won' : 'thesis_lost', text: `my ${p.symbol} call ${result >= 0 ? 'paid' : 'failed'}: ${pct(result)}, ${why === 'target' ? 'at the target' : why === 'time' ? 'when time ran out' : why === 'gave_up' ? 'after I held past my stop' : 'at the stop'}`, asset: p.address, weight: Math.abs(result) >= 0.3 || broke ? 2 : 1, sourceId: `thesis:${th.id}`, at: now });
-    const line = why === 'gave_up' ? `Out of ${p.symbol} on my paper desk at ${pct(result)}. I held past my own ${pct(plan.stopPct)} stop and it cost me. Noted.`
-      : broke && why === 'target' ? `${p.symbol} came back after I held through my stop: ${pct(result)} on paper. That was luck, not a plan.`
-      : why === 'target' ? `Took profit on ${p.symbol} on my paper desk: ${pct(result)}. Plan said ${pct(plan.targetPct)}, plan got paid.`
-      : why === 'stop' ? `Stopped out of ${p.symbol} on my paper desk at ${pct(result)}. The stop is the stop.`
-      : `Closed ${p.symbol} on my paper desk at ${pct(result)}: the thesis ran out of time.`;
+    if (th) await remember(d.db, agentId, { kind: result >= 0 ? 'thesis_won' : 'thesis_lost', text: `my $${p.symbol} call ${result >= 0 ? 'paid' : 'failed'}: ${pct(result)}, ${why === 'target' ? 'at the target' : why === 'time' ? 'when time ran out' : why === 'gave_up' ? 'after I held past my stop' : 'at the stop'}`, asset: p.address, weight: Math.abs(result) >= 0.3 || broke ? 2 : 1, sourceId: `thesis:${th.id}`, at: now });
+    const line = why === 'gave_up' ? `Out of $${p.symbol} on my paper desk at ${pct(result)}. I held past my own ${pct(plan.stopPct)} stop and it cost me. Noted.`
+      : broke && why === 'target' ? `$${p.symbol} came back after I held through my stop: ${pct(result)} on paper. That was luck, not a plan.`
+      : why === 'target' ? `Took profit on $${p.symbol} on my paper desk: ${pct(result)}. Plan said ${pct(plan.targetPct)}, plan got paid.`
+      : why === 'stop' ? `Stopped out of $${p.symbol} on my paper desk at ${pct(result)}. The stop is the stop.`
+      : `Closed $${p.symbol} on my paper desk at ${pct(result)}: the thesis ran out of time.`;
     await announce(d, agentId, line, broke);
   }
 
@@ -206,7 +206,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       await d.db.insert(realPositions).values({ agentId, address: best.c.address, symbol: best.c.symbol, qty: f.qty, costUsd: f.usd, openedAt: now, updatedAt: now })
         .onConflictDoUpdate({ target: [realPositions.agentId, realPositions.address], set: { qty: f.qty, costUsd: f.usd, updatedAt: now } });
       // A stop said out loud is a promise (agents/minds.ts): it will be kept or broken in public.
-      if (conviction > 0.25 && await announce(d, agentId, `Opened ${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`)) {
+      if (conviction > 0.25 && await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${best.s.why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}.`)) {
         await promiseStop(d.db, { agentId, thesisId, asset: best.c.address, symbol: best.c.symbol, stopPct: plan.stopPct, dueAt: new Date(now.getTime() + plan.horizonMs), now });
       }
     }
