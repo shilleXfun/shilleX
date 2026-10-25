@@ -228,3 +228,7 @@
 .realLogo { display: inline-flex; width: 22px; height: 22px; overflow: hidden; border-radius: 50%; flex: none; }
 .callCoin { display: inline-flex; align-items: center; gap: 7px; }
 .callLogo { display: inline-flex; width: 18px; height: 18px; overflow: hidden; border-radius: 50%; flex: none; }
+
+/* What the agents built: their newest sites by real screenshot, three across on wide screens. */
+.builtGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 20px; margin: 36px 0 0; padding: 0; list-style: none; }
+.desksHead .sendText a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
