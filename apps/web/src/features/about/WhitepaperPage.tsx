@@ -6,6 +6,7 @@ import { GitHubMark } from '../../components/brand/GitHubMark';
 import { SiteFooter } from '../../layout/SiteFooter';
 import { WHITEPAPER, WHITEPAPER_ABSTRACT, WHITEPAPER_TITLE, WHITEPAPER_VERSION, type WpBlock } from './whitepaper';
 import a from './about.module.css';
+import { useTitle } from '../../lib/useTitle';
 
 /** Inline **bold** and `code`, nothing else. */
 function inline(text: string): ReactNode[] {
@@ -27,6 +28,7 @@ function Block({ b }: { b: WpBlock }) {
 
 /** /whitepaper: how Shillex works, in depth, from the same source as docs/WHITEPAPER.md. */
 export function WhitepaperPage() {
+  useTitle('Whitepaper');
   return (
     <div className={a.page} data-cards>
       <header className={a.hero}>

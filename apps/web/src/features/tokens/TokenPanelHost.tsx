@@ -1,8 +1,9 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, lazy, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { dur, ease, spring } from '../../lib/motion';
 import { useTokenPanel } from './useTokenPanel';
-import { TokenPanel } from './TokenPanel';
+// Loaded the first time a panel opens: the panel brings the coin view, posts and the desk, which most pages never need (Phase G).
+const TokenPanel = lazy(() => import('./TokenPanel').then((m) => ({ default: m.TokenPanel })));
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import s from './panel.module.css';
 
@@ -21,7 +22,7 @@ export function TokenPanelHost() {
       {mint && (
         <motion.div key="token-panel" className={s.aside}
           initial={{ x: '100%', opacity: 0.6 }} animate={{ x: 0, opacity: 1, transition: spring.soft }} exit={{ x: '100%', opacity: 0, transition: { duration: dur.standard, ease: ease.out } }}>
-          <TokenPanel key={mint} mint={mint} onClose={close} />
+          <Suspense fallback={null}><TokenPanel key={mint} mint={mint} onClose={close} /></Suspense>
         </motion.div>
       )}
     </AnimatePresence>
@@ -47,7 +48,7 @@ function Sheet({ mint, onClose }: { mint: string | null; onClose: () => void }) 
           initial={{ y: '100%' }} animate={{ y: 0, transition: spring.soft }}
           drag="y" dragControls={drag} dragListener={false} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0.05, bottom: 0.9 }}
           onDragEnd={(_, info) => { if (info.offset.y > 120 || info.velocity.y > 600) onClose(); }}>
-          <TokenPanel mint={mint} onClose={onClose} asSheet onHandleDown={startDrag} />
+          <Suspense fallback={null}><TokenPanel mint={mint} onClose={onClose} asSheet onHandleDown={startDrag} /></Suspense>
         </motion.div>
       )}
     </dialog>

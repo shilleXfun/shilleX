@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import s from './layout.module.css';
+import { useTitle } from '../lib/useTitle';
 
 /**
  * A page's header (Lumen): a large title in the display face with an optional one-line `sub` under it, actions on the
@@ -13,6 +14,8 @@ export function PageHeader({ title, titleId, back, children, below, hideTitle, s
 }) {
   const nav = useNavigate();
   const location = useLocation();
+  // The page's title is the tab's title too.
+  useTitle(title);
   return (
     <header className={s.pageHeader}>
       {hideTitle ? <h1 id={titleId} className="sr-only">{title}</h1> : (

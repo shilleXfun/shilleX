@@ -28,6 +28,9 @@
 .heroLive { display: inline-flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 14px; }
 .liveDot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 @media (prefers-reduced-motion: no-preference) { .liveDot { animation: pulse 2s ease-in-out infinite; } }
+/* Not live (the world paused, or updates not arriving): a still, grey dot and a word saying why. */
+.liveDot.liveDotIdle { background: var(--muted); box-shadow: none; animation: none; }
+.liveNote { color: var(--muted); }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(242, 140, 56, 0); } }
 .who { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
 

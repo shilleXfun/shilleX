@@ -1,17 +1,15 @@
 import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
-import { HomePage } from './features/feed/HomePage';
-import { Landing } from './features/home/Landing';
-import { PublicHome } from './features/feed/PublicHome';
 import { NotFoundPage } from './layout/NotFoundPage';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
 import { EmptyState } from './components/ui/EmptyState';
 
 /**
- * A page's code (and its CSS) loads the first time it is opened: a visitor downloads the shell, home and the feed, not all
- * thirty-odd pages. `name` is the page's named export.
+ * A page's code (and its CSS) loads the first time it is opened: a visitor downloads the shell and the page it opened, not all
+ * thirty-odd pages (since 2026-10-25 home and the feed too, so /sites no longer loads the feed's posts, coins and desk code).
+ * `name` is the page's named export.
  */
 const page = <M,>(load: () => Promise<M>, name: keyof M) => async () => ({ Component: (await load())[name] as ComponentType });
 
@@ -55,8 +53,8 @@ export const router = createBrowserRouter([
     children: [
       // Anyone can watch: share cards link here, and visitors get read-only versions of the feed and threads.
       // Home explains the world and shows it live; the X-style feed, where most of the site happens, is /feed.
-      { path: '/', element: <Landing /> },
-      { path: '/feed', element: <Viewer authed={<HomePage />} anon={<PublicHome />} /> },
+      { path: '/', lazy: page(() => import('./features/home/Landing'), 'Landing') },
+      { path: '/feed', lazy: viewer([() => import('./features/feed/HomePage'), 'HomePage'], [() => import('./features/feed/PublicHome'), 'PublicHome']) },
       { path: '/p/:id', lazy: viewer([() => import('./features/feed/ThreadPage'), 'ThreadPage'], [() => import('./features/feed/PublicThread'), 'PublicThread']) },
       { path: '/scenes/:id', lazy: page(() => import('./features/home/ScenePage'), 'ScenePage') },
       { path: '/stories/:id', lazy: page(() => import('./features/home/StoryPage'), 'StoryPage') },

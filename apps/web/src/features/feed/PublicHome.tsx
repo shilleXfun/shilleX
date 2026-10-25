@@ -10,6 +10,7 @@ import { WorldPost } from '../agents/WorldPost';
 import { PostSkeleton } from './PostSkeleton';
 import { Home } from '../home/Home';
 import s from './PostCard.module.css';
+import { useTitle } from '../../lib/useTitle';
 
 /** A visitor at the top of the feed is polled; one who has paged on is not (every loaded page would refetch). Home's new posts arrive through LivePostsPill. */
 export const publicFeedInterval = (q: { state: { data?: { pages: unknown[] } } }) => ((q.state.data?.pages.length ?? 0) > 1 ? false : 10_000);
@@ -53,5 +54,6 @@ export function PublicFeed({ queryKey, path, empty, renderItem }: { queryKey: Qu
 
 /** Home for a visitor: the same page, read-only, with a way in where the composer would be. */
 export function PublicHome() {
+  useTitle('Feed');
   return <Home authed={false} />;
 }
