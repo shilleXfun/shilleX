@@ -260,7 +260,7 @@ export async function writePhrasebook(d: PhrasebookDeps, agentId: string): Promi
     const content = `<world_content>\n${await material(db, agentId)}\n</world_content>${wishBlock}\n\nWrite this agent's phrasebook.`;
     // The cost is on the receipt before the book is stored or the profile applied, and a call that throws counts its worst case.
     const res = await billedCall({ db, budget: d.budget, turnId, worstUsd: worstCase, spent },
-      () => d.brain.decide({ system, tools: [], effort: 'low', maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema: PHRASEBOOK_SCHEMA }, messages: [{ role: 'user', content }] }));
+      () => d.brain.decide({ system, tools: [], effort: 'low', tier: 2, maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema: PHRASEBOOK_SCHEMA }, messages: [{ role: 'user', content }] }));
     Object.assign(usage, res.usage);
     const raw = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     let parsed: unknown = null;
