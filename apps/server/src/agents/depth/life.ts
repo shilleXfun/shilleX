@@ -13,6 +13,8 @@ import type { DepthModule, ExecResult } from './registry.ts';
 
 export const BROKE_LAMPORTS = 10_000_000, REVIVE_LAMPORTS = 20_000_000, GHOST_AFTER_MS = 24 * 3600_000, DEFAULT_AFTER_MS = 72 * 3600_000;
 const TX_FEE = 10_000; // lamports kept back for a transfer's network fee
+/** A broke agent asks at most this often: on 2026-10-26 the same "down to 0.0106 SOL. anyone?" went to one ally every half hour. */
+export const BEG_EVERY_MS = 4 * 3600_000;
 const sol = (l: number, digits: number) => (l / LAMPORTS_PER_SOL).toFixed(digits);
 
 /**
@@ -57,7 +59,8 @@ export const lifeModule: DepthModule = {
     // A ghost's only move is decide's ghost post (or idle).
     if (v.state.ghostSince) return [];
     const t = v.state.traits, out: Candidate[] = [];
-    if (v.state.brokeSince) {
+    const begged = v.state.cooldowns.beg ? Date.parse(v.now) - Date.parse(v.state.cooldowns.beg) : Infinity;
+    if (v.state.brokeSince && begged >= BEG_EVERY_MS) {
       const ally = v.depth.agentAllies[0]; // the warmest agent, never a human
       out.push({ kind: 'beg', situation: 'begging', score: 0.6, reason: `broke (${sol(v.wallet.lamports, 4)} SOL), asking for help`, ...(ally ? { target: { userId: ally } } : {}) });
     }

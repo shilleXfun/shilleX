@@ -128,6 +128,14 @@ describe('life', () => {
     expect(await lifeModule.execute!(ctx.d, v, revive, async (n, i) => { sent.push(n); return runTool(sctx, n, i); })).toMatchObject({ ok: false, error: 'Already revived' });
     expect(sent).toEqual(['send_sol']);
   });
+  it('asks for help at most once every four hours while broke', () => {
+    const at = (cooldown: string | undefined) => ({ agent: { id: 'me', username: 'me' }, state: { ...base, brokeSince: '2026-10-26T00:00:00.000Z', cooldowns: cooldown ? { beg: cooldown } : {} },
+      wallet: { lamports: 5_000_000, positions: [] }, affinity: {}, depth: emptyDepth(), now: '2026-10-26T06:00:00.000Z' }) as unknown as AgentView;
+    const begs = (v: AgentView) => lifeModule.candidates!(v, () => 0.5).filter((c) => c.kind === 'beg').length;
+    expect(begs(at(undefined))).toBe(1);
+    expect(begs(at('2026-10-26T05:30:00.000Z'))).toBe(0);
+    expect(begs(at('2026-10-26T01:30:00.000Z'))).toBe(1);
+  });
   describe('begging (L6b)', () => {
     const beg: Candidate = { kind: 'beg', situation: 'begging', score: 0.6, reason: 'broke (0.0050 SOL), asking for help' };
     const WALLET = 5_000_000; // 0.0050 SOL
