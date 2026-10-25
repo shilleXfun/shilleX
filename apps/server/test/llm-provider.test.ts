@@ -107,6 +107,25 @@ describe('RoutedBrain', () => {
     expect(seen).not.toContain('c.test');
   });
 
+  it('walks the other models on the same key when one is spent, and keeps everyday calls off the strong ones', async () => {
+    const seen: string[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      const { model } = JSON.parse(String(init.body)) as { model: string };
+      seen.push(model);
+      return model === 'big' || model === 'small' ? fail(429, 'You exceeded your current quota, please check your plan and billing details.') : ok('{"text":"x"}');
+    }) as typeof fetch;
+    const brain = new RoutedBrain([provider({ fallbacks: ['small2'], fallbacksStrong: ['big2'] })], () => new Date(), fetchImpl);
+    await brain.decide({ ...req(), tier: 2 });
+    expect(seen).toEqual(['big', 'big2']);
+    await brain.decide(req({ messages: [{ role: 'user', content: 'everyday' }] }));
+    expect(seen.slice(2)).toEqual(['small', 'small2']);
+    // With every strong model spent, a strong request still gets an answer from an everyday one.
+    const none = new RoutedBrain([provider({ fallbacks: ['small2'] })], () => new Date(), fetchImpl);
+    await none.decide({ ...req({ messages: [{ role: 'user', content: 'page' }] }), tier: 2 });
+    expect(seen.slice(-3)).toEqual(['big', 'small', 'small2']);
+    expect(brain.status()[0]!.usable).toBe(true);
+  });
+
   it('answers an identical request from memory, and refuses a provider whose price is unknown', async () => {
     let calls = 0;
     const fetchImpl = (async () => { calls++; return ok('{"text":"x"}'); }) as unknown as typeof fetch;

@@ -22,6 +22,13 @@ export interface ProviderConfig {
   model: string;
   /** Tier 2: big moments, theses, product briefs; the tier-1 model when unset. */
   modelStrong: string;
+  /**
+   * More models on the same key, tried in order when the one before is spent, missing or slow (each has its own free quota:
+   * on 2026-10-25 Gemini's two configured models were out while five others answered). Tier 1 walks `fallbacks`; tier 2
+   * walks `fallbacksStrong`, then the everyday models, so a site still gets a page from a lighter model.
+   */
+  fallbacks?: string[];
+  fallbacksStrong?: string[];
   /** USD per million tokens. Null means unknown: the provider is not used, so an unknown price can never break the cap. */
   priceInPerM: number | null;
   priceOutPerM: number | null;
@@ -219,19 +226,22 @@ export class RoutedBrain implements AgentBrain {
     return s;
   }
 
-  /** Under this provider's own limits for one more call of about `tokens` tokens to `model`. */
-  private room(p: ProviderConfig, tokens: number, model: string): string | null {
+  /** Under this provider's own limits for one more call of about `tokens` tokens. */
+  private room(p: ProviderConfig, tokens: number): string | null {
     const s = this.state(p);
     if (s.coolUntil > this.now().getTime()) return 'cooling down';
-    if ((s.modelCool[model] ?? 0) > this.now().getTime()) return `${model} cooling down`;
     if (p.dailyRequests !== null && s.today >= p.dailyRequests) return 'daily requests used';
     if (p.rpm !== null && s.minute.length >= p.rpm) return 'requests per minute used';
     if (p.tpm !== null && s.tokens.reduce((n, x) => n + x.n, 0) + tokens > p.tpm) return 'tokens per minute used';
     return null;
   }
 
-  /** The model each provider uses for this request. */
+  /** The model each provider uses first for this request. */
   modelFor(p: ProviderConfig, tier: Tier): string { return tier === 2 ? p.modelStrong || p.model : p.model; }
+  /** The models of one tier on this provider's key, in the order they are tried. */
+  ladder(p: ProviderConfig, tier: Tier): string[] {
+    return [...new Set((tier === 2 ? [p.modelStrong || p.model, ...(p.fallbacksStrong ?? [])] : [p.model, ...(p.fallbacks ?? [])]).filter(Boolean))];
+  }
 
   async decide(req: BrainRequest & { tier?: Tier }): Promise<BrainResponse> {
     const tier: Tier = req.tier ?? 1;
@@ -246,34 +256,43 @@ export class RoutedBrain implements AgentBrain {
     const hit = key ? this.cache.get(key) : undefined;
     if (hit) return { ...hit.res, usage: { input: 0, output: 0, cacheRead: hit.res.usage.input, cacheWrite: 0 } };
     const errors: ProviderError[] = [];
-    for (const p of usable) {
-      const model = this.modelFor(p, tier);
-      const full = this.room(p, est, model);
+    // A strong request tries every key's strong models first, then the everyday ones: a lighter page beats no page.
+    const tried = new Set<string>();
+    for (const pass of (tier === 2 ? [2, 1] : [1]) as Tier[]) for (const p of usable) {
+      const full = this.room(p, est);
       if (full) { errors.push(new ProviderError(`${p.name}: ${full}`, 'rate_limit', 429, p.name)); continue; }
       const s = this.state(p);
-      s.calls++; s.today++; s.minute.push(this.now().getTime()); s.tokens.push({ at: this.now().getTime(), n: est });
-      try {
-        const res = await callProvider(p, model, req, this.fetchImpl);
-        s.ok++; s.lastOkAt = this.now().getTime();
-        if (key) {
-          this.cache.set(key, { at: this.now().getTime(), res });
-          if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
+      const models = this.ladder(p, pass).filter((m) => !tried.has(`${p.name}:${m}`) && (s.modelCool[m] ?? 0) <= this.now().getTime());
+      if (!models.length) { errors.push(new ProviderError(`${p.name}: every model cooling down`, 'rate_limit', 429, p.name)); continue; }
+      for (const model of models) {
+        tried.add(`${p.name}:${model}`);
+        if (this.room(p, est)) break;
+        s.calls++; s.today++; s.minute.push(this.now().getTime()); s.tokens.push({ at: this.now().getTime(), n: est });
+        try {
+          const res = await callProvider(p, model, req, this.fetchImpl);
+          s.ok++; s.lastOkAt = this.now().getTime();
+          if (key) {
+            this.cache.set(key, { at: this.now().getTime(), res });
+            if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
+          }
+          return res;
+        } catch (e) {
+          const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.message ?? String(e), 'transient', undefined, p.name);
+          s.failed++; s.lastError = err.message;
+          // A spent daily allowance ("free-models-per-day", Gemini's "exceeded your current quota") is not back in a minute.
+          const daily = err.category === 'rate_limit' && /per[- ]?day|daily|current quota/i.test(err.message);
+          const cool = err.retryAfterMs ?? (daily ? DAILY_COOL_MS : COOL_MS[err.category]);
+          // A key or billing problem benches the whole provider; a limit, a missing model or a hiccup only that model (Groq and
+          // Gemini limit each model on its own, so a spent strong model must not bench the everyday one).
+          if (cool && (err.category === 'auth' || err.category === 'credit')) s.coolUntil = this.now().getTime() + cool;
+          else if (cool) s.modelCool[model] = this.now().getTime() + cool;
+          console.error(`[llm] ${err.message}`);
+          // No answer means the call may have been billed: never sent again to someone else, unless this provider is free.
+          if (err.status === undefined && !(p.priceInPerM === 0 && p.priceOutPerM === 0)) throw err;
+          errors.push(err);
+          // A key or billing problem is the same for every model on the key.
+          if (err.category === 'auth' || err.category === 'credit') break;
         }
-        return res;
-      } catch (e) {
-        const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.message ?? String(e), 'transient', undefined, p.name);
-        s.failed++; s.lastError = err.message;
-        // A spent daily allowance ("free-models-per-day", Gemini's "exceeded your current quota") is not back in a minute.
-        const daily = err.category === 'rate_limit' && /per[- ]?day|daily|current quota/i.test(err.message);
-        const cool = err.retryAfterMs ?? (daily ? DAILY_COOL_MS : COOL_MS[err.category]);
-        // A key or billing problem benches the whole provider; a limit, a missing model or a hiccup only that model (Groq and
-        // Gemini limit each model on its own, so a spent strong model must not bench the everyday one).
-        if (cool && (err.category === 'auth' || err.category === 'credit')) s.coolUntil = this.now().getTime() + cool;
-        else if (cool) s.modelCool[model] = this.now().getTime() + cool;
-        console.error(`[llm] ${err.message}`);
-        // No answer means the call may have been billed: never sent again to someone else, unless this provider is free.
-        if (err.status === undefined && !(p.priceInPerM === 0 && p.priceOutPerM === 0)) throw err;
-        errors.push(err);
       }
     }
     // Every provider said no. If any of them only needs time (busy, a spent quota, a hiccup), that is the answer: one dead key
@@ -291,7 +310,7 @@ export class RoutedBrain implements AgentBrain {
       const why = this.why(p);
       const t = this.now().getTime();
       // Cooling: the whole provider, or every model it has; the latest end of any cool-down is shown.
-      const models = [...new Set([p.model, p.modelStrong || p.model])];
+      const models = [...new Set([...this.ladder(p, 1), ...this.ladder(p, 2)])];
       const cooling = s.coolUntil > t || models.every((m) => (s.modelCool[m] ?? 0) > t);
       const until = Math.max(s.coolUntil, ...models.map((m) => s.modelCool[m] ?? 0));
       return {

@@ -110,14 +110,16 @@ export interface LlmConfig {
 /** Known OpenAI-compatible providers: where they live, sensible models, what they support. Any field can be overridden by env. */
 export const LLM_PRESETS: Record<string, Omit<ProviderConfig, 'name' | 'apiKey' | 'priceInPerM' | 'priceOutPerM' | 'dailyRequests' | 'rpm' | 'tpm' | 'timeoutMs'>> = {
   groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', modelStrong: 'openai/gpt-oss-120b', jsonSchema: true, tools: true, reasoningEffort: true },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-flash-lite-latest', modelStrong: 'gemini-3.5-flash', jsonSchema: true, tools: true, reasoningEffort: true },
+  // Gemini's further models answered on 2026-10-25 while the first two were out (2.5 ones are gone, flash-latest timed out).
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-flash-lite-latest', modelStrong: 'gemini-3.5-flash', jsonSchema: true, tools: true, reasoningEffort: true,
+    fallbacks: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], fallbacksStrong: ['gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.6-flash'] },
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: '', modelStrong: '', jsonSchema: false, tools: false, reasoningEffort: false },
 };
 
 /**
  * LLM_PROVIDERS=groq,gemini (the order is the fallback order; default: groq and gemini, whichever has a key; openrouter only when
  * listed, since its key can spend credit). Per provider NAME: NAME_API_KEY, NAME_BASE_URL, NAME_MODEL, NAME_MODEL_STRONG,
- * NAME_PRICE_IN and NAME_PRICE_OUT (USD per million tokens; unset means unknown and the provider is not used, 0 for a free tier;
+ * NAME_MODEL_FALLBACKS and NAME_MODEL_STRONG_FALLBACKS (comma lists of more models on the same key), NAME_PRICE_IN and NAME_PRICE_OUT (USD per million tokens; unset means unknown and the provider is not used, 0 for a free tier;
  * an OpenRouter ':free' model is 0), NAME_DAILY_REQUESTS, NAME_RPM, NAME_TPM, NAME_JSON_SCHEMA, NAME_TOOLS. LLM_TIMEOUT_MS (default
  * 60 s). LLM_PROVIDER=openai|anthropic|none picks the mode; by default the providers when any is set, else Anthropic when its key
  * is set, else none.
@@ -137,8 +139,10 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
     if (!apiKey || !baseUrl) continue;
     const model = val(`${N}_MODEL`) ?? preset?.model ?? '';
     const free = name === 'openrouter' && model.endsWith(':free') ? 0 : null;
+    const list = (k: string) => val(k)?.split(',').map((x) => x.trim()).filter(Boolean);
     providers.push({
       name, baseUrl, apiKey, model, modelStrong: val(`${N}_MODEL_STRONG`) ?? (val(`${N}_MODEL`) ? model : preset?.modelStrong ?? model),
+      fallbacks: list(`${N}_MODEL_FALLBACKS`) ?? preset?.fallbacks ?? [], fallbacksStrong: list(`${N}_MODEL_STRONG_FALLBACKS`) ?? preset?.fallbacksStrong ?? [],
       priceInPerM: num(`${N}_PRICE_IN`) ?? free, priceOutPerM: num(`${N}_PRICE_OUT`) ?? free,
       dailyRequests: num(`${N}_DAILY_REQUESTS`), rpm: num(`${N}_RPM`), tpm: num(`${N}_TPM`),
       jsonSchema: flag(`${N}_JSON_SCHEMA`, preset?.jsonSchema ?? false), tools: flag(`${N}_TOOLS`, preset?.tools ?? false),

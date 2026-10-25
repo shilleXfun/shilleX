@@ -2,11 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { productBriefs, siteBuilds, siteVersions, sites } from '../src/db/schema.ts';
+import { productBriefs, siteBuilds, siteVersions, sites, worldJobs } from '../src/db/schema.ts';
 import { remember } from '../src/agents/minds.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { briefProblem, buildProduct, checkPage, pageOf, type PageCheck } from '../src/sites/products.ts';
+import { siteBuilder } from '../src/sites/build.ts';
+import { ProviderError } from '../src/world/brain-openai.ts';
 import { siteCsp } from '../src/sites/routes.ts';
 import type { ProductBrief } from '../src/db/schema.ts';
 
@@ -111,6 +113,17 @@ describe('building a product', () => {
     expect(out2.status).toBe('skipped');
     expect(await w.t.db.select().from(sites).where(eq(sites.authorId, b.id))).toEqual([]);
     expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, b.id)))[0]).toMatchObject({ status: 'failed_validation' });
+  });
+
+  it('hands a product no model can answer for to the local builder instead of failing the slot', async () => {
+    const a = w.agents[2]!;
+    const brain = new FakeBrain(() => { throw new ProviderError('groq: cooling down; gemini: every model cooling down', 'rate_limit', 429); });
+    const budget = new Budget(w.t.db, 5, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
+    expect(siteBuilder({ app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget })(a.id, { site: 'product' })).toBe(true);
+    // The job ends in the local builder, not in the model's failure (this test world has no public profile for it to read).
+    let job: typeof worldJobs.$inferSelect | undefined;
+    for (let n = 0; n < 100 && !job?.lastFinishedAt; n++) { await new Promise((r) => setTimeout(r, 50)); [job] = await w.t.db.select().from(worldJobs).where(eq(worldJobs.name, 'site-build')); }
+    expect(job).toMatchObject({ lastStatus: 'skipped', lastNote: 'no public record to build from', lastError: null });
   });
 
   it('improves a product only when something changed, and keeps the old version', async () => {
