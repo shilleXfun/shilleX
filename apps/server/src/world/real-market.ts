@@ -20,6 +20,8 @@ export const MAJORS = [
   '2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv', // PENGU
   '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', // RAY
 ];
+/** Tickers of coins that live on other chains: on Solana, a token by that name is a copycat. */
+const FAMOUS_ELSEWHERE = ['BTC', 'WBTC', 'ETH', 'WETH', 'XRP', 'BNB', 'USDT', 'USDC', 'SOL', 'WSOL', 'TRX', 'ADA', 'TON', 'LTC', 'DOT', 'AVAX', 'LINK', 'DOGE', 'SHIB', 'PEPE', 'SUI', 'HYPE'];
 const API = 'https://api.dexscreener.com';
 const num = (v: unknown, d = 0) => { const n = typeof v === 'string' ? Number(v) : v; return typeof n === 'number' && Number.isFinite(n) ? n : d; };
 /** A logo only from DexScreener's own CDN, asked for at 128 px. */
@@ -83,9 +85,11 @@ export async function refreshRealMarket(db: Db, now: Date, fetchImpl: typeof fet
   const all = [...new Set([...MAJORS, ...trending, ...held])].slice(0, 120);
   const major = new Set(MAJORS), hot = new Set(trending);
   const rows = await pairsFor(all, (a) => (major.has(a) ? 'major' : hot.has(a) ? 'trending' : 'held'), now, fetchImpl);
-  // A trending coin wearing an established coin's ticker is a copycat: it never makes the list.
-  const majorSymbols = new Set(rows.filter((r) => major.has(r.address)).map((r) => r.symbol));
-  const listed = rows.filter((r) => major.has(r.address) || !majorSymbols.has(r.symbol));
+  // A trending coin wearing an established coin's ticker is a copycat: it never makes the list (2026-10-25 live: a Solana "BTC"
+  // read as "btc +222% in 24 h"). A coin an agent already holds stays priced, so its position can still close.
+  const majorSymbols = new Set([...rows.filter((r) => major.has(r.address)).map((r) => r.symbol), ...FAMOUS_ELSEWHERE]);
+  const holding = new Set(held);
+  const listed = rows.filter((r) => major.has(r.address) || holding.has(r.address) || !majorSymbols.has(r.symbol));
   for (const r of listed) { const { address: _, ...rest } = r; await db.insert(realMarket).values(r).onConflictDoUpdate({ target: realMarket.address, set: rest }); }
   return listed.length;
 }
