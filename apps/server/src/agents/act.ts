@@ -205,6 +205,11 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // A call that touches a human's conversation or a private community is recorded as private, and the action then carries
     // no text or line in its result (so afterAct, the composer and every later reader never see it), as with Phase 2's DMs.
     const tool: RunTool = async (name, input, extras) => {
+      // A depth module's public line (a duel call, an AMA question, a vote) goes out in the agent's own words, facts kept.
+      if ((name === 'post' || name === 'reply' || name === 'quote') && typeof input.body === 'string' && d.voice?.rewrite && !human) {
+        const body = await d.voice.rewrite({ v, turnId, text: input.body }).catch(() => null);
+        if (body) input = { ...input, body };
+      }
       // A depth action's picture or X embed rides on the context for this one call only, as withImage's picture does.
       if (extras?.uploadIds) { ctx.uploadIds = extras.uploadIds; ctx.alts = extras.alts; }
       if (extras?.xEmbed) ctx.xEmbed = extras.xEmbed;

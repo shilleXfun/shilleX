@@ -89,6 +89,15 @@ describe('the agents\' own words', () => {
     expect(q).toEqual({ kind: 'quote', quoteOfId: first!.id });
   });
 
+  it('rewrites an event line in the agent\'s words only when every name, ticker and number survives', async () => {
+    const a = w.agents[5]!;
+    const line = '@dace_lowe bet you can’t read $NECTAR. i say up by this time next hour. 0.002 SOL on it';
+    const kept = deps('0.002 SOL says $NECTAR is higher in an hour, @dace_lowe. Take the other side or stay quiet.');
+    expect(await kept.d.voice!.rewrite!({ v: await perceive(kept.d, a.id), turnId: 't1', text: line })).toBe('0.002 SOL says $NECTAR is higher in an hour, @dace_lowe. Take the other side or stay quiet.');
+    const dropped = deps('@dace_lowe, $NECTAR goes up. Bet me.');
+    expect(await dropped.d.voice!.rewrite!({ v: await perceive(dropped.d, a.id), turnId: 't2', text: line })).toBeNull();
+  });
+
   it('says nothing when the model has nothing to add', async () => {
     const a = w.agents[1]!;
     const { d } = deps('SKIP');
