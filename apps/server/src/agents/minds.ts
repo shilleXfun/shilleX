@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentAffinity, agentCommitments, agentEvents, agentGoals, agentMemories, posts, realPositions, users, type AgentGoalRow, type AgentMemoryRow, type CommitmentRow } from '../db/schema.ts';
+import { agentAffinity, agentCommitments, agentEvents, agentGoals, agentMemories, beliefChanges, posts, realPositions, users, type AgentGoalRow, type AgentMemoryRow, type CommitmentRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { getSetting, setSetting } from '../world/launchpad.ts';
 import type { AgentGoalKind } from '@shillex/shared';
@@ -102,6 +102,27 @@ export async function adjustTrust(db: Db, agentId: string, otherId: string, delt
     .returning({ trust: agentAffinity.trust });
   return row?.trust ?? 0;
 }
+/**
+ * How highly the agents who know `aboutId` rate its judgement (plan C2), moved by its public calls resolving. Only opinions that
+ * already exist move: a stranger's call means nothing to an agent that never met it.
+ */
+export async function adjustRespectOf(db: Db, aboutId: string, delta: number, now: Date): Promise<void> {
+  await db.update(agentAffinity).set({ respect: sql`greatest(-1, least(1, ${agentAffinity.respect} + ${delta}))`, updatedAt: now })
+    .where(and(eq(agentAffinity.otherId, aboutId), ne(agentAffinity.agentId, aboutId)));
+}
+
+/**
+ * A change of mind, kept with its reason (plan C5): a style given up, a stance on a coin flipped, a goal dropped. The same
+ * change about the same subject is kept at most once every six hours, so a flip-flopping agent does not flood its page.
+ */
+export async function recordChange(db: Db, agentId: string, c: { kind: 'style' | 'coin' | 'goal'; subject: string; from: string; to: string; reason: string }, now: Date): Promise<void> {
+  if (c.from === c.to) return;
+  const [recent] = await db.select({ id: beliefChanges.id }).from(beliefChanges)
+    .where(and(eq(beliefChanges.agentId, agentId), eq(beliefChanges.kind, c.kind), eq(beliefChanges.subject, c.subject), gte(beliefChanges.at, new Date(now.getTime() - 6 * 3_600_000)))).limit(1);
+  if (recent) return;
+  await db.insert(beliefChanges).values({ id: newId(), agentId, kind: c.kind, subject: c.subject.slice(0, 60), fromValue: c.from.slice(0, 60), toValue: c.to.slice(0, 60), reason: c.reason.slice(0, 240), at: now });
+}
+
 /** Everyone this agent has an opinion of, trust only (0 is "no reason either way"). */
 export async function trustOf(db: Db, agentId: string): Promise<Record<string, number>> {
   const rows = await db.select({ otherId: agentAffinity.otherId, trust: agentAffinity.trust }).from(agentAffinity).where(and(eq(agentAffinity.agentId, agentId), ne(agentAffinity.trust, 0)));
@@ -175,6 +196,8 @@ export async function persistGoal(db: Db, agentId: string, fresh: Goal, now: Dat
     return { kind: active.kind as AgentGoalKind, why: active.why, targetId: active.targetId, mint: active.asset, symbol: active.symbol };
   }
   if (active) await db.update(agentGoals).set({ endedAt: now, outcome: REACHED_WHEN_GONE.has(active.kind) ? 'achieved' : 'dropped' }).where(eq(agentGoals.id, active.id));
+  // A goal dropped for another is a change of mind; one reached is not.
+  if (active && !REACHED_WHEN_GONE.has(active.kind)) await recordChange(db, agentId, { kind: 'goal', subject: 'what it is after', from: active.kind, to: fresh.kind, reason: fresh.why }, now);
   await db.insert(agentGoals).values({ id: newId(), agentId, kind: fresh.kind, why: fresh.why, targetId: fresh.targetId, asset: fresh.mint, symbol: fresh.symbol, startedAt: now, updatedAt: now })
     .onConflictDoNothing();
   return fresh;

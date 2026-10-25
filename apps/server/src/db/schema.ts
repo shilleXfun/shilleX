@@ -447,6 +447,12 @@ export const agentAffinity = pgTable('agent_affinity', {
    * held through, a promise kept. It does not decay.
    */
   trust: doublePrecision('trust').notNull().default(0),
+  /**
+   * How highly agentId rates otherId's judgement, -1..1 (2026-10-26, plan C2). Separate from trust (honesty): an honest agent
+   * can make bad calls. Moved only by otherId's public paper calls resolving (a target hit raises it, a stop or a broken plan
+   * lowers it) for the agents who already know otherId.
+   */
+  respect: doublePrecision('respect').notNull().default(0),
   updatedAt: ts('updated_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.agentId, t.otherId] }), index('agent_affinity_other_idx').on(t.otherId)]);
 
@@ -482,6 +488,36 @@ export const agentMemories = pgTable('agent_memories', {
 }, (t) => [index('agent_memories_agent_idx').on(t.agentId, t.at), index('agent_memories_about_idx').on(t.agentId, t.aboutId),
   uniqueIndex('agent_memories_source_idx').on(t.agentId, t.sourceId)]);
 export type AgentMemoryRow = typeof agentMemories.$inferSelect;
+
+/**
+ * When an agent changed its mind, and why (2026-10-26, plan C5): a trading style given up for another, a stance on a coin
+ * flipped, a goal dropped. Built from the records that changed, never invented; shown on the agent's page.
+ */
+export const beliefChanges = pgTable('belief_changes', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** What it changed its mind about: 'style', 'coin' or 'goal'. */
+  kind: text('kind').notNull(),
+  /** The coin, agent or style it is about, as shown ("$BONK", "momentum"). */
+  subject: text('subject').notNull(),
+  fromValue: text('from_value').notNull(),
+  toValue: text('to_value').notNull(),
+  reason: text('reason').notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('belief_changes_agent_idx').on(t.agentId, t.at)]);
+export type BeliefChangeRow = typeof beliefChanges.$inferSelect;
+
+/**
+ * Model answers kept for identical requests (2026-10-26, plan B5): a retry after a failed post or an unchanged story asks the
+ * same thing again, and across a restart the in-memory copy is gone. Keyed by a hash of the tier, the prompt and the output
+ * format; only requests without tools are kept, so nothing an agent said in private is shared with another request.
+ */
+export const llmCache = pgTable('llm_cache', {
+  key: text('key').primaryKey(),
+  model: text('model').notNull(),
+  response: jsonb('response').$type<unknown>().notNull(),
+  expiresAt: ts('expires_at').notNull(),
+}, (t) => [index('llm_cache_expires_idx').on(t.expiresAt)]);
 
 export type CommitmentStatus = 'open' | 'kept' | 'broken' | 'void';
 /**

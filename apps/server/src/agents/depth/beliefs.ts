@@ -3,6 +3,7 @@ import type { Db } from '../../db/client.ts';
 import { agentBeliefs, chainTxs, posts, saidVsDid, worldCoins } from '../../db/schema.ts';
 import { holdersOf } from '../../world/market.ts';
 import { adjustAffinity, rememberEvent } from '../state.ts';
+import { recordChange } from '../minds.ts';
 import type { Candidate, Situation } from '../types.ts';
 import type { DepthModule } from './registry.ts';
 
@@ -151,7 +152,12 @@ export const beliefsModule: DepthModule = {
       for (const coin of v.coins) {
         const stance = stanceOf(r.text, coin.symbol);
         if (stance === null) continue;
-        const base = v.depth.beliefs[coin.mint] ?? { expect: 0, trustCreator: 0.5 };
+        const base = v.depth.beliefs[coin.mint] ?? { expect: 0, trustCreator: 0.5, stance: null };
+        // Said the opposite of what it said before, both firmly: a change of mind on that coin (plan C5).
+        if (base.stance !== null && Math.abs(base.stance) > 0.3 && Math.abs(stance) > 0.3 && Math.sign(base.stance) !== Math.sign(stance)) {
+          const side = (x: number) => (x > 0 ? 'bullish' : 'bearish');
+          await recordChange(d.db, v.agent.id, { kind: 'coin', subject: `$${coin.symbol}`, from: side(base.stance), to: side(stance), reason: `it said so in public: "${r.text.slice(0, 160)}"` }, d.now());
+        }
         await d.db.insert(agentBeliefs).values({ agentId: v.agent.id, mint: coin.mint, expect: base.expect, trustCreator: base.trustCreator, stance, stanceAt: d.now() })
           .onConflictDoUpdate({ target: [agentBeliefs.agentId, agentBeliefs.mint], set: { stance, stanceAt: d.now() } });
         if (c.kind !== 'chat') await recordHypocrisy(d, v.agent.id, coin.mint, coin.symbol);

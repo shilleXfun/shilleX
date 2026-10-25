@@ -183,6 +183,13 @@
       "when": 1792931069532,
       "tag": "0025_products",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792972175279,
+      "tag": "0026_plan_rest",
+      "breakpoints": true
     }
   ]
 }

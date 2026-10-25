@@ -10,6 +10,7 @@ import type { Traits } from '../types.ts';
 import type { EngineDeps } from '../engine.ts';
 import type { DepthModule } from './registry.ts';
 import { applyDrift } from './drift.ts';
+import { adjustRespectOf, recordChange } from '../minds.ts';
 import { oneShotTool, systemAct, type ModelDeps } from './system.ts';
 import { remember } from '../minds.ts';
 
@@ -95,6 +96,7 @@ export async function localDesk(db: Db, agentId: string, t: Traits, now: Date) {
   const [desk] = await db.select({ style: agentDesks.style }).from(agentDesks).where(eq(agentDesks.agentId, agentId));
   const next = nextStyle(t, desk?.style ?? null, closed);
   const switched = next.switched ? ` Gave up on ${next.switched.from} after losing ${next.switched.lost} of ${next.switched.of}; trading ${next.style} now.` : '';
+  if (next.switched) await recordChange(db, agentId, { kind: 'style', subject: 'how it trades', from: next.switched.from, to: next.style, reason: `lost ${next.switched.lost} of its last ${next.switched.of} trades` }, now);
   if (next.switched) await remember(db, agentId, { kind: 'changed_style', text: `I gave up trading ${next.switched.from} after losing ${next.switched.lost} of my last ${next.switched.of} and went ${next.style}`, weight: 2, sourceId: `style:${now.toISOString().slice(0, 10)}`, at: now });
   await writeDesk(db, agentId, { style: next.style, risk: t.risk * (avg < -0.1 ? 0.7 : 1), watch: [], lessons: (localLessons(closed) + switched).slice(0, 400), model: 'local' }, now);
 }
@@ -158,7 +160,12 @@ export async function closeThesis(db: Db, th: Pick<ThesisRow, 'id' | 'agentId' |
   const closed = await db.update(agentTheses).set({ status, exitPrice, pnlPct, closedAt: now, closeReason: how.reason ?? 'other', process: how.process ?? null }).where(and(eq(agentTheses.id, th.id), eq(agentTheses.status, 'open'))).returning({ id: agentTheses.id });
   // It learns a little from each result: a stop hit makes it more careful, a win a little bolder (drift caps the day's change).
   if (closed.length) await applyDrift(db, th.agentId, status === 'won' ? { risk: 0.005 } : status === 'lost' ? { risk: -0.01 } : {}, now).catch(() => undefined);
+  // Its judgement, as the agents who know it rate it (plan C2): a target hit earns respect, leaving by its own plan a little,
+  // a stop costs some, holding past its own stop the most.
+  const respect = how.reason ? RESPECT_FOR[how.reason] ?? (how.reason === 'time' ? (pnlPct > 0 ? 0.03 : -0.03) : 0) : 0;
+  if (closed.length && respect) await adjustRespectOf(db, th.agentId, respect, now).catch(() => undefined);
 }
+const RESPECT_FOR: Record<string, number> = { target: 0.08, invalidated: 0.02, stop: -0.04, gave_up: -0.1 };
 
 export const deskModule: DepthModule = {
   name: 'desk',

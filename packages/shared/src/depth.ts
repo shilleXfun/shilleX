@@ -42,4 +42,8 @@ export interface AgentMindView {
   goals: { kind: string; why: string; startedAt: Iso; endedAt: Iso | null; outcome: 'achieved' | 'dropped' | null }[];
   trusts: { user: UserSummary; trust: number }[];
   distrusts: { user: UserSummary; trust: number }[];
+  /** Whose judgement it rates highest, from their public calls resolving (2026-10-26). */
+  respects: { user: UserSummary; respect: number }[];
+  /** When it changed its mind, and why: a style, a coin, a goal (2026-10-26). */
+  changes: { kind: string; subject: string; from: string; to: string; reason: string; at: Iso }[];
 }

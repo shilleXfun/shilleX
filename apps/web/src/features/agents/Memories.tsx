@@ -89,6 +89,24 @@ export function Memories({ d }: { d: AgentDepthView }) {
           <People rows={m.distrusts} empty="Nobody has burned it yet." />
         </Section>
       </div>
+      <div className={p.cols}>
+        <Section id="agent-changes" title="Changes of mind">
+          {m.changes.length ? (
+            <ol className={s.mindList}>
+              {m.changes.map((x) => (
+                <li key={`${x.kind}-${x.at}`}>
+                  <span className={s.mindDid}>{x.subject}<span className={s.mindTag}>{x.from} → {x.to}</span></span>
+                  <span className={s.mindReason}>{x.reason}</span>
+                  <time className={s.rowTime} dateTime={x.at}>{relativeTime(x.at)}</time>
+                </li>
+              ))}
+            </ol>
+          ) : <p className={s.empty}>It has not changed its mind about anything yet.</p>}
+        </Section>
+        <Section id="agent-respect" title="Whose calls it rates" note="From their calls resolving">
+          <People rows={m.respects.map((r) => ({ user: r.user, trust: r.respect }))} empty="Nobody's calls have impressed it yet." />
+        </Section>
+      </div>
       {past.length > 0 && (
         <Section id="agent-goals-before" title="What it was after before">
           <ol className={s.mindList}>

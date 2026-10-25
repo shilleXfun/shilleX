@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentAffinity, agentCommitments, agentGoals, realPositions } from '../src/db/schema.ts';
+import { agentAffinity, agentCommitments, agentGoals, beliefChanges, realPositions } from '../src/db/schema.ts';
 import { rememberEvent } from '../src/agents/state.ts';
-import { breakPromise, openPromise, persistGoal, promiseStop, recallLines, repeats, similarity, trustOf, GOAL_MIN_MS } from '../src/agents/minds.ts';
+import { adjustRespectOf, adjustTrust, breakPromise, openPromise, persistGoal, promiseStop, recallLines, recordChange, repeats, similarity, trustOf, GOAL_MIN_MS } from '../src/agents/minds.ts';
 import { trustWeight } from '../src/agents/depth/trust.ts';
 import { stubbornness, trustTilt } from '../src/world/real-desk.ts';
 import { reputationScore } from '../src/agents/depth/reputation.ts';
@@ -67,6 +67,9 @@ describe('persistent minds', () => {
     expect(out.kind).toBe('explore');
     const rows = await w.t.db.select().from(agentGoals).where(eq(agentGoals.agentId, a.id)).orderBy(agentGoals.startedAt);
     expect(rows.map((r) => [r.kind, r.outcome])).toEqual([['famous', 'dropped'], ['recover', 'achieved'], ['explore', null]]);
+    // Dropping a goal for another is a change of mind; reaching one is not.
+    const changes = await w.t.db.select().from(beliefChanges).where(eq(beliefChanges.agentId, a.id));
+    expect(changes.map((c) => [c.kind, c.fromValue, c.toValue])).toEqual([['goal', 'famous', 'recover']]);
     expect(GOAL_MIN_MS).toBeGreaterThan(60_000);
   });
 
@@ -85,6 +88,27 @@ describe('persistent minds', () => {
     const t = { risk: 0.5, chattiness: 0.5, loyalty: 0.5, pettiness: 0.5, greed: 0.5, humor: 0.5, curiosity: 0.5 };
     expect(stubbornness({ ...t, greed: 0.9, risk: 0.9, pettiness: 0.8 })).toBeGreaterThan(stubbornness({ ...t, greed: 0.1, risk: 0.2, pettiness: 0.1 }));
     expect(stubbornness({ ...t, greed: 1, risk: 1, pettiness: 1 })).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe('respect and changes of mind', () => {
+  it('moves respect only for agents who already know the caller, within -1..1', async () => {
+    const [caller, knows, stranger] = [w.agents[0]!, w.agents[1]!, w.agents[2]!];
+    await adjustTrust(w.t.db, knows.id, caller.id, 0.1, T0);
+    for (let i = 0; i < 20; i++) await adjustRespectOf(w.t.db, caller.id, 0.08, T0);
+    const rows = await w.t.db.select({ agentId: agentAffinity.agentId, respect: agentAffinity.respect }).from(agentAffinity).where(eq(agentAffinity.otherId, caller.id));
+    expect(rows).toEqual([{ agentId: knows.id, respect: 1 }]);
+    expect(rows.some((r) => r.agentId === stranger.id)).toBe(false);
+  });
+  it('keeps one change about the same subject per six hours, and none that changes nothing', async () => {
+    const a = w.agents[0]!;
+    const flip = { kind: 'coin' as const, subject: '$BONK', from: 'bullish', to: 'bearish', reason: 'it said so' };
+    await recordChange(w.t.db, a.id, flip, T0);
+    await recordChange(w.t.db, a.id, { ...flip, from: 'bearish', to: 'bullish' }, new Date(T0.getTime() + 3_600_000));
+    await recordChange(w.t.db, a.id, { ...flip, from: 'bearish', to: 'bullish' }, new Date(T0.getTime() + 7 * 3_600_000));
+    await recordChange(w.t.db, a.id, { ...flip, subject: '$WIF', to: 'bullish' }, T0);
+    const rows = await w.t.db.select().from(beliefChanges).where(eq(beliefChanges.agentId, a.id));
+    expect(rows.map((r) => [r.subject, r.fromValue, r.toValue])).toEqual([['$BONK', 'bullish', 'bearish'], ['$BONK', 'bearish', 'bullish']]);
   });
 });
 
