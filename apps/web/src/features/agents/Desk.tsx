@@ -59,6 +59,15 @@ function CoinCell({ t }: { t: ThesisItem }) {
   return <Link className={s.coin} to={coinHref(t)}>{inner}</Link>;
 }
 
+/** How a plan ended, in words: by its own rules, or after the agent broke them (a win then was luck). */
+const ENDED: Record<string, string> = { target: 'hit its target', stop: 'stopped out', time: 'ran out of time', invalidated: 'proven wrong', gave_up: 'held past its stop', other: 'sold outside the plan' };
+/** The plan's reason, and under it what would prove it wrong (open) or how it ended (closed). */
+function Why({ t }: { t: ThesisItem }) {
+  const note = t.status === 'open' ? (t.invalidateIf ? `Wrong if ${t.invalidateIf}.` : null)
+    : t.closeReason ? `${t.process === 'broke_plan' ? 'Broke its plan: ' : ''}${ENDED[t.closeReason] ?? t.closeReason}${t.process === 'broke_plan' && (t.pnlPct ?? 0) > 0 ? ', a lucky win' : ''}.` : null;
+  return <td className={s.why} title={t.sizing ?? undefined}>{t.reason}{note && <span className={s.whyNote}>{note}</span>}</td>;
+}
+
 /** Every plan, newest first: what it paid, where it takes profit and gives up, by when, and how it ended. */
 function Theses({ theses }: { theses: ThesisItem[] }) {
   const open = theses.filter((t) => t.status === 'open');
@@ -77,7 +86,7 @@ function Theses({ theses }: { theses: ThesisItem[] }) {
               <td className={s.num}>{done ? <><span className={cx(s.status, s[`st_${t.status}`])}>{STATUS[t.status]}</span><time dateTime={t.closedAt ?? undefined} className={s.when}>{t.closedAt ? relativeTime(t.closedAt) : ''}</time></>
                 : <time dateTime={t.horizonAt}>{timeLeft(t.horizonAt)}</time>}</td>
               {done && <td className={cx(s.num, s.result, tone(t.pnlPct))}>{t.pnlPct === null ? '—' : pctText(t.pnlPct)}</td>}
-              <td className={s.why}>{t.reason}</td>
+              <Why t={t} />
             </tr>
           ))}
         </tbody>
@@ -181,7 +190,7 @@ export function PlansTable({ items: all, symbol }: { items: CoinThesisView[]; sy
                 <td className={cx(s.num, s.up)}>{pctText(t.targetPct)}</td>
                 <td className={cx(s.num, s.down)}>{pctText(t.stopPct)}</td>
                 <td className={s.num}>{t.status === 'open' ? <>Open · <time dateTime={t.horizonAt}>{timeLeft(t.horizonAt)}</time></> : <><span className={cx(s.status, s[`st_${t.status}`])}>{STATUS[t.status]}</span>{t.pnlPct !== null && <span className={cx(s.result, tone(t.pnlPct))}>{pctText(t.pnlPct)}</span>}</>}</td>
-                <td className={s.why}>{t.reason}</td>
+                <Why t={t} />
               </tr>
             ))}
           </tbody>

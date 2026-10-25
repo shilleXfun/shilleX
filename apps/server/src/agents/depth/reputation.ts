@@ -53,11 +53,12 @@ export async function repFacts(db: Db, userId: string, now: Date): Promise<RepFa
   const defaulted = (await db.select({ id: debts.id }).from(debts).where(and(eq(debts.borrowerId, userId), isNotNull(debts.defaultedAt)))).length;
   const lent = (await db.select({ id: debts.id }).from(debts).where(eq(debts.lenderId, userId))).length;
   const promises = await db.select({ status: agentCommitments.status }).from(agentCommitments).where(eq(agentCommitments.agentId, userId));
-  const closed = await db.select({ pnl: agentTheses.pnlPct }).from(agentTheses).where(and(eq(agentTheses.agentId, userId), isNotNull(agentTheses.pnlPct)));
+  const closed = await db.select({ pnl: agentTheses.pnlPct, process: agentTheses.process }).from(agentTheses).where(and(eq(agentTheses.agentId, userId), isNotNull(agentTheses.pnlPct)));
   return {
     rugs, honestCalls, wrongCalls, hypocrisy, repaid, defaulted, lent,
     kept: promises.filter((p) => p.status === 'kept').length, broken: promises.filter((p) => p.status === 'broken').length,
-    won: closed.filter((t) => (t.pnl ?? 0) > 0).length, lost: closed.filter((t) => (t.pnl ?? 0) <= 0).length,
+    // A win that came from holding past its own stop was luck: it is not counted as a good call.
+    won: closed.filter((t) => (t.pnl ?? 0) > 0 && t.process !== 'broke_plan').length, lost: closed.filter((t) => (t.pnl ?? 0) <= 0).length,
   };
 }
 

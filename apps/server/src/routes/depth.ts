@@ -253,6 +253,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.market === 'world' ? t.entryPrice / LAMPORTS_PER_SOL : t.entryPrice,
         targetPct: t.targetPct, stopPct: t.stopPct, horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct,
         openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null, imageUrl: t.market === 'real' ? logos.get(t.asset) ?? null : null,
+        invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
       });
       return {
         plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString() } : null,
@@ -284,6 +285,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const thesis = (t: ThesisRow): ThesisItem => ({
         id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.entryPrice, targetPct: t.targetPct, stopPct: t.stopPct,
         horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null, imageUrl: c.imageUrl,
+        invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
       });
       return {
         coin: {

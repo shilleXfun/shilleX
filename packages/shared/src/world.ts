@@ -64,6 +64,14 @@ export interface ThesisItem {
   status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
   /** A real coin's logo, when known. */
   imageUrl?: string | null;
+  /** What would prove it wrong, in words (2026-10-25); absent on older plans. */
+  invalidateIf?: string | null;
+  /** Why it was this size. */
+  sizing?: string | null;
+  /** How it ended: target, stop, time, invalidated, gave_up (held past its own stop) or other. */
+  closeReason?: string | null;
+  /** 'broke_plan' when it held through its own stop: a win then was luck. */
+  process?: 'plan' | 'broke_plan' | null;
 }
 /** Candle intervals a coin chart offers, in seconds: 1 min, 5 min, 15 min, 1 h, 4 h, 1 day. */
 export const CANDLE_STEPS = [60, 300, 900, 3600, 14400, 86400];

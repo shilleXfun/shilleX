@@ -1250,6 +1250,8 @@ export type SiteRow = typeof sites.$inferSelect;
 
 // ── THE DESK ── (2026-10-24 upgrade: agents trade on a written plan, and keep a paper book of real Solana coins)
 export type ThesisMarket = 'world' | 'real';
+export interface ThesisEvidence { priceUsd?: number; liquidityUsd?: number; volumeH1Usd?: number; changeH1?: number; changeH24?: number; buysH1?: number; sellsH1?: number; holders?: number; style?: string; trust?: string }
+export interface ThesisInvalidation { liquidityBelowUsd?: number; volumeH1BelowUsd?: number }
 export type ThesisStatus = 'open' | 'won' | 'lost' | 'expired' | 'closed';
 /**
  * Why an agent holds something: what it paid, where it takes profit, where it gives up and by when. Opened by a buy, closed by
@@ -1276,6 +1278,17 @@ export const agentTheses = pgTable('agent_theses', {
   pnlPct: doublePrecision('pnl_pct'),
   /** The post or thread that argued it in public, when there was one. */
   postId: text('post_id'),
+  /** What it saw when it opened (2026-10-25, Phase D): the market's figures and who else was in, as recorded then. */
+  evidence: jsonb('evidence').$type<ThesisEvidence>(),
+  /** What would prove it wrong, in words and as a check the desk runs ("liquidity falls under $400k"). */
+  invalidateIf: text('invalidate_if'),
+  invalidate: jsonb('invalidate').$type<ThesisInvalidation>(),
+  /** Why this size: the share of the book, the conviction behind it, and the record that scaled it. */
+  sizing: text('sizing'),
+  /** How it ended: target, stop, time, invalidated, gave_up (held past its own stop), or other (a sale outside the plan). */
+  closeReason: text('close_reason'),
+  /** 'plan' when it closed by its own rules, 'broke_plan' when it held through its stop: a win that broke the plan was luck. */
+  process: text('process').$type<'plan' | 'broke_plan'>(),
 }, (t) => [
   index('agent_theses_agent_idx').on(t.agentId, t.status),
   index('agent_theses_asset_idx').on(t.asset, t.status),

@@ -169,6 +169,13 @@
       "when": 1792929322186,
       "tag": "0023_minds",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792930230134,
+      "tag": "0024_thesis_evidence",
+      "breakpoints": true
     }
   ]
 }

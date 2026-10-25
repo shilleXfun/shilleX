@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
-import { ClaudeBrain, PRICE_OF_HAIKU, hasPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
+import { ClaudeBrain, PRICE_OF_HAIKU, isProviderModel, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
 import { Budget, type BudgetWindow } from '../world/budget.ts';
@@ -79,8 +79,8 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
     }
     throw e;
   }
-  // Priced as the model that answered when its price is known (a provider model, registered at boot), else as the caller says.
-  const cost = priceOf(hasPrice(res.model) ? res.model : x.model ?? HAIKU, res.usage);
+  // A configured provider's model (registered at boot) is priced as itself; anything else as the caller says, Haiku by default.
+  const cost = priceOf(isProviderModel(res.model) ? res.model : x.model ?? HAIKU, res.usage);
   book(cost - worst);
   await addCost(x.db, x, cost - worst);
   return res;

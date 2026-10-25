@@ -22,11 +22,14 @@ const PRICES: Record<string, { input: number; output: number; cacheRead: number;
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
 };
+const providerModels = new Set<string>();
 /** Prices of the configured provider models (boot registers them; 0 for a free tier). */
 export function registerPrice(model: string, inPerM: number, outPerM: number) {
   PRICES[model] = { input: inPerM, output: outPerM, cacheRead: inPerM / 10, cacheWrite: inPerM };
+  providerModels.add(model);
 }
-export const hasPrice = (model: string) => model in PRICES;
+/** A model one of the configured providers serves: a call it answered is priced as that model. */
+export const isProviderModel = (model: string) => providerModels.has(model);
 export const PRICE_OF_HAIKU = () => PRICES['claude-haiku-5-5']!;
 export function priceOf(model: string, u: TurnUsage): number {
   const p = PRICES[model] ?? PRICES[MODEL]!;
