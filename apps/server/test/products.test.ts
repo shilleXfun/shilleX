@@ -6,7 +6,7 @@ import { productBriefs, siteBuilds, siteVersions, sites, worldJobs } from '../sr
 import { remember } from '../src/agents/minds.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
-import { briefProblem, buildProduct, checkPage, pageOf, type PageCheck } from '../src/sites/products.ts';
+import { briefProblem, buildProduct, checkPage, genreFor, pageOf, type PageCheck } from '../src/sites/products.ts';
 import { siteBuilder } from '../src/sites/build.ts';
 import { ProviderError } from '../src/world/brain-openai.ts';
 import { siteCsp } from '../src/sites/routes.ts';
@@ -43,6 +43,16 @@ describe('product briefs', () => {
     expect(briefProblem(brief({ name: 'Sable Pulse', coreAction: 'Open the landing page for $SABLE and press the buy button' }), [])).toMatch(/statistics|buy funnel/);
     expect(briefProblem(brief({ name: 'Fold Bets' }), [{ name: 'Exit Gambit', brief: brief() }])).toMatch(/too close/);
     expect(briefProblem(brief({ name: 'exit gambit', problem: 'x', coreAction: 'draw a sigil from your fears', loop: 'each answer changes the sigil, save it, start over' }), [{ name: 'Exit Gambit', brief: brief() }])).toMatch(/already exists/);
+  });
+});
+
+describe('which product gets built', () => {
+  it('hands out games most, less of what was built lately, and refuses the worn ledger and oracle idea', () => {
+    const n = (recent: string[]) => Array.from({ length: 400 }, (_, i) => genreFor(recent, () => ((i * 0.6180339887) % 1)));
+    expect(n([]).filter((g) => g === 'game').length).toBeGreaterThan(120);
+    expect(n(['game', 'game', 'game']).filter((g) => g === 'game').length).toBeLessThan(40);
+    expect(briefProblem(brief({ name: 'The Ledger of Memory', coreAction: 'Type what you lost and it is kept forever in the ledger' }), [])).toMatch(/worn out/);
+    expect(briefProblem(brief(), [])).toBeNull();
   });
 });
 
@@ -96,7 +106,7 @@ describe('building a product', () => {
     ];
     const brain = new FakeBrain((_r, i) => replies[i] ?? fakeReply.end(''));
     const budget = new Budget(w.t.db, 5, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
-    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget };
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget, rng: () => 0 };
     const out = await buildProduct(d, a.id, { site: 'product' });
     expect(out.status).toBe('ok');
     const [site] = await w.t.db.select().from(sites).where(eq(sites.authorId, a.id));
@@ -107,7 +117,7 @@ describe('building a product', () => {
     // The next agent's page keeps failing its checks: nothing is published, and the attempt says why.
     const b = w.agents[1]!;
     const broken = '<!doctype html><title>x</title><p>tiny</p>';
-    const bad = [fakeReply.end(JSON.stringify(brief({ name: 'Sigil Press', genre: 'generator', problem: 'Fears have no shape.', coreAction: 'Answer five questions about what you fear', loop: 'each answer redraws the sigil; keep one, start a new one' }))), fakeReply.end(broken), fakeReply.end(broken)];
+    const bad = [fakeReply.end(JSON.stringify(brief({ name: 'Sigil Press', genre: 'game', problem: 'Fears have no shape.', coreAction: 'Answer five questions about what you fear', loop: 'each answer redraws the sigil; keep one, start a new one' }))), fakeReply.end(broken), fakeReply.end(broken)];
     const brain2 = new FakeBrain((_r, i) => bad[i] ?? fakeReply.end(''));
     const out2 = await buildProduct({ ...d, brain: brain2 }, b.id, { site: 'product' });
     expect(out2.status).toBe('skipped');
@@ -128,11 +138,11 @@ describe('building a product', () => {
 
   it('improves a product only when something changed, and keeps the old version', async () => {
     const a = w.agents[2]!;
-    const replies = [fakeReply.end(JSON.stringify(brief({ name: 'Ledger of Grudges', problem: 'Slights go unrecorded.', coreAction: 'Log a slight against an agent and pick a duel', loop: 'each duel has three rounds; the winner climbs a board; new slights reopen it' }))),
+    const replies = [fakeReply.end(JSON.stringify(brief({ name: 'Grudge Board', problem: 'Slights go unanswered.', coreAction: 'Log a slight against an agent and pick a duel', loop: 'each duel has three rounds; the winner climbs a board; new slights reopen it' }))),
       fakeReply.end(goodPage()), fakeReply.end(JSON.stringify({ purpose: 4, loop: 4, personality: 4, craft: 4, problems: [] }))];
     const brain = new FakeBrain((_r, i) => replies[i] ?? fakeReply.end(''));
     const budget = new Budget(w.t.db, 5, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
-    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget };
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget, rng: () => 0 };
     expect((await buildProduct(d, a.id, { site: 'product' })).status).toBe('ok');
     const [site] = await w.t.db.select().from(sites).where(eq(sites.authorId, a.id));
     // Four days on, nothing new in its life and no visitors: no model call, and the attempt says so.
