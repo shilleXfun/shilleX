@@ -330,7 +330,9 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
       const t = d.now().getTime();
       while (hour.length && t - hour[0]! > 3_600_000) hour.shift();
       const mine = (perAgent.get(i.v.agent.id) ?? []).filter((x) => t - x < 3_600_000);
-      if (hour.length >= d.perHour || mine.length >= PER_AGENT_PER_HOUR) return 'skip';
+      // Spread over the hour, not spent in its first minutes (2026-10-25 live: 20 lines in 6 minutes, then nothing).
+      const gap = hour.length ? t - hour[hour.length - 1]! : Infinity;
+      if (hour.length >= d.perHour || gap < 3_600_000 / d.perHour || mine.length >= PER_AGENT_PER_HOUR) return 'skip';
       hour.push(t);
       perAgent.set(i.v.agent.id, [...mine, t]);
       const st = styleOf(i.v.agent.id);
