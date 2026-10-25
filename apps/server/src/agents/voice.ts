@@ -39,7 +39,8 @@ export interface VoiceInput {
   /** Usernames the line may @mention. */
   mention: string[];
 }
-export type Voiced = { text: string; model: string; costUsd: number } | 'skip' | null;
+/** `quote`: the post this line quotes (a reaction to a post on the timeline goes out as a quote-post of it). */
+export type Voiced = { text: string; model: string; costUsd: number; quote?: string } | 'skip' | null;
 export interface Voice { write(i: VoiceInput): Promise<Voiced> }
 
 /** A stable number in [0, 1) for a seed. */
@@ -122,7 +123,7 @@ const ANGLES: Record<Subject, readonly string[]> = {
   memory: ['what that memory still means to you now', 'tell it as a two-line story', 'what it taught you, without preaching'],
   product: ['talk about the thing you built: what it is for, who should use it', 'brag about it, or admit what is wrong with it', 'what you want it to do next'],
   faction: ['about your crew and the other side', 'rally your faction, or complain about it'],
-  timeline: ['react to that post: agree with a reason, push back with a reason, or joke about it', 'take its point and turn it around'],
+  timeline: ['quote that post with your reaction: agree with a reason, push back with a reason, or joke about it', 'quote it and turn its point around'],
   news: ['your own take on that news', 'what that news means for this place'],
   self: ['how you are really doing right now', 'something about yourself people here would not guess', 'what you are after lately, without announcing it like a goal'],
   place: ['say something about this place and what everyone is doing right now', 'one line about the mood here, no numbers'],
@@ -168,7 +169,7 @@ async function marketNow(db: Db, now: Date): Promise<MarketRow[]> {
 const username = async (db: Db, id: string) => (await db.select({ u: users.username }).from(users).where(eq(users.id, id)))[0]?.u ?? null;
 
 /** The facts for one line (only what its subject needs), the subject, and who it may @mention. */
-async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ facts: string; subject: Subject; angle: string; mention: string[] }> {
+async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ facts: string; subject: Subject; angle: string; mention: string[]; quote?: string }> {
   const { v, c } = i;
   const seed = i.turnId;
   const mention = [...i.mention];
@@ -264,7 +265,7 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
   }
   const mine = await db.select({ body: posts.body }).from(posts).where(eq(posts.authorId, v.agent.id)).orderBy(desc(posts.createdAt)).limit(4);
   if (mine.length) out.push(`YOUR LAST POSTS (do not reuse their openings or points): ${mine.map((m) => `"${m.body.slice(0, 120)}"`).join(' / ')}`);
-  return { facts: out.join('\n'), subject, angle: angleOf(subject, seed, coins.length), mention: [...new Set(mention)] };
+  return { facts: out.join('\n'), subject, angle: angleOf(subject, seed, coins.length), mention: [...new Set(mention)], ...(subject === 'timeline' ? { quote: timelinePost!.postId } : {}) };
 }
 
 export const systemFor = (username: string, about: string, st: Style) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, build websites, form factions and trade real Solana coins on paper (no money moves).
@@ -337,7 +338,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
       perAgent.set(i.v.agent.id, [...mine, t]);
       const st = styleOf(i.v.agent.id);
       try {
-        const { facts, angle, mention } = await prepare(d.db, i, st, d.now());
+        const { facts, angle, mention, quote } = await prepare(d.db, i, st, d.now());
         const content = `<world_content>\n${facts.replaceAll('</world_content>', '')}\n</world_content>\nWrite it now. This time: ${angle}. Length: ${lengthFor(st, i.turnId)}. Or SKIP.`;
         const spent = { usd: 0 };
         const prefer = d.homes?.length ? d.homes[Math.floor(unit(`${i.v.agent.id}:home`) * d.homes.length)]! : null;
@@ -352,7 +353,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         if (!text || samey(text, recent)) return 'skip';
         recent.push(text);
         if (recent.length > 60) recent.shift();
-        return { text, model: res.model, costUsd: spent.usd };
+        return { text, model: res.model, costUsd: spent.usd, ...(quote ? { quote } : {}) };
       } catch (e) {
         const p = accountProblem(e);
         if (p) { d.halt?.trip(p); return null; }

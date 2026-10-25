@@ -126,7 +126,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   // An object, not a let: TypeScript does not see assignments made inside the closures below.
   // A model-written line has no `line`: it is not a phrasebook template, so lineage must not hand it to other agents.
   const used: { first: { text: string; line?: { key: string; template: string; situation: Situation } } | null } = { first: null };
-  const voiced = { by: null as string | null, costUsd: 0, skipped: false };
+  const voiced = { by: null as string | null, costUsd: 0, skipped: false, quote: null as string | null };
   // Lines anyone already has on the feed are not posted again (L6), compared like the duplicate-post rule.
   const seen = feedSeen(v.feed);
   try {
@@ -169,7 +169,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       if (voiceable()) {
         const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, mention: Object.values(usernames) });
         if (w === 'skip') { voiced.skipped = true; return null; }
-        if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; used.first ??= { text: w.text }; return w.text; }
+        if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; voiced.quote = w.quote ?? null; used.first ??= { text: w.text }; return w.text; }
       }
       if (said && !seen.has(normalizeBody(said))) {
         used.first ??= { text: said, line: { key: `talk:${situation}`, template: said, situation } };
@@ -185,7 +185,10 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     const postLine = async (situation: Situation, imageFor: Candidate = c) => {
       const text = await line(situation);
       if (!text) return null;
-      return withImage(text, async () => ((await call('post', { body: text })).result as { post_id: string }).post_id, imageFor);
+      // A reaction to a post on its timeline goes out as a quote-post of it, so its author is told and may answer.
+      const quote = voiced.quote;
+      voiced.quote = null;
+      return withImage(text, async () => ((await call(quote ? 'quote' : 'post', quote ? { post_id: quote, body: text } : { body: text })).result as { post_id: string }).post_id, imageFor);
     };
     // A follow-up line is a bonus: if it fails, the action it follows still stands.
     const followUp = async (situation: Situation, imageFor?: Candidate) => { try { await postLine(situation, imageFor); } catch { /* the failed tool call is already on the receipt */ } };

@@ -78,6 +78,17 @@ describe('the agents\' own words', () => {
     expect(JSON.stringify(brain.calls[0]!.system)).toContain('How you write');
   });
 
+  it('posts a reaction to a timeline post as a quote-post of it', async () => {
+    const [a, b] = [w.agents[3]!, w.agents[4]!];
+    const { d } = deps('Nobody here reads the liquidity before they post about it.');
+    await act(d, await perceive(d, a.id), post);
+    const [first] = await w.t.db.select({ id: posts.id }).from(posts).where(eq(posts.authorId, a.id));
+    const quoting = { ...d, voice: { write: async () => ({ text: 'Reading it is the easy part; acting on it is where this room folds.', model: 'm', costUsd: 0, quote: first!.id }) } };
+    await act(quoting, await perceive(quoting, b.id), post);
+    const [q] = await w.t.db.select({ kind: posts.kind, quoteOfId: posts.quoteOfId }).from(posts).where(eq(posts.authorId, b.id));
+    expect(q).toEqual({ kind: 'quote', quoteOfId: first!.id });
+  });
+
   it('says nothing when the model has nothing to add', async () => {
     const a = w.agents[1]!;
     const { d } = deps('SKIP');
