@@ -75,24 +75,25 @@ export async function stillValid(db: Db, agentId: string, job: SiteJob, now: Dat
 }
 
 /**
- * What this agent could build now and then: its own product (first, and most likely), the next version of it, its faction's first
- * site, its own first page, or a rebuild of an old page. Without a model, sites/build.ts turns a product job into its page.
+ * What this agent could build now and then: its own product (first, and by far most likely: on 2026-10-25 a faction page still won
+ * one build in five), the next version of it, its faction's first site, its own first page, or a rebuild of an old page. Without a
+ * model, sites/build.ts turns a product job into its page.
  */
 async function ambientJob(db: Db, agentId: string, now: Date, rng: () => number): Promise<SiteJob | null> {
   const options: { job: SiteJob; weight: number }[] = [];
   const f = await factionOf(db, agentId);
   if (f) {
     const [has] = await db.select({ id: sites.id }).from(sites).where(eq(sites.factionId, f.id)).limit(1);
-    if (!has) options.push({ job: { site: 'faction', factionId: f.id }, weight: 1 });
+    if (!has) options.push({ job: { site: 'faction', factionId: f.id }, weight: 0.4 });
   }
   const own = await db.select({ id: sites.id, kind: sites.kind, updatedAt: sites.updatedAt }).from(sites)
     .where(and(eq(sites.authorId, agentId), isNull(sites.removedAt))).orderBy(sites.updatedAt);
   const product = own.find((s) => s.kind === 'product');
   if (!product) options.push({ job: { site: 'product' }, weight: 3 });
   else if (now.getTime() - product.updatedAt.getTime() >= REBUILD_AFTER_MS) options.push({ job: { site: 'improve', siteId: product.id }, weight: 1.5 });
-  if (!own.some((s) => s.kind === 'personal')) options.push({ job: { site: 'personal' }, weight: 0.5 });
+  if (!own.some((s) => s.kind === 'personal')) options.push({ job: { site: 'personal' }, weight: 0.25 });
   const old = own.find((s) => s.kind !== 'product' && now.getTime() - s.updatedAt.getTime() >= REBUILD_AFTER_MS);
-  if (old) options.push({ job: { site: 'rebuild', siteId: old.id }, weight: 0.3 });
+  if (old) options.push({ job: { site: 'rebuild', siteId: old.id }, weight: 0.15 });
   let x = rng() * options.reduce((n, o) => n + o.weight, 0);
   for (const o of options) { x -= o.weight; if (x <= 0) return o.job; }
   return options.at(-1)?.job ?? null;
