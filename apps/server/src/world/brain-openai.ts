@@ -104,6 +104,9 @@ export function fromChatResponse(r: ChatResponse, fallbackModel: string): BrainR
 /** An error answer → its category. 429 and quota answers back off; auth, a missing model and bad requests need a human. */
 export function categorize(status: number, body: string): ProviderErrorCategory {
   if (status === 401 || status === 403) return 'auth';
+  // A 429 is a limit that resets, unless it says the money is gone: Gemini's spent free quota also says "check your plan and
+  // billing details", which benched Gemini for an hour and paused the model queue as a credit problem (2026-10-25).
+  if (status === 429) return /insufficient[_ ](credit|funds|balance)|credit balance/i.test(body) ? 'credit' : 'rate_limit';
   if (status === 402 || /insufficient[_ ](credit|funds|balance)|credit balance|billing/i.test(body)) return 'credit';
   if (status === 429 || /resource[_ ]exhausted|rate.?limit|quota/i.test(body)) return 'rate_limit';
   if (/json_validate_failed|failed to generate json|tool_use_failed|output_parse_failed/i.test(body)) return 'bad_output';
@@ -175,19 +178,24 @@ export interface ProviderStatus { name: string; model: string; modelStrong: stri
 
 /** How long a provider sits out after an answer of each kind (a 429 uses its retry-after when it gives one). */
 const COOL_MS: Partial<Record<ProviderErrorCategory, number>> = { auth: 3_600_000, model: 3_600_000, credit: 3_600_000, rate_limit: 60_000, transient: 30_000 };
+const DAILY_COOL_MS = 3_600_000;
 const CACHE_TTL_MS = 10 * 60_000, CACHE_MAX = 200;
 /** Requests this tier asks for: 1 everyday, 2 the big ones. */
 export type Tier = 1 | 2;
 
 /**
- * The brain the world uses when providers are configured: per call, the first provider that has a known price, is not cooling
- * down after an error and is under its own limits gets it; if it answers with an error status, the next one is tried (an error
- * answer was not billed). A timeout or a dropped connection is thrown at once (it may have been billed). Identical requests
+ * The brain the world uses when providers are configured. Every key carries load (owner, 2026-10-25: Groq wrote 99% while the
+ * others sat idle as backups): a call that names no provider starts at the next one in turn, a call that does (a site page,
+ * an agent's home provider) starts there. The first provider in that order that has a known price, is not cooling down after
+ * an error and is under its own limits gets it; if it answers with an error status, the next one is tried (an error answer was
+ * not billed). A timeout or a dropped connection is thrown at once when the provider bills (it may have been billed); a free
+ * one hands the call on like an error answer, since a second try costs nothing. Identical requests
  * within ten minutes are answered from memory (a retry after a failed post, an unchanged story), never across tiers or models.
  */
 export class RoutedBrain implements AgentBrain {
   private states = new Map<string, ProviderState>();
   private cache = new Map<string, { at: number; res: BrainResponse }>();
+  private turn = 0;
   readonly name: string;
   constructor(readonly providers: ProviderConfig[], private now: () => Date = () => new Date(), private fetchImpl: typeof fetch = fetch) {
     for (const p of providers) this.states.set(p.name, { calls: 0, ok: 0, failed: 0, day: '', today: 0, minute: [], tokens: [], coolUntil: 0, modelCool: {}, lastError: null, lastOkAt: null });
@@ -228,8 +236,9 @@ export class RoutedBrain implements AgentBrain {
   async decide(req: BrainRequest & { tier?: Tier }): Promise<BrainResponse> {
     const tier: Tier = req.tier ?? 1;
     const est = Math.ceil(JSON.stringify(req.messages).length / 4 + req.system.reduce((n, b) => n + b.text.length, 0) / 4) + (req.maxTokens ?? 4000);
-    const usable = this.providers.filter((p) => this.why(p) === null && (!req.tools.length || p.tools))
-      .sort((a, b) => Number(b.name === req.prefer) - Number(a.name === req.prefer));
+    const able = this.providers.filter((p) => this.why(p) === null && (!req.tools.length || p.tools));
+    const start = req.prefer && able.some((p) => p.name === req.prefer) ? able.findIndex((p) => p.name === req.prefer) : this.turn++ % Math.max(1, able.length);
+    const usable = [...able.slice(start), ...able.slice(0, start)];
     if (!usable.length) throw new ProviderError('No model provider is usable: check the LLM_* settings on /api/health/world', 'auth', 401);
     const key = req.tools.length ? null : createHash('sha256').update(JSON.stringify([tier, req.system, req.messages, req.outputFormat ?? null, req.maxTokens ?? null])).digest('hex');
     const t = this.now().getTime();
@@ -254,21 +263,25 @@ export class RoutedBrain implements AgentBrain {
       } catch (e) {
         const err = e instanceof ProviderError ? e : new ProviderError((e as Error)?.message ?? String(e), 'transient', undefined, p.name);
         s.failed++; s.lastError = err.message;
-        const cool = err.retryAfterMs ?? COOL_MS[err.category];
+        // A spent daily allowance ("free-models-per-day", Gemini's "exceeded your current quota") is not back in a minute.
+        const daily = err.category === 'rate_limit' && /per[- ]?day|daily|current quota/i.test(err.message);
+        const cool = err.retryAfterMs ?? (daily ? DAILY_COOL_MS : COOL_MS[err.category]);
         // A key or billing problem benches the whole provider; a limit, a missing model or a hiccup only that model (Groq and
         // Gemini limit each model on its own, so a spent strong model must not bench the everyday one).
         if (cool && (err.category === 'auth' || err.category === 'credit')) s.coolUntil = this.now().getTime() + cool;
         else if (cool) s.modelCool[model] = this.now().getTime() + cool;
         console.error(`[llm] ${err.message}`);
-        // No answer means the call may have been billed: never sent again to someone else.
-        if (err.status === undefined) throw err;
+        // No answer means the call may have been billed: never sent again to someone else, unless this provider is free.
+        if (err.status === undefined && !(p.priceInPerM === 0 && p.priceOutPerM === 0)) throw err;
         errors.push(err);
       }
     }
-    // Every provider said no. The most serious reason wins, so the moment queue's pause sees an auth problem as one.
+    // Every provider said no. If any of them only needs time (busy, a spent quota, a hiccup), that is the answer: one dead key
+    // beside two busy providers must not pause the model queue. Otherwise the most serious reason wins, so the queue's pause
+    // sees an auth problem as one.
     const order: ProviderErrorCategory[] = ['auth', 'credit', 'model', 'bad_request', 'rate_limit', 'bad_output', 'transient'];
     errors.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
-    const worst = errors[0]!;
+    const worst = errors.find((x) => x.category === 'rate_limit' || x.category === 'transient' || x.category === 'bad_output') ?? errors[0]!;
     throw new ProviderError(errors.map((x) => x.message).join('; '), worst.category, worst.status, worst.provider, worst.retryAfterMs);
   }
 

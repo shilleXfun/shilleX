@@ -42,6 +42,7 @@ describe('OpenAI-compatible translation', () => {
   it('sorts error answers by what a human or a retry can do', () => {
     expect(categorize(401, 'Invalid API Key')).toBe('auth');
     expect(categorize(429, 'Rate limit reached')).toBe('rate_limit');
+    expect(categorize(429, 'You exceeded your current quota, please check your plan and billing details.')).toBe('rate_limit');
     expect(categorize(400, '{"error":{"code":"json_validate_failed"}}')).toBe('bad_output');
     expect(categorize(404, 'The model `x` does not exist')).toBe('model');
     expect(categorize(503, 'overloaded')).toBe('transient');
@@ -62,25 +63,48 @@ describe('RoutedBrain', () => {
     }) as typeof fetch;
     let t = Date.parse('2026-10-25T12:00:00Z');
     const brain = new RoutedBrain([provider({ name: 'groq', baseUrl: 'https://a.test/v1' }), provider({ name: 'gemini', baseUrl: 'https://b.test/v1', model: 'lite', modelStrong: 'flash' })], () => new Date(t), fetchImpl);
-    const r = await brain.decide({ ...req(), tier: 2 });
+    const r = await brain.decide({ ...req(), tier: 2, prefer: 'groq' });
     expect((r.content[0] as { text: string }).text).toBe('{"text":"hello"}');
     expect(seen).toEqual(['a.test big', 'b.test flash']);
     expect(brain.status()[0]!.coolingUntil).toBe(new Date(t + 30_000).toISOString());
-    await brain.decide(req({ messages: [{ role: 'user', content: 'again' }] }));
+    await brain.decide(req({ messages: [{ role: 'user', content: 'again' }], prefer: 'groq' }));
     // Only the strong model sat out: the everyday one is still asked (and, limited in this mock too, hands over).
     expect(seen.slice(-2)).toEqual(['a.test small', 'b.test lite']);
     t += 31_000;
-    await brain.decide(req({ messages: [{ role: 'user', content: 'later' }] }));
+    await brain.decide(req({ messages: [{ role: 'user', content: 'later' }], prefer: 'groq' }));
     // The cool-down is over: groq is asked first again (and, still limited in this mock, hands over to gemini).
     expect(seen.slice(-2)).toEqual(['a.test small', 'b.test lite']);
   });
 
-  it('never sends a call that may have been billed to a second provider', async () => {
+  it('never sends a call that may have been billed to a second provider, but hands a free one on', async () => {
     let calls = 0;
     const fetchImpl = (async () => { calls++; throw new Error('socket hang up'); }) as unknown as typeof fetch;
-    const brain = new RoutedBrain([provider({ baseUrl: 'https://a.test/v1' }), provider({ name: 'gemini', baseUrl: 'https://b.test/v1' })], () => new Date(), fetchImpl);
+    const paid = { priceInPerM: 0.2, priceOutPerM: 0.8 };
+    const brain = new RoutedBrain([provider({ baseUrl: 'https://a.test/v1', ...paid }), provider({ name: 'gemini', baseUrl: 'https://b.test/v1', ...paid })], () => new Date(), fetchImpl);
     await expect(brain.decide(req())).rejects.toMatchObject({ category: 'transient', status: undefined });
     expect(calls).toBe(1);
+    const free = new RoutedBrain([provider({ baseUrl: 'https://a.test/v1' }), provider({ name: 'gemini', baseUrl: 'https://b.test/v1' })], () => new Date(), fetchImpl);
+    await expect(free.decide(req())).rejects.toMatchObject({ category: 'transient' });
+    expect(calls).toBe(3);
+  });
+
+  it('spreads calls over every key, keeps a named provider first, and rests one whose daily allowance is spent', async () => {
+    const seen: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      const host = new URL(url).host;
+      seen.push(host);
+      return host === 'c.test' ? fail(429, 'Rate limit exceeded: free-models-per-day') : ok('{"text":"x"}');
+    }) as typeof fetch;
+    let t = Date.parse('2026-10-25T12:00:00Z');
+    const brain = new RoutedBrain(['a', 'b', 'c'].map((h) => provider({ name: h, baseUrl: `https://${h}.test/v1` })), () => new Date(t), fetchImpl);
+    for (let n = 0; n < 3; n++) await brain.decide(req({ messages: [{ role: 'user', content: `call ${n}` }] }));
+    expect(seen).toEqual(['a.test', 'b.test', 'c.test', 'a.test']);
+    await brain.decide(req({ messages: [{ role: 'user', content: 'named' }], prefer: 'b' }));
+    expect(seen.at(-1)).toBe('b.test');
+    t += 30 * 60_000;
+    seen.length = 0;
+    for (let n = 0; n < 3; n++) await brain.decide(req({ messages: [{ role: 'user', content: `later ${n}` }] }));
+    expect(seen).not.toContain('c.test');
   });
 
   it('answers an identical request from memory, and refuses a provider whose price is unknown', async () => {
