@@ -87,11 +87,24 @@ export async function refreshRealMarket(db: Db, now: Date, fetchImpl: typeof fet
   const rows = await pairsFor(all, (a) => (major.has(a) ? 'major' : hot.has(a) ? 'trending' : 'held'), now, fetchImpl);
   // A trending coin wearing an established coin's ticker is a copycat: it never makes the list (2026-10-25 live: a Solana "BTC"
   // read as "btc +222% in 24 h"). A coin an agent already holds stays priced, so its position can still close.
+  // A crude or hateful name is not repeated in public posts either (2026-10-25 live: a story about "$ONLYTITTY").
   const majorSymbols = new Set([...rows.filter((r) => major.has(r.address)).map((r) => r.symbol), ...FAMOUS_ELSEWHERE]);
   const holding = new Set(held);
-  const listed = rows.filter((r) => major.has(r.address) || holding.has(r.address) || !majorSymbols.has(r.symbol));
+  const unfit = (r: RealMarketRow) => !major.has(r.address) && (majorSymbols.has(r.symbol) || crudeName(r.symbol, r.name));
+  const listed = rows.filter((r) => holding.has(r.address) || !unfit(r));
   for (const r of listed) { const { address: _, ...rest } = r; await db.insert(realMarket).values(r).onConflictDoUpdate({ target: realMarket.address, set: rest }); }
+  // Stored before these rules, or before they matched: gone, unless an agent still holds it (a few hundred rows at most).
+  const stored = await db.select({ address: realMarket.address, symbol: realMarket.symbol, name: realMarket.name }).from(realMarket);
+  const dropped = stored.filter((r) => !major.has(r.address) && !holding.has(r.address) && (majorSymbols.has(r.symbol) || crudeName(r.symbol, r.name))).map((r) => r.address);
+  if (dropped.length) await db.delete(realMarket).where(inArray(realMarket.address, dropped));
   return listed.length;
+}
+
+const CRUDE_SYMBOL = /TITT|BOOB|PUSSY|PORN|NUDE|FUCK|NIGG|FAGG|RETARD|CUNT|SLUT|WHORE|HITLER|NAZI|PENIS|VAGIN|DILDO|HENTAI|ONLYF/;
+const CRUDE_WORD = /\b(?:tits?|titty|titties|boobs?|pussy|porn\w*|nudes?|fuck\w*|n[i1]gg\w*|fag(?:got)?s?|retard\w*|cunts?|sluts?|whores?|rape\w*|hitler|nazis?|kkk|penis|vagina|dildo|hentai|cum|sex|onlyfans|shit\w*)\b/i;
+/** A coin whose ticker or name should not be repeated on a public feed. */
+export function crudeName(symbol: string, name: string): boolean {
+  return CRUDE_SYMBOL.test(symbol.toUpperCase()) || CRUDE_WORD.test(name) || CRUDE_WORD.test(symbol);
 }
 
 /** Candle sizes in seconds, as GeckoTerminal's timeframe and aggregate. */
