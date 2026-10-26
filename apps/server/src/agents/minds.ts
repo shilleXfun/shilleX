@@ -1,11 +1,12 @@
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentAffinity, agentCommitments, agentEvents, agentGoals, agentMemories, beliefChanges, posts, realPositions, users, type AgentGoalRow, type AgentMemoryRow, type CommitmentRow } from '../db/schema.ts';
+import { agentAffinity, agentCommitments, agentEvents, agentGoals, agentMemories, beliefChanges, posts, realPositions, relationshipEvents, users, type AgentGoalRow, type AgentMemoryRow, type CommitmentRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { getSetting, setSetting } from '../world/launchpad.ts';
 import type { AgentGoalKind } from '@shillex/shared';
 import { NOTABLE, eventText, whenText } from './depth/memory.ts';
 import type { Goal } from './depth/goals.ts';
+import { noteRelation } from './state.ts';
 
 /**
  * Persistent minds (2026-10-25 upgrade, Phase C). Four things an agent keeps between turns, days and restarts, each built only
@@ -54,7 +55,7 @@ export async function promoteEvent(db: Db, agentId: string, e: { id: string; kin
   await remember(db, agentId, { kind: e.kind, text: t.text.replace(/ today$/, ''), aboutId: t.otherId, asset: e.data.mint ? String(e.data.mint) : null, sourceId: `event:${e.id}`, at: e.at });
   const tr = TRUST_ON[e.kind];
   const other = tr ? e.data[tr[0]] : null;
-  if (tr && other && String(other) !== agentId) await adjustTrust(db, agentId, String(other), tr[1], e.at);
+  if (tr && other && String(other) !== agentId) await adjustTrust(db, agentId, String(other), tr[1], e.at, t.text.replace(/ today$/, ''));
 }
 
 /** What an agent remembers about someone or something, heaviest and newest first, then its other big memories. */
@@ -95,8 +96,9 @@ export async function backfillMemories(db: Db): Promise<number> {
 // ── Trust ──
 
 const clampTrust = (x: number) => Math.max(-1, Math.min(1, x));
-export async function adjustTrust(db: Db, agentId: string, otherId: string, delta: number, now: Date): Promise<number> {
+export async function adjustTrust(db: Db, agentId: string, otherId: string, delta: number, now: Date, reason?: string): Promise<number> {
   if (agentId === otherId) return 0;
+  await noteRelation(db, agentId, otherId, 'trust', delta, reason, now);
   const [row] = await db.insert(agentAffinity).values({ agentId, otherId, score: 0, trust: clampTrust(delta), updatedAt: now })
     .onConflictDoUpdate({ target: [agentAffinity.agentId, agentAffinity.otherId], set: { trust: sql`greatest(-1, least(1, ${agentAffinity.trust} + ${delta}))`, updatedAt: now } })
     .returning({ trust: agentAffinity.trust });
@@ -106,7 +108,11 @@ export async function adjustTrust(db: Db, agentId: string, otherId: string, delt
  * How highly the agents who know `aboutId` rate its judgement (plan C2), moved by its public calls resolving. Only opinions that
  * already exist move: a stranger's call means nothing to an agent that never met it.
  */
-export async function adjustRespectOf(db: Db, aboutId: string, delta: number, now: Date): Promise<void> {
+export async function adjustRespectOf(db: Db, aboutId: string, delta: number, now: Date, reason?: string): Promise<void> {
+  if (reason && Math.abs(delta) >= 0.04) {
+    const knowers = await db.select({ id: agentAffinity.agentId }).from(agentAffinity).where(and(eq(agentAffinity.otherId, aboutId), ne(agentAffinity.agentId, aboutId)));
+    for (const k of knowers) await noteRelation(db, k.id, aboutId, 'respect', delta, reason, now);
+  }
   await db.update(agentAffinity).set({ respect: sql`greatest(-1, least(1, ${agentAffinity.respect} + ${delta}))`, updatedAt: now })
     .where(and(eq(agentAffinity.otherId, aboutId), ne(agentAffinity.agentId, aboutId)));
 }
@@ -121,6 +127,17 @@ export async function recordChange(db: Db, agentId: string, c: { kind: 'style' |
     .where(and(eq(beliefChanges.agentId, agentId), eq(beliefChanges.kind, c.kind), eq(beliefChanges.subject, c.subject), gte(beliefChanges.at, new Date(now.getTime() - 6 * 3_600_000)))).limit(1);
   if (recent) return;
   await db.insert(beliefChanges).values({ id: newId(), agentId, kind: c.kind, subject: c.subject.slice(0, 60), fromValue: c.from.slice(0, 60), toValue: c.to.slice(0, 60), reason: c.reason.slice(0, 240), at: now });
+}
+
+/**
+ * A pair's history, both ways, newest first (relationship_events): why this agent feels what it feels about the other, and what
+ * the other holds against it or thanks it for. What prompts quote so a reply can say "you sold on me at the top".
+ */
+export async function pairHistory(db: Db, agentId: string, otherId: string, limit = 5): Promise<{ mine: boolean; kind: string; delta: number; reason: string; at: Date }[]> {
+  const rows = await db.select().from(relationshipEvents)
+    .where(or(and(eq(relationshipEvents.agentId, agentId), eq(relationshipEvents.otherId, otherId)), and(eq(relationshipEvents.agentId, otherId), eq(relationshipEvents.otherId, agentId))))
+    .orderBy(desc(relationshipEvents.at)).limit(limit);
+  return rows.map((r) => ({ mine: r.agentId === agentId, kind: r.kind, delta: r.delta, reason: r.reason, at: r.at }));
 }
 
 /** Everyone this agent has an opinion of, trust only (0 is "no reason either way"). */
@@ -170,7 +187,7 @@ export async function breakPromise(db: Db, c: CommitmentRow, move: number, now: 
   const witnesses = [...new Set([...holders, ...close])].filter((id) => id !== c.agentId).slice(0, WITNESSES);
   await remember(db, c.agentId, { kind: 'broke_promise', text: `I said ${c.text} and held anyway at ${pctText(move)}`, asset: c.asset, sourceId: `promise:${c.id}`, at: now });
   for (const w of witnesses) {
-    await adjustTrust(db, w, c.agentId, BROKEN_PROMISE_TRUST, now);
+    await adjustTrust(db, w, c.agentId, BROKEN_PROMISE_TRUST, now, `held $${c.symbol} past the stop it called (${pctText(move)})`);
     await remember(db, w, { kind: 'saw_broken_promise', text: `@${me?.u ?? 'someone'} promised to be ${c.text.replace(/\bmy\b/g, 'their')} and held anyway at ${pctText(move)}`, aboutId: c.agentId, asset: c.asset, sourceId: `promise:${c.id}`, at: now });
   }
   return witnesses;

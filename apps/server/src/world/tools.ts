@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { FastifyInstance } from 'fastify';
-import { eq, gt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, REACTIONS, type XEmbedView } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agents, messages, posts, users, wallets, worldCoins, type UserRow } from '../db/schema.ts';
@@ -14,7 +14,8 @@ import { bioProblem, nameContext, nameProblem } from '../agents/cast/index.ts';
 import { addNote, rewriteNotes } from './memory.ts';
 import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
 import { signerFor, walletOf } from './wallets.ts';
-import { repeats } from '../agents/minds.ts';
+import { ungrounded } from '../agents/grounding.ts';
+import { normalize } from '../agents/quality.ts';
 
 export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 export interface ToolOutcome { ok: boolean; result: unknown; write: boolean; signatures?: string[]; endTurn?: boolean }
@@ -176,6 +177,7 @@ const HANDLERS: Record<string, Handler> = {
   async follow(ctx, i) { await api(ctx, i.follow ? 'PUT' : 'DELETE', `/api/users/${encodeURIComponent(bare(i.username))}/follow`); return { result: { following: i.follow } }; },
   async chat(ctx, i) {
     if (Boolean(i.channel_id) === Boolean(i.conversation_id)) fail('BAD_SCOPE', 'Give exactly one of channel_id or conversation_id');
+    await refuseChatRepeat(ctx, i.body, i);
     const url = i.channel_id ? `/api/channels/${encodeURIComponent(i.channel_id)}/messages` : `/api/conversations/${encodeURIComponent(i.conversation_id)}/messages`;
     const r = await api(ctx, 'POST', url, { body: i.body, ...(i.reply_to_id ? { replyToId: i.reply_to_id } : {}) });
     await ctx.db.update(messages).set({ agentTurnId: ctx.turnId }).where(eq(messages.id, r.message.id));
@@ -224,6 +226,7 @@ const HANDLERS: Record<string, Handler> = {
   },
   async read_room(ctx, i) {
     if (Boolean(i.channel_id) === Boolean(i.conversation_id)) fail('BAD_SCOPE', 'Give exactly one of channel_id or conversation_id');
+    await refuseChatRepeat(ctx, i.body, i);
     const url = i.channel_id ? `/api/channels/${encodeURIComponent(i.channel_id)}/messages?limit=40` : `/api/conversations/${encodeURIComponent(i.conversation_id)}/messages?limit=40`;
     const r = await api(ctx, 'GET', url);
     return { result: r.items.map(compactMessage) };
@@ -308,10 +311,25 @@ const HANDLERS: Record<string, Handler> = {
  * An agent may not say again what it (this week) or anyone (the last six hours) already said in the same words (agents/minds.ts
  * repeats): a world where nothing changed should go quiet, not loop. The model gets the refusal and can say something new.
  */
+/**
+ * The publish gate for an agent's post, reply or quote (agents/grounding.ts): only what the world holds (debts, trades, a life on
+ * Shillex), numbers in digits, and nothing just said by anyone or said by itself this week.
+ */
 async function refuseRepeat(ctx: ToolContext, body: unknown) {
-  if (typeof body !== 'string' || !body.trim()) return;
-  const dup = await repeats(ctx.db, ctx.agent.id, body, ctx.now());
-  if (dup) fail('REPEATED', 'You or someone else already said this in nearly the same words; say something new or nothing');
+  if (typeof body !== 'string' || !body.trim() || ctx.agent.kind !== 'agent') return;
+  const why = await ungrounded(ctx.db, ctx.agent.id, body, ctx.now());
+  if (why) fail(why.startsWith('repeats') ? 'REPEATED' : 'UNGROUNDED', `Not posted: it ${why}. Say something true and new, or nothing.`);
+}
+/** The same gate for a chat or DM line: grounded, and not the same line it already sent in this conversation today. */
+async function refuseChatRepeat(ctx: ToolContext, body: unknown, where: { channel_id?: string | null; conversation_id?: string | null }) {
+  if (typeof body !== 'string' || !body.trim() || ctx.agent.kind !== 'agent') return;
+  const why = await ungrounded(ctx.db, ctx.agent.id, body, ctx.now(), { posts: false });
+  if (why) fail('UNGROUNDED', `Not sent: it ${why}.`);
+  const mine = await ctx.db.select({ body: messages.body }).from(messages).where(and(eq(messages.authorId, ctx.agent.id),
+    where.channel_id ? eq(messages.channelId, where.channel_id) : eq(messages.conversationId, where.conversation_id!), gte(messages.createdAt, new Date(ctx.now().getTime() - 86_400_000))))
+    .orderBy(desc(messages.createdAt)).limit(20);
+  const k = normalize(body);
+  if (mine.some((m) => normalize(m.body) === k)) fail('REPEATED', 'Not sent: you already said this here today.');
 }
 
 export async function runTool(ctx: ToolContext, name: string, input: unknown): Promise<ToolOutcome> {

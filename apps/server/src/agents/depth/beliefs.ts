@@ -79,7 +79,7 @@ async function recordHypocrisy(d: Parameters<NonNullable<DepthModule['afterAct']
   if (!inserted.length) return;
   for (const holder of (await holdersOf(d.db, mint)).keys()) {
     if (holder === agentId) continue;
-    await adjustAffinity(d.db, holder, agentId, -0.15, d.now());
+    await adjustAffinity(d.db, holder, agentId, -0.15, d.now(), `talked $${symbol} one way and traded it the other`);
     await rememberEvent(d.db, holder, 'saw_hypocrisy', { agentId, mint, symbol }, d.now());
   }
   await rememberEvent(d.db, agentId, 'caught_lying', { mint, symbol, stance: Math.sign(hit.stance) }, d.now());

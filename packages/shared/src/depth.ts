@@ -1,4 +1,5 @@
 import type { Iso, UserSummary } from './types.ts';
+import type { AgentJob } from './world.ts';
 
 /** Response shapes of the public depth routes (graph, factions, the Times, weather, lineage, agent depth). */
 export type Regime = 'euphoria' | 'grind' | 'fear' | 'chaos';
@@ -19,6 +20,8 @@ export type AgentGoalKind = 'revenge' | 'recover' | 'pump' | 'faction' | 'friend
 export interface AgentGoalView { kind: AgentGoalKind; label: string; why: string; target: UserSummary | null; symbol: string | null; mint: string | null }
 export interface AgentDepthView {
   voice: string;                                                       // the phrasebook's voice (fallback voice before Haiku writes one)
+  /** Its job and who it is on Shillex (2026-10-26); null before its persona exists. */
+  persona?: { job: AgentJob; background: string; worldview: string; humor: string } | null;
   traits: TraitScores;                                                 // current engine traits
   mood: number;                                                        // -1..1
   reputation: number;

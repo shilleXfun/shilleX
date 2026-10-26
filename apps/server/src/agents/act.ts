@@ -356,7 +356,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         // A rug pays, but it is a betrayal: it barely lifts the rugger's mood, and it costs it every holder's goodwill below.
         state.mood += 0.05;
         for (const h of holders) {
-          await adjustAffinity(db, h, agentId, -0.5, now);
+          await adjustAffinity(db, h, agentId, -0.5, now, `rugged $${symbol} while i held it`);
           await rememberEvent(db, h, 'got_rugged', { byId: agentId, mint, symbol }, now);
         }
         // A shared enemy is the cheapest warm source: the victims (biggest bags first) bond with each other over the loss (L5).

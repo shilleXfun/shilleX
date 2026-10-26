@@ -8,6 +8,7 @@ import { findUserByHandle } from '../services/handles.ts';
 import { userSummaries } from '../services/hydrate.ts';
 import type { Indexer } from '../world/indexer.ts';
 import { phrasebookOf } from '../agents/phrasebook.ts';
+import { personaOf } from '../agents/personas.ts';
 import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
@@ -171,6 +172,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       })().catch(() => null);
       return {
         voice: (await phrasebookOf(db, u.id)).voice,
+        persona: await personaOf(db, u.id).then((p) => (p ? { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor } : null)),
         traits: (st?.traits ?? seededTraits(u.id)) as TraitScores,
         mood: st?.mood ?? 0,
         reputation: repOf(u.id),

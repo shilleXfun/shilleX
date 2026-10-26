@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
 import { testDb } from './helpers.ts';
-import { wallets, worldJobs } from '../src/db/schema.ts';
+import { agentPersonas, wallets, worldJobs } from '../src/db/schema.ts';
+import { seedVoice } from '../src/agents/personas.ts';
 import { ChainError, MemoryChain } from '../src/world/chain.ts';
 import { mulberry32 } from '../src/seed/rng.ts';
 import { startEngine, type Engine, type EngineDeps } from '../src/agents/engine.ts';
@@ -29,6 +30,8 @@ describe('world engine reliability (docs/system-audit.md §3)', () => {
   it('starts a website build while the model queue is halted (the latent stall)', async () => {
     const asked: [string, SiteJob][] = [];
     const agent = w.agents[0]!;
+    // Only builders build: this one is.
+    await w.t.db.insert(agentPersonas).values({ agentId: agent.id, job: 'builder', background: 'b', worldview: 'w', humor: 'h', voice: seedVoice(agent.id, 'builder'), source: 'seed', createdAt: w.t.clock.now(), updatedAt: w.t.clock.now() });
     await planSites(deps({ moments: haltedQueue({ n: 0 }), buildSite: (id, job) => { asked.push([id, job]); return true; } }), agent.id);
     // Its first product (or, by chance, its own page): either way the build starts though the model queue refuses everything.
     expect(asked.map(([id]) => id)).toEqual([agent.id]);

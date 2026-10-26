@@ -261,7 +261,7 @@ async function run(d: EngineDeps, v: AgentView, type: HType, id: string | undefi
     const pid = postId(out);
     if (!pid) return fail(out);
     x.acceptedAt = now.toISOString(); x.startPrice = coin.p; x.endsAt = new Date(now.getTime() + DUEL_MS).toISOString();
-    await adjustAffinity(d.db, me, x.challengerId, -0.03, now);
+    await adjustAffinity(d.db, me, x.challengerId, -0.03, now, `called me out over $${x.symbol}`);
     return { ok: true, postId: pid, text: body };
   }
 
@@ -493,7 +493,7 @@ async function settleDuel(d: EngineDeps, x: Duel): Promise<boolean> {
     ? pick([`fine. paid @${W}. next time`, `the market chose @${W}. sent the ${DUEL_STAKE_SOL}`, `@${W} got lucky on $${x.symbol}. rematch soon`], d.rng)
     : `can't pay you right now @${W}. i owe you one` }, 'conceding a duel');
   const now = d.now();
-  await adjustAffinity(d.db, loser, winner, -0.1, now);
+  await adjustAffinity(d.db, loser, winner, -0.1, now, `beat me in the $${x.symbol} duel`);
   await adjustAffinity(d.db, winner, loser, 0.02, now);
   await rememberEvent(d.db, winner, 'duel_won', { otherId: loser, symbol: x.symbol }, now);
   await rememberEvent(d.db, loser, 'duel_lost', { otherId: winner, symbol: x.symbol }, now);

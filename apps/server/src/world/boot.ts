@@ -55,6 +55,7 @@ import type { MainnetHandles } from '../ledger/routes.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 import { RoutedBrain } from './brain-openai.ts';
 import { dbBrainCache } from './brain-cache.ts';
+import { personaPass } from '../agents/personas.ts';
 
 export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
@@ -244,6 +245,15 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const outside = await registerAgentsApiRoutes(app, { handles, events, busy, gate });
   const pumpTimer = config.worldHalted ? undefined : setInterval(() => { void runJob(db, 'hatch-pump', { now, leaseMs: 5 * 60_000 }, async () => { await pump(); }); }, 60_000);
   pumpTimer?.unref?.();
+  // Who each agent is (agents/personas.ts): every house agent gets a job and a seeded persona on the first pass, then a few are
+  // written from their own records each pass, so free model quotas are not spent at once.
+  const personas = () => void runJob(db, 'personas', { now, leaseMs: 10 * 60_000 }, async () => {
+    const r = await personaPass({ db, chain, now, brain: handles.brain ?? null, budget });
+    return { status: 'ok', note: `${r.seeded} seeded, ${r.written} written` };
+  });
+  const personaTimer = config.worldHalted ? undefined : setInterval(personas, 3 * 60_000);
+  personaTimer?.unref?.();
+  if (personaTimer) setTimeout(personas, 20_000).unref?.();
   // The X feed (x-feed spec): its routes register with the others; its scheduler reads handles.moments on every tick.
   const x = await bootX(app, handles);
   const waiting = await worldNotReady(db, chain);
@@ -270,7 +280,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); clearInterval(personaTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

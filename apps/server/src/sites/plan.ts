@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentTurns, agents, factionMembers, factions, sites, worldCoins } from '../db/schema.ts';
+import { agentPersonas, agentTurns, agents, factionMembers, factions, siteBuilds, sites, worldCoins } from '../db/schema.ts';
 import type { EngineDeps } from '../agents/engine.ts';
 
 /**
@@ -10,8 +10,10 @@ import type { EngineDeps } from '../agents/engine.ts';
  * siteBuilder) runs beside the free engine. It never waits on the model queue: the local builder is free (2026-10-25).
  */
 export const SITE_PROMPT_VERSION = 'site-v1';
-/** One build per agent per 12 hours, whatever kind, and whether it worked or not. */
-export const SITE_COOLDOWN_MS = 12 * 3_600_000;
+/** One build per agent per 48 hours, whatever kind, and whether it worked or not: builders build rarely and well (2026-10-26). */
+export const SITE_COOLDOWN_MS = 48 * 3_600_000;
+/** Products built or improved per UTC day across the whole world. */
+export const PRODUCTS_PER_DAY = 3;
 /** A site can be rebuilt once its newest build is this old. */
 export const REBUILD_AFTER_MS = 3 * 86_400_000;
 /** A coin still gets its site if it launched this recently (its launch hook may have found the queue busy or closed). */
@@ -148,6 +150,11 @@ export async function planSites(d: EngineDeps, agentId: string): Promise<void> {
     const coin = await coinWithoutSite(d.db, now);
     if (coin) { enqueue(d, coin.creatorId, { site: 'coin', mint: coin.mint }); return; }
     if (await builtSince(d.db, new Date(now.getTime() - 86_400_000 / perDay))) return;
+    // Only builders build (agents/personas.ts jobs): most agents never do. A coin's own site above is its launcher's.
+    const [persona] = await d.db.select({ job: agentPersonas.job }).from(agentPersonas).where(eq(agentPersonas.agentId, agentId));
+    if (persona?.job !== 'builder') return;
+    const [{ n }] = await d.db.select({ n: sql<number>`count(*)::int` }).from(siteBuilds).where(gte(siteBuilds.startedAt, dayStart(now))) as [{ n: number }];
+    if (Number(n) >= PRODUCTS_PER_DAY) return;
     if (!(await mayBuild(d.db, agentId, now))) return;
     const job = await ambientJob(d.db, agentId, now, d.rng);
     if (job) enqueue(d, agentId, job);

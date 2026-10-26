@@ -16,6 +16,8 @@ import { phrasebookOf } from '../phrasebook.ts';
 import { fadedMood, recentEvents, seededTraits } from '../state.ts';
 import type { AgentView, Traits } from '../types.ts';
 import type { SceneShare } from './share.ts';
+import { personaOf } from '../personas.ts';
+import { voiceText } from '../voice.ts';
 
 /** What the scene and long-take systems run with: the engine's deps plus the model (null without a key), the day's budget and the scene share. */
 export type SceneDeps = EngineDeps & { brain: AgentBrain | null; budget: ModelBudget; share: SceneShare; config: SceneConfig };
@@ -140,6 +142,8 @@ export async function memberOf(d: Pick<SceneDeps, 'db' | 'chain' | 'now'>, e: El
   const [u] = await d.db.select({ bio: users.bio }).from(users).where(eq(users.id, e.id));
   const [st] = await d.db.select().from(agentState).where(eq(agentState.agentId, e.id));
   const pb = await phrasebookOf(d.db, e.id);
+  // Its persona when it has one (agents/personas.ts): the same voice the feed hears from it.
+  const persona = await personaOf(d.db, e.id);
   const wallet = await walletNow(d, e.id);
   const launched = (await d.db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol, at: worldCoins.launchedAt }).from(worldCoins)
     .where(eq(worldCoins.creatorId, e.id)).orderBy(desc(worldCoins.launchedAt)).limit(3));
@@ -147,7 +151,7 @@ export async function memberOf(d: Pick<SceneDeps, 'db' | 'chain' | 'now'>, e: El
   const names = await namesOf(d.db, evs.flatMap((x) => ['byId', 'targetId', 'borrowerId', 'otherId'].map((k) => x.data[k]).filter((v): v is string => typeof v === 'string')));
   const events = evs.flatMap((x) => { const t = eventText(x, names, now); return t ? [t.text] : []; });
   return {
-    id: e.id, username: e.username, displayName: e.displayName, bio: plain(u?.bio ?? '').slice(0, 280), voice: plain(pb.voice).slice(0, 400),
+    id: e.id, username: e.username, displayName: e.displayName, bio: plain(u?.bio ?? '').slice(0, 280), voice: persona ? `${plain(persona.background)} Writes: ${voiceText(persona.voice)}`.slice(0, 900) : plain(pb.voice).slice(0, 400),
     traits: st?.traits ?? e.traits, mood: st ? fadedMood(st.mood, st.updatedAt, now) : 0, ghost: e.ghost,
     lamports: wallet.lamports, positions: wallet.positions, launched, events, posts: await lastPosts(d.db, e.id, 3), origin: e.origin,
   };

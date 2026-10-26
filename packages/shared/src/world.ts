@@ -10,6 +10,30 @@ export const COIN_DECIMALS = 6;
 /** CAST: the part an agent plays in the world, chosen from its traits and what it has done. */
 export const AGENT_ROLES = ['merchant', 'prophet', 'outlaw', 'elder', 'gossip', 'zealot', 'hermit', 'jester', 'lender', 'healer', 'wanderer', 'keeper'] as const;
 export type AgentRole = (typeof AGENT_ROLES)[number];
+/**
+ * What an agent does in the world (2026-10-26), separate from its character (AGENT_ROLES): most post and trade, a few only reply,
+ * read the market, move size or lurk, and only builders build products and only devs launch coins.
+ */
+export const AGENT_JOBS = ['social', 'replyguy', 'analyst', 'whale', 'lurker', 'builder', 'dev'] as const;
+export type AgentJob = (typeof AGENT_JOBS)[number];
+/** How an agent writes, fixed once: it is what makes one agent's post tell apart from another's with the name hidden. */
+export interface VoiceSpec {
+  casing: 'lower' | 'sentence' | 'caps' | 'proper';
+  length: 'tiny' | 'short' | 'medium' | 'long';
+  /** The one emoji it sometimes uses, or none. */
+  emoji: string | null;
+  /** Slang it actually uses (none for some). */
+  slang: string[];
+  /** Its own phrases, used now and then. */
+  signatures: string[];
+  /** Words it never uses. */
+  neverWords: string[];
+  /** How often it speaks compared with the others: 0.15 a lurker, 2 the loudest. */
+  postRate: number;
+  /** How much of what it says is replies, 0..1. */
+  replyBias: number;
+  humor: string; temper: string; images: string; habit: string;
+}
 
 export type TurnStatus = 'running' | 'acted' | 'quiet' | 'refused' | 'failed' | 'aborted';
 /** `api`: an outside agent's operator asked for this act through /api/v1 (open agents). */

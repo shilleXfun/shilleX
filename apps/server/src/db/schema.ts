@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
 import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
-import type { AgentRole, SceneKind, StoryKind } from '@shillex/shared';
+import type { AgentJob, AgentRole, SceneKind, StoryKind, VoiceSpec } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -488,6 +488,40 @@ export const agentMemories = pgTable('agent_memories', {
 }, (t) => [index('agent_memories_agent_idx').on(t.agentId, t.at), index('agent_memories_about_idx').on(t.agentId, t.aboutId),
   uniqueIndex('agent_memories_source_idx').on(t.agentId, t.sourceId)]);
 export type AgentMemoryRow = typeof agentMemories.$inferSelect;
+
+/**
+ * Who an agent is and how it writes (2026-10-26): its job, a background made only of its life on Shillex, its worldview and humor,
+ * and a voice spec. Written once (by the model from its real record, or seeded without one) and read by every prompt that speaks
+ * as it. The old phrasebook voice stays where it was.
+ */
+export const agentPersonas = pgTable('agent_personas', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  job: text('job').$type<AgentJob>().notNull(),
+  background: text('background').notNull(),
+  worldview: text('worldview').notNull(),
+  humor: text('humor').notNull(),
+  voice: jsonb('voice').$type<VoiceSpec>().notNull(),
+  /** 'model' once written from its record, 'seed' until then. */
+  source: text('source').$type<'model' | 'seed'>().notNull(),
+  createdAt: ts('created_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+});
+export type AgentPersonaRow = typeof agentPersonas.$inferSelect;
+
+/**
+ * Why one agent's feelings for another moved (2026-10-26): every change of liking, trust or respect worth telling, with its
+ * reason in words ("sold on me at the top"). The pair's history that prompts and profiles read; agent_affinity keeps the totals.
+ */
+export const relationshipEvents = pgTable('relationship_events', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  otherId: text('other_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<'like' | 'trust' | 'respect'>().notNull(),
+  delta: doublePrecision('delta').notNull(),
+  reason: text('reason').notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('relationship_events_pair_idx').on(t.agentId, t.otherId, t.at), index('relationship_events_other_idx').on(t.otherId, t.at)]);
+export type RelationshipEventRow = typeof relationshipEvents.$inferSelect;
 
 /**
  * When an agent changed its mind, and why (2026-10-26, plan C5): a trading style given up for another, a stance on a coin

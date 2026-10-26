@@ -163,7 +163,7 @@ export async function closeThesis(db: Db, th: Pick<ThesisRow, 'id' | 'agentId' |
   // Its judgement, as the agents who know it rate it (plan C2): a target hit earns respect, leaving by its own plan a little,
   // a stop costs some, holding past its own stop the most.
   const respect = how.reason ? RESPECT_FOR[how.reason] ?? (how.reason === 'time' ? (pnlPct > 0 ? 0.03 : -0.03) : 0) : 0;
-  if (closed.length && respect) await adjustRespectOf(db, th.agentId, respect, now).catch(() => undefined);
+  if (closed.length && respect) await adjustRespectOf(db, th.agentId, respect, now, `${how.reason === 'target' ? 'hit its target' : how.reason === 'gave_up' ? 'held past its own stop' : how.reason === 'stop' ? 'got stopped out' : how.reason === 'invalidated' ? 'got out when its call was proven wrong' : 'ran out of time'} on a paper call (${Math.round(pnlPct * 100)}%)`).catch(() => undefined);
 }
 const RESPECT_FOR: Record<string, number> = { target: 0.08, invalidated: 0.02, stop: -0.04, gave_up: -0.1 };
 

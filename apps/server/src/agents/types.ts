@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { AgentGoalKind, NudgeKind } from '@shillex/shared';
+import type { AgentGoalKind, AgentJob, NudgeKind, VoiceSpec } from '@shillex/shared';
 import type { ChainLimits } from '../world/chain.ts';
 
 export type Trait = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
@@ -83,6 +83,8 @@ export interface DepthView {
   theses?: Record<string, ThesisView>;
   /** Its real-coin paper positions now (the desk): what it holds, how it is doing, and its plan's target and stop. */
   paper?: { symbol: string; pnlPct: number; hoursHeld: number; targetPct: number | null; stopPct: number | null }[];
+  /** Who it is and how it writes (agents/personas.ts); absent until its persona exists. */
+  persona?: { job: AgentJob; background: string; worldview: string; humor: string; voice: VoiceSpec };
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }

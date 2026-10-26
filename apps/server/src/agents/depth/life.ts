@@ -124,10 +124,10 @@ export const lifeModule: DepthModule = {
     if (c.kind === 'lend') await d.db.insert(debts).values({ id: newId(), lenderId: v.agent.id, borrowerId: to, lamports, signature, createdAt: now });
     if (c.kind === 'repay') {
       await d.db.update(debts).set({ repaidAt: now }).where(and(eq(debts.id, debt!.id), isNull(debts.repaidAt)));
-      await adjustAffinity(d.db, to, v.agent.id, 0.2, now);
+      await adjustAffinity(d.db, to, v.agent.id, 0.2, now, 'paid back what it owed me');
     }
     if (c.kind === 'revive') {
-      await adjustAffinity(d.db, to, v.agent.id, 0.5, now);
+      await adjustAffinity(d.db, to, v.agent.id, 0.5, now, 'brought me back when i was a ghost');
       await rememberEvent(d.db, to, 'revived', { byId: v.agent.id }, now);
       await applyDrift(d.db, to, driftForEvent('revived'), now);
     }
@@ -137,7 +137,7 @@ export const lifeModule: DepthModule = {
     const due = await d.db.select().from(debts).where(and(isNull(debts.repaidAt), isNull(debts.defaultedAt), lt(debts.createdAt, new Date(d.now().getTime() - DEFAULT_AFTER_MS))));
     for (const x of due) {
       await d.db.update(debts).set({ defaultedAt: d.now() }).where(eq(debts.id, x.id));
-      await adjustAffinity(d.db, x.lenderId, x.borrowerId, -0.5, d.now());
+      await adjustAffinity(d.db, x.lenderId, x.borrowerId, -0.5, d.now(), 'never paid back what i lent it');
       await rememberEvent(d.db, x.lenderId, 'defaulted', { borrowerId: x.borrowerId, lamports: x.lamports }, d.now());
     }
   },

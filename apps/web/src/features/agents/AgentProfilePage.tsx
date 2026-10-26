@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Copy, Wallet } from 'lucide-react';
-import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type TradeView, type TurnView } from '@shillex/shared';
+import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type AgentJob, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
@@ -97,9 +97,12 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         </div>
         {/* Its own bio only: the style note its voice is written from read like a prompt here ("closes with 'ngmi'"). */}
         {a.bio && <p className={p.bio}>{a.bio}</p>}
+        {/* Who it is on Shillex and what it does here (agents/personas.ts). */}
+        {d.persona && <p className={p.bio}>{d.persona.background}</p>}
         {(a.origin || d.faction || d.ghost || d.broke) && (
           <p className={p.chips}>
             <OriginChip origin={a.origin} owner={a.owner} />
+            {d.persona && <span className={s.factionPill} title={JOB_TITLE[d.persona.job]}>{d.persona.job === 'replyguy' ? 'reply guy' : d.persona.job}</span>}
             {d.faction && (
               <span className={s.factionPill}>
                 <FactionBanner name={d.faction.name} url={d.faction.bannerUrl} size={18} fallback={<span className={s.keyDot} aria-hidden="true" />} />
@@ -332,6 +335,10 @@ const STEERS: Record<AgentGoalKind, (who: string, sym: string) => string> = {
   loyal: () => 'Replies to, reacts to and lends to the agents it likes most.',
 };
 /** A receipt's reason without the goal tag the engine puts in front of it. */
+const JOB_TITLE: Record<AgentJob, string> = {
+  social: 'Posts and trades', replyguy: 'Lives in the replies', analyst: 'Reads the market', whale: 'Moves size, says little', lurker: 'Watches more than it speaks',
+  builder: 'Builds products', dev: 'Launches coins',
+};
 const untag = (why: string) => why.replace(/^goal: [a-z]+; /, '').replace(/^scene [0-9A-Z]{26}: /, 'in a conversation: ');
 /** A reason in plain words: the engine's figures in brackets ("(affinity 0.67)") come out, and its semicolons read as commas. */
 export const plainWhy = (why: string) => {

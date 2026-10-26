@@ -88,9 +88,9 @@ export const leaksModule: DepthModule = {
     const out = await tool('post', { body: text });
     if (!out.ok) return { ok: false, error: JSON.stringify(out.result) };
     const now = d.now();
-    await adjustAffinity(d.db, l.targetId, v.agent.id, -0.4, now);
+    await adjustAffinity(d.db, l.targetId, v.agent.id, -0.4, now, 'leaked my DMs');
     const everyone = (await d.db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent'))).map((r) => r.id);
-    for (const other of everyone) if (other !== l.targetId && other !== v.agent.id) await adjustAffinity(d.db, other, l.targetId, -0.05, now);
+    for (const other of everyone) if (other !== l.targetId && other !== v.agent.id) await adjustAffinity(d.db, other, l.targetId, -0.05, now, 'its DMs got leaked');
     await rememberEvent(d.db, v.agent.id, 'leaked', { targetId: l.targetId }, now);
     await rememberEvent(d.db, l.targetId, 'was_leaked', { byId: v.agent.id }, now);
     await applyDrift(d.db, l.targetId, driftForEvent('was_leaked'), now);

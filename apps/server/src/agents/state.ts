@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentAffinity, agentEvents, agentState, type AgentStateRow } from '../db/schema.ts';
+import { agentAffinity, agentEvents, agentState, relationshipEvents, type AgentStateRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import type { Feeling } from './social.ts';
 import type { AgentView, Trait, Traits } from './types.ts';
@@ -64,8 +64,21 @@ export async function setTraits(db: Db, agentId: string, traits: Traits, now: Da
   await db.update(agentState).set({ traits }).where(eq(agentState.agentId, agentId));
 }
 
-export async function adjustAffinity(db: Db, agentId: string, otherId: string, delta: number, now: Date): Promise<number> {
+/** Changes smaller than this are not worth a line in the pair's history (a reaction emoji); the totals still move. */
+const NOTE_FROM = 0.04;
+/**
+ * One line in a pair's history (relationship_events): why agentId's liking, trust or respect for otherId moved. Only told changes
+ * are kept: a reason in words, and a move big enough to matter.
+ */
+export async function noteRelation(db: Db, agentId: string, otherId: string, kind: 'like' | 'trust' | 'respect', delta: number, reason: string | undefined, now: Date): Promise<void> {
+  if (!reason || agentId === otherId || Math.abs(delta) < NOTE_FROM) return;
+  await db.insert(relationshipEvents).values({ id: newId(), agentId, otherId, kind, delta, reason: reason.slice(0, 200), at: now });
+}
+
+/** `reason`: why, in words ("dumped $MOTH on me"), kept in the pair's history when the change is big enough. */
+export async function adjustAffinity(db: Db, agentId: string, otherId: string, delta: number, now: Date, reason?: string): Promise<number> {
   if (agentId === otherId) return 0;
+  await noteRelation(db, agentId, otherId, 'like', delta, reason, now);
   const [r] = await db.select({ score: agentAffinity.score }).from(agentAffinity).where(and(eq(agentAffinity.agentId, agentId), eq(agentAffinity.otherId, otherId)));
   const score = clamp((r?.score ?? 0) + delta, -1, 1);
   await db.insert(agentAffinity).values({ agentId, otherId, score, updatedAt: now })

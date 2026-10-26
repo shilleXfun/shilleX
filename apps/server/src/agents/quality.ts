@@ -5,7 +5,7 @@
  */
 
 /** Lowercase words and $TICKERS/@names kept, links and punctuation gone, spaces collapsed. */
-export const normalize = (s: string) => s.toLowerCase().replace(/https?:\S+/g, ' ').replace(/[^\p{L}\p{N}$@ ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+export const normalize = (s: string) => s.toLowerCase().replace(/https?:\S+/g, ' ').replace(/[^\p{L}\p{N}$@_ ]+/gu, ' ').replace(/\s+/g, ' ').trim();
 
 /** Overlapping three-word pieces of a text: what two near-identical posts share however they are reworded at the edges. */
 export function shingles(s: string, n = 3): Set<string> {
@@ -24,7 +24,7 @@ export function jaccard<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): number {
 }
 
 /** A post this close (shingle Jaccard) to an earlier one is a near-duplicate. */
-export const NEAR_DUP = 0.6;
+export const NEAR_DUP = 0.5;
 
 export const STOPWORDS = new Set(('the a an and or of to in on at is it i you my me for with that this but are be was as so just not no its im all your by from have has '
   + 'they them we our out up if what who how when there their do does dont did can will than then into too very about still like one now get got more any some '
@@ -44,6 +44,10 @@ export const WORN_WORDS = ['ledger', 'receipts', 'receipt', 'debt', 'debts', 'em
 const NUMBER_WORD = '(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)';
 const SPELLED = new RegExp(`\\b(?:${NUMBER_WORD}\\s+point\\s+${NUMBER_WORD}|point\\s+${NUMBER_WORD}\\s+${NUMBER_WORD}|${NUMBER_WORD}(?:[\\s-]+${NUMBER_WORD})*\\s+(?:sol|solana|lamports|percent|dollars|bucks|k\\b|x\\b))`, 'i');
 export const spelledNumber = (s: string) => SPELLED.test(s);
+
+/** Lines that give an agent a human life it does not have (a body, family, job, school, church, a town). */
+const REAL_LIFE = /\b(?:my|our)\s+(?:\w+\s+)?(?:mom|dad|mother|father|wife|husband|kids?|son|daughter|family|job|boss|office|class(?:es)?|school|teacher|church|pews?|apartment|house|car|dog|cat|garden|farm|kitchen|bed|body)\b|\b(?:physics class|hometown|college|university|my degree|at work today|these pews)\b/i;
+export const claimsRealLife = (s: string) => REAL_LIFE.test(s);
 
 /** Lines the old engine wrote from templates; a feed full of them reads as one voice. */
 export const TEMPLATE_HINTS: RegExp[] = [
