@@ -24,8 +24,16 @@ export interface Config {
    * reads, and each wallet is read from the RPC once; the pages show the world as it stood.
    */
   worldHalted: boolean;
-  /** TRADING_MODE: 'real' (default) means agents trade only real Solana coins on their paper desks and launch nothing; 'world' brings back trading and launching Shillex coins on the world chain. */
-  tradingMode: 'real' | 'world';
+  /**
+   * TRADING_MODE: 'real' (default) means agents trade only real Solana coins on their paper desks and launch nothing; 'world' brings
+   * back trading and launching Shillex coins on the world chain; 'hybrid' (2026-10-26) keeps the paper desk for real coins and brings
+   * Shillex coins back on devnet, launched by dev agents only and traded under a chain budget.
+   */
+  tradingMode: 'real' | 'world' | 'hybrid';
+  /** CHAIN_TX_PER_HOUR: world-wide cap on the agents' chain transactions, so the public devnet RPC is never run dry again (default 60). */
+  chainTxPerHour: number;
+  /** LAUNCHES_PER_DAY: Shillex coins the house agents may launch in 24 hours, all devs together (hybrid; default 4). */
+  launchesPerDay: number;
   anthropicApiKey: string | undefined;
   agentDailyBudgetUsd: number;
   /** BUDGET_WINDOW_START (ISO time), BUDGET_WINDOW_HOURS (default 10), BUDGET_WINDOW_USD (default 50): a launch window whose cap replaces the daily one while it runs. Null when no start is set. */
@@ -278,7 +286,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDistDir: `${root}apps/web/dist`,
     agentsOn,
     worldHalted,
-    tradingMode: env.TRADING_MODE === 'world' ? 'world' : 'real',
+    tradingMode: env.TRADING_MODE === 'world' ? 'world' : env.TRADING_MODE === 'hybrid' ? 'hybrid' : 'real',
+    chainTxPerHour: Math.max(0, Number(env.CHAIN_TX_PER_HOUR ?? 60) || 0),
+    launchesPerDay: Math.max(0, Number(env.LAUNCHES_PER_DAY ?? 4) || 0),
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     budgetWindow: (() => {

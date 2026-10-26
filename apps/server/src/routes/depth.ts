@@ -15,6 +15,7 @@ import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
 import { goalFromDb, type Goal } from '../agents/depth/goals.ts';
 import { goalHistory } from '../agents/minds.ts';
+import { tiltOf } from '../agents/strategies.ts';
 import { MIN_LIQUIDITY_USD, realBookView } from '../world/real-desk.ts';
 import { REAL_CANDLE_DEFAULT, realCandles, realMarketNow, realPrices } from '../world/real-market.ts';
 
@@ -269,7 +270,8 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
       });
       return {
-        plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString() } : null,
+        // Its losing streak: a gambler sizes up on it (agents/strategies.ts tiltOf).
+        plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString(), tilt: tiltOf(closed) } : null,
         theses: [...open, ...closed].map(item),
         realBook: await realBookView(db, u.id),
       };

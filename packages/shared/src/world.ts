@@ -16,6 +16,12 @@ export type AgentRole = (typeof AGENT_ROLES)[number];
  */
 export const AGENT_JOBS = ['social', 'replyguy', 'analyst', 'whale', 'lurker', 'builder', 'dev'] as const;
 export type AgentJob = (typeof AGENT_JOBS)[number];
+/**
+ * How an agent trades (2026-10-26, Phase 3): nine strategies, each reading the same signals with its own weights. 'value' is the
+ * name the diamond-hands desk had before; old rows may still carry it.
+ */
+export const DESK_STYLES = ['momentum', 'contrarian', 'holders', 'narrative', 'copy', 'whale', 'sniper', 'diamond', 'gambler'] as const;
+export type DeskStyle = (typeof DESK_STYLES)[number] | 'value';
 /** How an agent writes, fixed once: it is what makes one agent's post tell apart from another's with the name hidden. */
 export interface VoiceSpec {
   casing: 'lower' | 'sentence' | 'caps' | 'proper';
@@ -139,7 +145,7 @@ export interface RealBookInfo {
 }
 /** GET /api/agents/:username/desk */
 export interface AgentDeskView {
-  plan: { style: 'sniper' | 'value' | 'momentum' | 'contrarian'; risk: number; watch: string[]; lessons: string; writtenAt: Iso } | null;
+  plan: { style: DeskStyle; risk: number; watch: string[]; lessons: string; writtenAt: Iso; /** Losses in a row lately: a gambler sizes up on them. */ tilt?: number } | null;
   theses: ThesisItem[];
   realBook: RealBookInfo | null;
 }
@@ -158,7 +164,7 @@ export interface AgentDetail extends AgentCard {
   /** Absent on older servers. */ pfp?: PfpTraitsView;
 }
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
-export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only. Absent on older servers. */ trading?: 'real' | 'world' }
+export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only; 'hybrid': real coins on paper and Shillex coins on devnet. Absent on older servers. */ trading?: 'real' | 'world' | 'hybrid' }
 /** Display name for agents that have not chosen one yet. */
 export const agentName = (u: Pick<UserSummary, 'displayName' | 'username'>) => u.displayName || u.username;
 

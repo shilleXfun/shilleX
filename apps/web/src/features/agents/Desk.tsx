@@ -25,10 +25,16 @@ const timeLeft = (iso: string) => { const m = Math.round((Date.parse(iso) - Date
 const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
 const usd = (n: number) => `$${n.toLocaleString('en', { maximumFractionDigits: n >= 100 ? 0 : 2 })}`;
 const STYLE: Record<NonNullable<AgentDeskView['plan']>['style'], { label: string; how: string }> = {
-  sniper: { label: 'Sniper', how: 'Gets into new coins first, small and fast, and leaves quickly.' },
-  value: { label: 'Value', how: 'Backs creators with clean records and gives a trade time.' },
-  momentum: { label: 'Momentum', how: 'Rides coins that are moving, and never chases one already up a lot.' },
-  contrarian: { label: 'Contrarian', how: 'Buys dips in coins whose creators it trusts.' },
+  momentum: { label: 'Momentum', how: 'Rides coins moving up with buyers ahead, and never chases one already up a lot.' },
+  contrarian: { label: 'Contrarian', how: 'Buys a flush once the selling stops, and fades what everyone is shouting about.' },
+  holders: { label: 'Holder analyst', how: 'Reads who is buying: wants many small buyers, not a few big wallets.' },
+  narrative: { label: 'Narrative', how: 'Trades what Shillex is talking about, before the talk peaks.' },
+  copy: { label: 'Copy-trader', how: 'Follows the agents it likes into their coins, and leaves when they do.' },
+  whale: { label: 'Whale', how: 'Big size in deep pools, slow in and slow out.' },
+  sniper: { label: 'Launch sniper', how: 'Gets into brand-new coins first, small and fast, and leaves quickly.' },
+  diamond: { label: 'Diamond hands', how: 'Wide stops and long holds: gives a trade two days.' },
+  value: { label: 'Diamond hands', how: 'Wide stops and long holds: gives a trade two days.' },
+  gambler: { label: 'Gambler', how: 'Goes where the price swings hardest, and sizes up after a loss.' },
 };
 const STATUS: Record<ThesisItem['status'], string> = { open: 'Open', won: 'Won', lost: 'Stopped out', expired: 'Ran out of time', closed: 'Closed' };
 const PLANS_SHOWN = 8;
@@ -60,7 +66,7 @@ function CoinCell({ t }: { t: ThesisItem }) {
 }
 
 /** How a plan ended, in words: by its own rules, or after the agent broke them (a win then was luck). */
-const ENDED: Record<string, string> = { target: 'hit its target', stop: 'stopped out', time: 'ran out of time', invalidated: 'proven wrong', gave_up: 'held past its stop', other: 'sold outside the plan' };
+const ENDED: Record<string, string> = { target: 'hit its target', stop: 'stopped out', time: 'ran out of time', invalidated: 'proven wrong', gave_up: 'held past its stop', leader_out: 'left when the agent it copied did', other: 'sold outside the plan' };
 /** The plan's reason, and under it what would prove it wrong (open) or how it ended (closed). */
 function Why({ t }: { t: ThesisItem }) {
   const note = t.status === 'open' ? (t.invalidateIf ? `Wrong if ${t.invalidateIf}.` : null)
@@ -116,6 +122,7 @@ function Plan({ plan }: { plan: NonNullable<AgentDeskView['plan']> }) {
         </div>
         <dl className={s.planFacts}>
           <div><dt>Risk</dt><dd><span className={s.risk} aria-hidden="true"><span style={{ width: `${Math.round(plan.risk * 100)}%` }} /></span>{Math.round(plan.risk * 100)} / 100</dd></div>
+          {plan.tilt ? <div><dt>Losing streak</dt><dd>{plan.tilt} in a row{plan.style === 'gambler' ? ': sizing up to win it back' : ''}</dd></div> : null}
           <div><dt>Watching</dt><dd>{plan.watch.length ? plan.watch.map((w) => <span key={w} className={s.chip}>${w}</span>) : <span className={s.muted}>nothing in particular</span>}</dd></div>
         </dl>
         {plan.lessons && <blockquote className={s.lessons}>{plan.lessons}</blockquote>}

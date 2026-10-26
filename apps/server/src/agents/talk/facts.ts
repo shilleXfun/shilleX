@@ -3,6 +3,9 @@ import { realMarketNow } from '../../world/real-market.ts';
 import { MIN_LIQUIDITY_USD } from '../../world/real-desk.ts';
 import type { AgentView, Candidate, Situation } from '../types.ts';
 import { paperTake, planTake, realMarketTake, realTake, replyWithData, voiceOf, worldTake, type PlanFacts, type RealFacts, type Style, type WorldFacts } from './engine.ts';
+import { strategyOf, type Strategy } from '../strategies.ts';
+
+const TALK_STYLE: Record<Strategy, Style> = { momentum: 'momentum', narrative: 'momentum', copy: 'momentum', gambler: 'momentum', sniper: 'sniper', contrarian: 'contrarian', holders: 'value', whale: 'value', diamond: 'value' };
 
 /** Real coins worth talking about, read at most once a minute per database (every agent's turn shares it). */
 const cache = new WeakMap<Db, { at: number; rows: RealFacts[] }>();
@@ -42,7 +45,8 @@ export function talkLine(v: AgentView, c: Candidate, situation: Situation, real:
   // Real-coin mode: market talk always comes from here (the phrase list only knows Shillex coins).
   if (rng() > (v.realOnly && MARKET.has(situation) ? 1 : TALK_RATE)) return null;
   const voice = voiceOf(v.phrasebook.voice, v.state.traits, v.phrasebook);
-  const style: Style = v.depth.desk?.style ?? 'momentum';
+  // The engine's own lines know four ways to trade; each of the nine strategies talks like the nearest of them.
+  const style: Style = TALK_STYLE[strategyOf(v.depth.desk?.style)];
   const realHeld = new Set<string>();
   if (MARKET.has(situation)) {
     // What it holds on its paper desk comes up often in real-coin mode.

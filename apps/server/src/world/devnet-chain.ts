@@ -219,6 +219,20 @@ export class DevnetChain implements Chain {
     return { signature, ...(await this.deltas(signature, signer.publicKey.toBase58(), null)) };
   }
 
+  /** Asks the devnet faucet for SOL. It is rate-limited per address and per IP, so a refusal is expected now and then and is not an error. */
+  async faucet(publicKey: string, lamports: number): Promise<string | null> {
+    await this.assertNotMainnet();
+    try {
+      const signature = await this.conn.requestAirdrop(new PublicKey(publicKey), lamports);
+      const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash('confirmed');
+      await this.conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+      return signature;
+    } catch (e) {
+      console.warn('[devnet] the faucet said no', (e as Error).message?.slice(0, 200));
+      return null;
+    } finally { this.expire(publicKey); }
+  }
+
   async sendSol(signer: Keypair, to: string, lamports: number) {
     let dest: PublicKey;
     try { dest = new PublicKey(to); } catch { throw new ChainError('BAD_ADDRESS', `${to} is not a Solana address`); }

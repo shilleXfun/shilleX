@@ -20,6 +20,8 @@ export interface Chain {
   curve(mint: string): Promise<CurveState | null>;
   /** Collects the creator's share of a coin's trading fees into its wallet; null when there is too little to be worth a transaction. */
   claimCreatorFees?(signer: Keypair, mint: string): Promise<TradeResult | null>;
+  /** Free test SOL from the network's faucet (devnet, a local validator, the memory chain); null when the faucet says no. */
+  faucet?(publicKey: string, lamports: number): Promise<string | null>;
 }
 
 export class ChainError extends Error {
@@ -50,6 +52,7 @@ export class MemoryChain implements Chain {
   private n = 0;
 
   airdrop(publicKey: string, lamports: number) { this.acct(publicKey).lamports += lamports; }
+  async faucet(publicKey: string, lamports: number): Promise<string | null> { this.airdrop(publicKey, lamports); return this.sig(); }
   private acct(pk: string) { let a = this.accounts.get(pk); if (!a) { a = { lamports: 0, tokens: new Map() }; this.accounts.set(pk, a); } return a; }
   private sig() { return `mem${++this.n}`.padEnd(64, 'x'); }
   private need(a: Account, lamports: number) {

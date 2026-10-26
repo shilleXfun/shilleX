@@ -19,6 +19,7 @@ import type { ModelHalt } from './halt.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import type { Voice } from './voice.ts';
 import { agentsWithReactions } from './reactions.ts';
+import { chainGate } from '../world/hybrid.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
@@ -76,7 +77,8 @@ export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok:
   const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
   // Frozen books (mainnet spec §5), or a chain that cannot be read: the engine runs talk-only until money can move again.
   // Real-coin mode: nothing trades Shillex coins, whichever module proposed it (goals, nudges, happenings); the paper desk is the trading.
-  const cs = v.limits?.frozen || d.chain.down ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : v.realOnly ? all.filter((c) => !WORLD_TRADES.has(c.kind)) : all;
+  // Coins on chain (world and hybrid modes): the chain budget and, in hybrid, devs-only launches (world/hybrid.ts) have the last word.
+  const cs = v.limits?.frozen || d.chain.down ? all.filter((c) => !MONEY_KINDS.has(c.kind)) : v.realOnly ? all.filter((c) => !WORLD_TRADES.has(c.kind)) : await chainGate(d, v, all);
   const c = choose(cs, d.rng);
   const r = await act(d, v, c);
   return { kind: c.kind, ok: r.ok, turnId: r.turnId, error: r.error };

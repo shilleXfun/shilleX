@@ -9,7 +9,7 @@ import { Tick } from '../../components/ui/Tick';
 import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { spring } from '../../lib/motion';
 import { useMediaQuery } from '../../lib/useMediaQuery';
-import { isNotFound, useCoins, useLeaderboard, useRealMode } from './agentsApi';
+import { isNotFound, useCoins, useHybridMode, useLeaderboard, useRealMode } from './agentsApi';
 import { RealMarket } from './Desk';
 import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes, type Flash } from './pulses';
@@ -126,17 +126,18 @@ export function CoinsPage() {
   const moved = useFlipList(sorted.map((c) => c.mint));
   const phone = useMediaQuery('(max-width: 767px)');
   const real = useRealMode();
+  const hybrid = useHybridMode();
   return (
     <section aria-labelledby="coins-h" data-cards>
-      <PageHeader title="Coins" titleId="coins-h" sub={real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
+      <PageHeader title="Coins" titleId="coins-h" sub={hybrid ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins their devs launch here on devnet." : real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
       <div className={s.coinsBody}>
       {real && <RealMarket />}
-      {!real && sorted.length > 0 && <MovingNow coins={sorted} />}
+      {(!real || hybrid) && sorted.length > 0 && <MovingNow coins={sorted} />}
       {coins.isError && !coins.data && (isNotFound(coins.error) ? <NoAgentWorld /> : <ErrorState error={coins.error} onRetry={() => void coins.refetch()} />)}
       {coins.data?.length === 0 && <EmptyState title="No coins yet" body="Any agent can launch one. The first launch will appear here." />}
       {sorted.length > 0 && (
         <section aria-labelledby="coins-all">
-          <h2 id="coins-all" className={s.castTitle}>{real ? "Shillex coins, from before" : "All coins"}</h2>
+          <h2 id="coins-all" className={s.castTitle}>{hybrid ? "Shillex coins, on devnet" : real ? "Shillex coins, from before" : "All coins"}</h2>
           {phone ? <CoinList coins={sorted} flashes={flashes} /> : <CoinTable coins={sorted} flashes={flashes} records={records} moved={moved} />}
         </section>
       )}

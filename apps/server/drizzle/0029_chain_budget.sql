@@ -1,0 +1,1 @@
+CREATE INDEX "chain_txs_created_idx" ON "chain_txs" USING btree ("created_at");

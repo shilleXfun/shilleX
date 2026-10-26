@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { stanceOf } from './depth/beliefs.ts';
 import { isCold } from './social.ts';
+import { PLANS, strategyOf, type Strategy } from './strategies.ts';
 import type { ActionKind, AgentView, Candidate, DeskStyleName, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
@@ -38,16 +39,16 @@ export const CHASE_AT = 0.4;
 export const MAX_POSITION_SHARE = 0.15;
 export const HOUSE_LAUNCH_MIN = 60_000_000;
 const WEATHER_RISK: Record<AgentView['weather'], number> = { euphoria: 0.2, grind: 0, fear: -0.2, chaos: 0.1 };
-/** How long each style gives a trade to work before it walks away. */
-const HORIZON_MS: Record<DeskStyleName, number> = { sniper: 2 * 3_600_000, momentum: 4 * 3_600_000, contrarian: 8 * 3_600_000, value: 12 * 3_600_000 };
 /**
- * The plan a buy opens: the greedy aim higher, the bold give a trade more room before the stop, and more conviction aims a little
- * higher still. Stops sit between -12% and -32%; targets between +25% and about +100%.
+ * The plan a buy opens, from its strategy's base (agents/strategies.ts PLANS: a sniper aims high and leaves within hours, diamond
+ * hands give a trade two days and a wide stop): the greedy aim higher, the bold give a trade more room before the stop, and more
+ * conviction aims a little higher still.
  */
 export function planFor(t: AgentView['state']['traits'], style: DeskStyleName, conviction: number, reason: string): NonNullable<Candidate['thesis']> {
-  const targetPct = 0.25 + 0.6 * t.greed + 0.15 * conviction + (style === 'sniper' ? 0.2 : 0);
-  const stopPct = -(0.12 + 0.2 * t.risk);
-  return { targetPct, stopPct, horizonMs: HORIZON_MS[style], conviction, reason };
+  const p = PLANS[strategyOf(style)];
+  const targetPct = p.target + 0.6 * t.greed + 0.15 * conviction;
+  const stopPct = -(p.stop + 0.2 * t.risk);
+  return { targetPct, stopPct, horizonMs: p.horizonH * 3_600_000, conviction, reason };
 }
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const f2 = (x: number) => x.toFixed(2);
@@ -109,30 +110,47 @@ export function feedTalk(v: AgentView): Map<string, number> {
 }
 
 export interface CoinScore { d: number; why: string }
-const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'it fits my taste', novelty: 'new and barely held', talk: 'people I like are talking it up', trust: 'its creator has a clean record', dip: 'it dipped and the creator is solid', watch: 'it is on my watchlist' };
-/** How much each desk style leans on momentum and on new coins: a contrarian buys the dip, a sniper gets in first. */
-const STYLE: Record<DeskStyleName, { momentum: number; novelty: number; dip: number }> = {
-  momentum: { momentum: 1, novelty: 0.6, dip: 0 }, sniper: { momentum: 0.5, novelty: 2, dip: 0 },
-  value: { momentum: 0.3, novelty: 0.5, dip: 0.6 }, contrarian: { momentum: -0.4, novelty: 0.5, dip: 1 },
+const WHY: Record<string, string> = { momentum: 'it is moving', ally: 'an ally made it', crowd: 'a crowd is in', taste: 'it fits my taste', novelty: 'new and barely held', talk: 'people I like are talking it up', trust: 'its creator has a clean record', dip: 'it dipped and the creator is solid', watch: 'it is on my watchlist', curve: 'its curve is filling with real holders', product: 'its creator ships a product people use' };
+/**
+ * How each strategy (agents/strategies.ts) weighs what a Shillex coin shows: its momentum, how new it is, a dip, what the feed says,
+ * an ally behind it, how many hold it, its creator's record, a curve half filled and a creator who ships a product. The same reads
+ * the paper desk makes of real coins: a sniper gets in first, a holder analyst wants a wide base, a copy-trader follows its allies.
+ */
+type StyleWeights = { momentum: number; novelty: number; dip: number; talk: number; ally: number; crowd: number; trust: number; curve: number; product: number };
+const STYLE: Record<Strategy, StyleWeights> = {
+  momentum: { momentum: 1, novelty: 0.6, dip: 0, talk: 1, ally: 1, crowd: 1, trust: 1, curve: 0, product: 0.3 },
+  contrarian: { momentum: -0.4, novelty: 0.5, dip: 1, talk: -0.5, ally: 1, crowd: 0.5, trust: 1, curve: 0, product: 0.3 },
+  holders: { momentum: 0.3, novelty: 0.5, dip: 0.3, talk: 0.5, ally: 0.5, crowd: 4, trust: 1.5, curve: 1, product: 0.5 },
+  narrative: { momentum: 0.5, novelty: 0.5, dip: 0, talk: 2.5, ally: 1, crowd: 1, trust: 1, curve: 0, product: 0.5 },
+  copy: { momentum: 0.3, novelty: 0.3, dip: 0, talk: 1.5, ally: 2.5, crowd: 1, trust: 1, curve: 0, product: 0.3 },
+  whale: { momentum: 0.3, novelty: 0, dip: 0.6, talk: 0.5, ally: 1, crowd: 2, trust: 2, curve: 1, product: 0.5 },
+  sniper: { momentum: 0.5, novelty: 2, dip: 0, talk: 0.5, ally: 1, crowd: 0.5, trust: 1, curve: 0, product: 0.3 },
+  diamond: { momentum: 0.3, novelty: 0.5, dip: 0.6, talk: 0.5, ally: 1.5, crowd: 1, trust: 2, curve: 0.5, product: 1 },
+  gambler: { momentum: 1.5, novelty: 1, dip: 0, talk: 1, ally: 0.5, crowd: 0.5, trust: 0.5, curve: 0, product: 0 },
 };
+/** Hybrid mode: the launch sniper and the holder analyst are the main buyers of Shillex coins; the others mostly trade on paper. */
+export const WORLD_APPETITE: Record<Strategy, number> = { sniper: 1.3, holders: 1.3, momentum: 0.6, contrarian: 0.6, narrative: 0.6, copy: 0.6, whale: 0.5, diamond: 0.6, gambler: 0.8 };
 /** One agent's appetite for one coin; d > 0 means worth buying. `why` names the biggest reason besides the agent's own boldness. */
 export function coinScore(v: AgentView, c: AgentView['coins'][number], talk: Map<string, number> = feedTalk(v)): CoinScore {
   const t = v.state.traits, desk = v.depth.desk;
-  const style = STYLE[desk?.style ?? 'momentum'];
+  const style = STYLE[strategyOf(desk?.style)];
   const ageMs = Date.parse(v.now) - Date.parse(c.launchedAt);
   const worth = v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);
   const held = v.wallet.positions.find((p) => p.mint === c.mint)?.valueLamports ?? 0;
   const trust = v.depth.reputation[c.creatorId] ?? 0;
   const parts: Record<string, number> = {
     momentum: style.momentum * momentumOf(c),
-    ally: t.loyalty * Math.max(0, v.affinity[c.creatorId] ?? 0),
-    crowd: (0.05 * Math.min(c.holders, 10)) / 10,
+    ally: style.ally * t.loyalty * Math.max(0, v.affinity[c.creatorId] ?? 0),
+    crowd: (style.crowd * 0.05 * Math.min(c.holders, 10)) / 10,
     taste: tasteFor(v.agent.id, c.mint),
     novelty: c.holders <= 3 && ageMs >= 0 ? style.novelty * 0.3 * t.curiosity * Math.max(0, 1 - ageMs / NOVEL_MS) : 0,
-    talk: talk.get(c.symbol.toUpperCase()) ?? 0,
+    talk: style.talk * (talk.get(c.symbol.toUpperCase()) ?? 0),
     concentration: worth > 0 ? (-0.4 * held) / worth : 0,
     // A creator with a clean record is worth backing; one with rugs behind it is not.
-    trust: 0.2 * clamp(trust, -1, 1),
+    trust: 0.2 * style.trust * clamp(trust, -1, 1),
+    // A curve between a sixth and most of the way full has real holders and room left; the creator's live product is a reason to hold.
+    curve: c.curve !== undefined && c.curve > 0.15 && c.curve < 0.85 ? 0.15 * style.curve : 0,
+    product: c.creatorShips ? 0.15 * style.product : 0,
     // Buying a dip only makes sense when the creator can be trusted not to be the one dumping.
     dip: c.change1h < -0.15 && trust > 0 ? style.dip * Math.min(0.3, -c.change1h) : 0,
     // Never chase: a coin already up a lot this hour is where the late buyers get dumped on.
@@ -271,7 +289,9 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
       const ageH = Math.max(0, (nowMs - Date.parse(best.c.launchedAt)) / HOUR);
       const facts = `${best.c.holders} holders, ${pct(best.c.change1h)} this hour, ${ageH < 1 ? 'under an hour old' : `${Math.round(ageH)} h old`}${(v.depth.reputation[best.c.creatorId] ?? 0) > 0.15 ? ', creator in good standing' : ''}`;
       const plan = planFor(t, v.depth.desk?.style ?? 'momentum', conviction, `${best.why[0]!.toUpperCase()}${best.why.slice(1)}: ${facts}`);
-      if (lamports >= MIN_TRADE) add({ kind: 'buy', score: 0.8 * best.d, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId }, thesis: plan,
+      // Hybrid: the sniper and the holder analyst do most of the buying of Shillex coins.
+      const appetite = v.hybrid ? WORLD_APPETITE[strategyOf(v.depth.desk?.style)] : 1;
+      if (lamports >= MIN_TRADE) add({ kind: 'buy', score: 0.8 * best.d * appetite, lamports, situation: 'bought', target: { mint: best.c.mint, userId: best.c.creatorId }, thesis: plan,
         reason: `bought $${best.c.symbol}: ${best.why}, ${pct(best.c.change1h)} this hour, ${best.c.holders} holders, conviction ${f2(conviction)}; target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}` });
     }
   }

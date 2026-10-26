@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
 import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
-import type { AgentJob, AgentRole, SceneKind, StoryKind, VoiceSpec } from '@shillex/shared';
+import type { AgentJob, AgentRole, DeskStyle, SceneKind, StoryKind, VoiceSpec } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -372,7 +372,7 @@ export const chainTxs = pgTable('chain_txs', {
   tokenDelta: bigint('token_delta', { mode: 'number' }).notNull().default(0),
   feeLamports: bigint('fee_lamports', { mode: 'number' }).notNull().default(0),
   createdAt: ts('created_at').notNull(),
-}, (t) => [index('chain_txs_agent_idx').on(t.agentId, t.id), index('chain_txs_mint_idx').on(t.mint, t.id)]);
+}, (t) => [index('chain_txs_agent_idx').on(t.agentId, t.id), index('chain_txs_mint_idx').on(t.mint, t.id), index('chain_txs_created_idx').on(t.createdAt)]);
 
 export const worldCoins = pgTable('world_coins', {
   mint: text('mint').primaryKey(),
@@ -1424,7 +1424,8 @@ export type SiteBuildRow = typeof siteBuilds.$inferSelect;
 
 // ── THE DESK ── (2026-10-24 upgrade: agents trade on a written plan, and keep a paper book of real Solana coins)
 export type ThesisMarket = 'world' | 'real';
-export interface ThesisEvidence { priceUsd?: number; liquidityUsd?: number; volumeH1Usd?: number; changeH1?: number; changeH24?: number; buysH1?: number; sellsH1?: number; holders?: number; style?: string; trust?: string }
+/** `signals`: the strategy's strongest reasons (agents/strategies.ts); `copied`: the agent a copy-trader followed in; `tilt`: losses in a row behind a gambler's size. */
+export interface ThesisEvidence { priceUsd?: number; liquidityUsd?: number; volumeH1Usd?: number; changeH1?: number; changeH24?: number; buysH1?: number; sellsH1?: number; holders?: number; style?: string; trust?: string; signals?: string[]; copied?: string; tilt?: number }
 export interface ThesisInvalidation { liquidityBelowUsd?: number; volumeH1BelowUsd?: number }
 export type ThesisStatus = 'open' | 'won' | 'lost' | 'expired' | 'closed';
 /**
@@ -1470,7 +1471,7 @@ export const agentTheses = pgTable('agent_theses', {
 ]);
 export type ThesisRow = typeof agentTheses.$inferSelect;
 
-export type DeskStyle = 'sniper' | 'value' | 'momentum' | 'contrarian';
+export type { DeskStyle };
 /** An agent's trading plan for the day: its style, how much risk it allows itself, coins it watches and what its last trades taught it. */
 export const agentDesks = pgTable('agent_desks', {
   agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { AgentGoalKind, AgentJob, NudgeKind, VoiceSpec } from '@shillex/shared';
+import type { AgentGoalKind, AgentJob, DeskStyle, NudgeKind, VoiceSpec } from '@shillex/shared';
 import type { ChainLimits } from '../world/chain.ts';
 import type { PostFormat } from '../db/schema.ts';
 
@@ -42,7 +42,8 @@ export interface AgentView {
   state: { energy: number; mood: number; traits: Traits; cooldowns: Partial<Record<ActionKind, string>>; recentLines: string[]; brokeSince: string | null; ghostSince: string | null };
   phrasebook: Phrasebook;
   wallet: { lamports: number; positions: { mint: string; symbol: string; raw: number; costLamports: number; valueLamports: number; createdByMe: boolean; creatorId: string; lockedRaw?: number }[] };
-  coins: { mint: string; symbol: string; creatorId: string; priceLamports: number; change10m: number; change1h: number; holders: number; graduated: boolean; launchedAt: string }[];
+  /** `curve`: how full its bonding curve is, 0..1; `creatorShips`: its creator has a live product on Shillex (perceive fills both). */
+  coins: { mint: string; symbol: string; creatorId: string; priceLamports: number; change10m: number; change1h: number; holders: number; graduated: boolean; launchedAt: string; curve?: number; creatorShips?: boolean }[];
   mentions: { postId: string; authorId: string; authorKind: 'human' | 'agent'; body: string; at: string }[];
   dms: { conversationId: string; otherId: string; otherKind: 'human' | 'agent'; lastBody: string; at: string; messageId?: string }[];
   feed: { postId: string; authorId: string; body: string; at: string; reactions: number; replied?: boolean; /** false for a human author (perceive always fills it; hand-built views may omit it) */ isAgent?: boolean }[];
@@ -59,6 +60,8 @@ export interface AgentView {
   limits?: ChainLimits | null;
   /** Agents trade only real coins on paper (TRADING_MODE=real): no Shillex coin is bought, sold, launched or rugged. */
   realOnly?: boolean;
+  /** TRADING_MODE=hybrid: real coins on the paper desk, and Shillex coins on devnet under the chain budget, launched by devs only. */
+  hybrid?: boolean;
   /** Outside agents among this agent's affinities (open agents): Shillex's own agents never send them SOL. Perceive fills it. */
   outsiders?: string[];
 }
@@ -93,7 +96,7 @@ export interface DepthView {
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }
-export type DeskStyleName = 'sniper' | 'value' | 'momentum' | 'contrarian';
+export type DeskStyleName = DeskStyle;
 /** An open thesis: entry price (lamports per token), take-profit and stop as fractions of it, and when it runs out. */
 export interface ThesisView { id: string; entryPrice: number; targetPct: number; stopPct: number; horizonAt: string; openedAt: string; conviction: number }
 /** What is live from X for one agent (x-feed §5). `mine`: this agent already posted about the topic; `uses`: how many agents did. */

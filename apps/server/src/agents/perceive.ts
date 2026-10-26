@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import {
-  agentTurns, chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, users, worldCoins,
+  agentTurns, chainTxs, channels, communities, communityMembers, conversationMembers, conversations, messages, notifications, posts, reactions, sites, users, worldCoins,
 } from '../db/schema.ts';
 import { LAUNCH_RENT, RAW_PER_TOKEN } from '../world/chain.ts';
 import { holdingsOf, walletOf } from '../world/wallets.ts';
@@ -60,6 +60,8 @@ async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSele
   }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), inArray(chainTxs.kind, ['buy', 'sell', 'launch']))).groupBy(chainTxs.mint);
   const holderRows = await db.select({ mint: chainTxs.mint, agentId: chainTxs.agentId }).from(chainTxs).where(and(inArray(chainTxs.mint, mints), isNotNull(chainTxs.agentId)))
     .groupBy(chainTxs.mint, chainTxs.agentId).having(sql`sum(${chainTxs.tokenDelta}) > 0`);
+  // Creators with a live product on Shillex (sites/products.ts): a reason some strategies hold their coin.
+  const ships = new Set((await db.selectDistinct({ id: sites.authorId }).from(sites).where(and(eq(sites.kind, 'product'), isNull(sites.removedAt), inArray(sites.authorId, [...new Set(coins.map((c) => c.creatorId))])))).map((r) => r.id));
   const flow = new Map(flows.map((f) => [f.mint!, f]));
   const held = new Map<string, number>();
   for (const h of holderRows) held.set(h.mint!, (held.get(h.mint!) ?? 0) + 1);
@@ -69,6 +71,7 @@ async function coinsView(db: Db, now: Date, rows?: (typeof worldCoins.$inferSele
       mint: c.mint, symbol: c.symbol, creatorId: c.creatorId, priceLamports: c.priceLamports ?? 0,
       change10m: f ? flowChange(f.total, f.m10) : 0, change1h: f ? flowChange(f.total, f.h1) : 0,
       holders: held.get(c.mint) ?? 0, graduated: Boolean(c.graduatedAt), launchedAt: c.launchedAt.toISOString(),
+      curve: c.curveProgress, creatorShips: ships.has(c.creatorId),
     };
   });
 }
@@ -214,7 +217,7 @@ export async function perceive(d: EngineDeps, agentId: string): Promise<AgentVie
   const missing = extraRows.filter((r) => !have.has(r.mint));
   const coins = missing.length ? [...globalCoins, ...(await coinsView(d.db, now, missing, launchFeeFor.get(d.db) ?? LAUNCH_RENT))] : globalCoins;
   const outsiders = [...(await outsiderSet(d.db, Object.keys(affinity)))];
-  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null, outsiders, realOnly: d.app.deps.config.tradingMode === 'real' };
+  const v: AgentView = { agent: { id: u.id, username: u.username, displayName: u.displayName }, state, phrasebook, wallet, coins, mentions: mentions.filter((m) => !queuedRefs.has(m.postId)), dms: dms.filter((x) => !queuedRefs.has(x.conversationId)), feed, rooms, affinity, weather: 'grind', now: now.toISOString(), depth: emptyDepth(), failedBuys, limits: d.chain.limits ?? null, outsiders, realOnly: d.app.deps.config.tradingMode === 'real', hybrid: d.app.deps.config.tradingMode === 'hybrid' };
   // Depth modules fill v.depth (and may replace, never mutate, v.coins and v.rooms: those arrays are the shared cache).
   await d.depth?.perceive(d, v);
   return v;

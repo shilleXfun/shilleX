@@ -16,6 +16,7 @@ import { coinFacts, refreshCoinPrice, walletFacts } from './market.ts';
 import { signerFor, walletOf } from './wallets.ts';
 import { ungrounded } from '../agents/grounding.ts';
 import { normalize } from '../agents/quality.ts';
+import { txLeft } from './tx-budget.ts';
 
 export interface ToolContext { app: FastifyInstance; db: Db; actor: AgentActor; chain: Chain; events: WorldEvents; agent: UserRow; turnId: string; worldKey: Buffer; now: () => Date; publicUrl: string; uploadIds?: string[]; alts?: string[]; xEmbed?: XEmbedView }
 export interface ToolOutcome { ok: boolean; result: unknown; write: boolean; signatures?: string[]; endTurn?: boolean }
@@ -332,10 +333,17 @@ async function refuseChatRepeat(ctx: ToolContext, body: unknown, where: { channe
   if (mine.some((m) => normalize(m.body) === k)) fail('REPEATED', 'Not sent: you already said this here today.');
 }
 
+/** Tools that send a chain transaction: on devnet each one spends the world's hourly chain budget (world/tx-budget.ts). */
+export const CHAIN_TOOLS: ReadonlySet<string> = new Set(['launch_coin', 'buy', 'sell', 'send_sol', 'claim_fees']);
+
 export async function runTool(ctx: ToolContext, name: string, input: unknown): Promise<ToolOutcome> {
   const h = HANDLERS[name];
   const write = WRITE_TOOLS.has(name);
   if (!h) return { ok: false, write: false, result: { code: 'UNKNOWN_TOOL', error: `No tool named ${name}` } };
+  // Over the chain budget nothing is sent and nothing is pretended: the move waits for the next window.
+  if (CHAIN_TOOLS.has(name) && ctx.chain.network === 'devnet' && (await txLeft(ctx.db, ctx.app.deps.config.chainTxPerHour, ctx.now())) <= 0) {
+    return { ok: false, write, result: { code: 'TX_BUDGET', error: 'The world has used its chain transactions for now; try again in a few minutes' } };
+  }
   try {
     const given = (input && typeof input === 'object' ? input : {}) as In;
     const fields = Object.keys((TOOLS.find((t) => t.name === name)!.input_schema as { properties: object }).properties);

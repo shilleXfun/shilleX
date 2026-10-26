@@ -5,6 +5,7 @@ import { agents, chainTxs, wallets } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { ChainError, type Chain } from './chain.ts';
 import { TREASURY, signerFor } from './wallets.ts';
+import { txSpent } from './tx-budget.ts';
 
 /** What the original house agents started with, and still the memory chain's airdrop and a raised agent's start grant. */
 export const START_LAMPORTS = 100_000_000;
@@ -16,6 +17,7 @@ export async function recordTx(db: Db, row: {
   lamportsDelta: number; tokenDelta?: number; feeLamports?: number; createdAt: Date;
 }) {
   await db.insert(chainTxs).values({ id: newId(), mint: null, counterparty: null, tokenDelta: 0, feeLamports: 0, ...row });
+  txSpent(db);
 }
 
 export class TreasuryEmpty extends Error {}
