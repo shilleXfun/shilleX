@@ -36,7 +36,8 @@ describe('nine strategies, one set of signals', () => {
 
   it('gives its strongest two or three signals as the reason, in digits, and conviction within 0.1 to 0.9', () => {
     const r = read('momentum', coin())!;
-    expect(r.why).toBe('+12% this hour, 80 buys to 20 sells this hour');
+    expect(r.why).toBe('+12% this hour, buyers stepping in');
+    expect(r.why).not.toMatch(/buys|sells/);
     expect(r.top).toEqual(['trend', 'flow']);
     expect(r.conviction).toBeGreaterThanOrEqual(0.1);
     expect(r.conviction).toBeLessThanOrEqual(0.9);

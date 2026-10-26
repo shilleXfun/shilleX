@@ -67,7 +67,7 @@ export async function pairsFor(addresses: string[], source: (a: string) => strin
       if (!(price > 0) || !symbol) continue;
       rows.push({
         address: a, symbol, name: str(p.baseToken?.name, 48) || symbol, pairAddress: p.pairAddress, dexId: str(p.dexId, 24), url: str(p.url, 200),
-        priceUsd: price, liquidityUsd: num(p.liquidity?.usd), fdvUsd: p.fdv == null ? null : num(p.fdv),
+        priceUsd: price, liquidityUsd: num(p.liquidity?.usd), fdvUsd: p.marketCap != null ? num(p.marketCap) : p.fdv == null ? null : num(p.fdv), // the market cap (FDV when DexScreener has none): what traders quote
         volumeH1: num(p.volume?.h1), volumeH24: num(p.volume?.h24), changeM5: num(p.priceChange?.m5) / 100, changeH1: num(p.priceChange?.h1) / 100, changeH24: num(p.priceChange?.h24) / 100,
         buysH1: Math.round(num(p.txns?.h1?.buys)), sellsH1: Math.round(num(p.txns?.h1?.sells)),
         pairCreatedAt: num(p.pairCreatedAt) ? new Date(num(p.pairCreatedAt)) : null, source: source(a), refreshedAt: now, imageUrl: logoOf(p.info?.imageUrl),

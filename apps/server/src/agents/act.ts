@@ -197,7 +197,6 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     const followUp = async (situation: Situation, imageFor?: Candidate) => { try { await postLine(situation, imageFor); } catch { /* the failed tool call is already on the receipt */ } };
     // A model run for this message already cost money and wrote nothing: it is answered from the phrasebook, never handed over again.
     const fallbackRef = async (ref: string) => (await handoverState(db, agentId, new Date(now.getTime() - 30 * 60_000))).fallback.has(ref);
-    const chatty = () => d.rng() < 0.35 + 0.4 * v.state.traits.chattiness;
     // A reaction carries a feeling: warm emoji warm the author toward this agent, mocking ones cool them (L4).
     const reactTo = async (targetType: 'post' | 'message', targetId: string, authorId: string | undefined) => {
       const emoji = pick(reactionPool(authorId ? (v.affinity[authorId] ?? 0) : 0).filter((e) => (REACTIONS as readonly string[]).includes(e)), d.rng);
@@ -337,7 +336,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         }
         state.mood += BUY_MOOD;
         if (c.target?.userId) await applyFeelings(db, buyFeelings(agentId, c.target.userId), now);
-        if (chatty()) await followUp('bought');
+        // No receipt post for a buy ("tried $REST, 0.011 SOL"): nobody talks like that (owner, 2026-10-26).
         break;
       }
       case 'sell': {
@@ -354,7 +353,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         if (c.target?.userId) await applyFeelings(db, sellFeelings(agentId, c.target.userId, pnl), now);
         if (pnl > 1) await rememberEvent(db, agentId, 'big_win', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);
         if (pnl < -0.5) await rememberEvent(db, agentId, 'big_loss', { mint: c.target!.mint, symbol: pos?.symbol ?? '?', pct: Math.round(pnl * 100) }, now);
-        if (chatty()) await followUp(pnl > 0 ? 'took_profit' : 'sold');
+        // No receipt post for a sale either: a call that closes with a real result is a reaction (desk.ts reactToClose), a victory lap or cope.
         break;
       }
       case 'rug': {

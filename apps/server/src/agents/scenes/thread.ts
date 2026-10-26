@@ -116,7 +116,7 @@ async function thesis(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
   } else {
     const [c] = await d.db.select().from(realMarket).where(eq(realMarket.address, pick.asset));
     if (!c) return null;
-    facts.push(`THE COIN NOW (DexScreener): $${c.symbol} (${plain(c.name)}) at ${usd(c.priceUsd)}, liquidity ${usd(c.liquidityUsd)}, ${c.fdvUsd ? `FDV ${usd(c.fdvUsd)}, ` : ''}volume ${usd(c.volumeH1)} this hour and ${usd(c.volumeH24)} in 24 h, ${pct(c.changeM5)} in 5 min, ${pct(c.changeH1)} in the hour, ${pct(c.changeH24)} in 24 h, ${c.buysH1} buys and ${c.sellsH1} sells this hour${c.pairCreatedAt ? `, pair ${Math.max(1, Math.round((now.getTime() - c.pairCreatedAt.getTime()) / 3_600_000))} h old` : ''}.`);
+    facts.push(`THE COIN NOW (DexScreener): $${c.symbol} (${plain(c.name)}) at ${c.fdvUsd ? `a ${usd(c.fdvUsd)} market cap` : usd(c.priceUsd)}, liquidity ${usd(c.liquidityUsd)}, volume ${usd(c.volumeH1)} this hour and ${usd(c.volumeH24)} in 24 h, ${pct(c.changeM5)} in 5 min, ${pct(c.changeH1)} in the hour, ${pct(c.changeH24)} in 24 h${c.pairCreatedAt ? `, pair ${Math.max(1, Math.round((now.getTime() - c.pairCreatedAt.getTime()) / 3_600_000))} h old` : ''}.`);
   }
   const hours = Math.max(1, Math.round((pick.horizonAt.getTime() - pick.openedAt.getTime()) / 3_600_000));
   const local = [
@@ -137,7 +137,7 @@ async function market(d: SceneDeps, elig: Map<string, Eligible>, busy: Set<strin
   if (!author) return null;
   const book = await realBookView(d.db, author.id);
   const facts = [
-    `THE REAL SOLANA MARKET NOW (DexScreener, by volume this hour):\n${rows.map((c) => `$${c.symbol}: ${usd(c.priceUsd)}, ${pct(c.changeH1)} 1h, ${pct(c.changeH24)} 24h, volume ${usd(c.volumeH1)}/h, liquidity ${usd(c.liquidityUsd)}, ${c.buysH1} buys vs ${c.sellsH1} sells${c.source === 'major' ? ' (established)' : ''}`).join('\n')}`,
+    `THE REAL SOLANA MARKET NOW (DexScreener, by volume this hour):\n${rows.map((c) => `$${c.symbol}: ${c.fdvUsd ? `${usd(c.fdvUsd)} mcap` : usd(c.priceUsd)}, ${pct(c.changeH1)} 1h, ${pct(c.changeH24)} 24h, volume ${usd(c.volumeH1)}/h, liquidity ${usd(c.liquidityUsd)}${c.source === 'major' ? ' (established)' : ''}`).join('\n')}`,
     `SHILLEX'S OWN MARKET: ${await marketLine(d.db, now)}`,
     book ? `ITS PAPER BOOK: ${usd(book.valueUsd)} (${pct(book.pnlPct)} since it started with ${usd(book.startUsd)}), ${usd(book.cashUsd)} in cash${book.positions.length ? `, holding ${book.positions.map((p) => `$${p.symbol} ${pct(p.pnlPct)}`).join(', ')}` : ', holding nothing'}.` : 'ITS PAPER BOOK: not opened yet.',
   ];

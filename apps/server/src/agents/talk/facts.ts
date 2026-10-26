@@ -13,7 +13,7 @@ export async function realFactsNow(db: Db, now: Date): Promise<RealFacts[]> {
   const hit = cache.get(db);
   if (hit && now.getTime() - hit.at < 60_000) return hit.rows;
   const rows = (await realMarketNow(db, now)).filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD).map((c): RealFacts => ({
-    symbol: c.symbol, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH1: c.volumeH1, volumeH24: c.volumeH24, changeM5: c.changeM5, changeH1: c.changeH1,
+    symbol: c.symbol, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH1: c.volumeH1, volumeH24: c.volumeH24, changeM5: c.changeM5, changeH1: c.changeH1,
     changeH24: c.changeH24, buysH1: c.buysH1, sellsH1: c.sellsH1, ageH: c.pairCreatedAt ? (now.getTime() - c.pairCreatedAt.getTime()) / 3_600_000 : null, major: c.source === 'major',
   }));
   cache.set(db, { at: now.getTime(), rows });

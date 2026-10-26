@@ -10,7 +10,8 @@
 export type Rng = () => number;
 export interface Voice { lower: boolean; terse: boolean; emoji: boolean; formal: boolean; closers: string[]; openers: string[] }
 /** A real Solana coin as the desk sees it (world/real-market.ts). Changes are fractions (0.12 = +12%). */
-export interface RealFacts { symbol: string; priceUsd: number; liquidityUsd: number; volumeH1: number; volumeH24: number; changeM5: number; changeH1: number; changeH24: number; buysH1: number; sellsH1: number; ageH: number | null; major: boolean }
+/** `mcapUsd`: its market cap, what a trader quotes (null when DexScreener has none). */
+export interface RealFacts { symbol: string; priceUsd: number; mcapUsd: number | null; liquidityUsd: number; volumeH1: number; volumeH24: number; changeM5: number; changeH1: number; changeH24: number; buysH1: number; sellsH1: number; ageH: number | null; major: boolean }
 /** A Shillex coin. */
 export interface WorldFacts { symbol: string; holders: number; change1h: number; change10m: number; ageH: number; curve: number; creator: string | null; mine: boolean }
 /** One of the agent's open plans. */
@@ -64,18 +65,19 @@ export function speak(parts: string[], v: Voice, rng: Rng, mood: 'up' | 'down' |
 }
 
 // ── Real Solana coins ──
+/** Where a coin is, the way traders say it: its market cap ("a $2.1M mcap"), the price only when there is no cap. */
+const at = (c: RealFacts) => (c.mcapUsd ? `a ${usd(c.mcapUsd)} mcap` : c.priceUsd >= 1 ? `$${c.priceUsd.toFixed(2)}` : `$${c.priceUsd.toPrecision(3)}`);
 /** What it sees on a real coin: one fact, phrased one of many ways. */
 function seeReal(c: RealFacts, rng: Rng): string {
   const s = `$${c.symbol}`;
   const opts = [
     `${s} ${pct(c.changeH1)} on the hour with ${usd(c.liquidityUsd)} of liquidity behind it`,
     `${s} did ${usd(c.volumeH24)} in volume today and sits ${pct(c.changeH24)} on the day`,
-    `${c.buysH1} buys against ${c.sellsH1} sells on ${s} this hour`,
-    `${s} at ${c.priceUsd >= 1 ? `$${c.priceUsd.toFixed(2)}` : `$${c.priceUsd.toPrecision(3)}`}, ${pct(c.changeH24)} in 24h`,
+    `${s} at ${at(c)}, ${pct(c.changeH24)} in 24h`,
     `${usd(c.volumeH1)} through ${s} in the last hour`,
   ];
   if (moved(c.changeM5)) opts.push(`${s} ${c.changeM5 >= 0 ? 'ticking up' : 'slipping'} ${abs(c.changeM5)} in five minutes`);
-  if (!moved(c.changeH1)) opts.splice(0, 1, `${s} flat on the hour at ${c.priceUsd >= 1 ? `$${c.priceUsd.toFixed(2)}` : `$${c.priceUsd.toPrecision(3)}`}`);
+  if (!moved(c.changeH1)) opts.splice(0, 1, `${s} flat on the hour at ${at(c)}`);
   const thin = opts.findIndex((o) => o.includes(' through '));
   if (c.volumeH1 < 2000 && thin >= 0) opts.splice(thin, 1);
   if (c.ageH !== null && c.ageH < 48) opts.push(`${s} is a ${Math.max(1, Math.round(c.ageH))}h old pair already doing ${usd(c.volumeH1)} an hour`);

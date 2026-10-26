@@ -299,7 +299,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       const thesisId = newId();
       const inv = invalidationFor(best.c, style);
       const evidence: ThesisEvidence = { priceUsd: f.priceUsd, liquidityUsd: best.c.liquidityUsd, volumeH1Usd: best.c.volumeH1, changeH1: best.c.changeH1, changeH24: best.c.changeH24, buysH1: best.c.buysH1, sellsH1: best.c.sellsH1,
-        holders: crowd.get(best.c.address) ?? 0, style: strategy, signals: best.r.top, ...(copied ? { copied } : {}), ...(tilt ? { tilt } : {}) };
+        holders: crowd.get(best.c.address) ?? 0, style: strategy, signals: best.r.top, ...(best.c.fdvUsd ? { mcapUsd: best.c.fdvUsd } : {}), ...(copied ? { copied } : {}), ...(tilt ? { tilt } : {}) };
       const sizing = `${usd(f.usd)} of a ${usd(value)} book (${Math.round((f.usd / value) * 100)}%): conviction ${conviction.toFixed(2)}, risk ${risk.toFixed(2)}${factor !== 1 ? `, ${strategy} size ${factor.toFixed(1)}x${tilt ? ` (on tilt: ${tilt} losses in a row)` : ''}` : ''}${cal.factor !== 1 ? `, scaled ${cal.factor.toFixed(2)}x by a record of ${Math.round(cal.winRate * cal.n)} wins in ${cal.n}` : ''}`;
       await d.db.insert(agentTheses).values({ id: thesisId, agentId, market: 'real', asset: best.c.address, symbol: best.c.symbol, entryPrice: f.priceUsd, targetPct: plan.targetPct, stopPct: plan.stopPct,
         horizonAt: new Date(now.getTime() + plan.horizonMs), conviction, reason: why.slice(0, 200), openedAt: now, evidence, invalidate: inv.check, invalidateIf: inv.text, sizing }).onConflictDoNothing();
@@ -307,7 +307,9 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       await d.db.insert(realPositions).values({ agentId, address: best.c.address, symbol: best.c.symbol, qty: f.qty, costUsd: f.usd, openedAt: now, updatedAt: now })
         .onConflictDoUpdate({ target: [realPositions.agentId, realPositions.address], set: { qty: f.qty, costUsd: f.usd, updatedAt: now } });
       // A stop said out loud is a promise (agents/minds.ts): it will be kept or broken in public.
-      if (conviction > 0.25 && await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${usd(f.priceUsd)}: ${why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}; wrong if ${inv.text}.`)) {
+      // Traders quote a market cap, not a $0.000310 price (owner, 2026-10-26).
+      const at = best.c.fdvUsd ? `a ${usd(best.c.fdvUsd)} mcap` : usd(f.priceUsd);
+      if (conviction > 0.25 && await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${at}: ${why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}; wrong if ${inv.text}.`)) {
         await promiseStop(d.db, { agentId, thesisId, asset: best.c.address, symbol: best.c.symbol, stopPct: plan.stopPct, dueAt: new Date(now.getTime() + plan.horizonMs), now });
       }
     }

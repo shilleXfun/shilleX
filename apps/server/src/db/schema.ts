@@ -1426,7 +1426,7 @@ export type SiteBuildRow = typeof siteBuilds.$inferSelect;
 // ── THE DESK ── (2026-10-24 upgrade: agents trade on a written plan, and keep a paper book of real Solana coins)
 export type ThesisMarket = 'world' | 'real';
 /** `signals`: the strategy's strongest reasons (agents/strategies.ts); `copied`: the agent a copy-trader followed in; `tilt`: losses in a row behind a gambler's size. */
-export interface ThesisEvidence { priceUsd?: number; liquidityUsd?: number; volumeH1Usd?: number; changeH1?: number; changeH24?: number; buysH1?: number; sellsH1?: number; holders?: number; style?: string; trust?: string; signals?: string[]; copied?: string; tilt?: number }
+export interface ThesisEvidence { priceUsd?: number; liquidityUsd?: number; volumeH1Usd?: number; changeH1?: number; changeH24?: number; buysH1?: number; sellsH1?: number; holders?: number; style?: string; trust?: string; signals?: string[]; copied?: string; tilt?: number; mcapUsd?: number }
 export interface ThesisInvalidation { liquidityBelowUsd?: number; volumeH1BelowUsd?: number }
 export type ThesisStatus = 'open' | 'won' | 'lost' | 'expired' | 'closed';
 /**

@@ -152,13 +152,14 @@ export function realSignals(c: RealMarketRow, x: RealContext): { sig: Signals; w
     chase: Math.max(0, c.changeH1 - 0.5) + Math.max(0, c.changeM5 - 0.12) * 2,
   };
   const words: SignalWords = {
-    fresh: ageH === null ? undefined : `pair ${Math.max(1, Math.round(ageH))} h old`,
+    fresh: ageH === null ? undefined : `${Math.max(1, Math.round(ageH))} h old${c.fdvUsd ? ` at a ${usd(c.fdvUsd)} mcap` : ''}`,
     trend: `${pct(c.changeH1)} this hour`,
     dip: `${pct(c.changeH24)} on the day and steady this hour`,
-    flow: `${c.buysH1} buys to ${c.sellsH1} sells this hour`,
+    // Said the way a trader says it, never as "80 buys to 20 sells" (owner, 2026-10-26).
+    flow: (sig.flow ?? 0) >= 0.3 ? 'buyers stepping in' : (sig.flow ?? 0) <= -0.3 ? 'sellers in control' : undefined,
     volume: `${usd(c.volumeH1)} traded this hour, ${turnover.toFixed(1)}x its pool`,
-    spread: `${trades} trades this hour averaging ${usd(avg)}`,
-    depth: `${usd(c.liquidityUsd)} of liquidity`,
+    spread: `a crowd of small wallets, about ${usd(avg)} a trade`,
+    depth: c.fdvUsd ? `a ${usd(c.fdvUsd)} mcap on ${usd(c.liquidityUsd)} of liquidity` : `${usd(c.liquidityUsd)} of liquidity`,
     chatter: `${x.chatter} Shillex posts on it in 2 h`,
     friends: x.friends.length ? namesHold(x.friends) : undefined,
     swing: `it moves ${Math.round(swing * 100)}% an hour`,
