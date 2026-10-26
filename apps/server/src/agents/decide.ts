@@ -6,6 +6,8 @@ import { PLANS, strategyOf, type Strategy } from './strategies.ts';
 import type { ActionKind, AgentView, Candidate, DeskStyleName, Situation } from './types.ts';
 
 const MIN_FEE = 10_000; // lamports needed to pay a sell's network fee
+/** A position worth less than this is not worth a sale (four fees). */
+export const DUST_BAG = 4 * MIN_FEE;
 
 export const SOL = 1_000_000_000;
 export const RESERVE = 10_000_000;
@@ -300,6 +302,8 @@ export function candidates(v: AgentView, rng: () => number): Candidate[] {
     const c = coin(p.mint) ?? { mint: p.mint, symbol: p.symbol, creatorId: p.creatorId, priceLamports: 0, change10m: 0, change1h: 0, holders: 0, graduated: false, launchedAt: v.now };
     if (c.graduated) continue;
     if (v.wallet.lamports < MIN_FEE || p.raw < RAW_PER_TOKEN) continue; // cannot pay the fee, or dust
+    // A bag worth less than a few network fees is kept: selling it would cost more than it brings, and spend the chain budget.
+    if (p.valueLamports > 0 && p.valueLamports < DUST_BAG && !p.createdByMe) continue;
     // A creator's launch buy unlocks over 24 h on the ledger; only the free part can be sold.
     const free = p.raw - (p.lockedRaw ?? 0);
     const pnl = pnlOf(p);
