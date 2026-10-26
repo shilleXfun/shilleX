@@ -34,3 +34,10 @@ export function fmtTiny(n: number | null | undefined): string {
   if (digits >= 1000) { zeros -= 1; digits = Math.round(digits / 10); }
   return `0.0${[...String(zeros)].map((d) => SUB[Number(d)]).join('')}${digits}`;
 }
+
+/** A market cap in dollars the way traders say it: $1.2B, $3.4M, $46k (2026-10-26: coins are shown by market cap, not price). */
+export const compactUsd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
+/** A market cap in SOL for a Shillex coin: "12.4", "3.21", "0.84". */
+export const fmtCapSol = (n: number | null) => (n === null ? '—' : n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2));
+/** The market cap a real coin had at another price: the same supply (today's cap over today's price) times that price. */
+export const capAt = (price: number, now: { priceUsd: number; mcapUsd?: number | null }) => (now.mcapUsd && now.priceUsd > 0 ? (price * now.mcapUsd) / now.priceUsd : null);

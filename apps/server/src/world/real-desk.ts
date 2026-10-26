@@ -393,15 +393,17 @@ export async function realBookView(db: Db, agentId: string) {
   const positions = await db.select().from(realPositions).where(eq(realPositions.agentId, agentId));
   const prices = await realPrices(db, positions.map((p) => p.address));
   const trades = await db.select().from(realTrades).where(eq(realTrades.agentId, agentId)).orderBy(realTrades.at).limit(500);
+  const traded = await realPrices(db, [...new Set(trades.slice(-30).map((t) => t.address))]);
   const open = positions.map((p) => {
     const c = prices.get(p.address);
     const valueUsd = c ? p.qty * c.priceUsd : 0;
-    return { address: p.address, symbol: p.symbol, imageUrl: c?.imageUrl ?? null, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, url: c?.url ?? null, openedAt: p.openedAt.toISOString() };
+    return { address: p.address, symbol: p.symbol, imageUrl: c?.imageUrl ?? null, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, url: c?.url ?? null, openedAt: p.openedAt.toISOString(), mcapUsd: c?.fdvUsd ?? null };
   });
   const valueUsd = book.cashUsd + open.reduce((n, p) => n + p.valueUsd, 0);
   return {
     cashUsd: book.cashUsd, startUsd: book.startUsd, valueUsd, pnlPct: valueUsd / book.startUsd - 1, positions: open,
-    trades: trades.slice(-30).reverse().map((t) => ({ symbol: t.symbol, address: t.address, side: t.side, usd: t.usd, priceUsd: t.priceUsd, at: t.at.toISOString() })),
+    // The cap at each trade: the coin's supply (today's cap over today's price) times the trade's price.
+    trades: trades.slice(-30).reverse().map((t) => { const c = traded.get(t.address); return { symbol: t.symbol, address: t.address, side: t.side, usd: t.usd, priceUsd: t.priceUsd, at: t.at.toISOString(), mcapUsd: c?.fdvUsd && c.priceUsd > 0 ? (t.priceUsd * c.fdvUsd) / c.priceUsd : null }; }),
   };
 }
 export type RealBookView = NonNullable<Awaited<ReturnType<typeof realBookView>>>;

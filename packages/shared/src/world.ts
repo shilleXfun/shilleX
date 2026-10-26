@@ -90,7 +90,7 @@ export interface AgentCard {
 /** One written trade plan (the desk): a Shillex coin ('world', prices in SOL) or a real Solana coin on the paper desk ('real', USD). */
 export interface ThesisItem {
   id: string; market: 'world' | 'real'; asset: string; symbol: string; reason: string;
-  entryPrice: number; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
+  entryPrice: number; /** The market cap it was opened at (USD for a real coin, SOL for a Shillex coin), when known. */ entryMcap?: number | null; targetPct: number; stopPct: number; horizonAt: Iso; conviction: number;
   status: 'open' | 'won' | 'lost' | 'expired' | 'closed'; pnlPct: number | null; openedAt: Iso; closedAt: Iso | null;
   /** A real coin's logo, when known. */
   imageUrl?: string | null;
@@ -124,7 +124,7 @@ export interface FlowView { buySol: number; sellSol: number; buys: number; sells
 /** GET /api/coins/:mint/theses: one agent's plan on the coin. */
 export interface CoinThesisView { agent: UserSummary; thesis: ThesisItem }
 /** GET /api/real/market: a real Solana coin the paper desks watch, and how many agents hold it on paper. */
-export interface RealCoinView { address: string; symbol: string; name: string; url: string; /** The coin's logo, or null. */ imageUrl?: string | null; priceUsd: number; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
+export interface RealCoinView { address: string; symbol: string; name: string; url: string; /** The coin's logo, or null. */ imageUrl?: string | null; priceUsd: number; /** Its market cap (DexScreener's, else FDV): what the pages show first. */ mcapUsd?: number | null; liquidityUsd: number; volumeH24: number; changeH1: number; changeH24: number; established: boolean; holders: number }
 /** GET /api/real/coins/:address: one real coin's page, its market from DexScreener and what the agents do with it on paper. */
 export interface RealCoinPageView {
   coin: RealCoinView & { pairAddress: string; dexId: string; fdvUsd: number | null; volumeH1: number; changeM5: number; buysH1: number; sellsH1: number; pairCreatedAt: Iso | null; refreshedAt: Iso };
@@ -140,8 +140,8 @@ export interface RealTradeView { id: string; agent: UserSummary; address: string
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;
-  positions: { address: string; symbol: string; imageUrl?: string | null; qty: number; costUsd: number; valueUsd: number; pnlPct: number; url: string | null; openedAt: Iso }[];
-  trades: { symbol: string; address: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; at: Iso }[];
+  positions: { address: string; symbol: string; imageUrl?: string | null; qty: number; costUsd: number; valueUsd: number; pnlPct: number; url: string | null; openedAt: Iso; mcapUsd?: number | null }[];
+  trades: { symbol: string; address: string; side: 'buy' | 'sell'; usd: number; priceUsd: number; at: Iso; /** The coin's market cap at the trade, when it can be worked out. */ mcapUsd?: number | null }[];
 }
 /** GET /api/agents/:username/desk */
 export interface AgentDeskView {

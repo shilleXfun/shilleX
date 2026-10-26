@@ -13,7 +13,7 @@ import { isNotFound, useCoins, useHybridMode, useLeaderboard, useRealMode } from
 import { RealMarket } from './Desk';
 import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes, type Flash } from './pulses';
-import { fmtPct, fmtSol, fmtSolCompact, fmtTiny } from './numbers';
+import { fmtCapSol, fmtPct, fmtSol } from './numbers';
 import { Avatar } from '../../components/ui/Avatar';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { PageHeader } from '../../layout/PageHeader';
@@ -43,17 +43,17 @@ function CoinTable({ coins, flashes, records, moved }: Rows & { records: Map<str
   return (
     <div className={s.tableWrap}>
       <table className={s.table}>
-        <thead><tr><th>Coin</th><th className={s.opt2}>Creator</th><th className={`${s.num} ${s.opt1}`}>Price (SOL)</th><th className={s.num}>1h</th><th className={s.opt2}>24h</th><th className={s.num}>Mkt cap</th><th className={s.opt4}>Curve</th><th className={s.num}>Holders</th><th className={`${s.num} ${s.opt3}`}>24h vol</th><th className={`${s.num} ${s.opt3}`}>Dev sold</th><th className={s.opt4}>Age</th></tr></thead>
+        <thead><tr><th>Coin</th><th className={s.opt2}>Creator</th><th className={s.num}>Mkt cap (SOL)</th><th className={s.num}>1h</th><th className={s.opt2}>24h</th><th className={s.opt4}>Curve</th><th className={s.num}>Holders</th><th className={`${s.num} ${s.opt3}`}>24h vol</th><th className={`${s.num} ${s.opt3}`}>Dev sold</th><th className={s.opt4}>Age</th></tr></thead>
         <tbody>
           {coins.map((c) => (
             // Rows slide to their new rank when market caps reorder them (reduced motion: MotionConfig turns layout motion off).
             <motion.tr key={c.mint} layout="position" transition={spring.soft} data-flash={flashes.get(c.mint)?.side} data-beat={flashes.get(c.mint)?.beat}>
               <td><RankChip dir={moved.get(c.mint)} /><Link to={`/coins/${c.mint}`} className={s.coinCell}><span className={s.coinTile} aria-hidden="true"><CoinMark seed={c.mint} /></span><span className={s.coinNames}><b>${c.symbol}</b><span>{c.name}</span></span></Link></td>
               <td className={s.opt2}><Link to={`/agents/${c.creator.username}`} className={s.creatorCell}><Avatar src={c.creator.avatarUrl} size={24} agentId={c.creator.id} /><span>{agentName(c.creator)}</span></Link><RugMark card={records.get(c.creator.id)} /></td>
-              <td className={`${s.num} ${s.opt1}`} title={`${fmtSol(c.priceSol)} SOL`}>{fmtTiny(c.priceSol)}</td>
+              {/* Coins are read by market cap, not by the price of one token (owner, 2026-10-26); the price is in the cell's title. */}
+              <td className={s.num} title={`${fmtSol(c.priceSol)} SOL per token`}>{c.marketCapSol === null ? '—' : <Tick value={c.marketCapSol} format={fmtCapSol} />}</td>
               <td className={s.num}><Change pct={c.change1hPct} /></td>
               <td className={s.opt2}><Sparkline points={c.spark ?? []} label={trendLabel(c)} /></td>
-              <td className={s.num}>{c.marketCapSol === null ? '—' : <Tick value={c.marketCapSol} format={fmtSolCompact} />}</td>
               <td className={s.opt4}><span className={s.bar} role="img" aria-label={`${Math.round(c.curveProgress * 100)}% of the curve`}><span className={s.barFill} style={{ width: `${Math.min(100, c.curveProgress * 100)}%` }} /></span>{c.graduated && <span className={s.muted}> graduated</span>}</td>
               <td className={s.num}><Tick value={c.holders} /></td>
               <td className={`${s.num} ${s.opt3}`}>{c.volume24hSol.toFixed(3)}</td>
@@ -77,7 +77,7 @@ function CoinList({ coins, flashes }: Rows) {
             <CoinMark seed={c.mint} size={24} />
             <span className={s.coinSym}>${c.symbol}</span>
             <Sparkline points={c.spark ?? []} label={trendLabel(c)} />
-            <span className={s.num}>{fmtSolCompact(c.marketCapSol)}</span>
+            <span className={s.num}>{fmtCapSol(c.marketCapSol)} SOL</span>
             <span className={s.num}><Change pct={c.change1hPct} /></span>
           </Link>
         </motion.li>
@@ -104,7 +104,7 @@ function MovingNow({ coins }: { coins: CoinView[] }) {
               </span>
               <Sparkline points={c.spark ?? []} width={260} height={56} label={trendLabel(c)} />
               <span className={s.movingFoot}>
-                <span><span className={s.movingLabel}>Market cap</span><b className={s.movingBig}>{fmtSolCompact(c.marketCapSol)} SOL</b></span>
+                <span><span className={s.movingLabel}>Market cap</span><b className={s.movingBig}>{fmtCapSol(c.marketCapSol)} SOL</b></span>
                 <span className={s.movingRight}><span className={s.movingLabel}>1h</span><b className={s.movingBig}><Change pct={c.change1hPct} /></b></span>
               </span>
             </Link>

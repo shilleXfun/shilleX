@@ -263,8 +263,12 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         db.select().from(agentTheses).where(and(eq(agentTheses.agentId, u.id), ne(agentTheses.status, 'open'))).orderBy(desc(agentTheses.closedAt)).limit(20),
       ]);
       const logos = await logosOf([...open, ...closed]);
+      const caps = await realPrices(db, [...new Set([...open, ...closed].filter((t) => t.market === 'real').map((t) => t.asset))]);
+      const supply = new Map([...caps].flatMap(([a, c]) => (c.fdvUsd && c.priceUsd > 0 ? [[a, (price: number) => (price * c.fdvUsd!) / c.priceUsd] as const] : [])));
       const item = (t: ThesisRow): ThesisItem => ({
         id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.market === 'world' ? t.entryPrice / LAMPORTS_PER_SOL : t.entryPrice,
+        // Its market cap at the entry: a Shillex coin's supply is a billion tokens; a real coin's is today's cap over today's price.
+        entryMcap: t.market === 'world' ? (t.entryPrice / LAMPORTS_PER_SOL) * 1e9 : t.evidence?.mcapUsd ?? supply.get(t.asset)?.(t.entryPrice) ?? null,
         targetPct: t.targetPct, stopPct: t.stopPct, horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct,
         openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null, imageUrl: t.market === 'real' ? logos.get(t.asset) ?? null : null,
         invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
@@ -283,7 +287,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const held = await db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address);
       const n = new Map(held.map((h) => [h.a, Number(h.n)]));
       // Only what a desk would trade (enough liquidity) or still holds: the trending list is full of coins that already died.
-      return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0, imageUrl: c.imageUrl })) };
+      return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0, imageUrl: c.imageUrl })) };
     });
 
     // One real coin's page: its market as last priced, who holds it on paper and how they are doing, every plan on it, its paper trades.
@@ -298,13 +302,13 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const people = await userSummaries(db, [...pos.map((p) => p.agentId), ...theses.map((t) => t.agentId), ...trades.map((x) => x.t.agentId)]);
       const closed = theses.filter((t) => t.status !== 'open' && t.pnlPct !== null);
       const thesis = (t: ThesisRow): ThesisItem => ({
-        id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.entryPrice, targetPct: t.targetPct, stopPct: t.stopPct,
+        id: t.id, market: t.market, asset: t.asset, symbol: t.symbol, reason: t.reason, entryPrice: t.entryPrice, entryMcap: t.evidence?.mcapUsd ?? (c.fdvUsd && c.priceUsd > 0 ? (t.entryPrice * c.fdvUsd) / c.priceUsd : null), targetPct: t.targetPct, stopPct: t.stopPct,
         horizonAt: t.horizonAt.toISOString(), conviction: t.conviction, status: t.status, pnlPct: t.pnlPct, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null, imageUrl: c.imageUrl,
         invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
       });
       return {
         coin: {
-          address: c.address, symbol: c.symbol, name: c.name, url: c.url, imageUrl: c.imageUrl, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24,
+          address: c.address, symbol: c.symbol, name: c.name, url: c.url, imageUrl: c.imageUrl, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24,
           established: c.source === 'major', holders: pos.length, pairAddress: c.pairAddress, dexId: c.dexId, fdvUsd: c.fdvUsd, volumeH1: c.volumeH1, changeM5: c.changeM5, buysH1: c.buysH1, sellsH1: c.sellsH1,
           pairCreatedAt: c.pairCreatedAt?.toISOString() ?? null, refreshedAt: c.refreshedAt.toISOString(),
         },

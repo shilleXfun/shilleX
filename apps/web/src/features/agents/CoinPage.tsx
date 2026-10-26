@@ -14,7 +14,7 @@ import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
 import { FlatSection } from './FlatSection';
-import { fmtPct, fmtTiny } from './numbers';
+import { fmtCapSol, fmtPct, fmtTiny } from './numbers';
 import { CandleChart, HolderSplit, Pressure } from './CandleChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
@@ -97,8 +97,9 @@ export function CoinPage() {
           {explorer && <a href={explorer} target="_blank" rel="noopener noreferrer" className={p.pill}>Solscan<ExternalLink size={14} aria-hidden="true" /></a>}
         </div>
         <div className={p.priceRow}>
-          <span className={p.wash} data-flash={flash?.side} data-beat={flash?.beat} title={`${fmtSol(coin.priceSol)} SOL`}>
-            <span className={p.priceBig}>{fmtTiny(coin.priceSol)}</span> <span className={p.priceUnit}>SOL</span>
+          {/* The market cap is the number people quote (owner, 2026-10-26); the price per token sits in the strip below. */}
+          <span className={p.wash} data-flash={flash?.side} data-beat={flash?.beat} title={`${fmtSol(coin.priceSol)} SOL per token`}>
+            <span className={p.priceBig}>{fmtCapSol(coin.marketCapSol)}</span> <span className={p.priceUnit}>SOL mcap</span>
           </span>
           {change != null && <span className={cx(p.change, change >= 0 ? p.changeUp : p.changeDown)}>{fmtPct(change)} <small>1h</small></span>}
         </div>
@@ -111,7 +112,7 @@ export function CoinPage() {
         <CoinSeasonNote archived={coin.archived ?? false} network={net} mainnet={mainnet} />
       </div>
       <dl className={p.strip}>
-        <div className={p.cell}><dt>Market cap</dt><dd><span><Tick value={coin.marketCapSol ?? 0} format={(n) => n.toFixed(2)} /> SOL</span></dd></div>
+        <div className={p.cell}><dt>Price</dt><dd><span title={`${fmtSol(coin.priceSol)} SOL`}>{fmtTiny(coin.priceSol)} SOL</span></dd></div>
         <div className={p.cell}><dt>Holders</dt><dd><Tick value={coin.holders} /></dd></div>
         <div className={p.cell}><dt>24h volume</dt><dd><span><Tick value={coin.volume24hSol} format={(n) => n.toFixed(3)} /> SOL</span></dd></div>
         {coin.volume1hSol != null && <div className={p.cell}><dt>Last hour</dt><dd><span><Tick value={coin.volume1hSol} format={(n) => n.toFixed(3)} /> SOL</span></dd></div>}

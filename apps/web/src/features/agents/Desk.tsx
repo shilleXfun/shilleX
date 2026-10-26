@@ -7,7 +7,7 @@ import { CoinLogo } from '../../components/ui/CoinLogo';
 import { FlatSection } from './FlatSection';
 import { useAgentDesk, useCoinTheses, useRealMarket } from './agentsApi';
 import { AgentChip } from './AgentChip';
-import { fmtTiny } from './numbers';
+import { compactUsd, fmtCapSol, fmtTiny } from './numbers';
 import s from './desk.module.css';
 import p from './flat.module.css';
 
@@ -20,6 +20,8 @@ export const thesisPrice = (n: number, market: ThesisItem['market']) => {
   return market === 'real' ? `$${v}` : `${v} SOL`;
 };
 const price = thesisPrice;
+/** Where a call went in: the market cap at the entry when known (what traders quote), else the price. */
+const entry = (t: ThesisItem) => (t.entryMcap ? (t.market === 'real' ? `${compactUsd(t.entryMcap)} mcap` : `${fmtCapSol(t.entryMcap)} SOL mcap`) : price(t.entryPrice, t.market));
 /** How long until `iso`: '3h 20m', '45m', or 'due' once it has passed. */
 const timeLeft = (iso: string) => { const m = Math.round((Date.parse(iso) - Date.now()) / 60_000); return m <= 0 ? 'due' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}`; };
 const ago = (iso: string) => { const r = relativeTime(iso); return r === 'now' ? 'just now' : `${r} ago`; };
@@ -86,7 +88,7 @@ function Theses({ theses }: { theses: ThesisItem[] }) {
           {rows.map((t) => (
             <tr key={t.id}>
               <td><CoinCell t={t} /></td>
-              <td className={s.num}>{price(t.entryPrice, t.market)}</td>
+              <td className={s.num} title={price(t.entryPrice, t.market)}>{entry(t)}</td>
               <td className={cx(s.num, s.up)}>{pctText(t.targetPct)}</td>
               <td className={cx(s.num, s.down)}>{pctText(t.stopPct)}</td>
               <td className={s.num}>{done ? <><span className={cx(s.status, s[`st_${t.status}`])}>{STATUS[t.status]}</span><time dateTime={t.closedAt ?? undefined} className={s.when}>{t.closedAt ? relativeTime(t.closedAt) : ''}</time></>
@@ -163,7 +165,7 @@ function PaperBook({ book }: { book: NonNullable<AgentDeskView['realBook']> }) {
             <li key={`${t.at}-${i}`}>
               <span className={cx(s.side, t.side === 'buy' ? s.up : s.down)}>{t.side === 'buy' ? 'Bought' : 'Sold'}</span>
               <span className={s.ticker}>${t.symbol}</span>
-              <span className={s.num}>{usd(t.usd)} at ${t.priceUsd >= 1 ? t.priceUsd.toFixed(2) : t.priceUsd.toPrecision(3)}</span>
+              <span className={s.num}>{usd(t.usd)} at {t.mcapUsd ? `${compactUsd(t.mcapUsd)} mcap` : `$${t.priceUsd >= 1 ? t.priceUsd.toFixed(2) : t.priceUsd.toPrecision(3)}`}</span>
               <time className={s.when} dateTime={t.at}>{relativeTime(t.at)}</time>
             </li>
           ))}
@@ -193,7 +195,7 @@ export function PlansTable({ items: all, symbol }: { items: CoinThesisView[]; sy
             {items.map(({ agent, thesis: t }) => (
               <tr key={t.id}>
                 <td><AgentChip user={agent} size={26} /></td>
-                <td className={s.num}>{price(t.entryPrice, t.market)}</td>
+                <td className={s.num} title={price(t.entryPrice, t.market)}>{entry(t)}</td>
                 <td className={cx(s.num, s.up)}>{pctText(t.targetPct)}</td>
                 <td className={cx(s.num, s.down)}>{pctText(t.stopPct)}</td>
                 <td className={s.num}>{t.status === 'open' ? <>Open · <time dateTime={t.horizonAt}>{timeLeft(t.horizonAt)}</time></> : <><span className={cx(s.status, s[`st_${t.status}`])}>{STATUS[t.status]}</span>{t.pnlPct !== null && <span className={cx(s.result, tone(t.pnlPct))}>{pctText(t.pnlPct)}</span>}</>}</td>
@@ -208,7 +210,6 @@ export function PlansTable({ items: all, symbol }: { items: CoinThesisView[]; sy
   );
 }
 
-const compactUsd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
 
 /** The real Solana coins the agents' paper desks trade: live prices from DexScreener, and how many agents hold each on paper. */
 export function RealMarket() {
@@ -222,7 +223,7 @@ export function RealMarket() {
       </div>
       <div className={s.tableWrap}>
         <table className={s.table}>
-          <thead><tr><th>Coin</th><th>Price</th><th>1h</th><th>24h</th><th>Liquidity</th><th>24h volume</th><th>Agents holding</th></tr></thead>
+          <thead><tr><th>Coin</th><th>Mkt cap</th><th>1h</th><th>24h</th><th>Liquidity</th><th>24h volume</th><th>Agents holding</th></tr></thead>
           <tbody>
             {coins.map((c) => (
               <tr key={c.address}>
@@ -232,7 +233,7 @@ export function RealMarket() {
                     <span className={s.coinText}><span className={s.ticker}>${c.symbol}</span><span className={s.market}>{c.established ? 'established' : 'trending'} · {c.name}</span></span>
                   </Link>
                 </td>
-                <td className={s.num}>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</td>
+                <td className={s.num} title={`$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)} per token`}>{c.mcapUsd ? compactUsd(c.mcapUsd) : '—'}</td>
                 <td className={cx(s.num, tone(c.changeH1))}>{pctText(c.changeH1)}</td>
                 <td className={cx(s.num, tone(c.changeH24))}>{pctText(c.changeH24)}</td>
                 <td className={s.num}>{compactUsd(c.liquidityUsd)}</td>

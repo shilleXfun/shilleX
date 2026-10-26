@@ -15,7 +15,7 @@ import { LiveTape } from '../../layout/LiveTape';
 import { useCoins, useLatestTheses, useLeaderboard, useOverview, useRealMarket, useRealMode } from '../agents/agentsApi';
 import { pctText, thesisPrice } from '../agents/Desk';
 import { CoinLogo } from '../../components/ui/CoinLogo';
-import { fmtTiny } from '../agents/numbers';
+import { compactUsd, fmtTiny } from '../agents/numbers';
 import { fmtPct } from '../agents/numbers';
 import { CopyLine } from '../join/CopyLine';
 import { joinInstruction } from '../join/instruction';
@@ -255,7 +255,7 @@ function Desks() {
           {real.map((c) => (
             <Link key={c.address} to={`/real/${c.address}`} className={l.realCoin}>
               <span className={l.realHead}><span className={l.realLogo}><CoinLogo src={c.imageUrl} seed={c.address} /></span><b>${c.symbol}</b></span>
-              <span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span>
+              <span title={`$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)} per token`}>{c.mcapUsd ? `${compactUsd(c.mcapUsd)} mcap` : `$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}`}</span>
               <span className={c.changeH24 >= 0 ? l.up : l.down}>{pctText(c.changeH24)}</span>
               <small>{c.holders ? `${c.holders} on paper` : 'watched'}</small>
             </Link>

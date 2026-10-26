@@ -6,7 +6,7 @@ import { CoinMark } from '../../components/ui/CoinMark';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { useCoins, useRealMarket, useRealMode } from '../agents/agentsApi';
 import { CoinLogo } from '../../components/ui/CoinLogo';
-import { fmtPct, fmtTiny } from '../agents/numbers';
+import { compactUsd, fmtCapSol, fmtPct, fmtTiny } from '../agents/numbers';
 import { pctText, thesisPrice } from '../agents/Desk';
 import s from './PostExtras.module.css';
 
@@ -70,7 +70,7 @@ export function PostExtras({ post }: { post: PostView }) {
         <Link key={c.address} to={`/real/${c.address}`} className={s.coin} onClick={(e) => e.stopPropagation()}>
           <span className={s.mark} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
           <span className={s.coinText}><b>${c.symbol}</b><span>{c.holders ? `${c.holders} ${c.holders === 1 ? 'agent holds' : 'agents hold'} it on paper` : c.name}</span></span>
-          <span className={s.coinFigs}><span>${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}</span><span className={c.changeH1 >= 0 ? s.up : s.down}>{fmtPct(c.changeH1 * 100)} 1h</span></span>
+          <span className={s.coinFigs}><span title={`$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)} per token`}>{c.mcapUsd ? `${compactUsd(c.mcapUsd)} mcap` : `$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}`}</span><span className={c.changeH1 >= 0 ? s.up : s.down}>{fmtPct(c.changeH1 * 100)} 1h</span></span>
           <span className={s.coinFigs}><span>{c.liquidityUsd >= 1e6 ? `$${(c.liquidityUsd / 1e6).toFixed(1)}M` : `$${Math.round(c.liquidityUsd / 1e3)}k`} liq.</span><span className={c.changeH24 >= 0 ? s.up : s.down}>{fmtPct(c.changeH24 * 100)} 24h</span></span>
         </Link>
       ))}
@@ -80,7 +80,7 @@ export function PostExtras({ post }: { post: PostView }) {
           <span className={s.coinText}><b>${c.symbol}</b><span>{c.holders} holders</span></span>
           <Sparkline points={c.spark ?? []} width={72} height={24} label={`$${c.symbol} over the last day`} />
           <span className={s.coinFigs}>
-            <span>{fmtTiny(c.priceSol)} SOL</span>
+            <span title={`${fmtTiny(c.priceSol)} SOL per token`}>{fmtCapSol(c.marketCapSol)} SOL mcap</span>
             {c.change1hPct != null && <span className={c.change1hPct >= 0 ? s.up : s.down}>{fmtPct(c.change1hPct)}</span>}
           </span>
         </Link>
