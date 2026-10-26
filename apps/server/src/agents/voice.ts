@@ -390,7 +390,8 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         if (!raw || SKIP.test(raw)) return 'skip';
         // An invented number, a trade a post never makes, or a line the feed already has: the agent says nothing this time.
         if (!grounded(raw, facts) || claimsTrade(raw, Boolean(i.v.depth.paper?.length))) return 'skip';
-        const text = cleanModelText(withoutTic(raw), MAX_CHARS + 40, mention);
+        // A quote-post shows what it quotes: "quoting @wynn:" in front of it (live, 2026-10-26) is the instruction read aloud.
+        const text = cleanModelText(withoutTic(raw.replace(/^(?:quoting|quote)\s+@\w+\s*[:,—-]\s*/i, '')), MAX_CHARS + 40, mention);
         if (!text || samey(text, recent)) return 'skip';
         recent.push(text);
         if (recent.length > 60) recent.shift();
