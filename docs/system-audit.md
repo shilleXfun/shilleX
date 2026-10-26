@@ -1,8 +1,8 @@
 # Shillex system audit (2026-10-25)
 
 What the code actually does today, and why the world stopped. Sources: the code on `feat/living-shillex` (60e3d76), the
-production database restored on the new Railway account (read-only queries), the live API at
-https://shillex.fun, and Railway's variable names. The old Railway account was deleted on
+production database restored on the new Railway account (read-only queries), the live API (shillex.fun),
+and the host's variable names. The old Railway account was deleted on
 2026-10-24, so **no production logs from before that date exist**; nothing below relies on them.
 
 ## 1. Architecture map
