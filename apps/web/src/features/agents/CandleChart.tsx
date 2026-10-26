@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import type { CandlesView, FlowView } from '@shillex/shared';
 import { get } from '../../lib/api';
 import { cx } from '../../lib/cx';
-import { fmtTiny } from './numbers';
+import { fmtCapSol, fmtTiny } from './numbers';
 import s from './candle.module.css';
 
 const STEPS = [
@@ -45,7 +45,8 @@ const timeOf = (t: number, step: number) => new Date(t).toLocaleString('en', ste
  * reads the candle under the pointer. A single launch spike would flatten everything, so the price scale fits the middle 96%
  * of the candles and clips the rest at the edge.
  */
-export function CandleChart({ mint, path }: { mint: string; path?: string }) {
+/** `supply`: the coin's token count; given, the chart reads market cap (price times supply) instead of the price of one token. */
+export function CandleChart({ mint, path, supply }: { mint: string; path?: string; supply?: number | null }) {
   const [step, setStep] = useState(0);
   const q = useCandlesAt(path ?? `/coins/${mint}/candles`, step, path ? 60_000 : 10_000);
   const [ref, width] = useWidth();
@@ -54,7 +55,8 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
   const H = width < 560 ? 300 : 380;
   const data = q.data;
   const geo = useMemo(() => {
-    const cs = data?.candles ?? [];
+    const k = supply && supply > 0 ? supply : 1;
+    const cs = (data?.candles ?? []).map((c) => (k === 1 ? c : { ...c, o: c.o * k, h: c.h * k, l: c.l * k, c: c.c * k }));
     if (!cs.length || width < 100) return null;
     // The first candles of a bonding curve hold the launch, a move ten times anything after it: once there is history, the
     // scale fits the candles' bodies after it (wicks clip at the edge).
@@ -70,7 +72,7 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
     const vy = (v: number) => Math.min(volH, (v / vMax) * volH);
     const x = (i: number) => W - (cs.length - i - 0.5) * slot;
     return { cs, min, max, W, priceH, volH, slot, body, y, vy, x };
-  }, [data, width, H]);
+  }, [data, width, H, supply]);
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!geo) return;
@@ -81,6 +83,7 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
   };
   const shown = geo ? geo.cs[hover ?? geo.cs.length - 1] : null;
   const usd = data?.unit === 'USD';
+  const fmtV = supply && supply > 0 ? fmtCapSol : fmtTiny;
   const vol = (n: number) => (usd ? `$${n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : n.toFixed(0)}` : `${sol(n)} SOL`);
   const last = geo?.cs.at(-1);
   return (
@@ -95,10 +98,10 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
         </div>
         {shown && (
           <dl className={s.legend} aria-live="off">
-            <div><dt>O</dt><dd>{fmtTiny(shown.o)}</dd></div>
-            <div><dt>H</dt><dd>{fmtTiny(shown.h)}</dd></div>
-            <div><dt>L</dt><dd>{fmtTiny(shown.l)}</dd></div>
-            <div><dt>C</dt><dd className={shown.c >= shown.o ? s.up : s.down}>{fmtTiny(shown.c)}</dd></div>
+            <div><dt>O</dt><dd>{fmtV(shown.o)}</dd></div>
+            <div><dt>H</dt><dd>{fmtV(shown.h)}</dd></div>
+            <div><dt>L</dt><dd>{fmtV(shown.l)}</dd></div>
+            <div><dt>C</dt><dd className={shown.c >= shown.o ? s.up : s.down}>{fmtV(shown.c)}</dd></div>
             <div><dt>Vol</dt><dd>{vol(shown.buy + shown.sell)}</dd></div>
             <div className={s.legendTime}>{timeOf(shown.t, data!.interval)}</div>
           </dl>
@@ -107,7 +110,7 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
       <div ref={ref} className={s.chart} style={{ height: H }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
         {!geo ? (q.isPending ? null : <p className={s.empty}>{path ? 'The pool has no candles to show right now.' : 'No trades yet: the chart starts with the first one.'}</p>) : (
           <>
-            <svg width={width} height={H} role="img" aria-label={`Price in ${stepLabel(data!.interval)} candles, last ${fmtTiny(last!.c)} ${usd ? 'USD' : 'SOL'}`}>
+            <svg width={width} height={H} role="img" aria-label={`${supply ? 'Market cap' : 'Price'} in ${stepLabel(data!.interval)} candles, last ${fmtV(last!.c)} ${usd ? 'USD' : 'SOL'}`}>
               {[0.12, 0.38, 0.64, 0.9].map((f) => { const p = geo.max - f * (geo.max - geo.min); const yy = geo.y(p); return <line key={f} x1={0} x2={geo.W} y1={yy} y2={yy} className={s.grid} />; })}
               {geo.cs.map((c, i) => {
                 const up = c.c >= c.o, cx0 = geo.x(i);
@@ -128,8 +131,8 @@ export function CandleChart({ mint, path }: { mint: string; path?: string }) {
               <line x1={0} x2={geo.W} y1={geo.y(last!.c)} y2={geo.y(last!.c)} className={cx(s.lastLine, last!.c >= last!.o ? s.upStroke : s.downStroke)} />
               {hover !== null && <line x1={geo.x(hover)} x2={geo.x(hover)} y1={0} y2={H - TIME_H} className={s.cross} />}
             </svg>
-            {[0.12, 0.38, 0.64, 0.9].map((f) => { const p = geo.max - f * (geo.max - geo.min); return <span key={f} className={s.price} style={{ top: geo.y(p) }}>{fmtTiny(p)}</span>; })}
-            <span className={cx(s.price, s.lastTag, last!.c >= last!.o ? s.upBg : s.downBg)} style={{ top: geo.y(last!.c) }}>{fmtTiny(last!.c)}</span>
+            {[0.12, 0.38, 0.64, 0.9].map((f) => { const p = geo.max - f * (geo.max - geo.min); return <span key={f} className={s.price} style={{ top: geo.y(p) }}>{fmtV(p)}</span>; })}
+            <span className={cx(s.price, s.lastTag, last!.c >= last!.o ? s.upBg : s.downBg)} style={{ top: geo.y(last!.c) }}>{fmtV(last!.c)}</span>
             <div className={s.times} style={{ width: geo.W }}>
               {[0.05, 0.35, 0.65, 0.95].map((f) => { const c = geo.cs[Math.min(geo.cs.length - 1, Math.floor(f * geo.cs.length))]!; return <span key={f}>{timeOf(c.t, data!.interval)}</span>; })}
             </div>

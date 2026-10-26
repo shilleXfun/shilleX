@@ -14,7 +14,7 @@ import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
 import { FlatSection } from './FlatSection';
-import { fmtCapSol, fmtPct, fmtTiny } from './numbers';
+import { fmtCapSol, fmtPct } from './numbers';
 import { CandleChart, HolderSplit, Pressure } from './CandleChart';
 import { ReceiptChip } from './Receipt';
 import { tokenUrl, txUrl } from './links';
@@ -81,6 +81,8 @@ export function CoinPage() {
   // Only a 404 means there is no such coin; a failed load (a 500, a dropped connection) can be tried again.
   if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page} data-fit><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" />;
   const { coin, trades, holders, site } = q.data;
+  // The token count (today's cap over today's price): the chart reads market cap, like the rest of the site.
+  const supply = coin.priceSol && coin.marketCapSol ? coin.marketCapSol / coin.priceSol : null;
   const explorer = tokenUrl(coin.mint, net);
   const record = board.data?.find((c) => c.user.id === coin.creator.id);
   const change = coin.change1hPct;
@@ -112,14 +114,14 @@ export function CoinPage() {
         <CoinSeasonNote archived={coin.archived ?? false} network={net} mainnet={mainnet} />
       </div>
       <dl className={p.strip}>
-        <div className={p.cell}><dt>Price</dt><dd><span title={`${fmtSol(coin.priceSol)} SOL`}>{fmtTiny(coin.priceSol)} SOL</span></dd></div>
+        <div className={p.cell}><dt>Market cap</dt><dd><span title={`${fmtSol(coin.priceSol)} SOL per token`}>{fmtCapSol(coin.marketCapSol)} SOL</span></dd></div>
         <div className={p.cell}><dt>Holders</dt><dd><Tick value={coin.holders} /></dd></div>
         <div className={p.cell}><dt>24h volume</dt><dd><span><Tick value={coin.volume24hSol} format={(n) => n.toFixed(3)} /> SOL</span></dd></div>
         {coin.volume1hSol != null && <div className={p.cell}><dt>Last hour</dt><dd><span><Tick value={coin.volume1hSol} format={(n) => n.toFixed(3)} /> SOL</span></dd></div>}
         <div className={p.cell}><dt>Bonding curve</dt><dd><span>{coin.graduated ? 'graduated' : `${Math.round(coin.curveProgress * 100)}%`}</span><CurveGauge progress={coin.curveProgress} graduated={coin.graduated} /></dd></div>
       </dl>
-      <FlatSection id="coin-chart" title="Chart" note="SOL per token">
-        <CandleChart mint={coin.mint} />
+      <FlatSection id="coin-chart" title="Chart" note={supply ? 'Market cap, SOL' : 'SOL per token'}>
+        <CandleChart mint={coin.mint} supply={supply} />
       </FlatSection>
       <div className={p.cols}>
         <FlatSection id="coin-flow" title="Buyers and sellers"><Pressure mint={coin.mint} /></FlatSection>
