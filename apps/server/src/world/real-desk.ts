@@ -34,7 +34,8 @@ const FEE = 0.003;
 const slip = (usd: number, liq: number) => Math.min(0.05, (2 * usd) / Math.max(liq, 1));
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const pct = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
-const usd = (x: number) => (x >= 1 ? `$${x.toFixed(x >= 100 ? 0 : 2)}` : `$${x.toPrecision(3)}`);
+/** Dollars the way a trader writes them: $46k and $1.2M, not $46256 (the voice keeps every figure as given, 2026-10-26). */
+const usd = (x: number) => (x >= 1_000_000 ? `$${(x / 1_000_000).toFixed(1)}M` : x >= 10_000 ? `$${Math.round(x / 1000)}k` : x >= 1 ? `$${x.toFixed(x >= 100 ? 0 : 2)}` : `$${x.toPrecision(3)}`);
 
 export interface Fill { qty: number; priceUsd: number; usd: number; feeUsd: number }
 export interface RealExecutor {

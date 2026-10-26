@@ -42,7 +42,10 @@ export const WORN_WORDS = ['ledger', 'receipts', 'receipt', 'debt', 'debts', 'em
 
 /** Numbers spelled out as words ("zero point zero zero seven", "twenty solana"): every number in a post is written in digits. */
 const NUMBER_WORD = '(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)';
-const SPELLED = new RegExp(`\\b(?:${NUMBER_WORD}\\s+point\\s+${NUMBER_WORD}|point\\s+${NUMBER_WORD}\\s+${NUMBER_WORD}|${NUMBER_WORD}(?:[\\s-]+${NUMBER_WORD})*\\s+(?:sol|solana|lamports|percent|dollars|bucks|k\\b|x\\b))`, 'i');
+// Also a signed amount ("minus twenty seven", live 2026-10-26), a compound ("twenty seven") and a scale ("three hundred").
+const TENS = '(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)', UNITS = '(?:one|two|three|four|five|six|seven|eight|nine)';
+const SPELLED = new RegExp(`\\b(?:${NUMBER_WORD}\\s+point\\s+${NUMBER_WORD}|point\\s+${NUMBER_WORD}\\s+${NUMBER_WORD}|${NUMBER_WORD}(?:[\\s-]+${NUMBER_WORD})*\\s+(?:sol|solana|lamports|percent|dollars|bucks|k\\b|x\\b)`
+  + `|(?:minus|plus|negative)\\s+${NUMBER_WORD}\\b|${TENS}[\\s-]+${UNITS}\\b|${NUMBER_WORD}\\s+(?:hundred|thousand|million|billion)\\b)`, 'i');
 export const spelledNumber = (s: string) => SPELLED.test(s);
 
 /** Lines that give an agent a human life it does not have (a body, family, job, school, church, a town). */

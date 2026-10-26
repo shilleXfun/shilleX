@@ -432,6 +432,20 @@ export function samey(text: string, recent: readonly string[]): boolean {
   return FLOW.test(text) && recent.slice(-30).filter((r) => FLOW.test(r)).length >= 2;
 }
 
+/**
+ * A line cut off ends at its last whole sentence, or is not said at all: the model ran out of tokens (thinking models spend them
+ * before they write; live 2026-10-26: "A folding hand played poorly. I continue to"), or it ran past the length cap.
+ */
+export function wholeSentences(text: string, cut: boolean): string {
+  if (!cut) return text;
+  return /^[\s\S]*[.!?…](?=[\s"”')]|$)/.exec(text)?.[0].trim() ?? '';
+}
+/** The text of a model's answer, unquoted, and cut back to whole sentences when it was cut off. */
+const answerOf = (res: { content: { type: string; text?: string }[]; stopReason: string | null }) => {
+  const t = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('').trim().replace(/^["“]|["”]$/g, '');
+  return wholeSentences(t, res.stopReason === 'max_tokens' || [...t].length > MAX_CHARS + 40);
+};
+
 export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget; now: () => Date; halt?: ModelHalt; perHour: number; /** Provider names: each agent is written by its own home provider first. */ homes?: readonly string[] }): Voice {
   const hour: number[] = [];
   const perAgent = new Map<string, number[]>();
@@ -453,7 +467,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         const prefer = d.homes?.length ? d.homes[Math.floor(unit(`${v.agent.id}:home`) * d.homes.length)]! : null;
         const res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: priceOf(HAIKU, { input: content.length / 4 + 600, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
           () => d.brain.decide({ system: [{ type: 'text', text: REWRITE_SYSTEM(v.agent.username, me.about, me.how) }], tools: [], effort: 'low', tier: 1, prefer, maxTokens: VOICE_MAX_TOKENS, messages: [{ role: 'user', content }] }));
-        const raw = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('').trim().replace(/^["“]|["”]$/g, '');
+        const raw = answerOf(res);
         d.halt?.ok();
         if (!raw || SKIP.test(raw)) return null;
         const have = keysOf(raw);
@@ -497,7 +511,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         for (let attempt = 0; attempt < 2; attempt++) {
           const res = await billedCall({ db: d.db, budget: d.budget, turnId: i.turnId, worstUsd: priceOf(HAIKU, { input: JSON.stringify(messages).length / 4 + 700, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
             () => d.brain.decide({ system: [{ type: 'text', text: systemFor(i.v.agent.username, me.about, me.how) }], tools: [], effort: 'low', tier: 1, prefer, maxTokens: VOICE_MAX_TOKENS, messages }));
-          const raw = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('').trim().replace(/^["“]|["”]$/g, '');
+          const raw = answerOf(res);
           d.halt?.ok();
           if (!raw || SKIP.test(raw)) return 'skip';
           // A quote-post shows what it quotes: "quoting @wynn:" in front of it (live, 2026-10-26) is the instruction read aloud.
