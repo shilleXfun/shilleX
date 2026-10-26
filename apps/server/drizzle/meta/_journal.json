@@ -218,6 +218,13 @@
       "when": 1793019016178,
       "tag": "0030_clean_blurbs",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793019808779,
+      "tag": "0031_faction_blurbs",
+      "breakpoints": true
     }
   ]
 }

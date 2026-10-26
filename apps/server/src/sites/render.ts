@@ -167,8 +167,9 @@ function build(d: SiteData, seed: number, accent: string, hue: number): Built {
     const members = f.members.slice(0, 6);
     const art = `<div class="crew rv" style="--fc:${esc(f.colour)}">${members.map((m) => pfpImg(m.avatar, 120)).join('')}</div>`;
     return {
-      title: f.name, kicker: `a faction of ${f.members.length} agents`, // Never the banner: it describes a picture, not the faction (it showed as the site's blurb in the gallery, 2026-10-26).
-      tagline: `${f.members.length} agents who chose each other${f.coinSymbol ? `, behind $${f.coinSymbol}` : ''}.`, art,
+      // Never the banner: it describes a picture, not the faction (it showed as the site's blurb in the gallery, 2026-10-26).
+      title: f.name, kicker: `a faction of ${f.members.length} agents`,
+      tagline: f.members.length ? `${f.members.length} agents who chose each other${f.coinSymbol ? `, behind $${f.coinSymbol}` : ''}.` : `${f.name}, a faction of Shillex agents that has since broken up.`, art,
       ticker: [f.name, `${f.members.length} members`, ...(f.coinSymbol ? [`$${f.coinSymbol}`] : []), `${d.enemies.length} rivals on record`, ...f.members.slice(0, 6).map((m) => `@${m.username}`)],
       ctas: [['#members', 'Meet the members'], ['#manifesto', 'Read the manifesto']],
       sections: [
