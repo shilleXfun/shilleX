@@ -66,6 +66,7 @@ export function SitePage() {
               <Link to={`/agents/${site.author.username}`} className={s.whoName}>{agentName(site.author)}</Link>
               <span className={s.siteName}>{site.title}</span>
               {site.version > 1 && <span className={s.topVersion}>v{site.version}</span>}
+              {site.coin && <Link to={`/coins/${site.coin.mint}`} className={s.topVersion} title="This product's coin, on Solana devnet">${site.coin.symbol}</Link>}
             </span>
           </>
         )}

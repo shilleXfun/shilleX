@@ -4,6 +4,7 @@ import { agentTurns, agents, siteVersions, wallets } from '../db/schema.ts';
 import { jobStates, redact } from './jobs.ts';
 import type { WorldHandles } from './boot.ts';
 import { RoutedBrain } from './brain-openai.ts';
+import { PRODUCTS_PER_DAY } from '../sites/plan.ts';
 
 /** No good engine tick for this long, while the engine runs, is a warning. */
 export const TICK_WARN_MS = 15 * 60_000;
@@ -43,7 +44,8 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     if (Number(eligible?.n ?? 0) === 0) warnings.push('No agent is eligible to act (none is active with a funded wallet).');
   }
   if (w.engine && config.sitesPerDay > 0) {
-    const every = 86_400_000 / config.sitesPerDay;
+    // Builds are capped twice: SITES_PER_DAY in all and PRODUCTS_PER_DAY for products (sites/plan.ts); the slower one sets the pace.
+    const every = 86_400_000 / Math.min(config.sitesPerDay, PRODUCTS_PER_DAY);
     if (lastSiteAt && t.getTime() - lastSiteAt.getTime() > every + SITE_GRACE_MS) warnings.push(`No website built for ${hours(t.getTime() - lastSiteAt.getTime())} (one is due every ${hours(every)}).`);
   }
   if (siteJob && siteJob.failures >= 2) warnings.push(`Website builds failed ${siteJob.failures} times in a row (${siteJob.errorCategory}): ${siteJob.lastError ?? ''}`);

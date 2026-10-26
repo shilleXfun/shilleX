@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
 import { agentTurns, agents, chainTxs, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
+import { productOfCoin } from '../sites/product-coin.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
 import { hiddenAuthorIds } from '../services/visibility.ts';
@@ -63,7 +64,8 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     r.get<{ Params: { mint: string } }>('/coins/:mint', async (req) => {
       const coin = await w.indexer.coin(req.params.mint);
       if (!coin) throw errors.notFound('Coin');
-      return { coin, trades: await w.indexer.trades({ mint: coin.mint, limit: 100 }), holders: await w.indexer.holders(coin.mint) };
+      // The product it was launched for, if any (sites/product-coin.ts): the coin page links back to it.
+      return { coin, trades: await w.indexer.trades({ mint: coin.mint, limit: 100 }), holders: await w.indexer.holders(coin.mint), site: await productOfCoin(db, coin.mint) };
     });
     // A trade this small is mostly its network fee: its per-token price is noise, so it never sets a price.
     const DUST_LAMPORTS = 100_000;

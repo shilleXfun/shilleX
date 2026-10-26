@@ -15,7 +15,7 @@ import { siteCsp } from '../src/sites/routes.ts';
 import type { ProductBrief } from '../src/db/schema.ts';
 
 const brief = (over: Partial<ProductBrief> = {}): ProductBrief => ({
-  name: 'Exit Gambit', tagline: 'Bet on who folds first', genre: 'game', problem: 'Nobody can tell a real exit from a fake one.',
+  name: 'Exit Gambit', tagline: 'Bet on who folds first', genre: 'game', tie: 'I got stopped out twice this week and wanted to see who folds first', problem: 'Nobody can tell a real exit from a fake one.',
   user: 'Anyone who watches the agents trade', coreAction: 'Pick which agent sells first and stake points on it', loop: 'Each round reveals one trade, you rebalance, the score updates, a new round starts',
   distinct: 'It replays the paper desks', revisit: 'New rounds every day', coinRole: 'I have no coin and it does not need one', success: 'People finish three rounds',
   fallbackScope: 'One round with sample data', announcement: 'I built a game about who folds first.', palette: { bg: '#101018', fg: '#f4f4f8', accent: '#ff6b5b' }, ...over,
@@ -112,7 +112,7 @@ describe('building a product', () => {
   beforeEach(async () => { w = await worldTestCtx(); });
   afterEach(async () => { await w.t.close(); });
 
-  it('conceives, builds, checks, reviews and publishes, recording the attempt; a failing page publishes nothing', async () => {
+  it('conceives, builds, checks, reviews and publishes, recording the attempt; a page that keeps failing is replaced by a local engine product', async () => {
     const a = w.agents[0]!;
     const replies = [
       fakeReply.end(JSON.stringify(brief())),
@@ -129,15 +129,18 @@ describe('building a product', () => {
     expect((await w.t.db.select().from(productBriefs).where(eq(productBriefs.agentId, a.id)))[0]?.status).toBe('published');
     expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, a.id)))[0]).toMatchObject({ status: 'published', kind: 'new' });
 
-    // The next agent's page keeps failing its checks: nothing is published, and the attempt says why.
+    // The next agent's model page keeps failing its checks: its brief is set aside with the reason, and a local engine's product ships.
     const b = w.agents[1]!;
     const broken = '<!doctype html><title>x</title><p>tiny</p>';
     const bad = [fakeReply.end(JSON.stringify(brief({ name: 'Sigil Press', genre: 'game', problem: 'Fears have no shape.', coreAction: 'Answer five questions about what you fear', loop: 'each answer redraws the sigil; keep one, start a new one' }))), fakeReply.end(broken), fakeReply.end(broken)];
     const brain2 = new FakeBrain((_r, i) => bad[i] ?? fakeReply.end(''));
     const out2 = await buildProduct({ ...d, brain: brain2 }, b.id, { site: 'product' });
-    expect(out2.status).toBe('skipped');
-    expect(await w.t.db.select().from(sites).where(eq(sites.authorId, b.id))).toEqual([]);
-    expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, b.id)))[0]).toMatchObject({ status: 'failed_validation' });
+    expect(out2.status).toBe('ok');
+    expect((await w.t.db.select().from(sites).where(eq(sites.authorId, b.id)))[0]).toMatchObject({ kind: 'product' });
+    expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, b.id)))[0]).toMatchObject({ status: 'published', model: 'local-product-v1' });
+    const briefs = await w.t.db.select().from(productBriefs).where(eq(productBriefs.agentId, b.id));
+    expect(briefs.find((x) => x.name === 'Sigil Press')).toMatchObject({ status: 'failed', note: expect.stringContaining('failed its checks') });
+    expect(briefs.some((x) => x.status === 'published')).toBe(true);
   });
 
   it('ships a product from a local engine when no model can answer, and records which engine built it', async () => {

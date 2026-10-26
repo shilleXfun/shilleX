@@ -96,7 +96,8 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
   if ((await buildsToday(d.db, now)) >= config.sitesPerDay) return { status: 'skipped', note: 'today’s builds are done' };
   // Products are conceived and built by the model when one answers; when none does (no key, the budget closed, every free
   // quota spent), buildProduct ships one from a local engine instead (plan E2). Improving a product waits for a model.
-  if (job.site === 'product' || job.site === 'improve') {
+  // A faction's site is a product for the faction now (Phase 4): the old members-and-manifesto page is not built any more.
+  if (job.site === 'product' || job.site === 'improve' || job.site === 'faction') {
     if (job.site === 'improve' && !(d.brain && d.budget?.canSpend())) return { status: 'skipped', note: 'no model to improve a product with' };
     if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
     return buildProduct({ ...d, brain: d.brain ?? null, budget: d.budget ?? null }, agentId, job);

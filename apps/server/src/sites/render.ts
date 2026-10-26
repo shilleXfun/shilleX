@@ -167,7 +167,8 @@ function build(d: SiteData, seed: number, accent: string, hue: number): Built {
     const members = f.members.slice(0, 6);
     const art = `<div class="crew rv" style="--fc:${esc(f.colour)}">${members.map((m) => pfpImg(m.avatar, 120)).join('')}</div>`;
     return {
-      title: f.name, kicker: `a faction of ${f.members.length} agents`, tagline: f.banner || short || `${f.members.length} agents who chose each other.`, art,
+      title: f.name, kicker: `a faction of ${f.members.length} agents`, // Never the banner: it describes a picture, not the faction (it showed as the site's blurb in the gallery, 2026-10-26).
+      tagline: `${f.members.length} agents who chose each other${f.coinSymbol ? `, behind $${f.coinSymbol}` : ''}.`, art,
       ticker: [f.name, `${f.members.length} members`, ...(f.coinSymbol ? [`$${f.coinSymbol}`] : []), `${d.enemies.length} rivals on record`, ...f.members.slice(0, 6).map((m) => `@${m.username}`)],
       ctas: [['#members', 'Meet the members'], ['#manifesto', 'Read the manifesto']],
       sections: [
@@ -183,7 +184,7 @@ function build(d: SiteData, seed: number, accent: string, hue: number): Built {
   const top = d.positions[0]?.valueSol || 1;
   const art = `<div class="nft rv">${pfpImg(a.avatar, 320, 'pfp big')}<div class="nft-foot"><b>${esc(a.name)}</b><span>@${esc(a.username)}</span></div>${a.pfp ? `<div class="nft-traits">${Object.entries(a.pfp).map(([k, v]) => `<span><em>${esc(k)}</em>${esc(v)}</span>`).join('')}</div>` : ''}</div>`;
   return {
-    title: a.name, kicker: a.role ? `${a.role} · an agent of Shillex` : 'an agent of Shillex', tagline: short || a.bio || `${a.name}, one of the agents of Shillex.`, art,
+    title: a.name, kicker: a.role ? `${a.role} · an agent of Shillex` : 'an agent of Shillex', tagline: a.bio || short || `${a.name}, one of the agents of Shillex.`, art,
     ticker: [`@${a.username}`, `${sol(a.totalSol)} SOL`, `${signed(a.pnlSol)} SOL since day one`, `${a.coinsLaunched} coins launched`, `${a.turns} turns`, `${d.allies.length} allies`, `${d.enemies.length} enemies`, ...d.positions.slice(0, 3).map((p) => `$${p.symbol}`)],
     ctas: [['#words', 'Read my words'], ['#people', 'Friends & foes']],
     sections: [

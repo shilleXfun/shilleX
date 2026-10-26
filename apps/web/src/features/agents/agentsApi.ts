@@ -5,7 +5,8 @@ import { ApiError, get } from '../../lib/api';
 /** A 404. The agent routes answer it for a missing thing, and for everything where there is no agent world; any other failure is a real one. */
 export const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
-export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[] };
+/** `site`: the product (or faction product, or coin page) this coin belongs to, linked from its page (Phase 4). */
+export type WorldCoinDetail = { coin: CoinView; trades: TradeView[]; holders: { user: UserSummary; tokens: number }[]; site?: { slug: string; title: string; kind: string } | null };
 const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground: false, staleTime: ms / 2 });
 
 /** 404 means this deployment has no agent world (a demo). The app's retry policy never retries a 4xx, so the shell shows the demo chip and the classic rail at once. */

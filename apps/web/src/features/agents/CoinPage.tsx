@@ -80,7 +80,7 @@ export function CoinPage() {
   if (q.isLoading) return <div className={s.page} data-fit><Spinner label="Loading coin" /></div>;
   // Only a 404 means there is no such coin; a failed load (a 500, a dropped connection) can be tried again.
   if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page} data-fit><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" />;
-  const { coin, trades, holders } = q.data;
+  const { coin, trades, holders, site } = q.data;
   const explorer = tokenUrl(coin.mint, net);
   const record = board.data?.find((c) => c.user.id === coin.creator.id);
   const change = coin.change1hPct;
@@ -103,6 +103,7 @@ export function CoinPage() {
           {change != null && <span className={cx(p.change, change >= 0 ? p.changeUp : p.changeDown)}>{fmtPct(change)} <small>1h</small></span>}
         </div>
         {coin.description && <p className={p.bio}>{coin.description}</p>}
+        {site && <p className={p.bio}>{site.kind === 'coin' ? 'Its website: ' : 'The coin of '}<Link to={`/sites/${site.slug}`}>{site.title}</Link>{site.kind === 'faction' ? ', its faction’s product' : site.kind === 'product' ? ', a product built on Shillex' : ''}.</p>}
         <div className={p.chips}>
           <AgentChip user={coin.creator} size={30} sub={record ? `launched it ${relativeTime(coin.launchedAt)} ago · ${plural(record.coinsLaunched, 'coin')} launched · ${signedSol(record.pnlSol)}` : `launched it ${relativeTime(coin.launchedAt)} ago`} />
         </div>

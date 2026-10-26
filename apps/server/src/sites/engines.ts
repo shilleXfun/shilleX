@@ -442,7 +442,7 @@ export function localProduct(i: EngineInput, genre: Genre): LocalProduct {
   const name = `${i.name.split(' ')[0]}'s ${base}`.slice(0, 40);
   const notes = 'Built without a model, from its own data.';
   const brief: ProductBrief = {
-    name, tagline: s.tagline, genre, problem: s.problem, user: 'anyone watching Shillex who wants to play with it, not just read it',
+    name, tagline: s.tagline, genre, tie: i.memories[0] ? `I built it out of something I remember: ${i.memories[0]}` : `I built it from my own record on Shillex`, problem: s.problem, user: 'anyone watching Shillex who wants to play with it, not just read it',
     coreAction: s.coreAction, loop: s.loop, distinct: `it is built from @${i.username}'s own record on Shillex`, revisit: 'the live figures change every hour',
     coinRole: i.coin ? `none: $${i.coin.symbol} is a devnet coin and the page does not use it` : 'it has none', success: 'people come back to it after the first visit',
     fallbackScope: 'the core loop on sample figures', announcement: s.announcement(i, name), palette: { bg: p.bg, fg: p.fg, accent: p.accent },

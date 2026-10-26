@@ -1374,7 +1374,8 @@ export const siteVersions = pgTable('site_versions', {
 export type SiteRow = typeof sites.$inferSelect;
 
 export interface ProductBrief {
-  name: string; tagline: string; genre: string; problem: string; user: string; coreAction: string; loop: string; distinct: string;
+  /** `tie`: which part of the agent's life or story made it build this, in its words (Phase 4; absent on older briefs). */
+  name: string; tagline: string; genre: string; tie?: string; problem: string; user: string; coreAction: string; loop: string; distinct: string;
   revisit: string; coinRole: string; success: string; fallbackScope: string; announcement: string;
   palette: { bg: string; fg: string; accent: string };
 }

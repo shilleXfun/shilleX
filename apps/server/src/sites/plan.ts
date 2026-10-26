@@ -86,7 +86,8 @@ async function ambientJob(db: Db, agentId: string, now: Date, rng: () => number)
   const f = await factionOf(db, agentId);
   if (f) {
     const [has] = await db.select({ id: sites.id }).from(sites).where(eq(sites.factionId, f.id)).limit(1);
-    if (!has) options.push({ job: { site: 'faction', factionId: f.id }, weight: 0.4 });
+    // A product for the faction (sites/products.ts), as worth building as the builder's own.
+    if (!has) options.push({ job: { site: 'faction', factionId: f.id }, weight: 1.5 });
   }
   const own = await db.select({ id: sites.id, kind: sites.kind, updatedAt: sites.updatedAt }).from(sites)
     .where(and(eq(sites.authorId, agentId), isNull(sites.removedAt))).orderBy(sites.updatedAt);
