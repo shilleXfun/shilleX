@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { agentAffinity, agentMemories, agentPersonas, agentReactions, agentTheses, chainTxs, realMarket, realPositions, worldCoins } from '../src/db/schema.ts';
+import { agentAffinity, agentDesks, agentMemories, agentPersonas, agentReactions, agentTheses, chainTxs, realBooks, realMarket, realPositions, wallets, worldCoins } from '../src/db/schema.ts';
+import { DESK_STYLES } from '@shillex/shared';
+import { restyleOnce } from '../src/agents/depth/desk.ts';
+import { seededTraits } from '../src/agents/state.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
 import type { AgentView, Candidate } from '../src/agents/types.ts';
 import type { Chain } from '../src/world/chain.ts';
-import { chainGate } from '../src/world/hybrid.ts';
+import { DEV_NEEDS, chainGate, topUpDevs } from '../src/world/hybrid.ts';
+import { TREASURY, signerFor, walletOf } from '../src/world/wallets.ts';
 import { txLeft } from '../src/world/tx-budget.ts';
-import { leaderSold } from '../src/world/real-desk.ts';
+import { LEADERBOARD_EVERY_MS, leaderSold, leaderboardMoves } from '../src/world/real-desk.ts';
 
 let w: Awaited<ReturnType<typeof worldTestCtx>>;
 beforeEach(async () => { w = await worldTestCtx(); });
@@ -60,5 +64,38 @@ describe('hybrid trading', () => {
     expect(grudge!.text).toMatch(/sold \$SABLE 2 h after I copied them in, leaving me at -20%/);
     const [r] = await w.t.db.select().from(agentReactions).where(eq(agentReactions.agentId, copier!.id));
     expect(r).toMatchObject({ format: 'callout', aboutId: leader!.id });
+  });
+
+  it('tops up a dev short of SOL for its next launch from the treasury, once per sweep', async () => {
+    const [dev] = w.agents;
+    const now = w.t.clock.now();
+    const voice = { casing: 'lower', length: 'short', emoji: null, slang: [], signatures: [], neverWords: [], postRate: 1, replyBias: 0.4, humor: 'h', temper: 't', images: 'i', habit: 'h' } as never;
+    await w.t.db.insert(agentPersonas).values({ agentId: dev!.id, job: 'dev', background: 'b', worldview: 'w', humor: 'h', voice, source: 'seed', createdAt: now, updatedAt: now });
+    const pk = (await walletOf(w.t.db, dev!.id))!.publicKey, tpk = (await walletOf(w.t.db, TREASURY))!.publicKey;
+    await w.t.db.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, dev!.id)); // live wallets are marked when the treasury funds them
+    w.chain.airdrop(tpk, 2_000_000_000);
+    await w.chain.sendSol(await signerFor(w.t.db, dev!.id, w.key), tpk, 95_000_000);
+    expect((await w.chain.balances(pk)).lamports).toBeLessThan(DEV_NEEDS);
+    const d = { ...deps(), app: { ...w.t.app, deps: { ...w.t.app.deps, config: { ...w.t.app.deps.config, tradingMode: 'hybrid' } } } } as EngineDeps;
+    expect((await topUpDevs(d)).funded).toBe(dev!.id);
+    expect((await w.chain.balances(pk)).lamports).toBeGreaterThanOrEqual(DEV_NEEDS);
+    expect((await topUpDevs(d)).funded).toBeNull();
+  });
+
+  it('moves on the paper leaderboard become reactions, after a baseline; old four-style desks are restyled once', async () => {
+    const [a, b, c] = w.agents;
+    const now = w.t.clock.now();
+    await w.t.db.insert(realBooks).values([{ agentId: a!.id, cashUsd: 1100, startUsd: 1000, createdAt: now }, { agentId: b!.id, cashUsd: 1050, startUsd: 1000, createdAt: now }, { agentId: c!.id, cashUsd: 900, startUsd: 1000, createdAt: now }]);
+    expect(await leaderboardMoves(deps(), now)).toBe(0);
+    await w.t.db.update(realBooks).set({ cashUsd: 1200 }).where(eq(realBooks.agentId, b!.id));
+    w.t.clock.advance(LEADERBOARD_EVERY_MS + 1000);
+    expect(await leaderboardMoves(deps(), w.t.clock.now())).toBeGreaterThanOrEqual(2);
+    const formats = (await w.t.db.select().from(agentReactions)).map((r) => `${r.agentId === b!.id ? 'b' : r.agentId === a!.id ? 'a' : 'x'}:${r.format}`);
+    expect(formats).toEqual(expect.arrayContaining(['b:victory_lap', 'a:cope']));
+
+    await w.t.db.insert(agentDesks).values([a, b, c].map((x) => ({ agentId: x!.id, style: 'value' as const, risk: 0.5, model: 'local', writtenAt: now })));
+    expect(await restyleOnce(w.t.db, [a, b, c].map((x) => ({ id: x!.id, traits: seededTraits(x!.id) })))).toBe(3);
+    expect((await w.t.db.select().from(agentDesks)).every((d) => (DESK_STYLES as readonly string[]).includes(d.style))).toBe(true);
+    expect(await restyleOnce(w.t.db, [{ id: a!.id, traits: seededTraits(a!.id) }])).toBe(0);
   });
 });
