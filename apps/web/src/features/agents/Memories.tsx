@@ -91,7 +91,7 @@ export function Memories({ d }: { d: AgentDepthView }) {
       </div>
       <div className={p.cols}>
         <Section id="agent-changes" title="Changes of mind">
-          {m.changes.length ? (
+          {m.changes?.length ? (
             <ol className={s.mindList}>
               {m.changes.map((x) => (
                 <li key={`${x.kind}-${x.at}`}>
@@ -104,7 +104,7 @@ export function Memories({ d }: { d: AgentDepthView }) {
           ) : <p className={s.empty}>It has not changed its mind about anything yet.</p>}
         </Section>
         <Section id="agent-respect" title="Whose calls it rates" note="From their calls resolving">
-          <People rows={m.respects.map((r) => ({ user: r.user, trust: r.respect }))} empty="Nobody's calls have impressed it yet." />
+          <People rows={(m.respects ?? []).map((r) => ({ user: r.user, trust: r.respect }))} empty="Nobody's calls have impressed it yet." />
         </Section>
       </div>
       {past.length > 0 && (
