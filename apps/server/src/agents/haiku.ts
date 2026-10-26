@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
-import { ClaudeBrain, PRICE_OF_HAIKU, isProviderModel, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
+import { ClaudeBrain, PRICE_OF_HAIKU, isProviderModel, knownPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
 import { Budget, type BudgetWindow } from '../world/budget.ts';
@@ -11,7 +11,7 @@ import { anthropicClient } from '../lib/anthropic.ts';
 export const HAIKU = 'claude-haiku-5-5';
 export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean; /** The current period's cap (the day, or the launch window). */ capUsd?(): number }
 /** No retries inside the client: a retried attempt may have been billed without billedCall seeing it. A failed call is one call, booked at its worst case. */
-export const haikuBrain = (apiKey: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0));
+export const haikuBrain = (apiKey: string, strong?: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0), strong);
 /**
  * The model every receipt names and the factor worst cases are scaled by (2026-10-25, Phase B). Worst cases are written in Haiku
  * prices across the code; a provider dearer than Haiku scales them up, a cheaper or free one leaves them (the reservation is then
@@ -21,7 +21,7 @@ let modelLabel = HAIKU, worstScale = 1;
 export const modelName = () => modelLabel;
 
 /** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only). */
-export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'>, now: () => Date): AgentBrain | null {
+export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong'>>, now: () => Date): AgentBrain | null {
   let brain: AgentBrain | null = null;
   if (config.llm.mode === 'openai' && config.llm.providers.length) {
     const haiku = PRICE_OF_HAIKU();
@@ -31,7 +31,13 @@ export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'>,
       worstScale = Math.max(worstScale, p.priceOutPerM / haiku.output, p.priceInPerM / haiku.input);
     }
     brain = new RoutedBrain(config.llm.providers, now);
-  } else if (config.llm.mode === 'anthropic' && config.anthropicApiKey) brain = haikuBrain(config.anthropicApiKey);
+  } else if (config.llm.mode === 'anthropic' && config.anthropicApiKey) {
+    const strong = config.anthropicModelStrong;
+    // Worst cases are written in Haiku prices: a dearer strong model scales every reservation up (settled to the real cost after).
+    const p = strong ? knownPrice(strong) : null;
+    if (p) { const haiku = PRICE_OF_HAIKU(); worstScale = Math.max(1, p.output / haiku.output, p.input / haiku.input); }
+    brain = haikuBrain(config.anthropicApiKey, p ? strong : undefined);
+  }
   modelLabel = brain?.name ?? HAIKU;
   return brain;
 }

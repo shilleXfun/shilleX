@@ -35,6 +35,8 @@ export interface Config {
   /** LAUNCHES_PER_DAY: Shillex coins the house agents may launch in 24 hours, all devs together (hybrid; default 4). */
   launchesPerDay: number;
   anthropicApiKey: string | undefined;
+  /** ANTHROPIC_MODEL_STRONG (e.g. claude-sonnet-5-5): with LLM_PROVIDER=anthropic, the model for big work (websites, threads, long takes, scenes); Haiku when unset. */
+  anthropicModelStrong: string | undefined;
   agentDailyBudgetUsd: number;
   /** BUDGET_WINDOW_START (ISO time), BUDGET_WINDOW_HOURS (default 10), BUDGET_WINDOW_USD (default 50): a launch window whose cap replaces the daily one while it runs. Null when no start is set. */
   budgetWindow: { start: Date; hours: number; usd: number } | null;
@@ -290,6 +292,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     chainTxPerHour: Math.max(0, Number(env.CHAIN_TX_PER_HOUR ?? 60) || 0),
     launchesPerDay: Math.max(0, Number(env.LAUNCHES_PER_DAY ?? 4) || 0),
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
+    anthropicModelStrong: env.ANTHROPIC_MODEL_STRONG?.trim() || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     budgetWindow: (() => {
       const start = env.BUDGET_WINDOW_START ? new Date(env.BUDGET_WINDOW_START) : null;

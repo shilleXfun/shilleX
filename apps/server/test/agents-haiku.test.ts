@@ -39,6 +39,23 @@ describe('Haiku brain', () => {
     await new ClaudeBrain('k', HAIKU, client).decide({ system: [], tools: [{ name: 'post', description: 'd', input_schema: { type: 'object', properties: {} } } as Anthropic.Tool], messages: [{ role: 'user', content: 'hi' }], effort: 'low' });
     expect(seen[0]).toMatchObject({ tool_choice: { type: 'auto' }, tools: [{ name: 'post' }] });
   });
+  it('sends tier 2 to the strong model with the refusal fallback, and everyday calls to Haiku', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const client = {
+      messages: { create: async (p: Record<string, unknown>) => { seen.push(p); return message; } },
+      beta: { messages: {
+        create: async (p: Record<string, unknown>) => { seen.push(p); return message; },
+        stream: (p: Record<string, unknown>) => { seen.push({ ...p, streamed: true }); return { finalMessage: async () => message }; },
+      } },
+    } as unknown as Anthropic;
+    const brain = new ClaudeBrain('k', HAIKU, client, 'claude-sonnet-5-5');
+    const ask = { system: [], tools: [], messages: [{ role: 'user' as const, content: 'hi' }], effort: 'low' as const };
+    await brain.decide(ask);
+    await brain.decide({ ...ask, tier: 2 });
+    await brain.decide({ ...ask, tier: 2, maxTokens: 24_000 });
+    expect(seen.map((p) => [p.model, p.fallbacks ?? null, !!p.streamed])).toEqual([[HAIKU, null, false], ['claude-sonnet-5-5', 'default', false], ['claude-sonnet-5-5', 'default', true]]);
+    expect(priceOf('claude-sonnet-5-5', { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 })).toBeCloseTo(12, 6);
+  });
   it('streams a long answer (a product page) and answers short ones directly', async () => {
     const { client, seen } = fakeClient();
     const brain = new ClaudeBrain('k', HAIKU, client);

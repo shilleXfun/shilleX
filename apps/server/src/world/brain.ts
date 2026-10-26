@@ -24,6 +24,7 @@ export interface AgentBrain {
 /** USD per million tokens. Cache writes are 1.25× input (5-minute TTL). */
 const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
 };
 const providerModels = new Set<string>();
@@ -35,28 +36,36 @@ export function registerPrice(model: string, inPerM: number, outPerM: number) {
 /** A model one of the configured providers serves: a call it answered is priced as that model. */
 export const isProviderModel = (model: string) => providerModels.has(model);
 export const PRICE_OF_HAIKU = () => PRICES['claude-haiku-5-5']!;
+/** A model's price per million tokens, or null when it is not known. */
+export const knownPrice = (model: string) => PRICES[model] ?? null;
 export function priceOf(model: string, u: TurnUsage): number {
   const p = PRICES[model] ?? PRICES[MODEL]!;
   return (u.input * p.input + u.output * p.output + u.cacheRead * p.cacheRead + u.cacheWrite * p.cacheWrite) / 1_000_000;
 }
 
+/** Models that take the server-side refusal fallback (`fallbacks: 'default'`); Haiku has none. */
+const FALLBACK_MODELS = new Set([MODEL, 'claude-sonnet-5-5']);
+
 export class ClaudeBrain implements AgentBrain {
   private client: Anthropic;
-  constructor(apiKey: string, private model = MODEL, client?: Anthropic) { this.client = client ?? anthropicClient(apiKey, 1); }
+  /** `strong`: the model tier-2 requests (websites, threads, long takes, scenes) go to; the everyday model when unset. */
+  constructor(apiKey: string, private model = MODEL, client?: Anthropic, private strong?: string) { this.client = client ?? anthropicClient(apiKey, 1); }
 
   async decide(req: BrainRequest): Promise<BrainResponse> {
+    const model = req.tier === 2 && this.strong ? this.strong : this.model;
     // Thinking can't be disabled on current models; effort controls depth. Forced tool_choice is a 400, so always auto.
     const base = {
-      model: this.model, max_tokens: req.maxTokens ?? 16000, system: req.system, messages: req.messages,
+      model, max_tokens: req.maxTokens ?? 16000, system: req.system, messages: req.messages,
       ...(req.tools.length ? { tools: req.tools, tool_choice: { type: 'auto' } } : {}),
       thinking: { type: 'adaptive', display: 'summarized' },
       output_config: { effort: req.effort, ...(req.outputFormat ? { format: req.outputFormat } : {}) },
     };
-    // Opus gets the server-side refusal fallback (beta endpoint); Haiku has no fallback and uses the regular endpoint.
+    // Opus and Sonnet get the server-side refusal fallback (beta endpoint); Haiku has no fallback and uses the regular endpoint.
     // A long answer (a product page asks for 24k tokens) must stream: the SDK refuses a non-streaming call that may pass 10 minutes.
     const long = base.max_tokens > 16000;
-    const r = this.model === MODEL
-      ? await this.client.beta.messages.create({ ...base, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } as unknown as Anthropic.Beta.MessageCreateParamsNonStreaming)
+    const withFallback = { ...base, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } as unknown as Anthropic.Beta.MessageCreateParamsNonStreaming;
+    const r = FALLBACK_MODELS.has(model)
+      ? long ? await this.client.beta.messages.stream(withFallback).finalMessage() : await this.client.beta.messages.create(withFallback)
       : long
         ? await this.client.messages.stream(base as unknown as Anthropic.MessageCreateParamsNonStreaming).finalMessage()
         : await this.client.messages.create(base as unknown as Anthropic.MessageCreateParamsNonStreaming);
