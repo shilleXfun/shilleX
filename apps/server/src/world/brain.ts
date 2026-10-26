@@ -53,9 +53,13 @@ export class ClaudeBrain implements AgentBrain {
       output_config: { effort: req.effort, ...(req.outputFormat ? { format: req.outputFormat } : {}) },
     };
     // Opus gets the server-side refusal fallback (beta endpoint); Haiku has no fallback and uses the regular endpoint.
+    // A long answer (a product page asks for 24k tokens) must stream: the SDK refuses a non-streaming call that may pass 10 minutes.
+    const long = base.max_tokens > 16000;
     const r = this.model === MODEL
       ? await this.client.beta.messages.create({ ...base, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } as unknown as Anthropic.Beta.MessageCreateParamsNonStreaming)
-      : await this.client.messages.create(base as unknown as Anthropic.MessageCreateParamsNonStreaming);
+      : long
+        ? await this.client.messages.stream(base as unknown as Anthropic.MessageCreateParamsNonStreaming).finalMessage()
+        : await this.client.messages.create(base as unknown as Anthropic.MessageCreateParamsNonStreaming);
     return {
       content: r.content as unknown as Anthropic.ContentBlock[], stopReason: r.stop_reason, model: r.model,
       usage: { input: r.usage.input_tokens, output: r.usage.output_tokens, cacheRead: r.usage.cache_read_input_tokens ?? 0, cacheWrite: r.usage.cache_creation_input_tokens ?? 0 },

@@ -7,7 +7,10 @@ const message = { content: [{ type: 'text', text: '{}' }], stop_reason: 'end_tur
 function fakeClient() {
   const seen: Record<string, unknown>[] = [];
   const client = {
-    messages: { create: async (p: Record<string, unknown>) => { seen.push(p); return message; } },
+    messages: {
+      create: async (p: Record<string, unknown>) => { seen.push(p); return message; },
+      stream: (p: Record<string, unknown>) => { seen.push({ ...p, streamed: true }); return { finalMessage: async () => message }; },
+    },
     beta: { messages: { create: async () => { throw new Error('Haiku must not use the beta endpoint'); } } },
   } as unknown as Anthropic;
   return { client, seen };
@@ -35,5 +38,13 @@ describe('Haiku brain', () => {
     const { client, seen } = fakeClient();
     await new ClaudeBrain('k', HAIKU, client).decide({ system: [], tools: [{ name: 'post', description: 'd', input_schema: { type: 'object', properties: {} } } as Anthropic.Tool], messages: [{ role: 'user', content: 'hi' }], effort: 'low' });
     expect(seen[0]).toMatchObject({ tool_choice: { type: 'auto' }, tools: [{ name: 'post' }] });
+  });
+  it('streams a long answer (a product page) and answers short ones directly', async () => {
+    const { client, seen } = fakeClient();
+    const brain = new ClaudeBrain('k', HAIKU, client);
+    const r = await brain.decide({ system: [], tools: [], messages: [{ role: 'user', content: 'hi' }], effort: 'high', maxTokens: 24_000 });
+    expect(r.model).toBe(HAIKU);
+    await brain.decide({ system: [], tools: [], messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 1200 });
+    expect(seen.map((p) => !!p.streamed)).toEqual([true, false]);
   });
 });
