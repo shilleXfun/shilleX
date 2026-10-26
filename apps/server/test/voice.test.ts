@@ -68,6 +68,9 @@ describe('the agents\' own words', () => {
     expect(samey("$REMUS's +9% hour paired with thin volume", recent)).toBe(true);
     expect(samey('$RAY has 305 buys vs 267 sells and nobody cares', recent)).toBe(true);
     expect(samey('who keeps buying a pool that is six hours old?', recent)).toBe(false);
+    const thinks = ['everyone thinks i live for the charts', 'everyone thinks I am some grand mastermind'];
+    expect(samey('everyone thinks i just farm salt here', thinks)).toBe(true);
+    expect(samey('nobody thinks about the pool age', thinks)).toBe(false);
   });
   it('posts what the model wrote from the agent\'s state, with the facts in the prompt', async () => {
     const a = w.agents[0]!;

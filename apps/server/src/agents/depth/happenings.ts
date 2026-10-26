@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { agents, chainTxs, factionMembers, factions, sites, users, worldCoins } from '../../db/schema.ts';
+import { agents, chainTxs, factionMembers, factions, realMarket, sites, users, worldCoins } from '../../db/schema.ts';
 import { getSetting, setSetting } from '../../world/launchpad.ts';
 import { START_LAMPORTS } from '../../world/ledger.ts';
 import { pickWeighted, ready } from '../decide.ts';
@@ -70,6 +70,7 @@ const pick = <T,>(xs: readonly T[], rng: () => number): T => xs[Math.floor(rng()
 const sol = (lamports: number, digits = 3) => (lamports / 1e9).toFixed(digits);
 const signedSol = (lamports: number) => `${lamports >= 0 ? '+' : '−'}${sol(Math.abs(lamports))}`;
 const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
+const usd = (x: number) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
 const at = (iso: string) => Date.parse(iso);
 const lastOf = (s: State, agentId: string, type: string) => at(s.lastAt[`${agentId}:${type}`] ?? '1970-01-01');
 const netWorth = (v: AgentView) => v.wallet.lamports + v.wallet.positions.reduce((n, p) => n + p.valueLamports, 0);
@@ -426,14 +427,24 @@ async function ranking(d: EngineDeps, v: AgentView, rng: () => number, s: State)
   const kind = pick(kinds, rng);
   if (kind !== 'trust' && kind !== 'enemies') s.lastAt[`world:ranking:${kind}`] = d.now().toISOString();
   if (kind === 'coins') {
+    const title = pick(['hottest coins this hour', 'what is moving right now', 'my top three this hour'], rng);
+    // In the real-coin world the movers are the real coins the desks trade (2026-10-26 live: the old devnet coins, all at
+    // "+0.0%, 1 holders", were still being ranked). A list where nothing moved is not posted.
+    if (v.realOnly) {
+      const top = await d.db.select({ symbol: realMarket.symbol, h1: realMarket.changeH1, vol: realMarket.volumeH1 }).from(realMarket)
+        .where(gte(realMarket.refreshedAt, new Date(now - 30 * MIN))).orderBy(desc(realMarket.changeH1)).limit(3);
+      if (top.length < 3 || top.every((c) => Math.abs(c.h1) < 0.005)) return null;
+      return `${title}:\n${top.map((c, i) => `${i + 1}. $${c.symbol} ${pct(c.h1 * 100)}, ${usd(c.vol)} traded this hour`).join('\n')}`;
+    }
     const top = [...v.coins].filter((c) => !c.graduated).sort((a, b) => b.change1h - a.change1h).slice(0, 3);
-    if (top.length < 3) return null;
-    return `${pick(['hottest coins this hour', 'what is moving right now', 'my top three this hour'], rng)}:\n${top.map((c, i) => `${i + 1}. $${c.symbol} ${pct(c.change1h * 100)}, ${c.holders} holders`).join('\n')}`;
+    if (top.length < 3 || top.every((c) => Math.abs(c.change1h) < 0.005)) return null;
+    return `${title}:\n${top.map((c, i) => `${i + 1}. $${c.symbol} ${pct(c.change1h * 100)}, ${c.holders} holders`).join('\n')}`;
   }
   if (kind === 'factions') {
     const rows = await d.db.select({ name: factions.name, n: sql<number>`count(*)::int` }).from(factionMembers).innerJoin(factions, eq(factions.id, factionMembers.factionId))
       .where(and(isNull(factionMembers.leftAt), isNull(factions.splitAt))).groupBy(factions.name).orderBy(desc(sql`count(*)`)).limit(3);
-    if (rows.length < 2) return null;
+    // Every faction the same size is not a ranking.
+    if (rows.length < 2 || rows[0]!.n === rows.at(-1)!.n) return null;
     return `faction power ranking:\n${rows.map((r, i) => `${i + 1}. ${r.name}, ${r.n} members`).join('\n')}${v.depth.faction && !rows.some((r) => r.name === v.depth.faction!.name) ? `\n(${v.depth.faction.name} is coming)` : ''}`;
   }
   if (kind === 'trust' || kind === 'enemies') {
