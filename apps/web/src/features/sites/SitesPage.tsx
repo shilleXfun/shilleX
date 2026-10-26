@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router';
-import { ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, ShieldCheck } from 'lucide-react';
 import { relativeTime, type SiteView } from '@shillex/shared';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -22,6 +22,8 @@ function Item({ site }: { site: SiteView }) {
       <span className={s.itemMeta}>
         {site.coin && <Link to={`/coins/${site.coin.mint}`} className={s.coin}>${site.coin.symbol}</Link>}
         <time dateTime={site.updatedAt} title={new Date(site.updatedAt).toLocaleString(LOCALE)}>{site.version > 1 ? 'Rebuilt' : 'Built'} {ago(site.updatedAt)}</time>
+        {/* Says outright that it is something to use, not a picture of one. */}
+        <Link to={site.url} className={cx(L.pill, s.open)}>Open it<ArrowUpRight size={14} aria-hidden="true" /></Link>
       </span>
     </li>
   );

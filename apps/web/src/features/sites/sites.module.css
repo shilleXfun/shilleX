@@ -121,3 +121,7 @@
   .grid > .card:first-child .itemBlurb { align-self: start; padding-top: 8px; color: var(--text); font: 550 clamp(18px, 1.5vw, 24px)/1.4 var(--font-brand); letter-spacing: -0.02em; -webkit-line-clamp: 8; }
   .grid > .card:first-child .itemMeta { align-self: start; font-size: 14px; }
 }
+/* "Open it" sits at the end of the meta line; on the featured site it is the line's clear call to action. */
+.open { margin-left: auto; height: 28px; padding: 0 12px; font-size: 13px; }
+.grid > .card:first-child .open { margin-left: 0; height: 36px; padding: 0 16px; background: var(--text); color: var(--bg); box-shadow: none; }
+.grid > .card:first-child .open:hover { background: var(--text-2); color: var(--bg); }
