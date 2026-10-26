@@ -88,7 +88,7 @@ export async function adjustAffinity(db: Db, agentId: string, otherId: string, d
 
 /** Applies feelings from social.ts in order, each one an adjustAffinity. */
 export async function applyFeelings(db: Db, feelings: Feeling[], now: Date): Promise<void> {
-  for (const f of feelings) await adjustAffinity(db, f.from, f.to, f.delta, now);
+  for (const f of feelings) await adjustAffinity(db, f.from, f.to, f.delta, now, f.reason);
 }
 
 export async function affinitiesOf(db: Db, agentId: string): Promise<Record<string, number>> {

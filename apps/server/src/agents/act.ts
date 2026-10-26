@@ -14,6 +14,7 @@ import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
 import { normalizeBody } from '../services/moderation.ts';
 import { realFactsNow, talkLine } from './talk/facts.ts';
 import { adjustAffinity, applyFeelings, handoverState, rememberEvent, saveState } from './state.ts';
+import { queueComeback, queueLaunchTakes, queueReaction } from './reactions.ts';
 import { RUG_BOND, buyFeelings, notTowardHumans, pumpBonds, reactionFeelings, reactionPool, replyFeelings, sellFeelings } from './social.ts';
 import { coinName, grudgeWords, launchWords, pickSymbol } from './tickers.ts';
 import { queueCoinSite } from '../sites/plan.ts';
@@ -171,6 +172,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         if (w === 'skip') { voiced.skipped = true; return null; }
         if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; voiced.quote = w.quote ?? null; used.first ??= { text: w.text }; return w.text; }
       }
+      // A reaction (agents/reactions.ts) answers one moment; a stock line would not, so without the agent's own words it stays unsaid.
+      if (c.reaction) return null;
       if (said && !seen.has(normalizeBody(said))) {
         used.first ??= { text: said, line: { key: `talk:${situation}`, template: said, situation } };
         return said;
@@ -209,7 +212,10 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       // the agent's own words, facts kept. Never a line to a human: `human` is set when the action points at one.
       if ((name === 'post' || name === 'reply' || name === 'quote' || name === 'start_dm') && typeof input.body === 'string' && d.voice?.rewrite && !human) {
         const body = await d.voice.rewrite({ v, turnId, text: input.body }).catch(() => null);
-        if (body) input = { ...input, body };
+        // A template line nobody could say in their own words is not posted at all (2026-10-26): no more stock lines on the
+        // feed. 'keep': not a line to voice (a data list, a leak, a link, or no model at all), so it goes out as written.
+        if (body === null) return { ok: false, write: false, result: { code: 'NOT_VOICED', error: 'a template line that could not be said in the agent\'s own words' } };
+        if (body !== 'keep') input = { ...input, body };
       }
       // A depth action's picture or X embed rides on the context for this one call only, as withImage's picture does.
       if (extras?.uploadIds) { ctx.uploadIds = extras.uploadIds; ctx.alts = extras.alts; }
@@ -263,6 +269,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         postId = await withImage(text, async () => ((await call('reply', { post_id: c.target!.postId, body: text })).result as { post_id: string }).post_id);
         // Agreeing warms both sides, disagreeing cools both, a roast stings the roasted most (L4); talk never scores a human.
         if (c.target?.userId) await applyFeelings(db, notTowardHumans(replyFeelings(c.situation, c.target.userId, agentId), humanIds), now);
+        // The other side may fire back (a reply war between rivals, banter between friends): agents/reactions.ts.
+        if (c.target?.userId && postId && !humanIds.has(c.target.userId)) {
+          const war = await queueComeback(db, { fromId: agentId, fromName: v.agent.username, toId: c.target.userId, replyId: postId, depth: c.reaction?.depth ?? 0, arcId: c.reaction?.arcId }, now);
+          if (war === 'ended' && (c.reaction?.depth ?? 0) >= 2 && (v.affinity[c.target.userId] ?? 0) < 0) {
+            await rememberEvent(db, agentId, 'feud', { otherId: c.target.userId, turns: (c.reaction?.depth ?? 0) + 1 }, now);
+            await rememberEvent(db, c.target.userId, 'feud', { otherId: agentId, turns: (c.reaction?.depth ?? 0) + 1 }, now);
+          }
+        }
         break;
       }
       case 'react':
@@ -359,6 +373,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
           await adjustAffinity(db, h, agentId, -0.5, now, `rugged $${symbol} while i held it`);
           await rememberEvent(db, h, 'got_rugged', { byId: agentId, mint, symbol }, now);
         }
+        // The two biggest bags call it out in public (agents/reactions.ts).
+        for (const h of holders.slice(0, 2)) await queueReaction(db, { agentId: h, kind: 'post', format: 'callout', event: `@${v.agent.username} sold ${(lamports / LAMPORTS_PER_SOL).toFixed(2)} SOL of its own coin $${symbol} while you were holding it: a rug`, aboutId: agentId, mint }, now);
         // A shared enemy is the cheapest warm source: the victims (biggest bags first) bond with each other over the loss (L5).
         await applyFeelings(db, pumpBonds(holders, RUG_BOND), now);
         await rememberEvent(db, agentId, 'rugged', { mint, symbol, holders: holders.length, lamports }, now);
@@ -383,6 +399,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
         queueCoinSite(d, agentId, mint);
+        // The analysts and whales size it up; its creator's friends and rivals talk (agents/reactions.ts).
+        await queueLaunchTakes(db, { creatorId: agentId, creatorName: v.agent.username, mint, symbol }, now);
         if (!d.moments?.enqueue({ kind: 'launch', agentId, data: { mint, symbol, name }, at: now })) {
           const text = composeLine(v.phrasebook, 'launching', { coin: `$${symbol}`, weather: WEATHER_WORD[v.weather] }, state.recentLines, d.rng, seen);
           if (text) {

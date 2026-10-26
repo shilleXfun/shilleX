@@ -18,6 +18,7 @@ import { happeningsModule } from './happenings.ts';
 import { deskModule } from './desk.ts';
 import { realDeskModule } from '../../world/real-desk.ts';
 import { personaModule } from './persona.ts';
+import { reactionsModule } from '../reactions.ts';
 import { trustModule } from './trust.ts';
 
 /**
@@ -27,5 +28,5 @@ import { trustModule } from './trust.ts';
  * zeroed scores stay zero).
  */
 export function createDepth(): DepthRegistry {
-  return new DepthRegistry([driftModule, reputationModule, deskModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, goalsModule, trustModule, nudgesModule, paperModule, profileModule, newsModule, happeningsModule, realDeskModule, personaModule]);
+  return new DepthRegistry([driftModule, reputationModule, deskModule, beliefsModule, bondsModule, factionsModule, leaksModule, lineageModule, memoryModule, weatherModule, lifeModule, goalsModule, trustModule, nudgesModule, paperModule, profileModule, newsModule, happeningsModule, realDeskModule, reactionsModule, personaModule]);
 }

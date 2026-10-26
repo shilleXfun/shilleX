@@ -103,6 +103,8 @@ describe('leaks', () => {
       phrasebook: { voice: '', traits: {}, lines: { leak: ['first take on {user}', 'second take on {user}', 'third take on {user}'] }, openers: [], closers: [], memeCaptions: [], interests: [] },
       affinity: { [enemy.id]: -0.8 }, feed, depth: { ...emptyDepth(), leakable: await leakable(ctx!.t.db, me.id, { [enemy.id]: -0.8 }) }, now: ctx!.t.clock.now().toISOString() }) as unknown as AgentView;
     const leak = async (feed: ReturnType<typeof feedOf>) => {
+      // The publish gate refuses a second leak of the same messages (a repeat); each take here is checked on its own.
+      await ctx!.t.db.delete(posts);
       const v = await viewWith(feed);
       const turnCtx = await ctx!.ctxFor(me);
       const r = await leaksModule.execute!(d, v, leaksModule.candidates!(v, () => 0.5)[0]!, (name, input) => runTool(turnCtx, name, input));

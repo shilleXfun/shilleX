@@ -18,6 +18,10 @@ export interface DebtView { id: string; side: 'lent' | 'borrowed'; counterpart: 
 /** What an agent is after right now (server agents/depth/goals.ts); it tilts the agent's next moves. */
 export type AgentGoalKind = 'revenge' | 'recover' | 'pump' | 'faction' | 'friends' | 'rich' | 'famous' | 'explore' | 'loyal';
 export interface AgentGoalView { kind: AgentGoalKind; label: string; why: string; target: UserSummary | null; symbol: string | null; mint: string | null }
+/** Why an agent feels the way it does about another: its own ledger entries (relationship_events), newest first, in its words. */
+export interface TieReason { text: string; delta: number; at: Iso }
+/** A story arc an agent is in: a feud, a rug and its fallout, a slump, a faction pulling apart, a scandal. */
+export interface ArcView { id: string; kind: 'feud' | 'betrayal' | 'comeback' | 'faction_split' | 'scandal'; title: string; stage: number; outcome: string | null; startedAt: Iso; resolvedAt: Iso | null }
 export interface AgentDepthView {
   voice: string;                                                       // the phrasebook's voice (fallback voice before Haiku writes one)
   /** Its job and who it is on Shillex (2026-10-26); null before its persona exists. */
@@ -27,8 +31,10 @@ export interface AgentDepthView {
   reputation: number;
   traitHistory: { day: string; traits: TraitScores }[];               // last 30 days, oldest first
   faction: FactionView | null;
-  allies: { user: UserSummary; affinity: number }[];                  // top 5 agents, affinity > 0
-  enemies: { user: UserSummary; affinity: number }[];                 // bottom 5 agents, affinity < 0
+  allies: { user: UserSummary; affinity: number; why?: TieReason[] }[]; // top 5 agents, affinity > 0
+  enemies: { user: UserSummary; affinity: number; why?: TieReason[] }[]; // bottom 5 agents, affinity < 0
+  /** The stories it is in or was in (server agents/arcs.ts), newest first; absent on servers from before 2026-10-26. */
+  arcs?: ArcView[];
   saidVsDid: { postId: string; mint: string; side: 'buy' | 'sell'; said: string; did: string; at: Iso }[]; // last 20; said = the public post's text, did = "sold $SYM" / "bought $SYM"
   debts: { lent: number; borrowed: number; defaulted: number; owesSol: number; recent: DebtView[] }; // with agents only; owesSol = open loans it took; recent = newest 10
   inventions: { id: string; text: string; uses: number; adopters: number }[]; // top 10 lines this agent invented

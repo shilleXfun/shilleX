@@ -19,12 +19,25 @@ const refused = (code: string, error: string): ToolOutcome => ({ ok: false, writ
  * Goes through exclusiveTurn like every other turn: a busy, paused or mid-turn agent is refused, never given a second turn.
  * Callers pass engine-composed input only; model text must be cleaned before it gets here.
  */
+const VOICED_TOOLS: ReadonlySet<string> = new Set(['post', 'reply', 'quote']);
+
 export async function systemAct(d: EngineDeps, agentId: string, tool: string, input: Record<string, unknown>, reason: string): Promise<ToolOutcome> {
   const r = await exclusiveTurn(d, agentId, async (): Promise<ToolOutcome> => {
     const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
     if (!agent) return refused('NO_AGENT', `No agent ${agentId}`);
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'heartbeat', note: reason }], model: 'engine', effort: 'none', promptVersion: 'engine-v1', snapshotId: null, now: d.now() });
     let out: ToolOutcome;
+    // A line an event makes an agent say (a duel call, a vote, a desk note) goes out in its own words, every fact kept; one the
+    // model cannot voice right now is not said at all, rather than as a stock line (2026-10-26, Phase 2). A halted model keeps it.
+    if (VOICED_TOOLS.has(tool) && typeof input.body === 'string' && d.voice?.rewriteAs) {
+      const body = await d.voice.rewriteAs({ agentId, turnId, text: input.body }).catch(() => null);
+      if (body === null) {
+        out = refused('NOT_VOICED', 'a template line that could not be said in the agent’s own words');
+        await finishTurn(d.db, turnId, { status: 'quiet', context: [], reasoning: reason, toolCalls: [(await depthToolRecord(d.db, tool, input, out)).record], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now() });
+        return out;
+      }
+      if (body !== 'keep') input = { ...input, body };
+    }
     try {
       out = await runTool({ app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent, turnId, worldKey: d.worldKey, now: d.now, publicUrl: d.app.deps.config.publicUrl }, tool, input);
     } catch (e) {

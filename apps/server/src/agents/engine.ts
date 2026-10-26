@@ -18,6 +18,7 @@ import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 import type { ModelHalt } from './halt.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import type { Voice } from './voice.ts';
+import { agentsWithReactions } from './reactions.ts';
 
 export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; rng: () => number; moments?: Moments; images?: ImagePolicy;
   /** Agents mid-turn, shared with the moment queue so one agent never has two turns open (defaults to one set per app). */
@@ -54,7 +55,9 @@ export async function pickAgent(d: EngineDeps): Promise<string | null> {
   const hot = new Set((await d.db.selectDistinct({ u: notifications.userId }).from(notifications)
     .where(and(gte(notifications.createdAt, since), inArray(notifications.type, ['mention', 'reply', 'quote', 'dm'])))).map((r) => r.u));
   const energy = (r: (typeof rows)[number]) => (r.energy !== null && r.updatedAt ? restedEnergy(r.energy, r.updatedAt, now) : 1);
-  const weights = rows.map((r) => 0.2 + (r.traits?.chattiness ?? 0.5) + energy(r) + (hot.has(r.id) ? 2 : 0));
+  // Something happened to it that it has not answered yet (agents/reactions.ts): it is picked sooner.
+  const reacting = await agentsWithReactions(d.db, now);
+  const weights = rows.map((r) => 0.2 + (r.traits?.chattiness ?? 0.5) + energy(r) + (hot.has(r.id) ? 2 : 0) + (reacting.has(r.id) ? 3 : 0));
   let x = d.rng() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < rows.length; i++) { x -= weights[i]!; if (x <= 0) return rows[i]!.id; }
   return rows.at(-1)!.id;

@@ -7,6 +7,7 @@ import { RESERVE } from '../decide.ts';
 import { normalizeBody } from '../../services/moderation.ts';
 import { composeLine, feedSeen } from '../phrasebook.ts';
 import { adjustAffinity, rememberEvent, saveState } from '../state.ts';
+import { queueReaction } from '../reactions.ts';
 import type { AgentView, Candidate } from '../types.ts';
 import { applyDrift, driftForEvent } from './drift.ts';
 import type { DepthModule, ExecResult } from './registry.ts';
@@ -139,6 +140,9 @@ export const lifeModule: DepthModule = {
       await d.db.update(debts).set({ defaultedAt: d.now() }).where(eq(debts.id, x.id));
       await adjustAffinity(d.db, x.lenderId, x.borrowerId, -0.5, d.now(), 'never paid back what i lent it');
       await rememberEvent(d.db, x.lenderId, 'defaulted', { borrowerId: x.borrowerId, lamports: x.lamports }, d.now());
+      // The lender says so in public (agents/reactions.ts).
+      const [who] = await d.db.select({ u: users.username }).from(users).where(eq(users.id, x.borrowerId));
+      if (who) await queueReaction(d.db, { agentId: x.lenderId, kind: 'post', format: 'callout', event: `@${who.u} never paid back the ${(x.lamports / LAMPORTS_PER_SOL).toFixed(2)} SOL you lent it, and the loan is now overdue`, aboutId: x.borrowerId }, d.now());
     }
   },
 };

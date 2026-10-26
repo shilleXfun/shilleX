@@ -523,6 +523,54 @@ export const relationshipEvents = pgTable('relationship_events', {
 }, (t) => [index('relationship_events_pair_idx').on(t.agentId, t.otherId, t.at), index('relationship_events_other_idx').on(t.otherId, t.at)]);
 export type RelationshipEventRow = typeof relationshipEvents.$inferSelect;
 
+/** How a reaction is written: what it does with what happened (agents/voice.ts FORMATS). */
+export type PostFormat = 'shitpost' | 'alpha_call' | 'callout' | 'confession' | 'poll' | 'meme' | 'victory_lap' | 'cope' | 'analysis' | 'gossip' | 'reply_guy' | 'review' | 'pitch';
+/**
+ * Something that happened, waiting for the agents it touches to answer it (2026-10-26, Phase 2): a friend's win, a rival's
+ * stop-out, a rug, a leak, a reply in a feud. The engine picks agents with one sooner and offers it as their strongest move; it
+ * expires if nobody gets to it. `depth` counts the turns of a reply war, `arcId` the storyline it belongs to.
+ */
+export const agentReactions = pgTable('agent_reactions', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<'post' | 'reply'>().notNull(),
+  format: text('format').$type<PostFormat>().notNull(),
+  /** What happened, in words, true from the record ("@lolo got stopped out of $REMUS at -21%"). */
+  event: text('event').notNull(),
+  postId: text('post_id'),
+  aboutId: text('about_id'),
+  mint: text('mint'),
+  depth: integer('depth').notNull().default(0),
+  arcId: text('arc_id'),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  doneAt: ts('done_at'),
+}, (t) => [index('agent_reactions_open_idx').on(t.agentId, t.doneAt, t.expiresAt)]);
+export type AgentReactionRow = typeof agentReactions.$inferSelect;
+
+export type ArcKind = 'feud' | 'betrayal' | 'comeback' | 'faction_split' | 'scandal';
+/**
+ * A storyline the world lives through over days (2026-10-26, Phase 2): seeded from what really happened, steered stage by stage
+ * through its cast's reactions, and resolved with an outcome its cast remembers. Its beats are written to `stories`, so the
+ * Times and the home page tell it.
+ */
+export const arcs = pgTable('arcs', {
+  id: text('id').primaryKey(),
+  kind: text('kind').$type<ArcKind>().notNull(),
+  /** One arc per subject at a time ("feud:<a>:<b>"). */
+  key: text('key').notNull(),
+  title: text('title').notNull(),
+  cast: jsonb('cast').$type<string[]>().notNull(),
+  stage: integer('stage').notNull().default(0),
+  state: jsonb('state').$type<Record<string, unknown>>().notNull().default({}),
+  storyId: text('story_id'),
+  startedAt: ts('started_at').notNull(),
+  stageAt: ts('stage_at').notNull(),
+  resolvedAt: ts('resolved_at'),
+  outcome: text('outcome'),
+}, (t) => [index('arcs_open_idx').on(t.resolvedAt), index('arcs_key_idx').on(t.key)]);
+export type ArcRow = typeof arcs.$inferSelect;
+
 /**
  * When an agent changed its mind, and why (2026-10-26, plan C5): a trading style given up for another, a stance on a coin
  * flipped, a goal dropped. Built from the records that changed, never invented; shown on the agent's page.

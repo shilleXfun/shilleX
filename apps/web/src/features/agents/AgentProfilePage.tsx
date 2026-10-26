@@ -193,16 +193,42 @@ function Bonds({ id, title, rows, tone, empty }: { id: string; title: string; ro
       {rows.length ? (
         <ul className={s.rows}>
           {rows.map((r) => (
-            <li key={r.user.id} className={cx(s.row, s.bond)}>
-              <AgentChip user={r.user} size={26} />
-              <span className={cx(s.affinity, s[tone])}>
-                <span className={s.affinityBar} aria-hidden="true"><span style={{ width: `${Math.round(Math.min(1, Math.abs(r.affinity)) * 100)}%` }} /></span>
-                <span className="sr-only">affinity </span>{signed(Math.round(r.affinity * 100), 0)}
-              </span>
+            <li key={r.user.id} className={s.bondItem}>
+              <div className={cx(s.row, s.bond)}>
+                <AgentChip user={r.user} size={26} />
+                <span className={cx(s.affinity, s[tone])}>
+                  <span className={s.affinityBar} aria-hidden="true"><span style={{ width: `${Math.round(Math.min(1, Math.abs(r.affinity)) * 100)}%` }} /></span>
+                  <span className="sr-only">affinity </span>{signed(Math.round(r.affinity * 100), 0)}
+                </span>
+              </div>
+              {/* Why, in its own words (the relationship ledger), newest first. */}
+              {r.why && r.why.length > 0 && (
+                <ul className={s.bondWhy}>
+                  {r.why.slice(0, 2).map((w, i) => <li key={i}><span className={w.delta > 0 ? s.up : s.down} aria-hidden="true">{w.delta > 0 ? '▲' : '▼'}</span> “{w.text}” <span className={s.muted}>· {ago(w.at)}</span></li>)}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
       ) : <p className={s.empty}>{empty}</p>}
+    </Section>
+  );
+}
+
+const ARC_KIND: Record<NonNullable<AgentDepthView['arcs']>[number]['kind'], string> = { feud: 'Feud', betrayal: 'Rug', comeback: 'Comeback', faction_split: 'Split', scandal: 'Scandal' };
+/** The stories it is in or was in (server agents/arcs.ts): ongoing ones say so, finished ones carry their outcome. */
+function Arcs({ arcs }: { arcs: NonNullable<AgentDepthView['arcs']> }) {
+  return (
+    <Section id="agent-arcs" title="Stories" note={plural(arcs.length, 'arc')}>
+      <ul className={s.rows}>
+        {arcs.map((x) => (
+          <li key={x.id} className={cx(s.row, s.arc)}>
+            <span className={s.arcKind}>{ARC_KIND[x.kind]}</span>
+            <span className={s.arcTitle}>{x.title}</span>
+            <span className={s.muted}>{x.resolvedAt ? `${x.outcome ?? 'over'} · ${ago(x.resolvedAt)}` : `ongoing · since ${ago(x.startedAt)}`}</span>
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }
@@ -229,6 +255,7 @@ function Relationships({ d, selfId }: { d: AgentDepthView; selfId: string }) {
         <Bonds id="agent-allies" title="Allies" rows={d.allies} tone="up" empty="No allies yet." />
         <Bonds id="agent-enemies" title="Enemies" rows={d.enemies} tone="down" empty="No enemies yet." />
       </div>
+      {d.arcs && d.arcs.length > 0 && <Arcs arcs={d.arcs} />}
     </>
   );
 }

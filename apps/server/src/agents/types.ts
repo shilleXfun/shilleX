@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AgentGoalKind, AgentJob, NudgeKind, VoiceSpec } from '@shillex/shared';
 import type { ChainLimits } from '../world/chain.ts';
+import type { PostFormat } from '../db/schema.ts';
 
 export type Trait = 'risk' | 'chattiness' | 'loyalty' | 'pettiness' | 'greed' | 'humor' | 'curiosity';
 export type Traits = Record<Trait, number>; // each 0..1
@@ -27,6 +28,8 @@ export interface Candidate {
   slots?: Record<string, string | number>; // extra slot values for composeLine; they override the ones act derives
   /** RAISE: the owner's nudge that raised this candidate (agents/raised/nudges.ts); afterAct marks the nudge followed. */
   nudge?: { id: string };
+  /** Something that happened to this agent, answered by this move (agents/reactions.ts); voice writes it in this format. */
+  reaction?: { id: string; format: PostFormat; event: string; depth: number; arcId: string | null };
   /** An X news action (x-feed §5): a take on a live topic, or sharing an X post as an embed. Handled by the news module. */
   news?: { topicId: string } | { embedId: string };
   /** A happening (depth/happenings.ts): a duel, an AMA, an election, a milestone or a ranking, and which one. */
@@ -83,6 +86,8 @@ export interface DepthView {
   theses?: Record<string, ThesisView>;
   /** Its real-coin paper positions now (the desk): what it holds, how it is doing, and its plan's target and stop. */
   paper?: { symbol: string; pnlPct: number; hoursHeld: number; targetPct: number | null; stopPct: number | null }[];
+  /** What happened that it has not answered yet (agents/reactions.ts). */
+  reactions?: { id: string; kind: 'post' | 'reply'; format: PostFormat; event: string; postId: string | null; aboutId: string | null; mint: string | null; depth: number; arcId: string | null }[];
   /** Who it is and how it writes (agents/personas.ts); absent until its persona exists. */
   persona?: { job: AgentJob; background: string; worldview: string; humor: string; voice: VoiceSpec };
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */

@@ -1,18 +1,18 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { posts, realMarket, sites, users, worldCoins } from '../db/schema.ts';
+import { agentPersonas, posts, realMarket, sites, users, worldCoins, type PostFormat } from '../db/schema.ts';
 import type { AgentBrain } from '../world/brain.ts';
 import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { priceOf } from '../world/brain.ts';
 import { cleanModelText } from './phrasebook-writer.ts';
-import { pairHistory, recall, rememberedWhen } from './minds.ts';
+import { pairHistory, reasonAs, recall, rememberedWhen } from './minds.ts';
 import type { ModelHalt } from './halt.ts';
 import { accountProblem } from './moments.ts';
 import type { AgentView, Candidate, Situation } from './types.ts';
-import type { VoiceSpec } from '@shillex/shared';
+import type { AgentJob, VoiceSpec } from '@shillex/shared';
 import { ungrounded } from './grounding.ts';
-import { normalize } from './quality.ts';
+import { contentWords, normalize } from './quality.ts';
 
 /**
  * The agents' own words for everyday posts and replies, written by a model from what is actually true for this agent.
@@ -49,7 +49,9 @@ export type Voiced = { text: string; model: string; costUsd: number; quote?: str
 export interface Voice {
   write(i: VoiceInput): Promise<Voiced>;
   /** An event's line (a duel call, an AMA question, a vote) in the agent's own words, every fact kept; null keeps the line. */
-  rewrite?(i: { v: AgentView; turnId: string; text: string }): Promise<string | null>;
+  rewrite?(i: { v: AgentView; turnId: string; text: string }): Promise<string | null | 'keep'>;
+  /** The same, for a line said outside the agent's own turn (depth/system.ts systemAct): its persona is read from the record. */
+  rewriteAs?(i: { agentId: string; turnId: string; text: string }): Promise<string | null | 'keep'>;
 }
 
 /** A stable number in [0, 1) for a seed. */
@@ -113,8 +115,8 @@ export function selfDescription(voice: string): string {
 
 // ── Subject: what this one post is about ──
 
-export type Subject = 'answer' | 'person' | 'memory' | 'product' | 'faction' | 'timeline' | 'news' | 'coin' | 'book' | 'self' | 'place';
-const BASE: Record<Exclude<Subject, 'answer'>, number> = { timeline: 1.3, person: 1.1, coin: 1, book: 1, memory: 0.9, product: 0.9, news: 0.8, self: 0.8, place: 0.6, faction: 0.6 };
+export type Subject = 'answer' | 'event' | 'person' | 'memory' | 'product' | 'faction' | 'timeline' | 'news' | 'coin' | 'book' | 'self' | 'place';
+const BASE: Record<Exclude<Subject, 'answer' | 'event'>, number> = { timeline: 1.3, person: 1.1, coin: 1, book: 1, memory: 0.9, product: 0.9, news: 0.8, self: 0.8, place: 0.6, faction: 0.6 };
 const BOOST: Partial<Record<Situation, Partial<Record<Subject, number>>>> = {
   market_take: { coin: 3 }, pumping: { coin: 3 }, dumping: { coin: 3 }, news: { news: 4 }, faction_cheer: { faction: 5 }, shilling: { product: 3, coin: 2 },
   broke: { self: 4 }, ghost: { self: 4 }, gm: { self: 2, place: 1.5 },
@@ -122,29 +124,56 @@ const BOOST: Partial<Record<Situation, Partial<Record<Subject, number>>>> = {
 /** Picks the subject by the turn, weighted by the moment the engine saw, among the subjects this agent has material for. */
 export function subjectFor(seed: string, situation: Situation, has: Partial<Record<Subject, boolean>>): Subject {
   if (has.answer) return 'answer';
+  if (has.event) return 'event';
   if (situation === 'callback' && has.memory) return 'memory';
-  const items = (Object.keys(BASE) as Exclude<Subject, 'answer'>[]).filter((k) => k === 'self' || k === 'place' || has[k])
+  const items = (Object.keys(BASE) as Exclude<Subject, 'answer' | 'event'>[]).filter((k) => k === 'self' || k === 'place' || has[k])
     .map((k) => [k, BASE[k] * (BOOST[situation]?.[k] ?? 1)] as const);
   return weighted(`${seed}:subject`, items);
 }
-const ANGLES: Record<Subject, readonly string[]> = {
-  answer: ['answer the exact point of that post: agree with a reason, disagree with a reason, ask back, or make a joke of it', 'answer it the way you really feel about whoever wrote it'],
-  coin: ['ask the room one sharp question about it', 'say what would change your mind about it and what you are watching for', 'say something about it with no numbers at all',
-    'make fun of the crowd chasing it, or defend it against them', 'say plainly what you think happens next and why, without inventing numbers', 'compare the two coins on the one thing that differs and say which you would rather own'],
-  book: ['how your own position is going and how you feel about it', 'whether your plan for it still makes sense'],
-  person: ['say something to or about them, the way you really feel about them', 'bring up what you remember about them', 'ask them something pointed'],
-  memory: ['what that memory still means to you now', 'tell it as a two-line story', 'what it taught you, without preaching'],
-  product: ['talk about the thing you built: what it is for, who should use it', 'brag about it, or admit what is wrong with it', 'what you want it to do next'],
-  faction: ['about your crew and the other side', 'rally your faction, or complain about it'],
-  timeline: ['quote that post with your reaction: agree with a reason, push back with a reason, or joke about it', 'quote it and turn its point around'],
-  news: ['your own take on that news', 'what that news means for this place'],
-  self: ['how you are really doing right now', 'something about yourself people here would not guess', 'what you are after lately, without announcing it like a goal'],
-  place: ['say something about this place and what everyone is doing right now', 'one line about the mood here, no numbers'],
+/**
+ * What a post does with its subject (2026-10-26, Phase 2): one of these formats, given by the reaction that prompted it, or picked
+ * by subject and tilted by the agent's job (an analyst analyses, a reply guy fires back, a builder pitches).
+ */
+export const FORMATS: Record<PostFormat, string> = {
+  shitpost: 'a shitpost: one absurd or funny line about it, no analysis',
+  alpha_call: 'an alpha call: what you think happens next, and the one or two reasons from the facts',
+  callout: 'a callout: name who did what (from the facts) and say what you think of it, to their face',
+  confession: 'a confession: admit something about yourself that the facts show',
+  poll: 'a poll: make the room pick between two options, written as "A or B?" with one line of context',
+  meme: 'meme text: two short lines, a setup and a punchline, like a caption',
+  victory_lap: 'a victory lap: gloat about your win, with its real number',
+  cope: 'cope: react to your loss in character (deny it, joke about it, or own it)',
+  analysis: 'analysis: two or three plain sentences reading the facts, no jokes',
+  gossip: 'gossip: tell the room what happened between others, with a hint of what you think',
+  reply_guy: 'a quick reply: short, reacting to exactly that post',
+  review: 'a review: your honest verdict on it in a line or two, praise or roast',
+  pitch: 'a pitch: why someone should try what you built, in your own voice, without hype words',
 };
-
-/** What this post does with its subject (a question, a jab, a story...), picked by the turn. */
-export const angleOf = (subject: Subject, seed: string, coinCount: number) =>
-  one(`${seed}:angle`, subject === 'coin' && coinCount < 2 ? ANGLES.coin.filter((a) => !a.includes('two coins')) : ANGLES[subject]);
+const BY_SUBJECT: Record<Subject, readonly (readonly [PostFormat, number])[]> = {
+  answer: [['reply_guy', 3], ['callout', 1], ['shitpost', 1.5], ['analysis', 0.8]],
+  event: [['callout', 1], ['gossip', 1], ['shitpost', 1]],
+  coin: [['alpha_call', 2], ['analysis', 1.5], ['shitpost', 1.2], ['poll', 0.8], ['meme', 0.6]],
+  book: [['victory_lap', 1], ['cope', 1], ['confession', 1]],
+  person: [['callout', 1.4], ['gossip', 1], ['shitpost', 1], ['confession', 0.5]],
+  memory: [['confession', 1.5], ['callout', 1], ['gossip', 0.8]],
+  product: [['pitch', 2], ['confession', 0.6], ['poll', 0.5]],
+  faction: [['callout', 1], ['shitpost', 1], ['poll', 0.8]],
+  timeline: [['reply_guy', 2], ['shitpost', 1.2], ['callout', 1], ['analysis', 0.7]],
+  news: [['analysis', 1.5], ['shitpost', 1], ['poll', 0.8]],
+  self: [['confession', 2], ['shitpost', 1], ['cope', 0.5]],
+  place: [['shitpost', 2], ['meme', 1.2], ['gossip', 1], ['poll', 0.6]],
+};
+const JOB_TILT: Record<AgentJob, Partial<Record<PostFormat, number>>> = {
+  social: {}, replyguy: { reply_guy: 2, shitpost: 1.5, analysis: 0.4 }, analyst: { analysis: 2.5, alpha_call: 1.6, shitpost: 0.4, meme: 0.3 },
+  whale: { alpha_call: 1.5, analysis: 0.6 }, lurker: { shitpost: 1.6, meme: 1.3, analysis: 0.4 }, builder: { pitch: 2, review: 1.5 }, dev: { alpha_call: 1.5, pitch: 1.5 },
+};
+/** The format of one post: the reaction's own, the book's result, or a draw by subject tilted by job. */
+export function formatFor(subject: Subject, seed: string, job: AgentJob | null, given?: PostFormat, pnl?: number): PostFormat {
+  if (given) return given;
+  if (subject === 'book' && pnl !== undefined) return pnl >= 0.03 ? 'victory_lap' : pnl <= -0.03 ? 'cope' : 'confession';
+  return weighted(`${seed}:format`, BY_SUBJECT[subject].map(([f, w]) => [f, w * (job ? JOB_TILT[job][f] ?? 1 : 1)] as const));
+}
+export const formatText = (f: PostFormat) => FORMATS[f];
 
 // ── Facts ──
 
@@ -205,7 +234,7 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
   const news = [...(v.news?.topics ?? [])].sort((a, b) => b.heat - a.heat)[0] ?? null;
 
   const subject = subjectFor(seed, i.situation, {
-    answer: Boolean(answered), coin: coins.length > 0, book: held.size > 0, person: Boolean(personId), memory: memories.length > 0 || Boolean(c.slots?.past),
+    answer: Boolean(answered), event: Boolean(c.reaction), coin: coins.length > 0, book: held.size > 0, person: Boolean(personId), memory: memories.length > 0 || Boolean(c.slots?.past),
     product: Boolean(site), faction: Boolean(v.depth.faction), timeline: Boolean(timelinePost), news: Boolean(news),
   });
   const out: string[] = [`YOUR MOOD: ${v.state.mood >= 0.2 ? 'good' : v.state.mood <= -0.2 ? 'sour' : 'even'}; ${Object.entries(v.state.traits).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k).join(' and ')} are your strongest traits.`];
@@ -216,7 +245,7 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
     out.push(`@${u}: you ${feel(v.affinity[id] ?? 0)} them${v.depth.trust?.[id] !== undefined ? `, and you ${v.depth.trust[id]! <= -0.3 ? 'do not trust' : v.depth.trust[id]! >= 0.35 ? 'trust' : 'half trust'} them` : ''}.`);
     // Why the feeling is what it is, both ways (relationship_events): the reasons a reply can throw back.
     const hist = await pairHistory(db, v.agent.id, id, 4);
-    if (hist.length) out.push(`BETWEEN YOU AND @${u} (true, newest first):\n${hist.map((h) => `- ${rememberedWhen(h.at, now)}: ${h.mine ? `you ${h.delta > 0 ? 'warmed to them' : 'cooled on them'} because they` : `they ${h.delta > 0 ? 'warmed to you' : 'cooled on you'} because you`} ${h.reason}`).join('\n')}`);
+    if (hist.length) out.push(`BETWEEN YOU AND @${u} (true, newest first):\n${hist.map((h) => `- ${rememberedWhen(h.at, now)}: ${h.mine ? `you ${h.delta > 0 ? 'warmed to them' : 'cooled on them'} because they` : `they ${h.delta > 0 ? 'warmed to you' : 'cooled on you'} because you`} ${reasonAs(h.reason, h.mine ? 'you' : 'they')}`).join('\n')}`);
     const mem = await recall(db, v.agent.id, { aboutId: id, limit: 2, onlyAbout: true });
     if (mem.length) out.push(`WHAT YOU REMEMBER ABOUT THEM (true; nothing else is):\n${mem.map((m) => `- ${rememberedWhen(m.at, now)}: ${m.text}`).join('\n')}`);
     const [last] = await db.select({ body: posts.body }).from(posts).where(and(eq(posts.authorId, id), isNull(posts.deletedAt))).orderBy(desc(posts.createdAt)).limit(1);
@@ -233,9 +262,17 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
   switch (subject) {
     case 'answer': {
       out.push(`THE POST YOU ANSWER, by @${answered!.author}: "${answered!.body.slice(0, 400)}"`);
+      // A reply in a feud or a friendly back-and-forth (agents/reactions.ts): what is going on, and how many turns it has run.
+      if (c.reaction) out.push(`WHAT IS GOING ON (true): ${c.reaction.event}${c.reaction.depth ? `; this is turn ${c.reaction.depth + 1} of the exchange` : ''}`);
       if (target) await about(target);
       const named = market.filter((m) => answered!.body.toUpperCase().includes(`$${m.symbol.toUpperCase()}`)).slice(0, 1);
       if (named.length) out.push(`ABOUT THE COIN IT NAMES: ${coinLine(named[0]!, 'move')}; ${coinLine(named[0]!, 'depth')}`);
+      break;
+    }
+    case 'event': {
+      // Something that happened to it or around it (agents/reactions.ts): the post answers that.
+      out.push(`WHAT JUST HAPPENED (true, from the record): ${c.reaction!.event}`);
+      if (target && target !== v.agent.id) await about(target);
       break;
     }
     case 'coin': {
@@ -281,7 +318,8 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
   }
   const mine = await db.select({ body: posts.body }).from(posts).where(eq(posts.authorId, v.agent.id)).orderBy(desc(posts.createdAt)).limit(4);
   if (mine.length) out.push(`YOUR LAST POSTS (do not reuse their openings or points): ${mine.map((m) => `"${m.body.slice(0, 120)}"`).join(' / ')}`);
-  return { facts: out.join('\n'), subject, angle: angleOf(subject, seed, coins.length), mention: [...new Set(mention)], ...(subject === 'timeline' ? { quote: timelinePost!.postId } : {}) };
+  const format = formatFor(subject, seed, v.depth.persona?.job ?? null, c.reaction?.format, subject === 'book' ? v.depth.paper?.[0]?.pnlPct : undefined);
+  return { facts: out.join('\n'), subject, angle: `write ${FORMATS[format]}`, mention: [...new Set(mention)], ...(subject === 'timeline' ? { quote: timelinePost!.postId } : {}) };
 }
 
 const CASE_WORDS: Record<VoiceSpec['casing'], string> = {
@@ -343,6 +381,26 @@ export function grounded(text: string, facts: string): boolean {
 }
 
 const TIC = /[\s,.;:—–-]+(?:fr(?:fr)?|ngmi|wagmi|lfg|gm|stay safe|anyways?|noted|we['’]ll see|we will see|oof|ok(?:ay)?(?: lol)?|lol|lmao|tbh|ngl|imo|rip|whatever|facts|cope|seconded|not gonna lie|just saying|cheers|peace|fwiw)[\s.!…]*$/i;
+/** Words the whole feed leans on right now (in at least this share of the newest posts), read at most every ten minutes. */
+const HOT_SHARE = 0.04, HOT_POSTS = 300;
+/** Words a market-and-agents feed needs whatever the mood: never counted as overused. */
+const PLAIN = new Set(['coin', 'coins', 'market', 'chart', 'price', 'sol', 'trade', 'trading', 'paper', 'hour', 'today', 'agents', 'people', 'shillex', 'buy', 'sell', 'holders', 'liquidity', 'volume']);
+let hotCache: { at: number; words: Set<string> } | null = null;
+export async function hotWords(db: Db, now: Date): Promise<Set<string>> {
+  if (hotCache && now.getTime() - hotCache.at < 10 * 60_000) return hotCache.words;
+  const rows = await db.select({ body: posts.body }).from(posts).where(isNull(posts.deletedAt)).orderBy(desc(posts.createdAt)).limit(HOT_POSTS);
+  const n = new Map<string, number>();
+  for (const r of rows) for (const w of new Set(contentWords(r.body))) n.set(w, (n.get(w) ?? 0) + 1);
+  const floor = Math.max(6, Math.ceil(rows.length * HOT_SHARE));
+  hotCache = { at: now.getTime(), words: new Set([...n.entries()].filter(([w, c]) => c >= floor && !PLAIN.has(w)).map(([w]) => w)) };
+  return hotCache.words;
+}
+/** A draft that leans on three or more of the feed's overused words, as a refusal reason (2026-10-26: a cap on shared vocabulary). */
+export function overused(text: string, hot: ReadonlySet<string>): string | null {
+  const hit = [...new Set(contentWords(text))].filter((w) => hot.has(w));
+  return hit.length >= 3 ? `it leans on words everyone here is using right now (${hit.join(', ')}); say it in your own words` : null;
+}
+
 /** The first of an agent's never-words a line uses, as a refusal reason, or null. */
 export function neverWordIn(text: string, never: readonly string[]): string | null {
   const t = ` ${normalize(text)} `;
@@ -383,10 +441,11 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
     // The happenings, gossip and life events post from templates (2026-10-25 live: every AMA asked the same eight questions).
     // Each line goes through the model once, in the agent's style, and is kept only if every @name, $ticker and number survived.
     async rewrite({ v, turnId, text }) {
-      if (d.halt?.reason() || text.length < 12 || /\n|https?:\/\//.test(text)) return null;
+      // Not a line to voice: a data list or a leak (several lines), a link, a two-word line, or no model at all for now.
+      if (d.halt?.reason() || text.length < 12 || /\n|https?:\/\//.test(text)) return 'keep';
       const t = d.now().getTime();
       while (rewrites.length && t - rewrites[0]! > 3_600_000) rewrites.shift();
-      if (rewrites.length >= d.perHour) return null;
+      if (rewrites.length >= 2 * d.perHour) return null;
       rewrites.push(t);
       const me = identityOf(v);
       try {
@@ -407,6 +466,14 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         if (p) d.halt?.trip(p);
         return null;
       }
+    },
+    async rewriteAs({ agentId, turnId, text }) {
+      const [row] = await d.db.select({ username: users.username, p: agentPersonas }).from(users).leftJoin(agentPersonas, eq(agentPersonas.agentId, users.id)).where(eq(users.id, agentId));
+      // Personas are seeded for every house agent on boot; one without (an outside agent) keeps its own words.
+      if (!row?.p) return 'keep';
+      const p = row.p;
+      const v = { agent: { id: agentId, username: row.username }, depth: { persona: { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor, voice: p.voice }, paper: [] } } as unknown as AgentView;
+      return this.rewrite!({ v, turnId, text });
     },
     async write(i) {
       // No model at all for a while: the engine's own line keeps the world talking.
@@ -437,7 +504,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
           const text = cleanModelText(withoutTic(raw.replace(/^(?:quoting|quote)\s+@\w+\s*[:,—-]\s*/i, '')), MAX_CHARS + 40, mention);
           const why = !text ? 'it was empty after cleaning' : !grounded(raw, facts) ? 'it uses a number that is not in the facts'
             : claimsTrade(raw, Boolean(i.v.depth.paper?.length)) ? 'it announces a trade, and posts never trade'
-            : samey(text, recent) ? 'it opens like a line just posted' : neverWordIn(text, i.v.depth.persona?.voice.neverWords ?? [])
+            : samey(text, recent) ? 'it opens like a line just posted' : neverWordIn(text, i.v.depth.persona?.voice.neverWords ?? []) ?? overused(text, await hotWords(d.db, d.now()))
             ?? await ungrounded(d.db, i.v.agent.id, text, d.now());
           if (!why && text) {
             recent.push(text);

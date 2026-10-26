@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, isValidSolanaAddress, type CandlesView, type RealCoinPageView, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentMindView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agentCommitments, beliefChanges, agentGoals, agentMemories, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { agentAffinity, agentCommitments, beliefChanges, agentGoals, agentMemories, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, relationshipEvents, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
@@ -9,6 +9,7 @@ import { userSummaries } from '../services/hydrate.ts';
 import type { Indexer } from '../world/indexer.ts';
 import { phrasebookOf } from '../agents/phrasebook.ts';
 import { personaOf } from '../agents/personas.ts';
+import { arcsOf } from '../agents/arcs.ts';
 import { seededTraits } from '../agents/state.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { weatherView } from '../agents/depth/weather.ts';
@@ -152,7 +153,11 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const allyRows = aff.filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
       const enemyRows = aff.filter((x) => x.score < 0).sort((a, b) => a.score - b.score).slice(0, 5);
       const people = await userSummaries(db, [...allyRows, ...enemyRows].map((x) => x.otherId));
-      const rel = (rows: typeof aff) => rows.map((x) => ({ user: people.get(x.otherId)!, affinity: x.score })).filter((x) => x.user);
+      // Why it feels so (relationship_events): its own last three reasons about each ally and enemy.
+      const tied = [...allyRows, ...enemyRows].map((x) => x.otherId);
+      const reasons = tied.length ? await db.select().from(relationshipEvents).where(and(eq(relationshipEvents.agentId, u.id), inArray(relationshipEvents.otherId, tied), eq(relationshipEvents.kind, 'like'))).orderBy(desc(relationshipEvents.at)).limit(120) : [];
+      const why = (otherId: string) => reasons.filter((r) => r.otherId === otherId).slice(0, 3).map((r) => ({ text: r.reason, delta: r.delta, at: r.at.toISOString() }));
+      const rel = (rows: typeof aff) => rows.map((x) => ({ user: people.get(x.otherId)!, affinity: x.score, why: why(x.otherId) })).filter((x) => x.user);
       // What it is after right now, by the same rule the engine steers it with (agents/depth/goals.ts). A goal that cannot
       // be worked out leaves the page without one rather than failing it.
       const goal = await (async () => {
@@ -179,6 +184,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         traitHistory: history.map((x) => ({ day: x.day, traits: x.traits as TraitScores })),
         faction: mine ? (await factionViews([mine.f]))[0]! : null,
         allies: rel(allyRows), enemies: rel(enemyRows),
+        arcs: (await arcsOf(db, u.id)).map((x) => ({ ...x, startedAt: x.startedAt.toISOString(), resolvedAt: x.resolvedAt?.toISOString() ?? null })),
         saidVsDid: flags.map((f) => ({ postId: f.x.postId, mint: f.x.mint, side: f.x.side, said: f.body.slice(0, 280), did: `${f.x.side === 'sell' ? 'sold' : 'bought'} $${f.symbol ?? '?'}`, at: f.x.at.toISOString() })),
         debts: {
           lent: ds.filter((x) => x.lenderId === u.id).length, borrowed: ds.filter((x) => x.borrowerId === u.id).length, defaulted: ds.filter((x) => x.borrowerId === u.id && x.defaultedAt).length,

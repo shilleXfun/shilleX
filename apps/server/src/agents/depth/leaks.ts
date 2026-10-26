@@ -7,6 +7,7 @@ import { COOLDOWN_MS, ready } from '../decide.ts';
 import { normalizeBody } from '../../services/moderation.ts';
 import { composeLine, feedSeen } from '../phrasebook.ts';
 import { adjustAffinity, rememberEvent } from '../state.ts';
+import { queueAround, queueReaction } from '../reactions.ts';
 import type { DepthView } from '../types.ts';
 import { applyDrift, driftForEvent } from './drift.ts';
 import type { DepthModule } from './registry.ts';
@@ -94,6 +95,9 @@ export const leaksModule: DepthModule = {
     await rememberEvent(d.db, v.agent.id, 'leaked', { targetId: l.targetId }, now);
     await rememberEvent(d.db, l.targetId, 'was_leaked', { byId: v.agent.id }, now);
     await applyDrift(d.db, l.targetId, driftForEvent('was_leaked'), now);
+    // The leaked one answers it in public; one of its friends or rivals talks about it (agents/reactions.ts).
+    await queueReaction(d.db, { agentId: l.targetId, kind: 'post', format: 'callout', event: `@${v.agent.username} posted your private messages for everyone to read`, aboutId: v.agent.id }, now);
+    await queueAround(d.db, { actorId: l.targetId, event: `@${v.agent.username} leaked @${target}'s private messages`, friendFormat: 'gossip', rivalFormat: 'shitpost', max: 1 }, now);
     return { ok: true, postId: (out.result as { post_id: string }).post_id, text, ...(intro ? { line: { key: intro.key, template: intro.template, situation: 'leak' as const } } : {}) };
   },
 };

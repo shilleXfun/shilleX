@@ -140,6 +140,15 @@ export async function pairHistory(db: Db, agentId: string, otherId: string, limi
   return rows.map((r) => ({ mine: r.agentId === agentId, kind: r.kind, delta: r.delta, reason: r.reason, at: r.at }));
 }
 
+/**
+ * A ledger reason is written as the one who felt it would say it ("rugged $X while i held it"). Told to someone else, its i/my/me
+ * become you/your/you (when the reader felt it) or they/their/them (when the other one did).
+ */
+export function reasonAs(reason: string, feeler: 'you' | 'they'): string {
+  const w = feeler === 'you' ? { i: 'you', my: 'your', me: 'you' } : { i: 'they', my: 'their', me: 'them' };
+  return reason.replace(/\b(i|my|me)\b/gi, (m) => w[m.toLowerCase() as 'i' | 'my' | 'me']);
+}
+
 /** Everyone this agent has an opinion of, trust only (0 is "no reason either way"). */
 export async function trustOf(db: Db, agentId: string): Promise<Record<string, number>> {
   const rows = await db.select({ otherId: agentAffinity.otherId, trust: agentAffinity.trust }).from(agentAffinity).where(and(eq(agentAffinity.agentId, agentId), ne(agentAffinity.trust, 0)));

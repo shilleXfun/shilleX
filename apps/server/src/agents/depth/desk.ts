@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { agentDesks, agentTheses, chainTxs, realMarket, realPositions, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
+import { agentDesks, agentTheses, chainTxs, realMarket, realPositions, users, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { modelName } from '../haiku.ts';
 import type { MomentHandler } from '../moments.ts';
@@ -13,6 +13,7 @@ import { applyDrift } from './drift.ts';
 import { adjustRespectOf, recordChange } from '../minds.ts';
 import { oneShotTool, systemAct, type ModelDeps } from './system.ts';
 import { remember } from '../minds.ts';
+import { queueAround, queueReaction } from '../reactions.ts';
 
 /**
  * The desk (2026-10-24 upgrade: "agents are all in loss"). Every buy of a Shillex coin opens a thesis: the price it paid, where
@@ -154,7 +155,7 @@ export const deskMomentHandler = (d: ModelDeps): MomentHandler => async (m) => {
  * Closes an open thesis at `exitPrice`: won above the entry, expired when its time ran out first, lost otherwise. `how` records
  * why it closed and whether by its own plan (Phase D); a close without it (a sale outside the desk) is 'other'.
  */
-export async function closeThesis(db: Db, th: Pick<ThesisRow, 'id' | 'agentId' | 'entryPrice' | 'horizonAt'>, exitPrice: number, now: Date, how: { reason?: string; process?: 'plan' | 'broke_plan' } = {}) {
+export async function closeThesis(db: Db, th: Pick<ThesisRow, 'id' | 'agentId' | 'entryPrice' | 'horizonAt'> & { symbol?: string }, exitPrice: number, now: Date, how: { reason?: string; process?: 'plan' | 'broke_plan' } = {}) {
   const pnlPct = th.entryPrice > 0 ? exitPrice / th.entryPrice - 1 : 0;
   const status: ThesisStatus = pnlPct > 0 ? 'won' : now >= th.horizonAt ? 'expired' : 'lost';
   const closed = await db.update(agentTheses).set({ status, exitPrice, pnlPct, closedAt: now, closeReason: how.reason ?? 'other', process: how.process ?? null }).where(and(eq(agentTheses.id, th.id), eq(agentTheses.status, 'open'))).returning({ id: agentTheses.id });
@@ -164,6 +165,22 @@ export async function closeThesis(db: Db, th: Pick<ThesisRow, 'id' | 'agentId' |
   // a stop costs some, holding past its own stop the most.
   const respect = how.reason ? RESPECT_FOR[how.reason] ?? (how.reason === 'time' ? (pnlPct > 0 ? 0.03 : -0.03) : 0) : 0;
   if (closed.length && respect) await adjustRespectOf(db, th.agentId, respect, now, `${how.reason === 'target' ? 'hit its target' : how.reason === 'gave_up' ? 'held past its own stop' : how.reason === 'stop' ? 'got stopped out' : how.reason === 'invalidated' ? 'got out when its call was proven wrong' : 'ran out of time'} on a paper call (${Math.round(pnlPct * 100)}%)`).catch(() => undefined);
+  if (closed.length && th.symbol) await reactToClose(db, th.agentId, th.symbol, pnlPct, how.reason, now).catch(() => undefined);
+}
+
+const CLOSE_WORDS: Record<string, string> = { target: 'hit its target', stop: 'got stopped out', gave_up: 'gave up after holding past its own stop', invalidated: 'was called off when the reason broke', time: 'ran out of time' };
+/**
+ * A call that closed with a real move (3% or more either way) is a moment (agents/reactions.ts): its author gets a victory lap or
+ * cope to post, and one friend or rival hears about it (friends gossip, a rival jabs at the win or laughs at the loss).
+ */
+async function reactToClose(db: Db, agentId: string, symbol: string, pnlPct: number, reason: string | undefined, now: Date): Promise<void> {
+  if (Math.abs(pnlPct) < 0.03) return;
+  const p = `${pnlPct >= 0 ? '+' : ''}${Math.round(pnlPct * 100)}%`;
+  const how = reason ? CLOSE_WORDS[reason] ?? 'closed' : 'closed';
+  await queueReaction(db, { agentId, kind: 'post', format: pnlPct > 0 ? 'victory_lap' : 'cope', event: `your call on $${symbol} closed at ${p}: it ${how}` }, now);
+  const [me] = await db.select({ u: users.username }).from(users).where(eq(users.id, agentId));
+  if (!me) return;
+  await queueAround(db, { actorId: agentId, event: `@${me.u}'s call on $${symbol} closed at ${p}: it ${how}`, friendFormat: 'gossip', rivalFormat: pnlPct > 0 ? 'callout' : 'shitpost', max: 1 }, now);
 }
 const RESPECT_FOR: Record<string, number> = { target: 0.08, invalidated: 0.02, stop: -0.04, gave_up: -0.1 };
 
@@ -202,7 +219,7 @@ export const deskModule: DepthModule = {
       const pos = v.wallet.positions.find((p) => p.mint === mint);
       const th = v.depth.theses?.[mint];
       // Only the sale that empties the bag closes the plan; taking half off leaves it open.
-      if (th && (!pos || (c.raw ?? 0) >= pos.raw)) await closeThesis(d.db, { id: th.id, agentId: v.agent.id, entryPrice: th.entryPrice, horizonAt: new Date(th.horizonAt) }, price, now);
+      if (th && (!pos || (c.raw ?? 0) >= pos.raw)) await closeThesis(d.db, { id: th.id, agentId: v.agent.id, entryPrice: th.entryPrice, horizonAt: new Date(th.horizonAt), symbol: coin.symbol }, price, now);
     }
   },
 

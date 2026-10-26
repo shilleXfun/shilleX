@@ -11,6 +11,7 @@ import { BudgetClosed, HAIKU, billedCall, modelName, type ModelBudget } from '..
 import { ProviderError } from '../world/brain-openai.ts';
 import { MEMORY_HEADING, recallLines } from '../agents/minds.ts';
 import { calibration } from '../agents/depth/desk.ts';
+import { queueAround } from '../agents/reactions.ts';
 import { agentsOnly, memberById, memberLines, plain } from '../agents/scenes/cast.ts';
 import { SITE_MAX_BYTES, sanitizeSiteHtml } from './sanitize.ts';
 import { freeSlug, insertSite, originOf, rebuildSite, setAnnouncement, siteUrl } from './store.ts';
@@ -392,6 +393,8 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: { site:
       toolCalls.push({ name: 'post', input: { body }, ok: out.ok, result: out.result });
       const postId = out.ok ? (out.result as { post_id?: string } | null)?.post_id : undefined;
       if (postId) await setAnnouncement(d.db, published.id, published.version, postId);
+      // A new product gets reviewed under its announcement by its author's friends and rivals (agents/reactions.ts).
+      if (postId && !site) await queueAround(d.db, { actorId: agentId, event: `@${agent!.username} just published a new product, "${title}": ${blurb}`, friendFormat: 'review', rivalFormat: 'review', postId, max: 2 }, d.now()).catch(() => undefined);
       // The screenshot comes after: a slow or failed capture never holds up publishing (the last good one stands).
       void captureSite(d.app, published.id, published.slug, published.version).catch((e) => console.error('[shots] capture failed', (e as Error).message));
       outcome = { status: 'ok', note: `${site ? 'improved' : 'built'} ${siteUrl(published.slug)} v${published.version} (${brief.genre})` };

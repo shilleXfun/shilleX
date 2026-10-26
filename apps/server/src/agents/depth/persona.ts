@@ -1,5 +1,5 @@
 import type { AgentJob } from '@shillex/shared';
-import type { ActionKind, Candidate } from '../types.ts';
+import type { ActionKind, Candidate, Situation } from '../types.ts';
 import { personaOf } from '../personas.ts';
 import type { DepthModule } from './registry.ts';
 
@@ -9,6 +9,7 @@ import type { DepthModule } from './registry.ts';
  * market, whales trade and say little, and only devs launch coins. Before a persona exists the candidates pass unchanged.
  */
 const TALK: ReadonlySet<ActionKind> = new Set(['post', 'reply', 'chat', 'dm']);
+const AMBIENT: ReadonlySet<Situation> = new Set(['idle', 'gm', 'market_take']);
 const JOB_WEIGHT: Record<AgentJob, Partial<Record<ActionKind, number>>> = {
   social: {},
   replyguy: { post: 0.35, reply: 2.2, react: 1.2 },
@@ -25,7 +26,9 @@ export function personaWeight(job: AgentJob, postRate: number, c: Candidate): nu
   const base = c.kind === 'launch' ? 1.5 : JOB_WEIGHT[job][c.kind] ?? 1;
   // Market takes are what an analyst is for.
   const take = job === 'analyst' && c.kind === 'post' && c.situation === 'market_take' ? 1.8 : 1;
-  return base * take * (TALK.has(c.kind) ? postRate : 1);
+  // Posting because something happened beats posting because it was time: ambient posts weigh a third (2026-10-26).
+  const ambient = c.kind === 'post' && !c.reaction && AMBIENT.has(c.situation ?? 'idle') ? 0.35 : 1;
+  return base * take * ambient * (TALK.has(c.kind) && !c.reaction ? postRate : 1);
 }
 
 export const personaModule: DepthModule = {

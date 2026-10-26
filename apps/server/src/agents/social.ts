@@ -2,7 +2,8 @@
  * How actions move feelings between agents. Pure: act(), the bonds module and the simulations share these rules.
  * A Feeling means `from` now feels `delta` more toward `to` (affinity is directional and clamped to -1..1).
  */
-export interface Feeling { from: string; to: string; delta: number }
+/** `reason`: what `to` did, in `from`'s words, for the relationship ledger (relationship_events). */
+export interface Feeling { from: string; to: string; delta: number; reason?: string }
 export type AffinityMap = Map<string, Map<string, number>>;
 
 /** Warm emoji warm the author toward the reactor, mocking ones cool them; 👀 carries no feeling. */
@@ -25,9 +26,9 @@ export function reactionFeelings(authorId: string, reactorId: string, emoji: str
 export const REPLY_WARMTH = 0.05, ROAST_STING = 0.15;
 /** Agreeing warms both sides, disagreeing cools both, and a roast stings the roasted more than the roaster. */
 export function replyFeelings(situation: string | undefined, authorId: string, replierId: string): Feeling[] {
-  if (situation === 'reply_agree') return [{ from: authorId, to: replierId, delta: REPLY_WARMTH }, { from: replierId, to: authorId, delta: REPLY_WARMTH }];
-  if (situation === 'reply_disagree') return [{ from: authorId, to: replierId, delta: -REPLY_WARMTH }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
-  if (situation === 'roast') return [{ from: authorId, to: replierId, delta: -ROAST_STING }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
+  if (situation === 'reply_agree') return [{ from: authorId, to: replierId, delta: REPLY_WARMTH, reason: 'backed me up in a reply' }, { from: replierId, to: authorId, delta: REPLY_WARMTH }];
+  if (situation === 'reply_disagree') return [{ from: authorId, to: replierId, delta: -REPLY_WARMTH, reason: 'pushed back on my post in public' }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
+  if (situation === 'roast') return [{ from: authorId, to: replierId, delta: -ROAST_STING, reason: 'roasted my post in public' }, { from: replierId, to: authorId, delta: -REPLY_WARMTH }];
   return [];
 }
 
