@@ -13,7 +13,7 @@ import type { Traits } from '../agents/types.ts';
 import { REAL_REFRESH_MS, realMarketNow, realPrices, refreshRealMarket } from './real-market.ts';
 import { DISTRUST, TRUSTED, adjustTrust, breakPromise, keepPromise, openPromise, promiseStop, remember } from '../agents/minds.ts';
 import { adjustAffinity } from '../agents/state.ts';
-import { PLANS, readCoin, realSignals, sizeFactor, strategyOf, tiltOf, type Read, type Strategy } from '../agents/strategies.ts';
+import { CROWD_FULL, PLANS, readCoin, realSignals, sizeFactor, strategyOf, tiltOf, type Read, type Strategy } from '../agents/strategies.ts';
 import { queueAround, queueReaction } from '../agents/reactions.ts';
 import { getSetting, setSetting } from './launchpad.ts';
 import type { CommitmentRow, ThesisEvidence, ThesisInvalidation, ThesisRow } from '../db/schema.ts';
@@ -85,7 +85,8 @@ async function bookOf(db: Db, agentId: string, now: Date) {
 /** Sometimes an agent says what it did on the desk, plainly marked as paper. True when it posted. `always`: a confession is never kept quiet by chance. */
 async function announce(d: EngineDeps, agentId: string, body: string, always = false): Promise<boolean> {
   // In real-coin mode the desk is the trading, so more of it is said out loud.
-  if (!always && d.rng() >= (d.app.deps.config.tradingMode !== 'world' ? 0.85 : 0.35)) return false;
+  // Most trades are kept to the desk (its page shows them all): a feed of "opened $X, target, stop" lines read like a bot (sim, 2026-10-26).
+  if (!always && d.rng() >= 0.3) return false;
   return (await systemAct(d, agentId, 'post', { body }, 'a paper trade on the real desk')).ok;
 }
 
@@ -277,6 +278,7 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
     const enemies = hs.filter((h) => ties.enemies.has(h));
     const r = realRead(c, strategy, risk, agentId, { now, crowd: crowd.get(c.address) ?? 0, chatter: chatter.get(c.symbol.toUpperCase()) ?? 0,
       friends: friends.map((f) => names.get(f) ?? 'someone'), enemies: enemies.map((e) => names.get(e) ?? 'someone') });
+    if ((crowd.get(c.address) ?? 0) >= CROWD_FULL && !(strategy === 'copy' && friends.length)) return [];
     return r && r.d > 0 ? [{ c, r, leader: friends[0] ?? null }] : [];
   }).sort((a, b) => b.r.d - a.r.d);
   const best = reads[0];
@@ -309,7 +311,8 @@ export async function workBook(d: EngineDeps, agentId: string, traits: Traits, m
       // A stop said out loud is a promise (agents/minds.ts): it will be kept or broken in public.
       // Traders quote a market cap, not a $0.000310 price (owner, 2026-10-26).
       const at = best.c.fdvUsd ? `a ${usd(best.c.fdvUsd)} mcap` : usd(f.priceUsd);
-      if (conviction > 0.25 && await announce(d, agentId, `Opened $${best.c.symbol} on my paper desk at ${at}: ${why}. Target ${pct(plan.targetPct)}, stop ${pct(plan.stopPct)}; wrong if ${inv.text}.`)) {
+      // The coin, where it went in, its reason and the stop (a promise); target and what would prove it wrong stay on the desk page.
+      if (conviction > 0.25 && await announce(d, agentId, `Opened $${best.c.symbol} at ${at}: ${why}. Out at ${pct(plan.stopPct)}.`)) {
         await promiseStop(d.db, { agentId, thesisId, asset: best.c.address, symbol: best.c.symbol, stopPct: plan.stopPct, dueAt: new Date(now.getTime() + plan.horizonMs), now });
       }
     }

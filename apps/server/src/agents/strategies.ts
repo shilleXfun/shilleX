@@ -97,7 +97,9 @@ export const sizeFactor = (s: Strategy, tilt = 0) => PLANS[s].size * (s === 'gam
 /** A read's bar: the signals must add up past it, after the agent's appetite for risk and its own taste for the coin. */
 export const BAR = 0.55;
 /** Every other agent of the house already in a coin makes it a little less worth having (the swarm spreads out). */
-export const CROWD = 0.06;
+export const CROWD = 0.12;
+/** A coin this many house agents already hold takes no new entry (a copy-trader following a friend in excepted): the sim of 2026-10-26 had eight agents open $GATO in one sweep. */
+export const CROWD_FULL = 5;
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 export const convictionOf = (d: number) => clamp(0.1 + 0.8 * Math.tanh(Math.max(0, d) * 2), 0.1, 0.9);
 
@@ -160,7 +162,8 @@ export function realSignals(c: RealMarketRow, x: RealContext): { sig: Signals; w
     volume: `${usd(c.volumeH1)} traded this hour, ${turnover.toFixed(1)}x its pool`,
     spread: `a crowd of small wallets, about ${usd(avg)} a trade`,
     depth: c.fdvUsd ? `a ${usd(c.fdvUsd)} mcap on ${usd(c.liquidityUsd)} of liquidity` : `${usd(c.liquidityUsd)} of liquidity`,
-    chatter: `${x.chatter} Shillex posts on it in 2 h`,
+    // Said like a person: nobody counts "6 posts in 2 h" out loud.
+    chatter: x.chatter >= 6 ? 'the timeline will not stop talking about it' : 'people here are talking about it',
     friends: x.friends.length ? namesHold(x.friends) : undefined,
     swing: `it moves ${Math.round(swing * 100)}% an hour`,
   };

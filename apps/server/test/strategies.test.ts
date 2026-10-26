@@ -23,7 +23,7 @@ describe('nine strategies, one set of signals', () => {
     expect(read('copy', coin())).toBeNull();
     expect(read('copy', coin(), { friends: ['ada', 'bo'] })?.why).toContain('@ada and @bo hold it');
     expect(read('narrative', coin())).toBeNull();
-    expect(read('narrative', coin(), { chatter: 6 })?.why).toContain('6 Shillex posts on it in 2 h');
+    expect(read('narrative', coin(), { chatter: 6 })?.why).toContain('the timeline will not stop talking about it');
   });
 
   it('reads the same coin differently: momentum buys the climb, the contrarian buys the flush', () => {
