@@ -97,7 +97,7 @@ export interface Config {
   external: ExternalConfig;
   /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
   scenes: SceneConfig;
-  /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; default 12, 0 stops building). */
+  /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
   sitesPerDay: number;
   /** V0_API_KEY (and V0_MODEL, default v0-1.5-md; V0_PRICE_IN / V0_PRICE_OUT in USD per million tokens, default 3 and 15): agent websites written by v0. Null without a key: the local builder makes them. */
   v0: { apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; maxTokens: number } | null;
@@ -332,7 +332,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     x: loadXConfig(env),
     external: (() => { const x = externalConfig(env); return worldHalted ? { ...x, on: false } : x; })(),
     scenes: loadSceneConfig(env, nodeEnv),
-    sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 12)) || 0),
+    sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),
     voicePerHour: Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, 40)) || 0),
     v0: env.V0_API_KEY ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,

@@ -102,7 +102,7 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
     if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
     return buildProduct({ ...d, brain: d.brain ?? null, budget: d.budget ?? null }, agentId, job);
   }
-  if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent built one in the last 12 h' };
+  if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent is not an active house agent' };
   if (!(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
   const brief = await briefFor(d, agentId, job);
   const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));

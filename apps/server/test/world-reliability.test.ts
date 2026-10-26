@@ -32,7 +32,8 @@ describe('world engine reliability (docs/system-audit.md §3)', () => {
     const agent = w.agents[0]!;
     // Only builders build: this one is.
     await w.t.db.insert(agentPersonas).values({ agentId: agent.id, job: 'builder', background: 'b', worldview: 'w', humor: 'h', voice: seedVoice(agent.id, 'builder'), source: 'seed', createdAt: w.t.clock.now(), updatedAt: w.t.clock.now() });
-    await planSites(deps({ moments: haltedQueue({ n: 0 }), buildSite: (id, job) => { asked.push([id, job]); return true; } }), agent.id);
+    // rng 0: it feels like building this time (sites/plan.ts WANT_TO_BUILD).
+    await planSites(deps({ rng: () => 0, moments: haltedQueue({ n: 0 }), buildSite: (id, job) => { asked.push([id, job]); return true; } }), agent.id);
     // Its first product (or, by chance, its own page): either way the build starts though the model queue refuses everything.
     expect(asked.map(([id]) => id)).toEqual([agent.id]);
     expect(['product', 'personal']).toContain(asked[0]![1].site);
