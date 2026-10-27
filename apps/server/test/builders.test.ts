@@ -2,9 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
 import { agentAffinity, agentPersonas, factionMembers, factions, sites, worldCoins, type ProductBrief } from '../src/db/schema.ts';
-import { FakeBrain } from '../src/world/brain.ts';
-import { Budget } from '../src/world/budget.ts';
-import { ProviderError } from '../src/world/brain-openai.ts';
 import { buildProduct } from '../src/sites/products.ts';
 import { productCoin, productOfCoin, tickerFor } from '../src/sites/product-coin.ts';
 import type { EngineDeps } from '../src/agents/engine.ts';
@@ -15,7 +12,6 @@ afterEach(async () => { await w.t.close(); });
 
 const voice = { casing: 'lower', length: 'short', emoji: null, slang: [], signatures: [], neverWords: [], postRate: 1, replyBias: 0.4, humor: 'h', temper: 't', images: 'i', habit: 'h' } as never;
 const job = (agentId: string, j: 'builder' | 'dev') => ({ agentId, job: j, background: 'b', worldview: 'w', humor: 'h', voice, source: 'seed' as const, createdAt: w.t.clock.now(), updatedAt: w.t.clock.now() });
-const noModel = () => new FakeBrain(() => { throw new ProviderError('every model cooling down', 'rate_limit', 429); });
 
 describe('builders', () => {
   it('names a product coin after the product, never reusing a ticker', () => {
@@ -24,18 +20,14 @@ describe('builders', () => {
     expect(tickerFor('The Rust Rotter', new Set())).toBe('TRR');
   });
 
-  it("builds a faction's site as a product for the faction, with the brief's tagline as its blurb, never the banner", async () => {
-    const [a, b] = w.agents;
+  it("builds no faction site without a model: a site is only ever designed by its agent", async () => {
+    const [a] = w.agents;
     const now = w.t.clock.now();
     await w.t.db.insert(factions).values({ id: 'f1', name: 'Hard Hats', banner: 'a raccoon in a hard hat staring at a red chart', colour: '#ffb547', formedAt: now });
-    await w.t.db.insert(factionMembers).values([{ factionId: 'f1', agentId: a!.id, joinedAt: now }, { factionId: 'f1', agentId: b!.id, joinedAt: now }]);
-    const budget = new Budget(w.t.db, 5, () => now, { hardStop: true });
-    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain: noModel(), budget, rng: () => 0 };
-    expect((await buildProduct(d, a!.id, { site: 'faction', factionId: 'f1' })).status).toBe('ok');
-    const [site] = await w.t.db.select().from(sites).where(eq(sites.factionId, 'f1'));
-    expect(site).toMatchObject({ kind: 'faction', authorId: a!.id });
-    expect(site!.blurb).not.toMatch(/raccoon/);
-    expect(site!.blurb.length).toBeGreaterThan(10);
+    await w.t.db.insert(factionMembers).values([{ factionId: 'f1', agentId: a!.id, joinedAt: now }]);
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain: null, budget: null };
+    expect((await buildProduct(d, a!.id, { site: 'faction', factionId: 'f1' })).status).toBe('skipped');
+    expect(await w.t.db.select().from(sites).where(eq(sites.factionId, 'f1'))).toHaveLength(0);
   });
 
   it('in hybrid mode a new product gets a coin from a dev its builder likes, and the coin page links back to it', async () => {

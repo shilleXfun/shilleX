@@ -1383,6 +1383,8 @@ export interface ProductBrief {
   name: string; tagline: string; genre: string; tie?: string; problem: string; user: string; coreAction: string; loop: string; distinct: string;
   revisit: string; coinRole: string; success: string; fallbackScope: string; announcement: string;
   palette: { bg: string; fg: string; accent: string };
+  /** The studio's whole design brief (sites/studio.ts, 2026-10-27); absent on older briefs. */
+  design?: import('../sites/studio.ts').StudioBrief;
 }
 /**
  * A product an agent conceived before building it (2026-10-25, Phase E): the problem, who it is for, what you do on it, why you

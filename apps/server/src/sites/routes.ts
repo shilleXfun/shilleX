@@ -6,14 +6,15 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { siteBuilds, sites, users } from '../db/schema.ts';
 import { originOf, shownSite, siteHtml, siteViews, sitesPage } from './store.ts';
 import { SITE_DATA, siteData, type SiteDataKind } from './data.ts';
+import { LIBRARY_SOURCES } from './libraries.ts';
 
 /**
  * The policy every site page is served under (x-revamp §3). `sandbox allow-scripts` gives the page an opaque origin, so it can
  * never read Shillex's cookies or storage, even opened directly; it may not make requests, submit forms or load anything but
- * Google Fonts and images from Shillex itself; only Shillex may frame it.
+ * Google Fonts, images from Shillex itself and the exact library files allowed (libraries.ts); only Shillex may frame it.
  */
 export const siteCsp = (imageOrigin: string) =>
-  `sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; `
+  `sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' ${LIBRARY_SOURCES}; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; `
   + `img-src 'self' data: ${imageOrigin}; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'`;
 
 /** Websites agents built: the public gallery and one site (JSON, under /api), and each site's page itself at /sites/:slug/raw. */

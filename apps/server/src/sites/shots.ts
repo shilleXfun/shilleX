@@ -41,7 +41,8 @@ export async function withBrowser<T>(fn: (b: Browser) => Promise<T>): Promise<T 
       const { chromium } = await import('playwright-core');
       browser = await chromium.launch({
         executablePath: chromiumPath(), headless: true, timeout: TIMEOUT_MS,
-        args: ['--js-flags=--jitless', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--mute-audio', '--no-sandbox'],
+        // WebGL through SwiftShader (software): a three.js or PixiJS site renders in a capture with no GPU.
+        args: ['--js-flags=--jitless', '--disable-gpu', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage', '--no-first-run', '--mute-audio', '--no-sandbox'],
       });
     } catch (e) {
       unavailable = (e as Error).message.split('\n')[0] ?? 'no browser';
@@ -80,6 +81,70 @@ export async function renderCheck(html: string): Promise<RenderCheck | null> {
     const [textChars, interactive] = await (page.evaluate(`[(document.body?.innerText ?? '').trim().length, document.querySelectorAll('button, input, select, textarea, canvas, [onclick], [contenteditable], [role="button"]').length]`) as Promise<[number, number]>).catch(() => [0, 0] as [number, number]);
     const jpeg = await page.screenshot({ type: 'jpeg', quality: 72, timeout: TIMEOUT_MS }).catch(() => null);
     return { errors, textChars, interactive, filled, jpeg };
+  });
+}
+
+/** A page under study, as the studio sees it (sites/studio.ts): what broke, what shows, and how it looks on a laptop and a phone. */
+export interface StudioRender {
+  errors: string[];
+  /** Content Security Policy refusals: something the page tried to load or run that the sandbox does not allow. */
+  csp: string[];
+  textChars: number; interactive: number; filled: number;
+  /** The page is wider than a phone's screen (it scrolls sideways). */
+  overflowX: boolean;
+  /** Text fields that ask for a password, a seed phrase, a private key or a wallet (the owner's hard wall: such a page never ships). */
+  secretInputs: number;
+  desktop: Buffer | null; mobile: Buffer | null;
+}
+export const MOBILE_W = 390, MOBILE_H = 844;
+/** Where a page under study is served from in the browser, with the sandbox policy a visitor gets. */
+const STUDY_URL = 'https://studio.shillex.invalid/';
+const SECRET_FIELD = `/password|seed|mnemonic|private.?key|secret.?(phrase|key)|recovery|wallet|passphrase/i`;
+
+/**
+ * Opens a page before it is published, under the same CSP a visitor gets (so a blocked script shows as a refusal), with only the
+ * pinned library files and Google Fonts let through, and the bridge answering with `data`. Shoots it at 1280×800 and at
+ * 390×844. Null without a browser.
+ */
+export async function studioRender(html: string, csp: string, allowed: readonly string[], data: Record<string, unknown>): Promise<StudioRender | null> {
+  return withBrowser(async (b) => {
+    const errors: string[] = [], refused: string[] = [];
+    const open = async (width: number, height: number, mobile: boolean) => {
+      const page = await b.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1 });
+      page.on('pageerror', (e) => errors.push(e.message.slice(0, 200)));
+      page.on('console', (m) => {
+        const t = m.text();
+        if (/Content Security Policy|Refused to (load|execute|apply|connect)/i.test(t)) refused.push(t.slice(0, 200));
+        else if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(t)) errors.push(t.slice(0, 200));
+      });
+      await page.addInitScript({ content: `(() => { const d = ${JSON.stringify(data)}; let saved = null;
+        addEventListener('message', (e) => { const m = e.data; if (!m || typeof m !== 'object') return;
+          if (m.type === 'shillex:get') postMessage({ type: 'shillex:data', id: m.id, what: m.what, data: d[m.what] ?? null }, '*');
+          if (m.type === 'shillex:load') postMessage({ type: 'shillex:data', id: m.id, what: 'state', data: saved }, '*');
+          if (m.type === 'shillex:save') saved = m.state ?? null; }); })();` });
+      await page.route('**/*', async (r) => {
+        const u = r.request().url();
+        if (u === STUDY_URL) return r.fulfill({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': csp }, body: html });
+        if (u.startsWith('data:') || allowed.includes(u) || u.startsWith('https://fonts.googleapis.com/') || u.startsWith('https://fonts.gstatic.com/')) return r.continue();
+        return r.abort();
+      });
+      await page.goto(STUDY_URL, { waitUntil: 'load', timeout: TIMEOUT_MS }).catch((e) => errors.push(`did not load: ${(e as Error).message.slice(0, 120)}`));
+      await page.waitForTimeout(2500);
+      return page;
+    };
+    const desk = await open(SHOT_W, SHOT_H, false);
+    const filled = await (desk.evaluate(`Math.min(1, Math.max(0, ...[...document.body.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 4 && r.height > 4 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05; }).map((e) => e.getBoundingClientRect().bottom)) / innerHeight)`) as Promise<number>).catch(() => 1);
+    const [textChars, interactive, secretInputs] = await (desk.evaluate(`[(document.body?.innerText ?? '').trim().length,
+      document.querySelectorAll('button, input, select, textarea, canvas, [onclick], [contenteditable], [role="button"], a[href^="#"]').length,
+      [...document.querySelectorAll('input, textarea, [contenteditable]')].filter((e) => e.type === 'password' || ${SECRET_FIELD}.test([e.name, e.id, e.placeholder, e.getAttribute('aria-label'), e.closest('label')?.innerText, e.parentElement?.innerText].join(' '))).length]`) as Promise<[number, number, number]>).catch(() => [0, 0, 0] as [number, number, number]);
+    const desktop = await desk.screenshot({ type: 'jpeg', quality: 70, timeout: TIMEOUT_MS }).catch(() => null);
+    // A visitor's first click: a page whose first button throws is broken.
+    await desk.locator('button:visible').first().click({ timeout: 1500 }).catch(() => undefined);
+    await desk.waitForTimeout(600);
+    const phone = await open(MOBILE_W, MOBILE_H, true);
+    const overflowX = await (phone.evaluate('document.documentElement.scrollWidth > innerWidth + 4') as Promise<boolean>).catch(() => false);
+    const mobile = await phone.screenshot({ type: 'jpeg', quality: 70, timeout: TIMEOUT_MS }).catch(() => null);
+    return { errors: [...new Set(errors)].slice(0, 8), csp: [...new Set(refused)].slice(0, 6), textChars, interactive, filled, overflowX, secretInputs, desktop, mobile };
   });
 }
 

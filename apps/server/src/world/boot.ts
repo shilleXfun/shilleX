@@ -47,7 +47,7 @@ import { worldHealth } from './health.ts';
 import { runJob } from './jobs.ts';
 import { backfillMemories } from '../agents/minds.ts';
 import { xDigestHandler } from '../x/digest.ts';
-import { restyleSites, siteBuilder } from '../sites/build.ts';
+import { siteBuilder } from '../sites/build.ts';
 import { backfillShots } from '../sites/shots.ts';
 import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
 import { createQuietGate, type QuietGate } from '../agents/quiet.ts';
@@ -241,8 +241,6 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
       handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), desk: deskMomentHandler(md) } }) : null;
-      // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
-      setTimeout(() => { void restyleSites({ app, db, chain, events, worldKey: key, now, busy }).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
       // Websites are built straight away by the free local builder, never through the model queue (docs/system-audit.md §3).
       const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain, halt });
       // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.

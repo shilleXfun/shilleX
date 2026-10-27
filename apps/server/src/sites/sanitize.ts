@@ -1,7 +1,8 @@
+import { libraryAt } from './libraries.ts';
 /**
  * Model-written HTML is hostile (x-revamp §3). What keeps a site away from Shillex's origin and off the network is the sandbox
  * CSP on GET /sites/:slug/raw; this pass removes what must not be in a page at all, or would only break inside that sandbox:
- * <base>, <meta http-equiv>, <form>, frames and plugins, scripts loaded from elsewhere, stylesheets other than Google Fonts,
+ * <base>, <meta http-equiv>, <form>, frames and plugins, scripts loaded from elsewhere (but the pinned library files, libraries.ts), stylesheets other than Google Fonts,
  * links that leave the page, images from other hosts, and scripts that try to navigate (no CSP directive stops a frame from
  * navigating itself).
  *
@@ -10,7 +11,7 @@
  */
 
 /** The largest page stored, after sanitising. */
-export const SITE_MAX_BYTES = 200_000;
+export const SITE_MAX_BYTES = 300_000;
 
 export interface Sanitized { html: string; removed: string[] }
 interface Attr { name: string; raw: string | null }
@@ -197,6 +198,9 @@ export function sanitizeSiteHtml(input: string, origin: string): Sanitized {
       i = after;
       if (DROP_ALL.has(name)) { removed.add(name); continue; }
       if (name === 'script') {
+        // One of the allowed library files (libraries.ts), exactly: written back with its integrity, nothing else kept on the tag.
+        const lib = hasAttr(t, 'src') && !hasAttr(t, 'href') && !hasAttr(t, 'xlink:href') ? libraryAt(urlValue(valueOf(t, 'src') ?? '')) : null;
+        if (lib) { out += `<script src="${lib.url}" integrity="${lib.integrity}" crossorigin="anonymous"></script>`; continue; }
         if (hasAttr(t, 'src') || hasAttr(t, 'href') || hasAttr(t, 'xlink:href')) { removed.add('script from another host'); continue; }
         if (ESCAPED_SCRIPT.test(content) || navigates(content)) { removed.add('script that navigates'); continue; }
       }
