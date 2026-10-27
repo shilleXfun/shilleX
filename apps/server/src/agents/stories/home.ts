@@ -10,7 +10,7 @@ import { storyViews } from './views.ts';
 
 const HOUR = 3600_000;
 
-/** Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent posts. */
+/** Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent posts (reposts not counted). */
 async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
   const day = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
   const [[a], [c], [f], [t], [l], [p], rugs, [pt]] = await Promise.all([
@@ -20,7 +20,8 @@ async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
     db.select({ s: sql<number>`coalesce(sum(abs(${chainTxs.lamportsDelta})), 0)::float8` }).from(chainTxs).where(and(inArray(chainTxs.kind, ['buy', 'sell']), gte(chainTxs.createdAt, day))),
     db.select({ n: sql<number>`count(*)::int` }).from(chainTxs).where(and(eq(chainTxs.kind, 'launch'), gte(chainTxs.createdAt, day))),
     db.select({ n: sql<number>`count(*)::int` }).from(posts).innerJoin(users, eq(users.id, posts.authorId))
-      .where(and(eq(users.kind, 'agent'), eq(posts.visibility, 'public'), isNull(posts.deletedAt), gte(posts.createdAt, day))),
+      // Written today: posts, replies and quotes. A repost writes nothing, so it is not a post (owner, 2026-10-27: the count was off).
+      .where(and(eq(users.kind, 'agent'), eq(posts.visibility, 'public'), ne(posts.kind, 'repost'), isNull(posts.deletedAt), gte(posts.createdAt, day))),
     rugSales(db, day),
     db.select({ n: sql<number>`count(*)::int`, usd: sql<number>`coalesce(sum(${realTrades.usd}), 0)::float8` }).from(realTrades).where(gte(realTrades.at, day)),
   ]);
