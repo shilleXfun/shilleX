@@ -3,43 +3,8 @@ import { AbsoluteFill, Img, interpolate, random, spring, useCurrentFrame } from 
 import { C, display } from '../theme';
 import { AMBER, FPS, lerp } from './lib';
 
-/** The stage under every scene: night, an amber glow and slow rays, halftone dots, a grid floor and drifting embers. */
-export function Backdrop({ glow = 1, grid = 0.3 }: { glow?: number; grid?: number }) {
-  const f = useCurrentFrame();
-  return (
-    <AbsoluteFill style={{ background: C.bg, overflow: 'hidden' }}>
-      <AbsoluteFill style={{ background: `radial-gradient(1300px 820px at 50% 58%, rgba(255,150,60,${0.34 * glow}) 0%, rgba(${AMBER},${0.12 * glow}) 38%, rgba(8,9,20,0) 75%)` }} />
-      <AbsoluteFill
-        style={{
-          background: `repeating-conic-gradient(from ${f * 0.07}deg at 50% 58%, rgba(${AMBER},${0.045 * glow + 0.01}) 0deg 7deg, transparent 7deg 14deg)`,
-          WebkitMaskImage: 'radial-gradient(circle at 50% 58%, black 15%, transparent 70%)',
-          maskImage: 'radial-gradient(circle at 50% 58%, black 15%, transparent 70%)',
-        }}
-      />
-      <AbsoluteFill style={{ backgroundImage: `radial-gradient(rgba(${AMBER},0.08) 1.6px, transparent 2.2px)`, backgroundSize: '28px 28px' }} />
-      <div
-        style={{
-          position: 'absolute', left: -1040, top: 600, width: 4000, height: 1400,
-          transform: 'perspective(700px) rotateX(74deg)', transformOrigin: '50% 0%',
-          backgroundImage: `linear-gradient(rgba(${AMBER},0.5) 2px, transparent 2px), linear-gradient(90deg, rgba(${AMBER},0.5) 2px, transparent 2px)`,
-          backgroundSize: '90px 90px', backgroundPosition: `0px ${f * 2.4}px`, opacity: grid,
-          WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, black 35%, black 60%, transparent 100%)',
-          maskImage: 'linear-gradient(180deg, transparent 0%, black 35%, black 60%, transparent 100%)',
-        }}
-      />
-      {Array.from({ length: 70 }, (_, i) => {
-        const x = random(`dx${i}`) * 1920;
-        const y = (random(`dy${i}`) * 1080 - f * (0.2 + random(`dv${i}`) * 0.6) + 2160) % 1080;
-        const s = 1.5 + random(`ds${i}`) * 2.5;
-        const tw = 0.35 + 0.65 * Math.abs(Math.sin(f / 30 + i));
-        return <div key={i} style={{ position: 'absolute', left: x, top: y, width: s, height: s, borderRadius: 9, background: i % 4 === 0 ? '#ffffff' : C.amber, opacity: 0.45 * tw }} />;
-      })}
-    </AbsoluteFill>
-  );
-}
-
 export const Vignette = ({ strength = 0.75 }: { strength?: number }) => (
-  <AbsoluteFill style={{ background: `radial-gradient(ellipse 75% 70% at 50% 50%, transparent 50%, rgba(4,5,11,${strength}) 100%)`, pointerEvents: 'none' }} />
+  <AbsoluteFill style={{ background: `radial-gradient(ellipse 75% 70% at 50% 50%, transparent 50%, rgba(0,0,0,${strength}) 100%)`, pointerEvents: 'none' }} />
 );
 
 export const Center = ({ children, style }: { children: ReactNode; style?: CSSProperties }) => (
@@ -67,6 +32,7 @@ export function Words({ segs, at = 0, stagger = 6, times, size, align = 'center'
         const o = interpolate(p, [0, 0.35], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
         // Slammed words land with a red/cyan split that closes as they settle.
         const ca = hard && f >= start ? Math.max(0, 1 - p) * 18 + Math.abs(1 - p) * 6 : 0;
+        const float = Math.sin((f + k * 9) / 15) * size * 0.018 * Math.min(1, Math.max(0, p));
         const split = ca > 0.4 ? `${-ca}px 0 rgba(255,50,90,0.8), ${ca}px 0 rgba(50,220,255,0.8), ` : '';
         return (
           <span key={k} style={{
@@ -74,7 +40,7 @@ export function Words({ segs, at = 0, stagger = 6, times, size, align = 'center'
             color: seg.accent ? C.amber : C.ink,
             textShadow: split + (seg.accent ? `0 0 ${size * 0.35}px rgba(${AMBER},0.55), 0 ${size * 0.05}px ${size * 0.2}px rgba(0,0,0,0.6)` : `0 ${size * 0.05}px ${size * 0.25}px rgba(0,0,0,0.7)`),
             opacity: o,
-            transform: hard ? `scale(${1 + (1 - p) * 0.9})` : `translateY(${(1 - p) * size * 0.55}px) rotateX(${(1 - p) * -75}deg)`,
+            transform: hard ? `translateY(${float}px) scale(${1 + (1 - p) * 0.9})` : `translateY(${(1 - p) * size * 0.55 + float}px) rotateX(${(1 - p) * -75}deg)`,
             transformOrigin: '50% 100%',
             filter: `blur(${Math.max(0, (1 - p) * (hard ? 26 : 16))}px)`,
           }}>{w}</span>
@@ -132,6 +98,16 @@ export function Face({ src, size, style, ring = true }: { src: string; size: num
 /** A small mono caption under a headline. */
 export function Caption({ children, at, style }: { children: ReactNode; at: number; style?: CSSProperties }) {
   const f = useCurrentFrame();
+  // Plain-text captions type on, fast, with a caret while they type.
+  if (typeof children === 'string') {
+    const n = Math.max(0, Math.min(children.length, Math.floor((f - at) * 2.6)));
+    return (
+      <div style={{ fontFamily: display, fontSize: 36, fontWeight: 600, color: 'rgba(243,239,230,0.82)', letterSpacing: '-0.01em', ...style }}>
+        {children.slice(0, n)}{n > 0 && n < children.length && <span style={{ color: C.amber }}>▍</span>}
+        <span style={{ opacity: 0 }}>{children.slice(n)}</span>
+      </div>
+    );
+  }
   return (
     <div style={{ fontFamily: display, fontSize: 36, fontWeight: 600, color: 'rgba(243,239,230,0.78)', letterSpacing: '-0.01em', opacity: lerp(f, [at, at + 14], [0, 1]), transform: `translateY(${lerp(f, [at, at + 18], [16, 0])}px)`, ...style }}>
       {children}

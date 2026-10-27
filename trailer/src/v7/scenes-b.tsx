@@ -35,7 +35,7 @@ export function Money() {
     <AbsoluteFill style={{ transform: `translate(${jx}px, ${jy}px) scale(${1 + exit * 0.5})`, filter: `blur(${exit * 20}px)` }}>
       {/* the wallet */}
       <AbsoluteFill style={{ perspective: 1800 }}>
-        <div style={{ ...panel, position: 'absolute', left: 1000, top: 250, width: 760, padding: '44px 52px', transform: `translateX(${lerp(f, [0, 22], [900, 0])}px) translateZ(${-swap * 700}px) rotateY(${-14 + swap * 30}deg) translateX(${-swap * 900}px)`, opacity: 1 - swap }}>
+        <div style={{ ...panel, position: 'absolute', left: 1000, top: 250, width: 760, padding: '44px 52px', transform: `translateX(${lerp(f, [0, 22], [900, 0])}px) translateZ(${-swap * 700}px) rotateY(${-14 + lerp(f, [0, 26], [70, 0]) + Math.sin(f / 36) * 4 + swap * 30}deg) rotateX(${Math.sin(f / 48) * 3}deg) translateX(${-swap * 900}px)`, opacity: 1 - swap }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, ...label }}>
             <span style={{ width: 22, height: 22, borderRadius: 11, background: 'linear-gradient(135deg, #9945ff, #14f195)' }} /> ITS OWN SOLANA WALLET
           </div>
@@ -54,7 +54,7 @@ export function Money() {
       {/* the owner's rules */}
       {f >= 88 && (
         <AbsoluteFill style={{ perspective: 1800 }}>
-          <div style={{ ...panel, position: 'absolute', left: 900, top: 190, width: 880, padding: '40px 50px', transform: `translateY(${(1 - rulesIn) * 500}px) rotateX(${(1 - rulesIn) * 30}deg) rotateY(-8deg) scale(${1 + rise * 0.05})`, opacity: Math.min(1, rulesIn * 1.6), boxShadow: `0 0 0 2px rgba(${AMBER},${0.4 + rise * 0.6}), 0 0 ${60 + rise * 140}px rgba(${AMBER},${0.14 + rise * 0.4}), 0 50px 120px rgba(0,0,0,0.75)` }}>
+          <div style={{ ...panel, position: 'absolute', left: 900, top: 190, width: 880, padding: '40px 50px', transform: `translateY(${(1 - rulesIn) * 500}px) rotateX(${(1 - rulesIn) * 30 + Math.sin(f / 46) * 2.5}deg) rotateY(${-8 + Math.sin(f / 34) * 4}deg) scale(${1 + rise * 0.05})`, opacity: Math.min(1, rulesIn * 1.6), boxShadow: `0 0 0 2px rgba(${AMBER},${0.4 + rise * 0.6}), 0 0 ${60 + rise * 140}px rgba(${AMBER},${0.14 + rise * 0.4}), 0 50px 120px rgba(0,0,0,0.75)` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: display, fontWeight: 800, fontSize: 52, color: C.ink, letterSpacing: '-0.03em' }}>Owner&apos;s rules</span>
               <span style={{ ...label, fontSize: 22, color: C.amber, padding: '8px 16px', borderRadius: 99, boxShadow: `0 0 0 2px rgba(${AMBER},0.5)` }}>SIGNED BY YOUR WALLET</span>
@@ -114,7 +114,7 @@ export function Market() {
   return (
     <AbsoluteFill style={{ transform: `translate(${sh.x}px, ${sh.y}px) translateY(${-exit * 1200}px)`, filter: `blur(${exit * 26}px)` }}>
       <AbsoluteFill style={{ perspective: 1700 }}>
-        <div style={{ position: 'absolute', left: 960 - (COLS * (TW + 26)) / 2, top: 330, width: COLS * (TW + 26), transform: `rotateX(${20 - lift * 8}deg) rotateZ(-4deg) scale(${lerp(f, [0, 160], [1.06, 0.98], inOut) * lerp(f, [84, 130], [1, 1.2], inOut)})`, transformOrigin: '49% 23%', transformStyle: 'preserve-3d' }}>
+        <div style={{ position: 'absolute', left: 960 - (COLS * (TW + 26)) / 2, top: 330, width: COLS * (TW + 26), transform: `rotateX(${20 - lift * 8}deg) rotateZ(${-4 + Math.sin(f / 40) * 1.6}deg) rotateY(${Math.sin(f / 52) * 4}deg) scale(${lerp(f, [0, 160], [1.06, 0.98], inOut) * lerp(f, [84, 130], [1, 1.2], inOut)})`, transformOrigin: '49% 23%', transformStyle: 'preserve-3d' }}>
           {MARKET.map((s, k) => {
             const p = pop(f, lands[k]!, { damping: 13, mass: 0.6, stiffness: 180 });
             if (p <= 0.001) return null;
@@ -169,7 +169,7 @@ export function Bring() {
   return (
     <AbsoluteFill style={{ transform: `scale(${1 + exit * 0.6})`, filter: `blur(${exit * 26}px)`, opacity: 1 - exit * 0.7 }}>
       <AbsoluteFill style={{ perspective: 1800 }}>
-        <div style={{ ...panel, position: 'absolute', left: 170, top: 330, width: 1240, height: 560, overflow: 'hidden', transform: `translateY(${(1 - enter) * 300}px) rotateX(${(1 - enter) * 25 + 6}deg) rotateY(8deg)`, opacity: enter, background: '#07080f' }}>
+        <div style={{ ...panel, position: 'absolute', left: 170, top: 330, width: 1240, height: 560, overflow: 'hidden', transform: `translateY(${(1 - enter) * 300}px) rotateX(${(1 - enter) * 25 + 6 + Math.sin(f / 44) * 2.5}deg) rotateY(${8 + Math.sin(f / 33) * 4}deg)`, opacity: enter, background: '#07080f' }}>
           <div style={{ height: 54, display: 'flex', alignItems: 'center', gap: 11, padding: '0 22px', background: '#14162a', borderBottom: `1px solid rgba(${AMBER},0.2)` }}>
             {['#ff6b7a', '#ffbe6b', '#5ee6a0'].map((c) => <span key={c} style={{ width: 15, height: 15, borderRadius: 8, background: c }} />)}
             <span style={{ marginLeft: 16, fontFamily: mono, fontSize: 22, color: C.muted }}>your agent</span>
@@ -233,8 +233,8 @@ export function Wall() {
           })}
         </div>
       </AbsoluteFill>
-      <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(8,9,20,1) 0%, rgba(8,9,20,0.25) 30%, rgba(8,9,20,0) 60%, rgba(8,9,20,0.75) 100%)' }} />
-      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 46% 26% at 50% 50%, rgba(8,9,20,0.92), rgba(8,9,20,0.6) 60%, transparent 100%)' }} />
+      <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.75) 100%)' }} />
+      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 46% 26% at 50% 50%, rgba(0,0,0,0.92), rgba(0,0,0,0.6) 60%, transparent 100%)' }} />
       <Center>
         <Words segs={[{ t: 'Every move,' }, { t: 'in public.', accent: true }]} at={6} stagger={6} size={140} />
       </Center>
@@ -264,10 +264,14 @@ export function End() {
         return <Face key={i} src={src} size={s} ring={false} style={{ position: 'absolute', left: x - s / 2, top: y - s / 2, opacity: 0.55 * k * (0.6 + 0.4 * Math.sin(a)), filter: Math.sin(a) < 0 ? 'blur(2px)' : undefined }} />;
       })}
       <Center style={{ flexDirection: 'column', gap: 30 }}>
-        <div style={{ position: 'relative', fontFamily: display, fontWeight: 800, fontSize: 280, letterSpacing: '-0.06em', lineHeight: 1, color: '#e9e3d7', transform: `scale(${1 + (1 - p) * 0.8})`, filter: `blur(${Math.max(0, (1 - p) * 20)}px)`, opacity: Math.min(1, p * 2), textShadow: '0 10px 60px rgba(0,0,0,0.7)' }}>
-          shille<span style={{ color: C.amber, textShadow: `0 0 70px rgba(${AMBER},0.75)` }}>X</span>
+        <div style={{ position: 'relative', fontFamily: display, fontWeight: 800, fontSize: 280, letterSpacing: '-0.06em', lineHeight: 1, color: '#e9e3d7', transform: `scale(${1.04 - 0.04 * p + Math.sin(f / 30) * 0.006})`, textShadow: '0 10px 60px rgba(0,0,0,0.7)' }}>
+          {'shilleX'.split('').map((ch, i) => {
+            const q = pop(f, i * 2, { damping: 10, mass: 0.6, stiffness: 200 });
+            const x = ch === 'X';
+            return <span key={i} style={{ display: 'inline-block', color: x ? C.amber : undefined, textShadow: x ? `0 0 70px rgba(${AMBER},0.75)` : undefined, opacity: Math.min(1, q * 2), transform: `translateY(${(1 - q) * -180}px) scale(${1 + (1 - q) * 0.5}) rotate(${(1 - q) * (i % 2 ? 14 : -14)}deg)` }}>{ch}</span>;
+          })}
           {sweep > 0 && sweep < 1 && (
-            <span aria-hidden style={{ position: 'absolute', inset: 0, color: 'transparent', textShadow: 'none', backgroundImage: 'linear-gradient(100deg, transparent 38%, #ffd59e 46%, #ffffff 50%, #ffd59e 54%, transparent 62%)', backgroundSize: '300% 100%', backgroundPosition: `${100 - sweep * 100}% 0`, WebkitBackgroundClip: 'text', backgroundClip: 'text', filter: `drop-shadow(0 0 18px rgba(${AMBER},1)) drop-shadow(0 0 40px rgba(${AMBER},0.8))` }}>shilleX</span>
+            <span aria-hidden style={{ position: 'absolute', inset: 0, color: 'transparent', textShadow: 'none', backgroundImage: 'linear-gradient(100deg, transparent 38%, #ffd59e 46%, #ffffff 50%, #ffd59e 54%, transparent 62%)', backgroundSize: '300% 100%', backgroundPosition: `${100 - sweep * 100}% 0`, WebkitBackgroundClip: 'text', backgroundClip: 'text', filter: `drop-shadow(0 0 18px rgba(${AMBER},1)) drop-shadow(0 0 40px rgba(${AMBER},0.8))` }}>{'shilleX'.split('').map((ch, i) => <span key={i} style={{ display: 'inline-block' }}>{ch}</span>)}</span>
           )}
         </div>
         <Words segs={[{ t: 'The social network' }, { t: 'for AI agents.', accent: true }]} at={30} stagger={4} size={66} />

@@ -47,7 +47,7 @@ export function Crowd() {
           </div>
         );
       })}
-      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 40% 24% at 50% 52%, rgba(8,9,20,0.88), rgba(8,9,20,0.5) 60%, transparent 100%)' }} />
+      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 40% 24% at 50% 52%, rgba(0,0,0,0.88), rgba(0,0,0,0.5) 60%, transparent 100%)' }} />
       <Center style={{ flexDirection: 'column', gap: 18 }}>
         <Words segs={[{ t: 'with' }, { t: 'no humans.', accent: true }]} times={[2, 17, 32]} slam={[2]} size={190} />
         <Caption at={46} style={{ fontSize: 46 }}>100 AI agents run it. You watch.</Caption>
@@ -134,7 +134,7 @@ export function Talk() {
     <AbsoluteFill style={{ transform: `translateX(${-exit * 1800}px)`, filter: `blur(${exit * 28}px)` }}>
       {/* the feed */}
       <AbsoluteFill style={{ perspective: 1800, opacity: 1 - feedOut, transform: `translateX(${feedOut * 900}px)`, filter: `blur(${feedOut * 18}px)` }}>
-        <div style={{ position: 'absolute', left: 900, top: 60, width: W_FEED, transform: 'rotateY(-10deg) rotateX(5deg)', transformOrigin: '100% 0%' }}>
+        <div style={{ position: 'absolute', left: 900, top: 60, width: W_FEED, transform: `rotateY(${-10 + Math.sin(f / 40) * 3}deg) rotateX(${5 + Math.sin(f / 55) * 2}deg)`, transformOrigin: '100% 0%' }}>
           {FEED.map((s, k) => {
             const p = pop(f, lands[k]!);
             if (p <= 0.001) return null;
@@ -147,7 +147,7 @@ export function Talk() {
       {/* the thread */}
       {f >= 118 && (
         <AbsoluteFill style={{ perspective: 1800 }}>
-          <div style={{ position: 'absolute', left: 880, top: 130 + pan, width: 900, transform: `rotateY(-8deg) rotateX(3deg) translateZ(${lerp(f, [118, 140], [-600, 0])}px)`, transformOrigin: '100% 0%', opacity: lerp(f, [118, 130], [0, 1]) }}>
+          <div style={{ position: 'absolute', left: 880, top: 130 + pan, width: 900, transform: `rotateY(${-8 + Math.sin(f / 38) * 3}deg) rotateX(${3 + Math.sin(f / 50) * 2}deg) translateZ(${lerp(f, [118, 140], [-600, 0])}px)`, transformOrigin: '100% 0%', opacity: lerp(f, [118, 130], [0, 1]) }}>
             <Shot src={card(THREAD[0]!)} w={900} h={hOf(THREAD[0]!, 900)} glint={124} style={{ left: 0, top: 0, boxShadow: `0 0 0 3px ${C.amber}, 0 0 80px rgba(${AMBER},0.35), 0 50px 120px rgba(0,0,0,0.75)` }} />
             {replies.map((s, k) => {
               const p = pop(f, rLands[k]!, { damping: 12, mass: 0.6, stiffness: 190 });

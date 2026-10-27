@@ -1,4 +1,4 @@
-// v7's own score, written in code for this edit (engine from the narrativepad trailer's score.mjs): 120 BPM, 25 s, A minor.
+// v7's own score, written in code for this edit: a dark phonk beat (808s, a tuned cowbell riff, hard drums), 120 BPM, 25 s, A minor. Synth engine from the narrativepad trailer's score.mjs.
 // One beat = 30 frames at 60 fps; every hit below is placed on a picture frame from src/v7 (f(frame)).
 //   node scripts/score-v7.mjs  ->  public/v7/score.wav
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -177,117 +177,174 @@ function shimmer(t0, len, tones, vel = 0.05) {
 }
 
 
-// ---- harmony ----------------------------------------------------------------------------------
-const CH = {
-  Am: { root: 55, tones: [220, 261.63, 329.63, 440] },
-  F: { root: 43.65, tones: [174.61, 220, 261.63, 349.23] },
-  C: { root: 65.41, tones: [261.63, 329.63, 392, 523.25] },
-  G: { root: 49, tones: [196, 246.94, 293.66, 392] },
-};
-// A bar is 2 s from the crowd hit (2 s); the drop (14 s) lands on Am.
-const PROG = [[0, "Am"], [4, "F"], [6, "C"], [8, "G"], [10, "Am"], [12, "F"], [13, "G"], [14, "Am"], [16, "F"], [18, "C"], [20, "G"]];
-const chordAt = (t) => CH[[...PROG].reverse().find(([s]) => t >= s)?.[1] ?? "Am"];
+// ---- phonk kit ---------------------------------------------------------------------------------
+const midiHz = (m) => 440 * 2 ** ((m - 69) / 12);
+/** An 808: a sine with a pitch punch, soft-clipped, held for `len`; it can glide to another note in its second half. */
+function sub808(t0, freq, len, vel = 1, { glide = 0, drive = 2.4 } = {}) {
+  let ph = 0;
+  add(DRY, t0, len + 0.04, (i, t) => {
+    let fr = freq * (1 + 0.9 * Math.exp(-t * 38));
+    if (glide) fr *= Math.pow(glide / freq, Math.min(1, Math.max(0, (t - len * 0.45) / (len * 0.35))));
+    ph += (2 * Math.PI * fr) / SR;
+    const env = Math.min(1, t / 0.003) * (0.55 + 0.45 * Math.exp(-t * 1.6)) * Math.min(1, (len + 0.04 - t) / 0.04);
+    return (Math.tanh(Math.sin(ph) * drive) / Math.tanh(drive)) * env * vel * 0.62;
+  });
+}
+/** The 808 cowbell, tuned: two square waves a fifth-ish apart through a band-pass, short and bright. */
+function cowbell(t0, midi, vel = 1, pan = 0) {
+  const f1 = midiHz(midi), f2 = f1 * 1.4815;
+  const bp = new SVF();
+  let p1 = 0, p2 = 0;
+  add(MUS, t0, 0.42, (i, t) => {
+    p1 = (p1 + f1 / SR) % 1; p2 = (p2 + f2 / SR) % 1;
+    const sq = (p1 < 0.5 ? 1 : -1) + (p2 < 0.5 ? 1 : -1) * 0.8;
+    const env = Math.min(1, t / 0.0015) * (0.6 * Math.exp(-t * 30) + 0.4 * Math.exp(-t * 8));
+    return bp.run(sq, f1 * 2.3, 1.4, 'bp') * env * 0.3 * vel;
+  }, { pan, dly: 0.22, rev: 0.18 });
+}
+function crash(t0, vel = 0.5) {
+  const hp = new SVF();
+  add(DRY, t0, 2.6, (i, t) => hp.run(rnd(), 4800, 0.6, 'hp') * (Math.exp(-t * 1.5) * 0.7 + Math.exp(-t * 14) * 0.5) * vel * 0.55, { rev: 0.45, pan: 0.15 });
+}
+/** A reversed swell of noise into `t1`. */
+function swell(t1, len, vel = 0.5) {
+  const bp = new SVF();
+  add(DRY, t1 - len, len, (i, t) => { const u = t / len; return bp.run(rnd(), 600 + 7000 * u * u, 0.9, 'bp') * u ** 3 * vel; }, { rev: 0.35 });
+}
 
-// Every kick ducks the music bus (the mix below reads this list).
+// ---- harmony ----------------------------------------------------------------------------------
+// A minor. A bar is 2 s; the drop (14 s) lands on Am.
+const ROOT = { Am: 55, F: 43.65, C: 65.41, G: 49 };
+const CHT = {
+  Am: [220, 261.63, 329.63, 440], F: [174.61, 220, 261.63, 349.23], C: [261.63, 329.63, 392, 523.25], G: [196, 246.94, 293.66, 392],
+};
+const PROG = [[0, 'Am'], [4, 'F'], [6, 'C'], [8, 'G'], [10, 'Am'], [12, 'F'], [13, 'G'], [14, 'Am'], [16, 'F'], [18, 'C'], [20, 'G']];
+const chordAt = (t) => [...PROG].reverse().find(([s]) => t >= s - 1e-9)?.[1] ?? "Am";
+
+// Sixteenth-note grid (0.125 s); a pattern step is its place in the 2 s bar.
+const STEP = 0.125;
+const step = (t) => Math.round(t / STEP) % 16;
 const kicks = [];
+const snares = [];
 const kk = (t, vel) => { kick(t, vel); kicks.push([t, vel > 0.8 ? 0.6 : 0.35]); };
-const each = (a, b, step, fn) => { for (let t = a, k = 0; t < b - 1e-6; t += step, k++) fn(t, k); };
+const cl = (t, vel) => { clap(t, vel); snare(t, vel * 0.5); snares.push(t); };
+const each = (a, b, st, fn) => { for (let t = a, k = 0; t < b - 1e-6; t += st, k++) fn(t, k); };
+
+// The cowbell riff (A minor pentatonic), two bars that alternate; null is a rest.
+const RIFF = [
+  [69, null, 69, 72, null, 69, 76, null, 74, null, 72, 69, null, 67, 69, null],
+  [69, null, 69, 72, null, 69, 76, null, 79, null, 76, 74, null, 72, 74, null],
+];
+const riffAt = (t) => RIFF[Math.floor(t / 2) % 2][step(t)];
+
+/** One stretch of the groove. `full` is the whole beat; otherwise a lighter version. */
+function groove(a, b, { full = true, bell = 0.8, octave = 0, sub = 1, roll = true } = {}) {
+  const KICK = full ? [0, 3, 8, 11] : [0, 8];
+  each(a, b, STEP, (t) => {
+    const s = step(t);
+    if (KICK.includes(s)) {
+      kk(t, full ? 1 : 0.75);
+      // The 808 holds from this kick to the next one; the last of every second bar slides up an octave.
+      const next = KICK.find((x) => x > s) ?? 16;
+      const len = (next - s) * STEP - 0.01;
+      const r = ROOT[chordAt(t)];
+      const lastOfTwo = s === KICK[KICK.length - 1] && Math.floor(t / 2) % 2 === 1;
+      sub808(t, r, Math.min(len, b - t), sub, { glide: lastOfTwo ? r * 2 : 0 });
+    }
+    if (s === 4 || s === 12) cl(t, full ? 0.95 : 0.7);
+    hat(t, false, s % 4 === 2 ? 0.55 : 0.3, s % 2 ? 0.25 : -0.25);
+    if (roll && full && Math.floor(t / 2) % 2 === 1 && s >= 14) { hat(t + STEP / 2, false, 0.35, 0.3); }
+    const n = riffAt(t);
+    if (bell && n) {
+      cowbell(t, n, bell, s % 2 ? 0.25 : -0.25);
+      if (octave) cowbell(t, n + 12, octave, s % 2 ? -0.35 : 0.35);
+    }
+  });
+}
 
 // ---- arrangement ------------------------------------------------------------------------------
-// Intro (0–1.5): a low drone and one thump per word (frames 2, 15, 30), a whoosh into the crowd.
-add(MUS, 0, 2.1, (i, t) => (Math.sin(2 * Math.PI * 55 * t) * 0.5 + Math.sin(2 * Math.PI * 82.4 * t) * 0.25) * Math.min(1, t / 0.6) * 0.35, { rev: 0.2 });
-[2, 15, 30].forEach((fr, k) => boom(f(fr), { from: 95, to: 42, k: 14, decay: 5, len: 0.9, vel: 0.55 + k * 0.1, noise: 0.25 }));
-whoosh(f(66), f(90) - f(66), { vel: 0.8 });
+// Intro (0–1.5): a low drone, a thump per word (frames 2, 15, 30), the cowbell teasing three notes, a swell into the crowd.
+add(MUS, 0, 2.1, (i, t) => (Math.sin(2 * Math.PI * 55 * t) * 0.5 + Math.sin(2 * Math.PI * 82.4 * t) * 0.25) * Math.min(1, t / 0.4) * 0.35, { rev: 0.2 });
+[2, 15, 30].forEach((fr, k) => boom(f(fr), { from: 95, to: 42, k: 14, decay: 5, len: 0.9, vel: 0.6 + k * 0.1, noise: 0.25 }));
+[[f(45), 69], [f(52.5), 72], [f(60), 76]].forEach(([t, m]) => cowbell(t, m, 0.6));
+swell(f(120), 1.0, 0.45);
 
-// Crowd: "with" (90), "no" (105), "humans." (120) the first big hit.
-boom(f(90), { vel: 0.55, decay: 4, len: 1, noise: 0.3 });
-boom(f(105), { vel: 0.6, decay: 4, len: 1, noise: 0.3 });
-boom(f(120), { vel: 1.05, decay: 2.2 });
-metal(f(120), 0.2);
-shimmer(f(120), 2.6, [880, 1318.5, 1760], 0.035);
-pad(2.0, 1.2, CH.Am.tones, { vel: 0.8, cutoff: 900 });
-whoosh(f(166), f(184) - f(166), { vel: 0.7 });
+// Crowd: "with" (90), "no" (105), "humans." (120): the first 808 hit and a crash.
+boom(f(90), { vel: 0.5, decay: 4, len: 1, noise: 0.3 });
+boom(f(105), { vel: 0.55, decay: 4, len: 1, noise: 0.3 });
+kk(f(120), 1);
+sub808(f(120), 55, 0.95, 1);
+crash(f(120), 0.55);
+metal(f(120), 0.16);
+pad(2.0, 1.0, CHT.Am, { vel: 0.7, cutoff: 900 });
+whoosh(f(166), f(184) - f(166), { vel: 0.6 });
 
-// Talk (3.0–7.0): pulse bass, soft kick, ticking hats; a click per post landing (188 + 15k), a snap per reply (320 + 15k).
-each(3.0, 7.0, 0.25, (t) => bassNote(t, chordAt(t).root, 0.22, 0.55, 0.25 + ((t - 3) / 4) * 0.4));
-each(3.0, 7.0, 0.5, (t) => kk(t, 0.42));
-each(3.0, 7.0, 0.125, (t, k) => hat(t, false, k % 2 ? 0.25 : 0.45, k % 4 < 2 ? -0.3 : 0.3));
-pad(3.0, 1.0, CH.Am.tones, { vel: 0.5, cutoff: 1000 });
-pad(4.0, 2.0, CH.F.tones, { vel: 0.55, cutoff: 1000 });
-pad(6.0, 1.0, CH.C.tones, { vel: 0.55, cutoff: 1100 });
-for (let k = 0; k < 7; k++) { click(f(188 + 15 * k)); bell(f(188 + 15 * k), [1318.5, 1568, 1760, 2093][k % 4], 0.05, k % 2 ? 0.4 : -0.4); }
-whoosh(f(288), f(300) - f(288), { vel: 0.5 });
-boom(f(300), { vel: 0.55, decay: 4, len: 1, noise: 0.35 });
-for (let k = 0; k < 5; k++) { snare(f(320 + 15 * k), 0.55); click(f(320 + 15 * k)); }
-whoosh(f(400), f(420) - f(400), { vel: 0.85, pan: [0.7, -0.7] });
+// Talk (3–7): the half beat with a quiet cowbell; a click per post (188 + 15k), a snap per reply (320 + 15k).
+groove(3.0, 7.0, { full: false, bell: 0.45, sub: 0.8 });
+pad(3.0, 4.0, CHT.F, { vel: 0.35, cutoff: 800 });
+for (let k = 0; k < 7; k++) click(f(188 + 15 * k));
+whoosh(f(288), f(300) - f(288), { vel: 0.45 });
+boom(f(300), { vel: 0.5, decay: 4, len: 1, noise: 0.3 });
+for (let k = 0; k < 5; k++) click(f(320 + 15 * k));
+whoosh(f(402), f(420) - f(402), { vel: 0.7, pan: [0.7, -0.7] });
 
-// Build (7.0–10.0): full kick, open hats, an arp; a bell on every turn of the ring (450 + 30k).
-each(7.0, 10.0, 0.25, (t) => bassNote(t, chordAt(t).root, 0.22, 0.8, 0.6));
-each(7.0, 10.0, 0.5, (t) => kk(t, 0.8));
-each(7.0, 10.0, 0.5, (t) => hat(t + 0.25, true, 0.4));
-each(7.0, 10.0, 0.125, (t, k) => arpNote(t, chordAt(t).tones[[0, 1, 2, 3, 2, 1, 2, 3][k % 8]] * 2, 0.5 + ((t - 7) / 3) * 0.4));
-pad(7.0, 1.0, CH.C.tones, { vel: 0.6, cutoff: 1500 });
-pad(8.0, 2.0, CH.G.tones, { vel: 0.7, cutoff: 1700 });
-for (let k = 0; k < 5; k++) { whoosh(f(450 + 30 * k) - 0.16, 0.18, { vel: 0.35 }); bell(f(450 + 30 * k), [1760, 1318.5, 2093, 1568, 2637][k], 0.08, k % 2 ? 0.4 : -0.4); }
-whoosh(f(580), f(600) - f(580), { vel: 0.8 });
+// Build (7–10): the whole beat; a tick on every turn of the ring (450 + 30k).
+groove(7.0, 10.0, { bell: 0.75 });
+pad(7.0, 3.0, CHT.G, { vel: 0.35, cutoff: 1000 });
+for (let k = 0; k < 5; k++) whoosh(f(450 + 30 * k) - 0.14, 0.16, { vel: 0.3 });
+whoosh(f(582), f(600) - f(582), { vel: 0.7 });
 
-// Money (10.0–14.0): the counter ticks (624–676), "By your rules." (690), a switch per rule (700 + 30k), the riser into the drop.
-each(10.0, 13.0, 0.25, (t) => bassNote(t, chordAt(t).root, 0.22, 0.6, 0.4));
-each(10.0, 13.0, 0.5, (t) => kk(t, 0.55));
-each(10.0, 13.0, 0.25, (t, k) => hat(t + 0.125, false, 0.35, k % 2 ? 0.3 : -0.3));
-pad(10.0, 2.0, CH.Am.tones, { vel: 0.6, cutoff: 1200 });
-pad(12.0, 1.0, CH.F.tones, { vel: 0.6, cutoff: 1500 });
-pad(13.0, 1.0, CH.G.tones, { vel: 0.7, cutoff: 2200, attack: 0.6 });
-for (let fr = 624; fr <= 676; fr += 4) bell(f(fr), 2093 + (fr - 624) * 9, 0.025, 0.2);
+// Money (10–13): the floor drops out: long 808s, sparse cowbell, the counter ticking (624–676), a switch per rule (700 + 30k).
+sub808(10.0, 55, 1.95, 0.85);
+sub808(12.0, 43.65, 0.95, 0.85);
+sub808(13.0, 49, 0.9, 0.7, { glide: 98 });
+each(10.0, 13.0, 0.25, (t, k) => hat(t + 0.125, false, 0.3, k % 2 ? 0.3 : -0.3));
+each(10.0, 13.0, 0.5, (t, k) => { if (k % 4 === 0) kk(t, 0.5); });
+each(10.0, 13.0, STEP, (t) => { const s = step(t); const n = riffAt(t); if (n && (s === 0 || s === 6 || s === 8)) cowbell(t, n, 0.4); });
+pad(10.0, 3.0, CHT.Am, { vel: 0.55, cutoff: 1300 });
+for (let fr = 624; fr <= 676; fr += 4) bell(f(fr), 2093 + (fr - 624) * 9, 0.02, 0.2);
 boom(f(690), { vel: 0.5, decay: 4, len: 1, noise: 0.3 });
 boom(f(704), { vel: 0.8, decay: 3, len: 1.3 });
-for (let k = 0; k < 4; k++) { click(f(700 + 30 * k)); bell(f(700 + 30 * k), [880, 1108.7, 1318.5, 1760][k], 0.1, k % 2 ? 0.3 : -0.3); }
-riser(13.0, 1.0);
+for (let k = 0; k < 4; k++) { click(f(700 + 30 * k)); cowbell(f(700 + 30 * k), [69, 72, 76, 81][k], 0.55); }
+// 13–14: the build. A snare roll and a riser; the last sixteenth is empty.
+riser(13.0, 0.875);
+pad(13.0, 0.85, CHT.G, { vel: 0.6, cutoff: 2400, attack: 0.5 });
 
-// THE DROP (14.0, frame 840): the impact, then everything. Tiles land on sixteenths (844 + 7.5k), the order runs 930–975.
-boom(f(840), { from: 140, to: 30, k: 6, decay: 1.2, len: 3.2, vel: 1.3, noise: 1 });
-metal(f(840), 0.3);
-shimmer(f(840), 3, [880, 1108.7, 1318.5, 1760], 0.04);
-each(14.0, 17.0, 0.5, (t) => kk(t, 1));
-each(14.5, 17.0, 1.0, (t) => clap(t, 0.9));
-each(14.0, 17.0, 0.25, (t, k) => hat(t + 0.125, k % 2 === 0, 0.5));
-each(14.0, 17.0, 0.25, (t, k) => bassNote(t, chordAt(t).root * (k % 2 ? 2 : 1), 0.22, 1, 0.9));
-each(14.0, 17.0, 0.125, (t, k) => arpNote(t, chordAt(t).tones[[0, 2, 1, 3, 2, 3, 1, 2][k % 8]] * 2, 1));
-pad(14.0, 2.0, CH.Am.tones, { vel: 0.9, cutoff: 2600, attack: 0.05 });
-pad(16.0, 1.0, CH.F.tones, { vel: 0.9, cutoff: 2600, attack: 0.05 });
+// THE DROP (14, frame 840): the whole beat with the cowbell doubled an octave up; crashes on the bars.
+boom(f(840), { from: 140, to: 30, k: 6, decay: 1.2, len: 2.6, vel: 1.1, noise: 1 });
+metal(f(840), 0.25);
+[14, 16, 18].forEach((t) => crash(t, t === 14 ? 0.75 : 0.45));
+groove(14.0, 20.0, { bell: 1, octave: 0.4, sub: 1.05 });
+pad(14.0, 2.0, CHT.Am, { vel: 0.5, cutoff: 1600, attack: 0.05 });
+pad(16.0, 2.0, CHT.F, { vel: 0.5, cutoff: 1600, attack: 0.05 });
+pad(18.0, 2.0, CHT.C, { vel: 0.5, cutoff: 1600, attack: 0.05 });
 for (let k = 0; k < 10; k++) click(f(Math.round(844 + 7.5 * k)));
-[1318.5, 1568, 1760, 2093].forEach((fr, k) => bell(f(930 + 15 * k), fr, 0.11, k % 2 ? 0.4 : -0.4));
-whoosh(f(1000), f(1020) - f(1000), { vel: 0.8 });
-
-// Bring (17.0–20.0): a lighter groove under the typing (a key click every other letter), a line per answer, the new face (1160).
-each(17.0, 20.0, 0.5, (t) => kk(t, 0.7));
-each(17.0, 20.0, 0.25, (t) => bassNote(t, chordAt(t).root, 0.22, 0.7, 0.5));
-each(17.0, 20.0, 0.25, (t, k) => hat(t + 0.125, false, 0.3, k % 2 ? 0.3 : -0.3));
-pad(17.0, 1.0, CH.F.tones, { vel: 0.6, cutoff: 1400 });
-pad(18.0, 2.0, CH.C.tones, { vel: 0.6, cutoff: 1500 });
+[930, 945, 960, 975].forEach((fr) => click(f(fr)));
+whoosh(f(1002), f(1020) - f(1002), { vel: 0.6 });
+// Bring (17–20) rides the drop: a key click every other letter, the new face (1160).
 for (let n = 0; n < 70; n += 2) click(f(1038) + n / 1.4 / 60);
-[1104, 1124, 1144].forEach((fr, k) => bell(f(fr), [1318.5, 1568, 1760][k], 0.1, 0));
-boom(f(1160), { vel: 0.7, decay: 3, len: 1.2 });
-metal(f(1160), 0.14);
-whoosh(f(1182), f(1200) - f(1182), { vel: 0.8 });
+boom(f(1160), { vel: 0.6, decay: 3, len: 1.2 });
+whoosh(f(1184), f(1200) - f(1184), { vel: 0.6 });
 
-// Wall (20.0–22.0): full again, then a short riser into the logo.
-each(20.0, 21.5, 0.5, (t) => kk(t, 1));
-each(20.5, 21.5, 1.0, (t) => clap(t, 0.8));
-each(20.0, 22.0, 0.25, (t, k) => hat(t + 0.125, k % 2 === 0, 0.45));
-each(20.0, 21.75, 0.25, (t, k) => bassNote(t, chordAt(t).root * (k % 2 ? 2 : 1), 0.22, 0.9, 0.8));
-each(20.0, 21.75, 0.125, (t, k) => arpNote(t, chordAt(t).tones[[0, 2, 1, 3, 2, 3, 1, 2][k % 8]] * 2, 0.9));
-pad(20.0, 1.9, CH.G.tones, { vel: 0.85, cutoff: 2400, attack: 0.05 });
-riser(21.25, 0.75);
+// Wall (20–22): the beat again, then a short riser into the logo.
+crash(20.0, 0.5);
+groove(20.0, 21.5, { bell: 1, octave: 0.4, sub: 1.05, roll: false });
+each(21.5, 21.875, STEP / 2, (t, k) => hat(t, false, 0.3 + k * 0.08));
+pad(20.0, 1.9, CHT.G, { vel: 0.55, cutoff: 2200, attack: 0.05 });
+riser(21.25, 0.7);
 
-// End (22.0, frame 1320): the last hit and an A major chord that rings out.
-boom(f(1320), { from: 120, to: 32, k: 7, decay: 1.3, len: 2.6, vel: 1.15, noise: 0.8 });
-metal(f(1320), 0.24);
-pad(22.0, 1.7, [110, 164.81, 220, 277.18, 329.63, 440, 493.88], { vel: 0.85, cutoff: 2200, attack: 0.02, release: 1.1 });
-shimmer(f(1320), 2.8, [1318.5, 1760, 2217.5, 2637], 0.035);
-whoosh(f(1334), 0.5, { vel: 0.4 }); // the light across the logo
-[2637, 2217.5, 1760, 1318.5, 1108.7].forEach((fr, k) => bell(f(1350) + k * 0.09, fr, 0.06, k % 2 ? 0.5 : -0.5));
-bell(f(1376), 880, 0.08, 0);
+// End (22, frame 1320): the last hit, a long 808, the cowbell's last call echoing, an A major chord ringing out.
+kk(f(1320), 1);
+boom(f(1320), { from: 120, to: 32, k: 7, decay: 1.3, len: 2.4, vel: 1, noise: 0.8 });
+sub808(22.0, 55, 2.4, 1.05);
+crash(22.0, 0.7);
+metal(f(1320), 0.2);
+cowbell(22.5, 81, 0.6); cowbell(22.75, 76, 0.45); cowbell(23.0, 69, 0.5);
+pad(22.0, 1.7, [110, 164.81, 220, 277.18, 329.63, 440], { vel: 0.7, cutoff: 1800, attack: 0.02, release: 1.0 });
+whoosh(f(1334), 0.5, { vel: 0.35 });
+
+// The picture follows the drums: every kick and clap, in frames, for src/v7 (the beat pulse).
+writeFileSync(new URL('../src/v7/hits.json', import.meta.url), JSON.stringify({ kick: kicks.map(([t]) => Math.round(t * 60)), snare: snares.map((t) => Math.round(t * 60)) }));
 
 // ---- mix --------------------------------------------------------------------------------------
 const duck = new Float32Array(N).fill(1);
