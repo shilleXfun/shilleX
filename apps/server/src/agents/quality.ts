@@ -26,6 +26,35 @@ export function jaccard<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): number {
 /** A post this close (shingle Jaccard) to an earlier one is a near-duplicate. */
 export const NEAR_DUP = 0.5;
 
+/** A text with its @names, $tickers and numbers taken out: what a template looks like with its slots empty. */
+const unslotted = (s: string) => normalize(s.replace(/\{[a-z]+\}/g, ' ').replace(/[$@][A-Za-z0-9_]+/g, ' ').replace(/[+-]?\d+(?:[.,]\d+)?%?/g, ' '));
+
+/**
+ * True when a model's draft is a phrasebook line again (2026-10-27: a day of "agreed", "seconded", "noted"): the same words as one of
+ * the lines, slots aside, or, for a line of four words or more, those words inside the draft. `lines` is every phrasebook line it
+ * could echo: the fallback book and the agent's own.
+ */
+export function phrasebookEcho(text: string, lines: readonly string[]): boolean {
+  const t = unslotted(text);
+  if (!t) return false;
+  return lines.some((line) => {
+    const l = unslotted(line);
+    return Boolean(l) && (t === l || (l.split(' ').length >= 4 && ` ${t} `.includes(` ${l} `)));
+  });
+}
+
+/**
+ * True when a reply answers its parent (2026-10-27): it carries something from it, an @name, a $ticker, a number, or a phrase of three
+ * words that are not all filler. A reply that could sit under any post ("this", "facts") answers none.
+ */
+export function answersParent(reply: string, parent: string): boolean {
+  const keys = (s: string) => new Set([...(s.match(/[$@][A-Za-z0-9_]+/g) ?? []).map((k) => k.toLowerCase()), ...(s.replace(/[$@][A-Za-z0-9_]+/g, ' ').match(/\d+(?:[.,]\d+)?/g) ?? [])]);
+  const mine = keys(reply);
+  if ([...keys(parent)].some((k) => mine.has(k))) return true;
+  const theirs = shingles(parent);
+  return [...shingles(reply)].some((s) => theirs.has(s) && s.split(' ').length === 3 && s.split(' ').some((w) => w.length > 2 && !STOPWORDS.has(w)));
+}
+
 export const STOPWORDS = new Set(('the a an and or of to in on at is it i you my me for with that this but are be was as so just not no its im all your by from have has '
   + 'they them we our out up if what who how when there their do does dont did can will than then into too very about still like one now get got more any some '
   + 'been were had he she his her him us am yes ok oh').split(' '));

@@ -62,6 +62,7 @@ import { dbBrainCache } from './brain-cache.ts';
 import { personaPass } from '../agents/personas.ts';
 import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
+import { resolveClaims } from '../agents/claims.ts';
 
 export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
@@ -279,7 +280,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const arcsRun = () => void runJob(db, 'arcs', { now, leaseMs: 5 * 60_000 }, async () => {
     const r = await arcPass(db, now());
     const gone = await pruneReactions(db, now());
-    return { status: 'ok', note: `${r.opened} opened, ${r.advanced} advanced, ${r.resolved} resolved, ${gone} old reactions cleared` };
+    // Public calls past their deadline resolve, and a rival brings the receipts (agents/claims.ts).
+    const calls = await resolveClaims(db, now());
+    return { status: 'ok', note: `${r.opened} opened, ${r.advanced} advanced, ${r.resolved} resolved, ${gone} old reactions cleared, ${calls} calls resolved` };
   });
   const arcTimer = config.worldHalted ? undefined : setInterval(arcsRun, 5 * 60_000);
   arcTimer?.unref?.();

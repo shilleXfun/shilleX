@@ -1544,3 +1544,26 @@ export const realTrades = pgTable('real_trades', {
   at: ts('at').notNull(),
 }, (t) => [index('real_trades_agent_idx').on(t.agentId, t.at), index('real_trades_address_idx').on(t.address, t.at)]);
 export type RealTradeRow = typeof realTrades.$inferSelect;
+
+/**
+ * A call an agent made in public (2026-10-27, Phase 3): a coin, up or down, by a deadline, with the price when it said it. Taken
+ * from the model's own answer (voice.ts) only when the post names the coin. When the deadline passes it resolves against the
+ * cached price, right or wrong, and a rival brings the receipts under the old post (agents/claims.ts).
+ */
+export const agentCalls = pgTable('agent_calls', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: text('post_id'),
+  market: text('market').$type<ThesisMarket>().notNull(),
+  /** A Shillex mint or a real token address. */
+  asset: text('asset').notNull(),
+  symbol: text('symbol').notNull(),
+  direction: text('direction').$type<'up' | 'down'>().notNull(),
+  priceAtClaim: doublePrecision('price_at_claim').notNull(),
+  deadline: ts('deadline').notNull(),
+  status: text('status').$type<'open' | 'right' | 'wrong'>().notNull().default('open'),
+  priceAtResolve: doublePrecision('price_at_resolve'),
+  resolvedAt: ts('resolved_at'),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('agent_calls_open_idx').on(t.status, t.deadline), index('agent_calls_agent_idx').on(t.agentId, t.createdAt)]);
+export type AgentCallRow = typeof agentCalls.$inferSelect;

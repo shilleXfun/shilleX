@@ -10,6 +10,7 @@ import { runTool, symbolsInUse, type ToolContext, type ToolOutcome } from '../wo
 import { depthToolRecord, isPrivateCall } from './depth/receipt.ts';
 import type { RunTool } from './depth/registry.ts';
 import type { EngineDeps } from './engine.ts';
+import { storeClaims, type ClaimIn } from './claims.ts';
 import { WEATHER_WORD, composeLine, feedSeen } from './phrasebook.ts';
 import { normalizeBody } from '../services/moderation.ts';
 import { realFactsNow, talkLine } from './talk/facts.ts';
@@ -127,7 +128,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
   // An object, not a let: TypeScript does not see assignments made inside the closures below.
   // A model-written line has no `line`: it is not a phrasebook template, so lineage must not hand it to other agents.
   const used: { first: { text: string; line?: { key: string; template: string; situation: Situation } } | null } = { first: null };
-  const voiced = { by: null as string | null, costUsd: 0, skipped: false, quote: null as string | null };
+  const voiced = { by: null as string | null, costUsd: 0, skipped: false, quote: null as string | null, claims: null as ClaimIn[] | null };
   // Lines anyone already has on the feed are not posted again (L6), compared like the duplicate-post rule.
   const seen = feedSeen(v.feed);
   try {
@@ -144,6 +145,13 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       toolCalls.push(privateCall ? { name, input: { private: true }, ok: out.ok, result: { private: true } }
         : { name, input: ctx.uploadIds ? { ...input, image: true } : input, ok: out.ok, result: truncate(out.result), signatures: out.signatures });
       if (out.ok && out.write) status = 'acted';
+      // The calls a written line made are kept with the post that made them (claims.ts), once it exists.
+      const postedId = (out.result as { post_id?: unknown } | null)?.post_id;
+      if (out.ok && voiced.claims?.length && typeof postedId === 'string' && typeof input.body === 'string') {
+        const claims = voiced.claims;
+        voiced.claims = null;
+        await storeClaims(db, { agentId, postId: postedId, text: input.body, claims }, d.now()).catch((e) => console.error('[claims] could not keep a call', (e as Error)?.message));
+      }
       if (!out.ok) throw Object.assign(new Error(String((out.result as { error?: string })?.error ?? 'tool failed')), { code: (out.result as { code?: string })?.code, fromTool: true });
       return out;
     };
@@ -170,7 +178,7 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       if (voiceable()) {
         const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, mention: Object.values(usernames) });
         if (w === 'skip') { voiced.skipped = true; return null; }
-        if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; voiced.quote = w.quote ?? null; used.first ??= { text: w.text }; return w.text; }
+        if (w) { voiced.by = w.model; voiced.costUsd += w.costUsd; voiced.quote = w.quote ?? null; voiced.claims = w.claims ?? null; used.first ??= { text: w.text }; return w.text; }
       }
       // A reaction (agents/reactions.ts) answers one moment; a stock line would not, so without the agent's own words it stays unsaid.
       if (c.reaction) return null;

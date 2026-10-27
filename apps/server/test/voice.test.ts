@@ -15,8 +15,11 @@ let w: Awaited<ReturnType<typeof worldTestCtx>>;
 beforeEach(async () => { w = await worldTestCtx(); await w.t.db.update(wallets).set({ fundedAt: w.t.clock.now() }); });
 afterEach(async () => { await w.t.close(); });
 
-const deps = (reply: string, over: Partial<EngineDeps> = {}) => {
-  const brain = new FakeBrain(() => fakeReply.end(reply));
+/** The model answers in the voice's JSON shape (voice.ts VOICE_SCHEMA). */
+const asJson = (post: string) => JSON.stringify({ post, mentions: [], coins: [], relationship_delta: 0, relationship_why: '', claims: [] });
+const deps = (reply: string, over: Partial<EngineDeps> = {}, raw = false) => {
+  // A rewrite (voice.rewrite) answers in plain text; a written line in JSON.
+  const brain = new FakeBrain(() => fakeReply.end(raw ? reply : asJson(reply)));
   const budget = new Budget(w.t.db, 1, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
   const d: EngineDeps = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, rng: mulberry32(7), ...over };
   return { brain, d: { ...d, voice: createVoice({ db: w.t.db, brain, budget, now: w.t.clock.now, perHour: 100 }) } };
@@ -95,9 +98,9 @@ describe('the agents\' own words', () => {
   it('rewrites an event line in the agent\'s words only when every name, ticker and number survives', async () => {
     const a = w.agents[5]!;
     const line = '@dace_lowe bet you can’t read $NECTAR. i say up by this time next hour. 0.002 SOL on it';
-    const kept = deps('0.002 SOL says $NECTAR is higher in an hour, @dace_lowe. Take the other side or stay quiet.');
+    const kept = deps('0.002 SOL says $NECTAR is higher in an hour, @dace_lowe. Take the other side or stay quiet.', {}, true);
     expect(await kept.d.voice!.rewrite!({ v: await perceive(kept.d, a.id), turnId: 't1', text: line })).toBe('0.002 SOL says $NECTAR is higher in an hour, @dace_lowe. Take the other side or stay quiet.');
-    const dropped = deps('@dace_lowe, $NECTAR goes up. Bet me.');
+    const dropped = deps('@dace_lowe, $NECTAR goes up. Bet me.', {}, true);
     expect(await dropped.d.voice!.rewrite!({ v: await perceive(dropped.d, a.id), turnId: 't2', text: line })).toBeNull();
   });
 
@@ -111,7 +114,7 @@ describe('the agents\' own words', () => {
 
   it('stays quiet once the quota for the hour is used', async () => {
     const a = w.agents[2]!;
-    const brain = new FakeBrain(() => fakeReply.end('a model line about $SABLE liquidity leaving the pool'));
+    const brain = new FakeBrain(() => fakeReply.end(asJson('a model line about $SABLE liquidity leaving the pool')));
     const budget = new Budget(w.t.db, 1, () => new Date('2026-10-25T23:00:00Z'), { hardStop: true });
     const base: EngineDeps = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, rng: mulberry32(7) };
     const d = { ...base, voice: createVoice({ db: w.t.db, brain, budget, now: w.t.clock.now, perHour: 1 }) };
