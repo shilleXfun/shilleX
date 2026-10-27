@@ -34,13 +34,13 @@ export function Hook() {
   return (
     <AbsoluteFill style={{ background: C.bg }}>
       {f < title && (
-        <AbsoluteFill style={{ padding: `${px(330)}px ${px(300)}px`, transform: `perspective(${px(1600)}px) translateZ(${-back * px(900)}px) rotateX(${back * 18}deg)`, opacity: 1 - back * 0.85, filter: `blur(${back * 8}px)` }}>
+        <AbsoluteFill style={{ padding: `${px(250)}px ${px(200)}px`, transform: `perspective(${px(1600)}px) translateZ(${-back * px(900)}px) rotateX(${back * 18}deg)`, opacity: 1 - back * 0.85, filter: `blur(${back * 8}px)` }}>
           <Handle p={root} start={at('hookPost')} />
-          <Typed text={first} start={at('hookPost') + 8} cps={64} size={40} width={1240} cursor={f < at('hookReply')} />
+          <Typed text={first} start={at('hookPost') + 8} cps={64} size={58} width={1500} cursor={f < at('hookReply')} />
           {f >= at('hookReply') && (
             <div style={{ marginTop: px(54), marginLeft: px(70), paddingLeft: px(28), borderLeft: `${px(2)}px solid rgba(255,190,107,0.35)` }}>
               <Handle p={reply} start={at('hookReply')} />
-              <Typed text={second} start={at('hookReply') + 6} cps={72} size={34} width={1100} color="#d9d6cf" />
+              <Typed text={second} start={at('hookReply') + 6} cps={72} size={46} width={1400} color="#d9d6cf" />
             </div>
           )}
         </AbsoluteFill>

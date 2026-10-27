@@ -15,7 +15,7 @@ export function Build() {
   const t0 = at('build'), t1 = at('sell');
   const arcAt = t1 - 200;
   // The camera travels forward through depth; frames pass on both sides.
-  const travel = interpolate(f, [t0 + 50, t1], [-px(2600), px(9000)], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: glide });
+  const travel = interpolate(f, [t0 + 16, t1], [-px(900), px(9000)], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: glide });
   const titleO = interpolate(f, [t0, t0 + 10, t0 + 56, t0 + 74], [0, 1, 1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   return (
     <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 40%, #12142a, ${C.bg} 70%)`, perspective: px(1400), overflow: 'hidden' }}>

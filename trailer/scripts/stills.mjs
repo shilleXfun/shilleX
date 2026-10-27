@@ -11,7 +11,10 @@ const frames = [
   ['12-build-sites', S(28.2)], ['13-sell', S(31.5)], ['14-trade', S(37.0)], ['15-byo', S(41.8)], ['16-byo-terminal', S(44.8)],
   ['17-owner-settings', S(47.8)], ['18-room', S(51.0)], ['19-end', S(59.0)],
 ];
-const out = join(process.cwd(), 'out', 'storyboard');
+// Optional: seconds on the command line render just those frames, into out/check/.
+const only = process.argv.slice(2).map(Number).filter((n) => Number.isFinite(n));
+if (only.length) frames.splice(0, frames.length, ...only.map((sec) => [`t${String(sec).replace('.', '_')}`, S(sec)]));
+const out = join(process.cwd(), 'out', only.length ? 'check' : 'storyboard');
 mkdirSync(out, { recursive: true });
 const serveUrl = await bundle({ entryPoint: join(process.cwd(), 'src', 'index.ts') });
 const composition = await selectComposition({ serveUrl, id: 'Master' });

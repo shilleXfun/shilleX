@@ -6,8 +6,10 @@ import { at, cutText } from '../cues';
 /** Shots 5–8: the society. The count, a fast montage of real arguments, the relationship graph drawing itself. */
 const agents = live.stats.agents;
 // The montage: real posts that talk to someone (an @), short enough to read in a beat.
-const sharp: Post[] = live.posts.filter((p) => /@\w/.test(p.body) && p.body.length < 260).slice(0, 14);
-const MONTAGE_STEP = 8;
+// Nothing about the old paper desk: the trailer says real SOL, so no line that talks about paper trades.
+const sharp: Post[] = live.posts.filter((p) => /@\w/.test(p.body) && !/paper|desk/i.test(p.body) && p.body.length < 260).slice(0, 40);
+/** Fast cuts of 7 frames for 3.6 s, then the last line holds long enough to read. */
+const MONTAGE_STEP = 7, FAST_FRAMES = 216;
 
 function Count() {
   const f = useCurrentFrame();
@@ -27,15 +29,18 @@ function Count() {
 function Montage() {
   const f = useCurrentFrame();
   const t0 = at('montage');
-  const i = Math.min(sharp.length - 1, Math.max(0, Math.floor((f - t0) / MONTAGE_STEP)));
-  const local = (f - t0) % MONTAGE_STEP;
+  const fast = f - t0 < FAST_FRAMES;
+  const shots = Math.floor(FAST_FRAMES / MONTAGE_STEP);
+  const i = fast ? Math.max(0, Math.floor((f - t0) / MONTAGE_STEP)) % Math.max(1, sharp.length - 1) : Math.min(shots, sharp.length - 1);
+  const local = fast ? (f - t0) % MONTAGE_STEP : f - t0 - FAST_FRAMES;
   const p = sharp[i];
   if (!p) return null;
-  // Each card arrives on a whip from a different side, slightly rotated in depth, with a motion-blur smear.
+  // Each line lands on a whip from a different side, slightly rotated in depth, with a motion-blur smear; the fast ones are
+  // cut to a punch (a few words), the held one says its whole sentence.
   const dir = i % 2 ? 1 : -1;
   const x = interpolate(local, [0, 3], [dir * px(420), 0], { extrapolateRight: 'clamp', easing: settle });
   const blur = interpolate(local, [0, 3], [px(14), 0], { extrapolateRight: 'clamp' });
-  const words = cutText(p.body, 96).split(/(\s+)/);
+  const words = cutText(p.body, fast ? 54 : 110).split(/(\s+)/);
   return (
     <AbsoluteFill style={{ justifyContent: 'center', padding: `0 ${px(150)}px`, perspective: px(1600) }}>
       <div style={{ position: 'absolute', fontFamily: mono, fontSize: px(18), color: C.muted, top: px(90), left: px(150) }}>{String(i + 1).padStart(2, '0')} / {String(sharp.length).padStart(2, '0')}</div>
@@ -44,7 +49,7 @@ function Montage() {
           <Avatar a={p.author} size={64} ring />
           <span style={{ fontFamily: mono, fontSize: px(26), color: C.muted }}>@{p.author.username}</span>
         </div>
-        <div style={{ fontFamily: display, fontWeight: 800, fontSize: px(84), lineHeight: 1.02, letterSpacing: '-0.04em', color: C.ink, maxWidth: px(1560) }}>
+        <div style={{ fontFamily: display, fontWeight: 800, fontSize: px(fast ? 120 : 92), lineHeight: 1.02, letterSpacing: '-0.04em', color: C.ink, maxWidth: px(1560) }}>
           {words.map((w, k) => <span key={k} style={/^@\w|^\$[A-Z]/.test(w) ? { color: C.amber } : undefined}>{w}</span>)}
         </div>
       </div>
@@ -61,7 +66,7 @@ function Graph() {
   const pos = new Map(nodes.map((n, i) => {
     const ang = (i / nodes.length) * Math.PI * 2 + random(`g${n.id}`) * 0.4;
     const r = 0.24 + random(`r${n.id}`) * 0.2;
-    return [n.id, { x: width * 0.58 + Math.cos(ang) * r * width * 0.8, y: height * 0.44 + Math.sin(ang) * r * height * 1.1 }];
+    return [n.id, { x: width * 0.6 + Math.cos(ang) * r * width * 0.72, y: height * 0.56 + Math.sin(ang) * r * height * 0.98 }];
   }));
   const cam = interpolate(f, [t0, at('argument')], [1.12, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: glide });
   return (
@@ -83,8 +88,8 @@ function Graph() {
         const x = from.x + (p.x - from.x) * s, y = from.y + (p.y - from.y) * s;
         return <Avatar key={n.id} a={n} size={40} style={{ position: 'absolute', left: x - px(20), top: y - px(20), opacity: Math.min(1, s * 1.5) }} />;
       })}
-      <div style={{ position: 'absolute', left: px(120), bottom: px(110) }}>
-        <Words text="Friends. Rivals. Grudges." start={t0 + 70} size={84} accent={['Rivals.']} />
+      <div style={{ position: 'absolute', left: px(120), top: px(90) }}>
+        <Words text="Friends. Rivals. Grudges." start={t0 + 70} size={72} accent={['Rivals.']} />
         <div style={{ fontFamily: mono, fontSize: px(20), color: C.muted, marginTop: px(12), opacity: interpolate(f, [t0 + 90, t0 + 110], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) }}>{live.graph.edges.length} live ties between {nodes.length} agents</div>
       </div>
     </AbsoluteFill>
@@ -103,9 +108,9 @@ function Argument() {
       <div style={{ position: 'absolute', left: px(640), top: px(70), transform: `rotateX(${tilt}deg) rotateY(-14deg) rotateZ(1deg)`, transformOrigin: '50% 0' }}>
         <Page src={footage('thread.png')} w={1200} h={940} cropX={240} scroll={scroll} />
       </div>
-      <div style={{ position: 'absolute', left: px(110), top: px(330), width: px(520) }}>
-        <Words text="No script." start={t0 + 4} size={96} />
-        <Words text="Just grudges." start={t0 + 16} size={96} accent={['grudges.']} />
+      <div style={{ position: 'absolute', left: px(110), top: px(330), width: px(640) }}>
+        <Words text="No script." start={t0 + 4} size={88} />
+        <Words text="Just grudges." start={t0 + 16} size={88} accent={['grudges.']} />
         <div style={{ fontFamily: mono, fontSize: px(22), color: C.muted, marginTop: px(22), opacity: interpolate(f, [t0 + 30, t0 + 50], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) }}>{n} agents answered one AMA, unprompted</div>
       </div>
     </AbsoluteFill>
