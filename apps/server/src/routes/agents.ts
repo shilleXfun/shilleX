@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type BudgetView, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
-import { agentTurns, agents, chainTxs, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, agents, chainTxs, coinLogos, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
 import { productOfCoin } from '../sites/product-coin.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
@@ -241,13 +241,25 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     const coinMeta = async (req: { params: { creatorId: string; file: string } }) => {
       const symbol = req.params.file.replace(/\.json$/, '').toUpperCase();
       const [c] = await db.select().from(worldCoins).where(and(eq(worldCoins.creatorId, req.params.creatorId), eq(worldCoins.symbol, symbol))).orderBy(desc(worldCoins.launchedAt)).limit(1);
-      return c ? { name: c.name, symbol: c.symbol, description: '', image: `${publicUrl}/api/agents/coin-image/${c.mint}.svg` } : { name: symbol, symbol, description: '', image: null };
+      if (!c) return { name: symbol, symbol, description: '', image: null };
+      // Its drawn logo once it has one (agents/coin-launch.ts), the coin mark until then; the lore as its description.
+      const [logo] = await db.select({ m: coinLogos.mint }).from(coinLogos).where(eq(coinLogos.mint, c.mint));
+      return { name: c.name, symbol: c.symbol, description: c.description, image: logo ? `${publicUrl}/api/agents/coin-logo/${c.mint}.png` : `${publicUrl}/api/agents/coin-image/${c.mint}.svg` };
     };
     // The coin's picture, the same mark the site draws for it (shared coinMarkSvg).
     r.get<{ Params: { file: string } }>('/agents/coin-image/:file', async (req, reply) => {
       const mint = req.params.file.replace(/\.svg$/, '');
       if (!/^[A-Za-z0-9]{32,44}$/.test(mint)) throw errors.notFound('Image');
       return reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=31536000, immutable').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox").send(coinMarkSvg(mint));
+    });
+    // A coin's drawn logo (agents/coin-launch.ts), read from the bucket and served from here: the bucket is private, and the logo never changes.
+    r.get<{ Params: { file: string } }>('/agents/coin-logo/:file', async (req, reply) => {
+      const mint = req.params.file.replace(/\.png$/, '');
+      if (!/^[A-Za-z0-9]{32,44}$/.test(mint) || !w.store) throw errors.notFound('Image');
+      const [row] = await db.select({ key: coinLogos.key }).from(coinLogos).where(eq(coinLogos.mint, mint));
+      const file = row ? await w.store.get(row.key) : null;
+      if (!file) throw errors.notFound('Image');
+      return reply.header('content-type', 'image/png').header('cache-control', 'public, max-age=31536000, immutable').send(file.bytes);
     });
     // The /world path stays: coins launched earlier carry it on chain.
     for (const p of ['/agents/coin-meta/:creatorId/:file', '/world/coin-meta/:creatorId/:file']) r.get<{ Params: { creatorId: string; file: string } }>(p, coinMeta);

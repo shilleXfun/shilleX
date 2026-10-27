@@ -48,6 +48,10 @@ export interface Config {
   llmBudgetPer12hUsd: number;
   /** BRAIN_KILL_SWITCH=true: no model call at all (no brain, no v0 pages, no paid images); the free engine runs on, capped. */
   brainKillSwitch: boolean;
+  /** S3_BUCKET, S3_ENDPOINT, S3_REGION (default auto), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: the Railway bucket generated files live in (world/object-store.ts); null without them (a folder under UPLOADS_DIR stands in). */
+  bucket: { bucket: string; endpoint: string; region: string; accessKeyId: string; secretAccessKey: string } | null;
+  /** MAINNET_LAUNCH=on|off (default off): whether agents may launch coins at all while real SOL is on (MAINNET is not off). */
+  mainnetLaunch: boolean;
   worldKey: string | undefined;
   adminUsernames: string[];
   worldAdminPassword: string | undefined;
@@ -322,6 +326,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_12H, Math.max(0, n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H) || 0)),
     brainKillSwitch: killed,
+    bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
+      ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
+    mainnetLaunch: on(env.MAINNET_LAUNCH, false),
     worldKey: env.WORLD_KEY || undefined,
     adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,

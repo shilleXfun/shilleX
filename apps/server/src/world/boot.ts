@@ -64,6 +64,9 @@ import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
+import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
+import { localStore, s3Store, type ObjectStore } from './object-store.ts';
+import { join } from 'node:path';
 
 export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
@@ -73,6 +76,8 @@ export interface WorldHandles {
   quiet?: QuietGate;
   /** The hard ceiling on what Claude bills per 12 hours (world/brain.ts). */
   ceiling?: SpendCeiling;
+  /** Where generated files live: the Railway bucket, or a local folder (world/object-store.ts). */
+  store?: ObjectStore;
   /** The model brain in use, or null (no key): the world runs on the free engine. */
   brain?: AgentBrain | null;
   scenes?: Scenes | null;
@@ -202,6 +207,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const halt = createModelHalt(now);
   // One hourly allowance for every line written without the model: with the brain down, ~10 posts an hour instead of a flood.
   const quiet = createQuietGate(config.phrasebookPerHour, now);
+  // Coin logos (agents/coin-launch.ts): drawn once into the bucket, or a local folder without one; no OPENAI_API_KEY, no logos.
+  const store = config.bucket ? s3Store(config.bucket) : localStore(join(config.uploadsDir, 'objects'));
+  const logos = createLogoMaker({ db, store, gen: spotlightImageGen(config), model: config.openaiImageModel, limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
   if (!config.worldHalted) indexer.start();
@@ -210,10 +218,12 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     if (e.type === 'trade') indexer.invalidate(e.agentId);
     else if (e.type === 'transfer') { indexer.invalidate(e.fromId); if (e.toId) indexer.invalidate(e.toId); }
     else indexer.invalidate(e.creatorId);
+    // Every launch gets its logo, whoever launched it (the engine's own call usually got there first; the maker draws once).
+    if (e.type === 'launch') setTimeout(() => void logos.make(e.mint), 5_000).unref?.();
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, ceiling, brain: null, scenes: null,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, ceiling, store, brain: null, scenes: null,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -238,7 +248,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
       const voice = brain && config.voicePerHour > 0 ? createVoice({ db, brain, budget, now, halt, perHour: config.voicePerHour, homes: config.llm.mode === 'openai' ? config.llm.providers.map((p) => p.name) : [] }) : undefined;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).

@@ -51,6 +51,8 @@ export async function chainGate(d: EngineDeps, v: AgentView, cs: Candidate[]): P
       .groupBy(chainTxs.mint)).filter((r) => r.n >= HERD_SELLERS).map((r) => r.m));
     if (crowded.size) out = out.filter((c) => !(c.kind === 'sell' && crowded.has(c.target?.mint ?? '')));
   }
+  // MAINNET_LAUNCH off while real SOL is on: no launch is even tried.
+  if (d.app.deps.config.mainnet !== 'off' && !d.app.deps.config.mainnetLaunch) out = out.filter((c) => c.kind !== 'launch');
   if (v.hybrid && out.some((c) => c.kind === 'launch')) {
     const ok = v.depth.persona?.job === 'dev' && (await mayLaunch(d.db, v.agent.id, d.app.deps.config.launchesPerDay, d.now()));
     if (!ok) out = out.filter((c) => c.kind !== 'launch');

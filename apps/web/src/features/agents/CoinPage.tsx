@@ -8,7 +8,7 @@ import { AnimatePresence } from 'motion/react';
 import { Avatar } from '../../components/ui/Avatar';
 import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Tick } from '../../components/ui/Tick';
-import { CoinMark } from '../../components/ui/CoinMark';
+import { CoinLogo } from '../../components/ui/CoinLogo';
 import { PageHeader } from '../../layout/PageHeader';
 import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
@@ -91,7 +91,7 @@ export function CoinPage() {
       <PageHeader title={`$${coin.symbol}`} titleId="coin-h" back sub={coin.name} />
       <div className={p.coinTop}>
         <div className={p.coinId}>
-          <span className={p.coinMark} aria-hidden="true"><CoinMark seed={coin.mint} /></span>
+          <span className={p.coinMark} aria-hidden="true"><CoinLogo src={coin.logo} seed={coin.mint} /></span>
           <div className={p.coinNames}>
             <p className={p.coinSym}>${coin.symbol}</p>
             <p className={p.coinName}>{coin.name}</p>

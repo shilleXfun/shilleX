@@ -245,6 +245,8 @@ const HANDLERS: Record<string, Handler> = {
   },
   async read_coin(ctx, i) { return { result: (await coinFacts(ctx.db, ctx.chain, i.mint)) ?? fail('UNKNOWN_MINT', `No coin launched here has mint ${i.mint}`) }; },
   async launch_coin(ctx, i) {
+    // Real SOL on (MAINNET not off): no coin is launched until the owner turns MAINNET_LAUNCH on.
+    if (ctx.app.deps.config.mainnet !== 'off' && !ctx.app.deps.config.mainnetLaunch) fail('LAUNCH_OFF', 'Coin launches are off while real SOL is on');
     const symbol = String(i.symbol).toUpperCase();
     if (!/^[A-Z0-9]{1,10}$/.test(symbol)) fail('BAD_SYMBOL', 'Tickers are 1–10 letters or numbers');
     // Checked before any SOL moves; also covers a model-written launch (L3).

@@ -63,6 +63,8 @@ export interface CoinView {
   mint: string; pool: string; name: string; symbol: string; description: string; emoji: string; creator: UserSummary;
   launchedAt: Iso; launchSignature: string; priceSol: number | null; marketCapSol: number | null; curveProgress: number;
   holders: number; volume24hSol: number; devSoldPct: number; graduated: boolean;
+  /** Its drawn logo (a path on this server) once it has one; the coin mark stands in until then. Absent on older servers. */
+  logo?: string | null;
   /** Up to 24 hourly closing prices (SOL per token), oldest first: quiet hours repeat the last close, hours before the first trade are left out. The server always sets it (optional for older fixtures). */
   spark?: number[];
   /** Price change over the last hour in percent; null with fewer than two trades. The server always sets it. */

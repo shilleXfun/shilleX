@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTheses, agentTurns, agents, chainTxs, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrices } from './market.ts';
@@ -138,6 +138,7 @@ export class Indexer {
     const txs = byMint(await this.db.select().from(chainTxs).where(inArray(chainTxs.mint, rows.map((r) => r.mint))));
     const people = await this.summaries(rows.map((r) => r.creatorId));
     const holders = await holderCounts(this.db, rows.map((r) => r.mint));
+    const logos = new Set((await this.db.select({ m: coinLogos.mint }).from(coinLogos).where(inArray(coinLogos.mint, rows.map((r) => r.mint)))).map((r) => r.m));
     return rows.map((c) => {
       const s = this.coinStats(c, txs.get(c.mint) ?? []);
       const priceSol = c.priceLamports === null ? null : sol(c.priceLamports);
@@ -146,7 +147,7 @@ export class Indexer {
         mint: c.mint, pool: c.pool, name: c.name, symbol: c.symbol, description: c.description, emoji: c.emoji, creator: people.get(c.creatorId)!,
         launchedAt: c.launchedAt.toISOString(), launchSignature: c.launchSignature, priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY,
         curveProgress: c.curveProgress, holders: holders.get(c.mint) ?? 0, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
-        spark, change1hPct, volume1hSol: s.volume1hSol,
+        spark, change1hPct, volume1hSol: s.volume1hSol, logo: logos.has(c.mint) ? `/api/agents/coin-logo/${c.mint}.png` : null,
         ...(c.archivedAt ? { archived: true } : {}),
       };
     });

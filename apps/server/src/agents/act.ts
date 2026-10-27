@@ -405,10 +405,14 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         // A ticker trending on X is never taken: it would read as the real coin (x-feed §5.3).
         const taken = await symbolsInUse(db, now);
         for (const s of v.news?.avoidSymbols ?? []) taken.add(s.toUpperCase());
-        const symbol = pickSymbol(words, taken, d.rng);
-        const name = coinName(symbol, d.rng);
-        const r = await call('launch_coin', { name, symbol, description: `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
+        // The model writes the coin from who the agent is (coin-launch.ts); without it, a ticker from its own words.
+        const plan = d.coinWriter ? await d.coinWriter.plan(v, turnId, taken) : null;
+        const symbol = plan?.symbol ?? pickSymbol(words, taken, d.rng);
+        const name = plan?.name ?? coinName(symbol, d.rng);
+        const r = await call('launch_coin', { name, symbol, description: plan?.lore ?? `${name}, launched by @${v.agent.username}`, emoji: pick(EMOJI, d.rng), initial_buy_sol: (c.lamports ?? 0) / LAMPORTS_PER_SOL });
         const mint = (r.result as { mint: string }).mint;
+        // Its logo, drawn once, in the background: the launch post does not wait for a picture.
+        if (d.logos) void d.logos.make(mint, plan?.logo);
         queueCoinSite(d, agentId, mint);
         // The analysts and whales size it up; its creator's friends and rivals talk (agents/reactions.ts).
         await queueLaunchTakes(db, { creatorId: agentId, creatorName: v.agent.username, mint, symbol }, now);

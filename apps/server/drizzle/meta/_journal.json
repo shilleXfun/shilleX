@@ -239,6 +239,13 @@
       "when": 1793099891591,
       "tag": "0033_reflections",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793100846627,
+      "tag": "0034_coin_logos",
+      "breakpoints": true
     }
   ]
 }

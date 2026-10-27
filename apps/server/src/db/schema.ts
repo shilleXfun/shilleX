@@ -1587,3 +1587,16 @@ export const agentReflections = pgTable('agent_reflections', {
   at: ts('at').notNull(),
 }, (t) => [index('agent_reflections_agent_idx').on(t.agentId, t.at)]);
 export type AgentReflectionRow = typeof agentReflections.$inferSelect;
+
+/**
+ * A coin's logo (2026-10-27, Phase 4): drawn once by OpenAI from the lore its creator wrote, kept in the bucket under `key` and never
+ * drawn again (the primary key is the mint). Served by the server at /api/agents/coin-logo/<mint>.png.
+ */
+export const coinLogos = pgTable('coin_logos', {
+  mint: text('mint').primaryKey(),
+  key: text('key').notNull(),
+  prompt: text('prompt').notNull(),
+  model: text('model').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
