@@ -7,6 +7,8 @@ import { B, Rest } from './scenes/V4';
 import { Trailer, V5_DURATION } from './v5/Trailer';
 import { Inside, V6_DURATION } from './v6/Inside';
 import { V7 } from './v7/Trailer';
+import { V8 } from './v8/Trailer';
+import { DURATION as V8_DURATION } from './v8/path';
 import { DURATION as V7_DURATION } from './v7/lib';
 import { Audio, staticFile } from 'remotion';
 import brand from './brand';
@@ -76,6 +78,7 @@ function Open10() { return <AbsoluteFill><Open /><Vignette strength={0.6} /><Gra
 export function Root() {
   return (
     <>
+      <Composition id="V8" component={V8} durationInFrames={V8_DURATION} fps={60} width={1920} height={1080} />
       <Composition id="V7" component={V7} durationInFrames={V7_DURATION} fps={60} width={1920} height={1080} />
       <Composition id="V6" component={Inside} durationInFrames={V6_DURATION} fps={60} width={1920} height={1080} />
       <Composition id="V6Vertical" component={Inside} durationInFrames={V6_DURATION} fps={60} width={1080} height={1920} />
