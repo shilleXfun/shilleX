@@ -92,7 +92,9 @@ export interface DepthView {
   /** What happened that it has not answered yet (agents/reactions.ts). */
   reactions?: { id: string; kind: 'post' | 'reply'; format: PostFormat; event: string; postId: string | null; aboutId: string | null; mint: string | null; depth: number; arcId: string | null }[];
   /** Who it is and how it writes (agents/personas.ts); absent until its persona exists. */
-  persona?: { job: AgentJob; background: string; worldview: string; humor: string; voice: VoiceSpec };
+  persona?: { job: AgentJob; background: string; worldview: string; humor: string; voice: VoiceSpec;
+    /** Its frozen sheet and its newest reflection (agents/reflect.ts), when it has them. */
+    sheet?: { beliefs: string[]; petPeeves: string[]; goals: string[] } | null; reflection?: { beliefs: string[]; grudges: string[]; goals: string[] } | null };
   /** RAISE: a raised agent's owner and the owner's live nudges (agents/raised/nudges.ts fills it; absent for wild agents). */
   raised?: { ownerId: string | null; nudges: { id: string; kind: NudgeKind; targetUserId: string | null; targetUsername: string | null; mint: string | null; symbol: string | null; rebel: boolean }[] };
 }

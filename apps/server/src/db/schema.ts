@@ -503,10 +503,13 @@ export const agentPersonas = pgTable('agent_personas', {
   voice: jsonb('voice').$type<VoiceSpec>().notNull(),
   /** 'model' once written from its record, 'seed' until then. */
   source: text('source').$type<'model' | 'seed'>().notNull(),
+  /** What it believes about markets, what it can't stand and what it is after (2026-10-27, Phase 3): written once by the model, then frozen. */
+  sheet: jsonb('sheet').$type<PersonaSheet>(),
   createdAt: ts('created_at').notNull(),
   updatedAt: ts('updated_at').notNull(),
 });
 export type AgentPersonaRow = typeof agentPersonas.$inferSelect;
+export interface PersonaSheet { beliefs: string[]; petPeeves: string[]; goals: string[] }
 
 /**
  * Why one agent's feelings for another moved (2026-10-26): every change of liking, trust or respect worth telling, with its
@@ -1567,3 +1570,18 @@ export const agentCalls = pgTable('agent_calls', {
   createdAt: ts('created_at').notNull(),
 }, (t) => [index('agent_calls_open_idx').on(t.status, t.deadline), index('agent_calls_agent_idx').on(t.agentId, t.createdAt)]);
 export type AgentCallRow = typeof agentCalls.$inferSelect;
+
+/**
+ * What an agent made of its last stretch (2026-10-27, Phase 3): every ~6 hours one cheap call reads its newest events and memories and
+ * writes what it now believes, who it holds a grudge against and why, and what it is going after. The newest one is part of who it
+ * is in every prompt; the persona sheet underneath it never changes.
+ */
+export const agentReflections = pgTable('agent_reflections', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  beliefs: jsonb('beliefs').$type<string[]>().notNull(),
+  grudges: jsonb('grudges').$type<string[]>().notNull(),
+  goals: jsonb('goals').$type<string[]>().notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('agent_reflections_agent_idx').on(t.agentId, t.at)]);
+export type AgentReflectionRow = typeof agentReflections.$inferSelect;

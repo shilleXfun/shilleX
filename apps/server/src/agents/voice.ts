@@ -373,7 +373,14 @@ export function voiceText(v: VoiceSpec): string {
 /** Who the agent is and how it writes: its persona when it has one; its old self-description and a drawn style until then. */
 export function identityOf(v: AgentView): { about: string; how: string; length: LengthHabit } {
   const p = v.depth.persona;
-  if (p) return { about: `${p.background} What it believes: ${p.worldview}`, how: voiceText(p.voice), length: p.voice.length };
+  if (p) {
+    // The frozen sheet, then what it made of its last stretch (agents/reflect.ts): beliefs it argues from, grudges with their reasons.
+    const s = p.sheet, r = p.reflection;
+    const sheet = s ? ` About markets it believes: ${s.beliefs.join('; ')}. It can't stand: ${s.petPeeves.join('; ')}. It is after: ${s.goals.join('; ')}.` : '';
+    const lately = r && (r.beliefs.length || r.grudges.length || r.goals.length)
+      ? ` Lately${r.beliefs.length ? ` it has come to believe: ${r.beliefs.join('; ')}.` : ''}${r.grudges.length ? ` Grudges: ${r.grudges.join('; ')}.` : ''}${r.goals.length ? ` Next it wants: ${r.goals.join('; ')}.` : ''}` : '';
+    return { about: `${p.background} What it believes: ${p.worldview}${sheet}${lately}`, how: voiceText(p.voice), length: p.voice.length };
+  }
   const st = styleOf(v.agent.id);
   return { about: selfDescription(v.phrasebook.voice), how: styleText(st), length: st.length };
 }
@@ -551,7 +558,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
       // Personas are seeded for every house agent on boot; one without (an outside agent) keeps its own words.
       if (!row?.p) return 'keep';
       const p = row.p;
-      const v = { agent: { id: agentId, username: row.username }, depth: { persona: { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor, voice: p.voice }, paper: [] } } as unknown as AgentView;
+      const v = { agent: { id: agentId, username: row.username }, depth: { persona: { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor, voice: p.voice, sheet: p.sheet ?? null }, paper: [] } } as unknown as AgentView;
       return this.rewrite!({ v, turnId, text });
     },
     async write(i) {

@@ -1,6 +1,7 @@
 import type { AgentJob } from '@shillex/shared';
 import type { ActionKind, Candidate, Situation } from '../types.ts';
 import { personaOf } from '../personas.ts';
+import { latestReflection } from '../reflect.ts';
 import type { DepthModule } from './registry.ts';
 
 /**
@@ -35,7 +36,9 @@ export const personaModule: DepthModule = {
   name: 'persona',
   async perceive(d, v) {
     const p = await personaOf(d.db, v.agent.id);
-    if (p) v.depth.persona = { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor, voice: p.voice };
+    if (!p) return;
+    const r = await latestReflection(d.db, v.agent.id, d.now());
+    v.depth.persona = { job: p.job, background: p.background, worldview: p.worldview, humor: p.humor, voice: p.voice, sheet: p.sheet ?? null, reflection: r ? { beliefs: r.beliefs, grudges: r.grudges, goals: r.goals } : null };
   },
   modify(v, cs) {
     const p = v.depth.persona;

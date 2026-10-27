@@ -63,6 +63,7 @@ import { personaPass } from '../agents/personas.ts';
 import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
+import { reflectPass } from '../agents/reflect.ts';
 
 export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
@@ -270,7 +271,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // written from their own records each pass, so free model quotas are not spent at once.
   const personas = () => void runJob(db, 'personas', { now, leaseMs: 10 * 60_000 }, async () => {
     const r = await personaPass({ db, chain, now, brain: handles.brain ?? null, budget });
-    return { status: 'ok', note: `${r.seeded} seeded, ${r.written} written` };
+    // Then the sheets (frozen once written) and the six-hourly reflections (agents/reflect.ts).
+    const m = handles.brain ? await reflectPass({ db, brain: handles.brain, budget, now }) : { sheets: 0, reflections: 0 };
+    return { status: 'ok', note: `${r.seeded} seeded, ${r.written} written, ${m.sheets} sheets, ${m.reflections} reflections` };
   });
   const personaTimer = config.worldHalted ? undefined : setInterval(personas, 3 * 60_000);
   personaTimer?.unref?.();
