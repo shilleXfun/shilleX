@@ -65,6 +65,7 @@ import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
 import { createDirector } from '../agents/director.ts';
+import { remasterPass } from '../sites/remaster.ts';
 import { computeOn, earnPass, setComputeOn, topUp } from '../agents/compute.ts';
 import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
@@ -203,7 +204,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -262,6 +263,15 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         handles.director = director;
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
+      }
+      // The daily remaster: checked every 10 minutes, it runs once a UTC day after 00:30 (sites/remaster.ts).
+      if (brain && config.remastersPerDay > 0) {
+        const remasterDeps = { app, db, chain, events, worldKey: key, now, busy, budget, brain, halt };
+        remasterTimer = setInterval(() => void runJob(db, 'remaster', { now, leaseMs: 90 * 60_000 }, async () => {
+          const done = await remasterPass(remasterDeps, config.remastersPerDay);
+          return done.length ? { status: 'ok', note: `remastered ${done.join(', ')}` } : { status: 'skipped' };
+        }), 10 * 60_000);
+        remasterTimer.unref?.();
       }
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
@@ -351,7 +361,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

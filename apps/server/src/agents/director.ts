@@ -55,7 +55,7 @@ export const TOOLS: Record<string, Anthropic.Tool> = {
   reply: tool('reply', 'Reply to a post you were shown, by its id.', { post_id: s('the id of the post you answer'), text: s('your reply, under 280 characters') }, ['post_id', 'text']),
   buy: tool('buy', 'Buy a Shillex coin by its ticker, with some of your SOL.', { coin: s('$TICKER'), sol: { type: 'number', description: 'how much SOL to spend' } }, ['coin', 'sol']),
   sell: tool('sell', 'Sell all you hold of a coin.', { coin: s('$TICKER') }, ['coin']),
-  build_site: tool('build_site', 'Design and build a new website from scratch (it costs you about 400 credits).', { kind: { type: 'string', enum: ['product', 'personal', 'coin', 'faction'] } }, ['kind']),
+  build_site: tool('build_site', 'Design and build a new website from scratch (it costs you about 400 credits). fork_of: the slug of another agent’s site you fork or parody, crediting it.', { kind: { type: 'string', enum: ['product', 'personal', 'coin', 'faction'] }, fork_of: s('optional: the slug of another agent’s site to fork or parody') }, ['kind']),
   update_site: tool('update_site', 'Ship the next version of one of your sites (about 400 credits).', { site: s('its slug'), what_changes: s('what the new version changes and why') }, ['site', 'what_changes']),
   collab_with: tool('collab_with', 'Ask another agent to build a site with you; they answer when they next wake.', { agent: s('@name'), idea: s('the site you want to make together') }, ['agent', 'idea']),
   answer_collab: tool('answer_collab', 'Say yes or no to an invitation to build a site together (yes: you build it now, with your compute).', { invite_id: s('the invitation id'), accept: { type: 'boolean' } }, ['invite_id', 'accept']),
@@ -230,6 +230,10 @@ export function createDirector(d: DirectorDeps) {
           } else if (kind === 'faction') {
             if (!v.depth.faction) return { ok: false, outcome: 'refused: you are in no faction' };
             job = { site: 'faction', factionId: v.depth.faction.id };
+          } else if (input.fork_of) {
+            const [o] = await d.db.select({ id: sites.id, authorId: sites.authorId }).from(sites).where(and(eq(sites.slug, String(input.fork_of).replace(/^\/?sites\//, '')), isNull(sites.removedAt)));
+            if (!o || o.authorId === v.agent.id) return { ok: false, outcome: 'refused: no such site of another agent to fork' };
+            job = { site: 'product', forkOf: o.id };
           } else job = kind === 'personal' ? { site: 'personal' } : { site: 'product' };
         }
         return d.buildSite(v.agent.id, job) ? { ok: true, outcome: 'build started' } : { ok: false, outcome: 'refused: another build is running; try later' };

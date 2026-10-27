@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import type { ToolCallRecord } from '@shillex/shared';
-import { agentCast, agentDesks, agentGoals, agentMemories, factionMembers, factions, productBriefs, siteBuilds, siteVersions, sites, users, worldCoins, type ProductBrief, type ProductBriefRow, type SiteRow } from '../db/schema.ts';
+import { agentCast, agentDesks, mediaBlobs, agentGoals, agentMemories, factionMembers, factions, productBriefs, siteBuilds, siteVersions, sites, users, worldCoins, type ProductBrief, type ProductBriefRow, type SiteRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import type { AgentBrain } from '../world/brain.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
@@ -9,7 +9,7 @@ import { actorFor } from '../agents/act.ts';
 import { modelName, type ModelBudget } from '../agents/haiku.ts';
 import { MEMORY_HEADING, recallLines } from '../agents/minds.ts';
 import { calibration } from '../agents/depth/desk.ts';
-import { queueAround } from '../agents/reactions.ts';
+import { queueAround, queueReaction } from '../agents/reactions.ts';
 import { agentsOnly, memberById, memberLines, plain } from '../agents/scenes/cast.ts';
 import { freeSlug, insertSite, originOf, rebuildSite, setAnnouncement, siteUrl } from './store.ts';
 import { SITE_PROMPT_VERSION } from './plan.ts';
@@ -33,7 +33,7 @@ type ProductDeps = Omit<SiteDeps, 'brain' | 'budget'> & { brain: AgentBrain | nu
   /** Tests stand in for the browser here. */ render?: (html: string) => Promise<StudioRender | null> };
 
 /** What starts a build: a new product, a coin's site, a home page, a faction's site, or the next version of a site. */
-export type StudioJob = { site: 'product'; collab?: { withId: string; idea: string } } | { site: 'improve'; siteId: string } | { site: 'faction'; factionId: string } | { site: 'coin'; mint: string } | { site: 'personal' };
+export type StudioJob = { site: 'product'; collab?: { withId: string; idea: string }; forkOf?: string } | { site: 'improve'; siteId: string } | { site: 'faction'; factionId: string } | { site: 'coin'; mint: string } | { site: 'personal' };
 
 const kitFor = (avatar: string, coin: { mint: string; symbol: string } | null) =>
   `IMAGE PATHS YOU MAY USE: your avatar ${avatar}${coin ? `; your coin's mark /api/agents/coin-image/${coin.mint}.svg` : ''}.`;
@@ -108,7 +108,7 @@ const kindOf = (job: StudioJob, site: SiteRow | null) => (site ? site.kind : job
  * Builds a site for this agent in the studio, or its next version. Returns a job outcome; throws only on failures a retry could fix
  * (the job ledger records and backs off). `force`: a version even when nothing changed (a site from before the studio).
  */
-export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJob, opts: { force?: string } = {}): Promise<{ status: 'ok' | 'skipped'; note: string }> {
+export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJob, opts: { force?: string; /** The daily remaster: the stronger model, paid by the house, announced as such. */ remaster?: boolean } = {}): Promise<{ status: 'ok' | 'skipped'; note: string }> {
   if (!d.brain || !d.budget) return { status: 'skipped', note: 'no model: a site is only built by its agent' };
   const now = d.now();
   const facts = await selfFacts(d, agentId);
@@ -118,6 +118,7 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
   const [coinRow] = job.site === 'coin' ? await d.db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol }).from(worldCoins).where(eq(worldCoins.mint, job.mint)) : [];
   if (job.site === 'coin' && !coinRow) return { status: 'skipped', note: 'the coin is gone' };
   let site: SiteRow | null = null, purpose: StudioPurpose, current: string | undefined;
+  let forked: { id: string; author: string; authorId: string; title: string; reference: { text: string; jpeg: Buffer | null } } | null = null;
   if (job.site === 'improve') {
     site = (await d.db.select().from(sites).where(and(eq(sites.id, job.siteId), eq(sites.authorId, agentId), isNull(sites.removedAt))))[0] ?? null;
     if (!site) return { status: 'skipped', note: 'no site to improve' };
@@ -132,8 +133,18 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
   } else {
     // Built together (collab_with): the partner's handle and the idea they agreed on.
     const partner = job.site === 'product' && job.collab ? (await d.db.select({ u: users.username }).from(users).where(eq(users.id, job.collab.withId)))[0]?.u ?? null : null;
+    // A fork or a parody (build_site fork_of): the original's brief and its last screenshot go with the brief step.
+    if (job.site === 'product' && job.forkOf) {
+      const [o] = await d.db.select({ s: sites, author: users.username }).from(sites).innerJoin(users, eq(users.id, sites.authorId)).where(and(eq(sites.id, job.forkOf), isNull(sites.removedAt)));
+      if (!o || o.s.authorId === agentId) return { status: 'skipped', note: 'nothing to fork' };
+      const [b] = await d.db.select({ brief: productBriefs.brief }).from(productBriefs).where(eq(productBriefs.siteId, o.s.id)).orderBy(desc(productBriefs.createdAt)).limit(1);
+      const [v] = await d.db.select({ blob: siteVersions.screenshotBlobId }).from(siteVersions).where(and(eq(siteVersions.siteId, o.s.id), eq(siteVersions.version, o.s.version)));
+      const [img] = v?.blob ? await d.db.select({ bytes: mediaBlobs.bytes }).from(mediaBlobs).where(eq(mediaBlobs.id, v.blob)) : [];
+      const design = b?.brief.design;
+      forked = { id: o.s.id, author: o.author, authorId: o.s.authorId, title: plain(o.s.title), reference: { text: `"${plain(o.s.title)}" by @${o.author} (/sites/${o.s.slug}): ${plain(o.s.blurb)}${design ? ` Its design: ${plain(design.aesthetic)}; ${plain(design.concept)} The toy: ${plain(design.toy)}.` : ''}`, jpeg: img?.bytes ? Buffer.from(img.bytes) : null } };
+    }
     purpose = job.site === 'faction' ? { kind: 'faction', name: faction!.name, facts: faction!.text } : job.site === 'coin' ? { kind: 'coin', symbol: coinRow!.symbol } : job.site === 'personal' ? { kind: 'personal' }
-      : { kind: 'product', ...(partner && job.site === 'product' && job.collab ? { collab: `together with @${partner}, the idea you both agreed on: ${plain(job.collab.idea).slice(0, 300)}` } : {}) };
+      : { kind: 'product', ...(forked ? { collab: `as your fork or parody of @${forked.author}'s "${forked.title}"` } : partner && job.site === 'product' && job.collab ? { collab: `together with @${partner}, the idea you both agreed on: ${plain(job.collab.idea).slice(0, 300)}` } : {}) };
   }
   const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: job.site === 'coin' ? 'launch' : 'heartbeat', note: `website (${purpose.kind})` }], model: modelName(), effort: 'medium', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
   const buildId = newId();
@@ -153,6 +164,7 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
     const made = await studioBuild({
       db: d.db, brain: d.brain, budget: d.budget, now: d.now, turnId, spent, username: facts.username, facts: facts.text, kit: kitFor(facts.avatar, coinRow ?? facts.coin), purpose,
       recent, current, origin: originOf(publicUrl), csp: siteCsp(originOf(publicUrl)), data, ...(d.render ? { render: d.render } : {}),
+      ...(opts.remaster ? { tier: 2 as const, house: true } : {}), ...(forked ? { reference: forked.reference } : {}),
     });
     const brief = asProductBrief(made.brief);
     [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, siteId: site?.id ?? null, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: made.html ? 'building' : 'failed', note: made.html ? null : made.problems.join('; ').slice(0, 500), model: modelName(), createdAt: now, updatedAt: now }).returning();
@@ -166,20 +178,27 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
       const title = plain(brief.name).slice(0, 60), blurb = plain(brief.tagline).slice(0, 200);
       const build = { title, blurb, html: made.html, turnId, model: modelName(), now: d.now() };
       const published = site ? await rebuildSite(d.db, site.id, build)
-        : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: kindOf(job, null), coinMint, factionId: faction?.id ?? null, coAuthorId: job.site === 'product' ? job.collab?.withId ?? null : null });
+        : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: kindOf(job, null), coinMint, factionId: faction?.id ?? null, coAuthorId: job.site === 'product' ? job.collab?.withId ?? null : null, forkOfId: forked?.id ?? null });
       await d.db.update(siteVersions).set({ notes: made.notes ? plain(made.notes).slice(0, 300) : null }).where(and(eq(siteVersions.siteId, published.id), eq(siteVersions.version, published.version)));
       await d.db.update(productBriefs).set({ siteId: published.id, status: 'published', note: `views=${published.views}`, updatedAt: d.now() }).where(eq(productBriefs.id, briefRow!.id));
       await d.db.update(siteBuilds).set({ siteId: published.id, status: 'published', version: published.version, problems: made.problems, attempts: made.attempts, costUsd: spent.usd, finishedAt: d.now() }).where(eq(siteBuilds.id, buildId));
       toolCalls.push({ name: 'build_site', input: { kind: kindOf(job, site), title, aesthetic: brief.genre }, ok: true, result: { url: siteUrl(published.slug), version: published.version } });
       // The agent says it in its own words (the brief's announcement), with the address at the end.
       const [agent] = await d.db.select().from(users).where(eq(users.id, agentId));
-      const body = `${site ? `${title}, version ${published.version}: ${plain(made.notes ?? 'remade').slice(0, 200)}` : plain(brief.announcement).slice(0, 240)}\n\n${publicUrl}${siteUrl(published.slug)}`;
+      // A remaster says so; a fork credits its original if the agent's own words did not.
+      const own = plain(brief.announcement).slice(0, 240);
+      const said = opts.remaster ? `Remastered: ${title}, version ${published.version}. ${plain(made.notes ?? '').slice(0, 180)}`.trim()
+        : site ? `${title}, version ${published.version}: ${plain(made.notes ?? 'remade').slice(0, 200)}`
+        : forked && !own.includes(`@${forked.author}`) ? `${own} (my take on @${forked.author}'s "${forked.title}")` : own;
+      const body = `${said}\n\n${publicUrl}${siteUrl(published.slug)}`;
       const ctx: ToolContext = { app: d.app, db: d.db, actor: actorFor(d.app), chain: d.chain, events: d.events, agent: agent!, turnId, worldKey: d.worldKey, now: d.now, publicUrl };
       const out = await runTool(ctx, 'post', { body });
       toolCalls.push({ name: 'post', input: { body }, ok: out.ok, result: out.result });
       const postId = out.ok ? (out.result as { post_id?: string } | null)?.post_id : undefined;
       if (postId) await setAnnouncement(d.db, published.id, published.version, postId);
       // A new site gets reviewed under its announcement by its author's friends and rivals (agents/reactions.ts).
+      // The original's author hears about the fork, under its announcement.
+      if (postId && forked) await queueReaction(d.db, { agentId: forked.authorId, kind: 'reply', format: 'review', event: `@${agent!.username} forked your site "${forked.title}" into "${title}"`, postId, aboutId: agentId }, d.now()).catch(() => undefined);
       if (postId && !site) await queueAround(d.db, { actorId: agentId, event: `@${agent!.username} just published a new site${faction ? ` for ${faction.name}` : ''}, "${title}": ${blurb}`, friendFormat: 'review', rivalFormat: 'review', postId, max: 2 }, d.now()).catch(() => undefined);
       // A new product may get its own devnet coin (hybrid mode), launched by its builder or a dev it likes; the two pages link.
       if (!site && kindOf(job, null) === 'product' && !published.coinMint) await productCoin(d, { builderId: agentId, siteId: published.id, slug: published.slug, title, brief }).catch((e) => console.error('[products] product coin failed', (e as Error).message));

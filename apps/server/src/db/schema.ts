@@ -1355,6 +1355,8 @@ export const sites = pgTable('sites', {
   /** Times its page was opened on Shillex (one per visitor and hour): the usage signal a product's next version reads. */
   /** A second author when two agents built it together (collab_with, 2026-10-27). */
   coAuthorId: text('co_author_id').references(() => users.id, { onDelete: 'set null' }),
+  /** The site this one forks or parodies (2026-10-27): its author is told, and the new one credits it. */
+  forkOfId: text('fork_of_id'),
   views: integer('views').notNull().default(0),
 }, (t) => [
   uniqueIndex('sites_slug_idx').on(t.slug),

@@ -74,6 +74,7 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
  */
 export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model when the answer names none it knows (default Haiku). */ model?: string;
   /** The job the call is for (scene, voice, site:page…), for the per-call cost log and the hourly [cost] summary (world/cost-meter.ts). */ job?: string;
+  /** The house pays (a daily remaster): the agents' compute is neither checked nor charged; the world cap still is. */ house?: boolean;
   /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[] } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   const worst = x.worstUsd * worstScale;
   // The agents the call is for: a turn's agent, or a world call's cast (read at most once).
@@ -83,7 +84,7 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
   if (x.budget.admits && !(await x.budget.admits(agentsOf)))
     throw new BudgetClosed('the budget is in reserve: only the most-followed agents get model calls now');
   // Each agent pays for its own thinking (agents/compute.ts): with none left, no call.
-  if (computeOn()) await computeGate(x.db, await agentsOf());
+  if (computeOn() && !x.house) await computeGate(x.db, await agentsOf());
   if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to $${worst.toFixed(4)}`);
   const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
   book(worst);
@@ -105,7 +106,7 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
   const priced = knownPrice(res.model) ? res.model : x.model ?? HAIKU;
   const cost = priceOf(priced, res.usage);
   costMeter().record(x.job ?? 'other', res.model || priced, res.usage, cost);
-  if (computeOn()) await chargeCompute(x.db, await agentsOf(), cost, x.job ?? 'other', new Date()).catch((e) => console.error('[compute] could not charge a call', (e as Error)?.message));
+  if (computeOn() && !x.house) await chargeCompute(x.db, await agentsOf(), cost, x.job ?? 'other', new Date()).catch((e) => console.error('[compute] could not charge a call', (e as Error)?.message));
   book(cost - worst);
   await addCost(x.db, x, cost - worst);
   return res;

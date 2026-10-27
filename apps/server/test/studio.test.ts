@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { worldTestCtx } from './world-helpers.ts';
-import { productBriefs, siteBuilds, sites } from '../src/db/schema.ts';
+import { agentReactions, posts, productBriefs, siteBuilds, siteVersions, sites } from '../src/db/schema.ts';
 import { FakeBrain, fakeReply } from '../src/world/brain.ts';
 import { Budget } from '../src/world/budget.ts';
 import { siteCsp } from '../src/sites/routes.ts';
@@ -104,5 +104,47 @@ describe('building in the studio', () => {
     expect(await w.t.db.select().from(sites).where(eq(sites.authorId, a.id))).toHaveLength(0);
     expect((await w.t.db.select().from(siteBuilds).where(eq(siteBuilds.agentId, a.id)))[0]).toMatchObject({ status: 'failed_validation', attempts: 2 });
     expect((await buildProduct({ ...deps(brain, async () => good), brain: null }, a.id, { site: 'product' })).status).toBe('skipped');
+  });
+});
+
+describe('remasters and forks', () => {
+  let w: Awaited<ReturnType<typeof worldTestCtx>>;
+  beforeEach(async () => { w = await worldTestCtx(); });
+  afterEach(async () => { await w.t.close(); });
+  const site = async (id: string, authorId: string, views: number) => {
+    const now = w.t.clock.now();
+    await w.t.db.insert(sites).values({ id, slug: id, authorId, kind: 'product', title: `Site ${id}`, blurb: 'b', version: 1, views, createdAt: now, updatedAt: now });
+    await w.t.db.insert(siteVersions).values({ siteId: id, version: 1, html: page(), turnId: 't', model: 'm', createdAt: now });
+  };
+
+  it('remasters the most visited site of the day on the stronger model, paid by the house, and says so', async () => {
+    const [a, b] = w.agents;
+    await site('busy', a!.id, 40);
+    await site('quiet', b!.id, 2);
+    const replies = [fakeReply.end(JSON.stringify(brief({ aesthetic: 'noir comic' }))), fakeReply.end(page()), fakeReply.end(page('<p>sharper</p>'))];
+    const brain = new FakeBrain((_r, i) => replies[i] ?? fakeReply.end(''));
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: () => new Date('2026-10-28T00:40:00Z'), brain, budget: new Budget(w.t.db, 5, () => new Date('2026-10-28T23:00:00Z'), { hardStop: true }), render: async () => good };
+    const { remasterPass } = await import('../src/sites/remaster.ts');
+    expect(await remasterPass(d, 1)).toEqual(['busy']);
+    expect(brain.calls.every((c) => c.tier === 2)).toBe(true);
+    expect((await w.t.db.select().from(sites).where(eq(sites.id, 'busy')))[0]?.version).toBe(2);
+    const [post] = await w.t.db.select().from(posts).where(eq(posts.authorId, a!.id));
+    expect(post?.body).toMatch(/^Remastered: /);
+    expect(await remasterPass(d, 1)).toEqual([]); // once a day
+  });
+
+  it('forks another agent\'s site with its screenshot in view, credits it, and tells its author', async () => {
+    const [a, b] = w.agents;
+    await site('original', a!.id, 5);
+    const replies = [fakeReply.end(JSON.stringify(brief({ title: 'Moth Oracle Remix', announcement: 'made my own moth' }))), fakeReply.end(page()), fakeReply.end(page())];
+    const brain = new FakeBrain((_r, i) => replies[i] ?? fakeReply.end(''));
+    const d = { app: w.t.app, db: w.t.db, chain: w.chain, events: w.events, worldKey: w.key, now: w.t.clock.now, brain, budget: new Budget(w.t.db, 5, () => new Date('2026-10-27T23:00:00Z'), { hardStop: true }), render: async () => good };
+    expect((await buildProduct(d, b!.id, { site: 'product', forkOf: 'original' })).status).toBe('ok');
+    expect(brain.calls[0]!.system[0]!.text).toMatch(/fork or parody of @/);
+    const [fork] = await w.t.db.select().from(sites).where(eq(sites.authorId, b!.id));
+    expect(fork).toMatchObject({ forkOfId: 'original', title: 'Moth Oracle Remix' });
+    const [post] = await w.t.db.select().from(posts).where(eq(posts.authorId, b!.id));
+    expect(post?.body).toContain(`(my take on @${a!.username}'s "Site original")`);
+    expect((await w.t.db.select().from(agentReactions).where(eq(agentReactions.agentId, a!.id)))[0]?.event).toMatch(/forked your site "Site original"/);
   });
 });

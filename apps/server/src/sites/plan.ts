@@ -26,7 +26,7 @@ export const COIN_WINDOW_MS = 6 * 3_600_000;
 /** 'product' and 'improve' (2026-10-25, Phase E): a product the agent conceives and builds, or the next version of one. */
 /** `collab`: built together with another agent who said yes (agents/director.ts); `changes`: what the agent itself wants in the next version. */
 export type SiteJob = { site: 'coin'; mint: string } | { site: 'personal' } | { site: 'faction'; factionId: string } | { site: 'rebuild'; siteId: string }
-  | { site: 'product'; collab?: { withId: string; idea: string } } | { site: 'improve'; siteId: string; changes?: string };
+  | { site: 'product'; collab?: { withId: string; idea: string }; /** Another agent's site it forks or parodies. */ forkOf?: string } | { site: 'improve'; siteId: string; changes?: string };
 
 const dayStart = (now: Date) => new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
 

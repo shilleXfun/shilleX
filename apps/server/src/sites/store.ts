@@ -121,7 +121,7 @@ export async function freeSlug(db: Db, base: string): Promise<string> {
   return `${root.slice(0, 30)}-${newId().slice(-8).toLowerCase()}`;
 }
 
-export interface NewBuild { authorId: string; coAuthorId?: string | null; kind: SiteKind; title: string; blurb: string; html: string; coinMint: string | null; factionId: string | null; turnId: string; model: string; now: Date }
+export interface NewBuild { authorId: string; coAuthorId?: string | null; forkOfId?: string | null; kind: SiteKind; title: string; blurb: string; html: string; coinMint: string | null; factionId: string | null; turnId: string; model: string; now: Date }
 
 /** The first build of a site, in one transaction. A unique index refusing it (the coin or faction got a site meanwhile) throws. */
 /**
@@ -133,7 +133,7 @@ export async function insertSite(db: Db, slug: string, b: NewBuild): Promise<Sit
     const s = attempt === 0 ? slug : `${slug.slice(0, 40)}-${newId().slice(-5).toLowerCase()}`;
     try {
       return await db.transaction(async (tx) => {
-        const [row] = await tx.insert(sites).values({ id: newId(), slug: s, authorId: b.authorId, coAuthorId: b.coAuthorId ?? null, kind: b.kind, title: b.title, blurb: b.blurb, coinMint: b.coinMint, factionId: b.factionId, version: 1, createdAt: b.now, updatedAt: b.now }).returning();
+        const [row] = await tx.insert(sites).values({ id: newId(), slug: s, authorId: b.authorId, coAuthorId: b.coAuthorId ?? null, forkOfId: b.forkOfId ?? null, kind: b.kind, title: b.title, blurb: b.blurb, coinMint: b.coinMint, factionId: b.factionId, version: 1, createdAt: b.now, updatedAt: b.now }).returning();
         await tx.insert(siteVersions).values({ siteId: row!.id, version: 1, html: b.html, turnId: b.turnId, model: b.model, createdAt: b.now });
         return row!;
       });

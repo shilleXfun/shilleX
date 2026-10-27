@@ -146,6 +146,12 @@ export interface StudioDeps {
   data: Record<string, unknown>;
   /** Tests stand in for the browser here. */
   render?: (html: string) => Promise<StudioRender | null>;
+  /** 2: the stronger model (a daily remaster); 1, the everyday one, by default. */
+  tier?: 1 | 2;
+  /** The house pays, not the agent's compute (a remaster). */
+  house?: boolean;
+  /** Another agent's site this one forks or parodies: its brief and how it looks, shown with the brief step. */
+  reference?: { text: string; jpeg: Buffer | null };
 }
 export interface StudioResult { brief: StudioBrief; html: string | null; notes: string | null; problems: string[]; attempts: number }
 
@@ -169,19 +175,23 @@ export function repeats(b: Pick<StudioBrief, 'aesthetic' | 'concept'>, recent: S
 
 export async function studioBuild(d: StudioDeps): Promise<StudioResult> {
   const call = (job: string, req: Omit<BrainRequest, 'tools'>, maxTokens: number, input: number) =>
-    billedCall({ job, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
-      () => d.brain.decide({ ...req, tools: [], maxTokens, tier: 1 }));
+    billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
+      () => d.brain.decide({ ...req, tools: [], maxTokens, tier: d.tier ?? 1 }));
 
   // 1. The brief, its own; a repeat of a recent direction gets one more try.
   const recentList = d.recent.slice(0, 30).map((r) => `- ${r.aesthetic.slice(0, 80)}: ${r.concept.slice(0, 120)}`).join('\n') || '(none yet)';
   let brief: StudioBrief | null = null, refused: string | null = null;
   for (let i = 0; i < 2 && !brief; i++) {
-    const user = `<world_content>\n${d.facts}\n\nRECENT SITES ON SHILLEX (their directions and ideas: yours must differ):\n${recentList}\n</world_content>${refused ? `\nYour last brief was refused: ${refused}. Choose differently.` : ''}\nWrite your brief.`;
-    const res = await call('site:brief', { system: [{ type: 'text', text: BRIEF_SYSTEM(d.username, d.purpose) }], effort: 'low', outputFormat: { type: 'json_schema', schema: STUDIO_BRIEF_SCHEMA }, messages: [{ role: 'user', content: user }] }, 2500, user.length / 3.5 + 1500);
+    const user = `<world_content>\n${d.facts}${d.reference ? `\n\nTHE SITE YOU FORK OR PARODY (credit it; make your own take, never a copy):\n${d.reference.text}` : ''}\n\nRECENT SITES ON SHILLEX (their directions and ideas: yours must differ):\n${recentList}\n</world_content>${refused ? `\nYour last brief was refused: ${refused}. Choose differently.` : ''}\nWrite your brief.`;
+    // A fork sees the original as well as reads it (its last screenshot).
+    const content: Anthropic.ContentBlockParam[] | string = d.reference?.jpeg
+      ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: d.reference.jpeg.toString('base64') } }, { type: 'text', text: user }] : user;
+    const res = await call('site:brief', { system: [{ type: 'text', text: BRIEF_SYSTEM(d.username, d.purpose) }], effort: 'low', outputFormat: { type: 'json_schema', schema: STUDIO_BRIEF_SCHEMA }, messages: [{ role: 'user', content }] }, 2500, user.length / 3.5 + 1500 + (d.reference?.jpeg ? 1600 : 0));
     try {
       const b = JSON.parse(textOf(res)) as StudioBrief;
       b.libraries = (b.libraries ?? []).filter((n) => LIBRARIES.some((l) => l.name === n)).slice(0, 3);
-      refused = repeats(b, d.recent);
+      // A fork or a parody may borrow the original's direction on purpose.
+      refused = d.reference ? null : repeats(b, d.recent);
       if (!refused) brief = b;
     } catch { refused = 'it was not valid JSON'; }
   }
