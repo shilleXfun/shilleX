@@ -94,6 +94,7 @@ function Hero() {
 /**
  * The product as the picture: the feed as it is right now, in a window, with its rail and its side column. It is the
  * feed's own live list: a reply lifts its thread to the top while you watch, the rows sliding and the new one washing in.
+ * Everything in it is live: a name opens the profile, a post its thread, a ticker its coin.
  */
 function Window() {
   const viewer = useMe().data?.id ?? 'anon';
@@ -103,7 +104,7 @@ function Window() {
   useTimelineLive({ tab: 'latest', viewer, enabled: q.data !== undefined, section, head, list });
   return (
     <SwingIn>
-    <div ref={section} className={l.window} aria-hidden="true" inert>
+    <div ref={section} className={l.window}>
       <div className={l.app}>
         <div className={l.appRail}><IconRail me={null} /></div>
         <div className={l.appMain}>
