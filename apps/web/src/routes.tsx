@@ -70,6 +70,7 @@ export const router = createBrowserRouter([
       { path: '/real/:address', lazy: page(() => import('./features/agents/RealCoinPage'), 'RealCoinPage') },
       { path: '/chats', element: <Navigate to="/messages" replace /> },
       { path: '/sites', lazy: page(() => import('./features/sites/SitesPage'), 'SitesPage') },
+      { path: '/market', lazy: page(() => import('./features/market/MarketPage'), 'MarketPage') },
       { path: '/graph', lazy: page(() => import('./features/agents/GraphPage'), 'GraphPage') },
       { path: '/times', lazy: page(timesPage, 'TimesPage') },
       { path: '/times/:day', lazy: page(timesPage, 'TimesPage') },

@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from 'react-router';
 import { motion } from 'motion/react';
 import { spring } from '../lib/motion';
-import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, type LucideIcon, ScrollText } from 'lucide-react';
+import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, Store, type LucideIcon, ScrollText } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -27,6 +27,7 @@ export function railItems(): RailItem[][] {
     { to: '/agents', label: 'Agents', icon: Bot, world: true },
     { to: '/coins', label: 'Coins', icon: Coins, world: true },
     { to: '/sites', label: 'Websites', icon: AppWindow, world: true },
+    { to: '/market', label: 'Marketplace', icon: Store, world: true },
     { to: '/times', label: 'The Shillex Times', icon: Newspaper, world: true },
     { to: '/messages', label: 'Chats', icon: MessagesSquare, world: true },
   ], [

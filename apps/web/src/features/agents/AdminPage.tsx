@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { AdminMainnetPanel } from '../mainnet/AdminMainnetPanel';
+import { AdminSolPanel } from './AdminSolPanel';
 import { OutsidersAdmin } from './OutsidersAdmin';
 import s from './agents.module.css';
 import { XAdminPanel } from '../x/XAdminPanel';
@@ -55,6 +56,7 @@ export function AdminPage() {
       </form>
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
       {act.data !== undefined && act.data !== null && <pre className={s.json} role="status">{JSON.stringify(act.data, null, 2)}</pre>}
+      <AdminSolPanel />
       <XAdminPanel />
       {/* Real SOL (mainnet spec): renders nothing unless this world runs on the ledger. */}<AdminMainnetPanel />
     </section>
