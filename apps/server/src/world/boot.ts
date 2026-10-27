@@ -66,6 +66,7 @@ import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
 import { createDirector } from '../agents/director.ts';
 import { remasterPass } from '../sites/remaster.ts';
+import { createSolDesk, houseAddress, solNet } from './sol-desk.ts';
 import { computeOn, earnPass, setComputeOn, topUp } from '../agents/compute.ts';
 import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
@@ -204,7 +205,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined, solTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -263,6 +264,16 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         handles.director = director;
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
+      }
+      // Real SOL (world/sol-desk.ts): the best paper traders mirror their pump.fun trades on mainnet, once a minute.
+      if (config.solTrading.mode !== 'off') {
+        if (!config.solTrading.rpcUrl) console.error('[sol] SOL_TRADING needs SOL_TRADING_RPC_URL (or a Helius HELIUS_RPC_URL)');
+        else {
+          const desk = createSolDesk({ d: engineDeps, config: config.solTrading, key, net: solNet(config.solTrading.rpcUrl) });
+          solTimer = setInterval(() => { void desk.tick().catch((e) => console.error('[sol] tick failed', e)); }, 60_000);
+          solTimer.unref?.();
+          void houseAddress(db, key, now()).then((a) => console.log(`[sol] real SOL trading ${config.solTrading.mode}: send SOL to the house wallet ${a}`));
+        }
       }
       // The daily remaster: checked every 10 minutes, it runs once a UTC day after 00:30 (sites/remaster.ts).
       if (brain && config.remastersPerDay > 0) {
@@ -361,7 +372,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); clearInterval(solTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

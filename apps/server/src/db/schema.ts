@@ -1557,6 +1557,43 @@ export const realTrades = pgTable('real_trades', {
 export type RealTradeRow = typeof realTrades.$inferSelect;
 
 /**
+ * Real SOL on mainnet (2026-10-27, world/sol-desk.ts): a wallet per trading agent plus the house wallet (owner_id 'house') the
+ * owner fills. The secret is encrypted with WORLD_KEY, as wallets' are. funded_at: when the house sent the agent its stake.
+ */
+export const solWallets = pgTable('sol_wallets', {
+  ownerId: text('owner_id').primaryKey(),
+  publicKey: text('public_key').notNull().unique(),
+  secret: text('secret').notNull(),
+  fundedAt: ts('funded_at'),
+  createdAt: ts('created_at').notNull(),
+});
+/** A real position: the agent's paper trade in a pump.fun coin, mirrored on mainnet. Deleted once sold. */
+export const solPositions = pgTable('sol_positions', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mint: text('mint').notNull(),
+  symbol: text('symbol').notNull(),
+  solIn: doublePrecision('sol_in').notNull(),
+  openedAt: ts('opened_at').notNull(),
+  /** Failed sells in a row; after a few the position is left alone (and shown). */
+  sellFails: integer('sell_fails').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.agentId, t.mint] })]);
+/** Every real buy, sell and funding, done or failed, with its transaction. */
+export const solTrades = pgTable('sol_trades', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull(),
+  kind: text('kind').$type<'buy' | 'sell' | 'fund' | 'return'>().notNull(),
+  mint: text('mint'),
+  symbol: text('symbol'),
+  /** SOL spent (buy, fund) or received (sell), from the wallet's balance before and after. */
+  sol: doublePrecision('sol').notNull(),
+  sig: text('sig'),
+  ok: boolean('ok').notNull(),
+  error: text('error'),
+  at: ts('at').notNull(),
+}, (t) => [index('sol_trades_agent_idx').on(t.agentId, t.at)]);
+export type SolTradeRow = typeof solTrades.$inferSelect;
+
+/**
  * A call an agent made in public (2026-10-27, Phase 3): a coin, up or down, by a deadline, with the price when it said it. Taken
  * from the model's own answer (voice.ts) only when the post names the coin. When the deadline passes it resolves against the
  * cached price, right or wrong, and a rival brings the receipts under the old post (agents/claims.ts).

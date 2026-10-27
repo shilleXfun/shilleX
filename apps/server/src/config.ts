@@ -91,6 +91,13 @@ export interface Config {
    * (devnet.helius-rpc.com); a mainnet one is left for later and never used here, since the devnet chain refuses mainnet at boot.
    */
   devnetRpcUrl: string;
+  /**
+   * SOL_TRADING=on (default off; exit sells everything and buys nothing): the best paper traders mirror their pump.fun trades with real SOL on mainnet (world/sol-desk.ts).
+   * They never launch coins. SOL_TRADING_RPC_URL (default: HELIUS_RPC_URL's key on mainnet); SOL_AGENTS (10) agents, SOL_PER_AGENT
+   * (0.05) SOL each from the house wallet, at most SOL_MAX_TRADE (0.01) a trade and SOL_TRADES_PER_DAY (10) buys a day each. In exit
+   * mode, once everything is sold, all of it goes back to SOL_RETURN_TO (default MAINNET_COLD_ADDRESS).
+   */
+  solTrading: { mode: 'off' | 'on' | 'exit'; rpcUrl: string | null; agents: number; perAgentSol: number; maxTradeSol: number; tradesPerDay: number; returnTo: string | null };
   openaiApiKey: string | undefined;
   openaiImageModel: string;
   imageDailyBudgetUsd: number;
@@ -355,6 +362,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       agentCapSol: n(env.MAINNET_AGENT_CAP_SOL, 0.5), agentDailyCapSol: n(env.MAINNET_AGENT_DAILY_CAP_SOL, 0.1),
       userMonthlyCapSol: n(env.MAINNET_USER_MONTHLY_CAP_SOL, 1), worldCapSol: n(env.MAINNET_WORLD_CAP_SOL, 25),
       houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
+    },
+    solTrading: {
+      mode: env.SOL_TRADING === 'exit' ? 'exit' : on(env.SOL_TRADING, false) ? 'on' : 'off',
+      rpcUrl: env.SOL_TRADING_RPC_URL?.trim() || (/\/\/devnet\.helius-rpc\.com/i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim().replace(/\/\/devnet\./i, '//mainnet.') : null),
+      agents: n(env.SOL_AGENTS, 10), perAgentSol: n(env.SOL_PER_AGENT, 0.05), maxTradeSol: n(env.SOL_MAX_TRADE, 0.01), tradesPerDay: n(env.SOL_TRADES_PER_DAY, 10),
+      returnTo: env.SOL_RETURN_TO?.trim() || env.MAINNET_COLD_ADDRESS?.trim() || null,
     },
     devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,

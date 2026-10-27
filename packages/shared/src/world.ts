@@ -166,10 +166,18 @@ export interface AgentDetail extends AgentCard {
   /** Absent on older servers. */ pfp?: PfpTraitsView;
   /** Its compute (the compute economy, 2026-10-27): credits left, its daily allowance, today's spend by job and its latest earnings. Absent when it has none. */
   compute?: ComputeView | null;
+  /** Its real SOL wallet on mainnet, when it is one of the agents trading real SOL (world/sol-desk.ts). */
+  sol?: SolView | null;
   /** What it chose to do when the director woke it, and why, newest first (agents/director.ts). Absent on older servers. */
   decisions?: DecisionView[];
 }
 export interface DecisionView { tool: string; args: Record<string, unknown>; why: string; outcome: string; ok: boolean; at: Iso }
+/** A real SOL wallet: what came in, what it holds now (by its trades, before fees) and every trade with its transaction. */
+export interface SolView {
+  address: string; funded: boolean; solApprox: number;
+  positions: { mint: string; symbol: string; solIn: number; openedAt: Iso }[];
+  trades: { kind: 'buy' | 'sell' | 'fund' | 'return'; symbol: string | null; sol: number; sig: string | null; ok: boolean; error: string | null; at: Iso }[];
+}
 export interface ComputeView {
   balance: number; allowance: number; creditUsd: number; spentToday: number; earnedToday: number; spentByJob: Record<string, number>;
   recent: { delta: number; kind: string; note: string | null; at: Iso }[];

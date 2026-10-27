@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Copy, Wallet } from 'lucide-react';
-import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type AgentJob, type ComputeView, type DecisionView, type TradeView, type TurnView } from '@shillex/shared';
+import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type AgentJob, type ComputeView, type DecisionView, type SolView, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
@@ -350,6 +350,35 @@ function ComputeCard({ c }: { c: ComputeView }) {
   );
 }
 
+const SOL_WORD = { buy: 'Bought', sell: 'Sold', fund: 'Got its stake', return: 'Sent back to the owner' } as const;
+const solscan = (path: string) => `https://solscan.io/${path}`;
+
+/** Its real SOL wallet on mainnet: the agents trading real SOL mirror their pump.fun paper trades with it (world/sol-desk.ts). */
+function SolCard({ w }: { w: SolView }) {
+  return (
+    <Section id="agent-sol" title="Real SOL" note={w.funded ? `about ${w.solApprox.toFixed(3)} SOL` : 'waiting for its stake'}>
+      <dl className={s.walletList}>
+        <div><dt>Wallet</dt><dd><a href={solscan(`account/${w.address}`)} target="_blank" rel="noreferrer">{abbreviateMint(w.address)}</a></dd></div>
+        <div><dt>Holding</dt><dd>{w.positions.length ? w.positions.map((p) => `$${p.symbol} (${p.solIn.toFixed(4)} SOL in)`).join(' · ') : 'nothing'}</dd></div>
+      </dl>
+      {w.trades.length > 0 && (
+        <ul className={cx(s.rows, s.computeLedger)}>
+          {w.trades.slice(0, 8).map((t) => (
+            <li key={`${t.at}-${t.kind}-${t.symbol}`} className={s.computeRow}>
+              <span className={s.computeWhat} title={t.error ?? undefined}>
+                {t.sig ? <a href={solscan(`tx/${t.sig}`)} target="_blank" rel="noreferrer">{SOL_WORD[t.kind]}{t.symbol ? ` $${t.symbol}` : ''}</a> : `${SOL_WORD[t.kind]}${t.symbol ? ` $${t.symbol}` : ''}`}
+                {!t.ok && ' · failed'}
+              </span>
+              <span className={cx(s.rowNum, t.kind === 'buy' || t.kind === 'return' ? s.down : s.up)}>{t.ok ? `${t.kind === 'buy' || t.kind === 'return' ? '−' : '+'}${t.sol.toFixed(4)}` : '—'}</span>
+              <span className={s.computeTime}>{relativeTime(t.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 const TOOL_WORD: Record<string, string> = { post: 'Posted', reply: 'Replied', buy: 'Bought', sell: 'Sold', build_site: 'Built a site', update_site: 'Remade a site', collab_with: 'Asked to build together', answer_collab: 'Answered an invitation', launch_coin: 'Launched a coin', give_compute: 'Gave compute', idle: 'Rested' };
 
 /** What it chose each time the director woke it, in its own words, and what came of it. */
@@ -575,6 +604,7 @@ export function AgentProfilePage() {
                 {tab === 'money' && (
                   <>
                     <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>
+                    {a.data.sol && <SolCard w={a.data.sol} />}
                     {a.data.compute && <ComputeCard c={a.data.compute} />}
                     {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide />}
                   </>

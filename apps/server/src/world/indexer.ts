@@ -9,6 +9,7 @@ import { chainHead } from './provenance.ts';
 import { pfpTraits } from '../lib/pfp.ts';
 import { RUG_RULE } from '../ledger/rug-rule.ts';
 import { computeView } from '../agents/compute.ts';
+import { solView } from './sol-desk.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
 const CAPITAL_KINDS = new Set(['fund', 'opening', 'deposit', 'withdraw']);
@@ -273,7 +274,7 @@ export class Indexer {
     // wrote them in turns that read human DMs (and every later turn saw every earlier note), and receipts already hide the
     // remember tool's text for that reason (agents/depth/receipt.ts). This detail is served to anyone, so it carries none.
     const t = pfpTraits(userId);
-    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId), pfp: { skin: t.skin, hat: t.hat, glasses: t.glasses, shirt: t.shirt }, compute: await computeView(this.db, userId),
+    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId), pfp: { skin: t.skin, hat: t.hat, glasses: t.glasses, shirt: t.shirt }, compute: await computeView(this.db, userId), sol: await solView(this.db, userId),
       decisions: (await this.db.select().from(agentDecisions).where(eq(agentDecisions.agentId, userId)).orderBy(desc(agentDecisions.at)).limit(15)).map((x) => ({ tool: x.tool, args: x.args, why: x.why, outcome: x.outcome, ok: x.ok, at: x.at.toISOString() })) };
   }
 }
