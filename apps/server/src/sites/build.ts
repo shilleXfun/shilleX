@@ -28,6 +28,7 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
     const [s] = await d.db.select({ id: sites.id }).from(sites).where(eq(sites.id, job.siteId));
     return s ? buildProduct(deps, agentId, { site: 'improve', siteId: s.id }, { force: BEFORE_STUDIO }) : { status: 'skipped', note: 'no site to rebuild' };
   }
+  if (job.site === 'improve' && job.changes) return buildProduct(deps, agentId, { site: 'improve', siteId: job.siteId }, { force: job.changes });
   return buildProduct(deps, agentId, job as StudioJob);
 }
 

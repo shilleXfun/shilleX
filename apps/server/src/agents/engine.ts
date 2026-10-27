@@ -13,6 +13,8 @@ import { restedEnergy } from './state.ts';
 import { pacedTick } from './raised/pacing.ts';
 import { keyDriven } from './external/keys.ts';
 import { planSites } from '../sites/plan.ts';
+import { computeOn } from './compute.ts';
+import { agentCompute } from '../db/schema.ts';
 import { runJob } from '../world/jobs.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 import type { ModelHalt } from './halt.ts';
@@ -36,6 +38,8 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
   quiet?: QuietGate;
   /** Writes a launching agent's coin (name, ticker, lore, logo idea) with the model, and draws its logo once (coin-launch.ts). */
   coinWriter?: CoinWriter;
+  /** The director wakes the agents and they decide for themselves (agents/director.ts): the engine keeps only the free moves for them. */
+  director?: boolean;
   logos?: LogoMaker;
   /** Starts a website build now (sites/build.ts siteBuilder); false when one is already running. */
   buildSite?: (agentId: string, job: SiteJob) => boolean;
@@ -73,15 +77,27 @@ export async function pickAgent(d: EngineDeps): Promise<string | null> {
 
 /** One engine turn: pick an agent, perceive, decide (with the depth modules), act. The scheduler runs exactly this; so does the simulation test. */
 const WORLD_TRADES = new Set<ActionKind>(['buy', 'sell', 'launch', 'rug']);
+/** What the engine still does for an agent the director runs: nothing that needs a thought of its own. */
+export const FREE_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['react', 'follow', 'unfollow', 'sell', 'idle']);
+/** Whether an agent has compute to think with (always, when the economy is off). */
+async function hasCompute(db: EngineDeps['db'], agentId: string): Promise<boolean> {
+  if (!computeOn()) return true;
+  const [r] = await db.select({ b: agentCompute.balance }).from(agentCompute).where(eq(agentCompute.agentId, agentId));
+  return (r?.b ?? 0) > 0;
+}
 
 export async function engineTurn(d: EngineDeps): Promise<{ kind: ActionKind; ok: boolean; turnId: string; error?: string } | null> {
   const id = await pickAgent(d);
   if (!id) return null;
   if (d.moments && (await needsPhrasebook(d.db, id, d.now()))) d.moments.enqueue({ kind: 'phrasebook', agentId: id, data: {}, at: d.now() });
-  await planSites(d, id);
+  // With the director on, an agent with compute decides for itself what to say, buy, launch and build (agents/director.ts): the
+  // engine keeps only what needs no thought (reactions, follows, the rule-based exits of its trades), and no site is planned for it.
+  const directed = Boolean(d.director) && (await hasCompute(d.db, id));
+  if (!directed && !d.director) await planSites(d, id);
   const v = await perceive(d, id);
   const base = candidates(v, d.rng);
-  const all = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  const every = d.depth ? d.depth.modify(v, [...base, ...d.depth.candidates(v, d.rng).filter((c) => ready(v, c.kind))]) : base;
+  const all = directed ? every.filter((c) => FREE_KINDS.has(c.kind) && !c.reaction) : every;
   // Frozen books (mainnet spec §5), or a chain that cannot be read: the engine runs talk-only until money can move again.
   // Real-coin mode: nothing trades Shillex coins, whichever module proposed it (goals, nudges, happenings); the paper desk is the trading.
   // Coins on chain (world and hybrid modes): the chain budget and, in hybrid, devs-only launches (world/hybrid.ts) have the last word.

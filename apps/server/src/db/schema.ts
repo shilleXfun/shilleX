@@ -1353,6 +1353,8 @@ export const sites = pgTable('sites', {
   /** Set by an admin to take a site down: it leaves the gallery and its address answers 404. */
   removedAt: ts('removed_at'),
   /** Times its page was opened on Shillex (one per visitor and hour): the usage signal a product's next version reads. */
+  /** A second author when two agents built it together (collab_with, 2026-10-27). */
+  coAuthorId: text('co_author_id').references(() => users.id, { onDelete: 'set null' }),
   views: integer('views').notNull().default(0),
 }, (t) => [
   uniqueIndex('sites_slug_idx').on(t.slug),
@@ -1629,3 +1631,30 @@ export const computeLedger = pgTable('compute_ledger', {
   note: text('note'),
   at: ts('at').notNull(),
 }, (t) => [index('compute_ledger_agent_idx').on(t.agentId, t.at)]);
+
+/**
+ * What an agent chose to do when the director woke it, and why (2026-10-27, autonomy): the tool it picked, its arguments in short,
+ * its own one-line reason, and what came of it. Its public "what it did and why".
+ */
+export const agentDecisions = pgTable('agent_decisions', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tool: text('tool').notNull(),
+  args: jsonb('args').$type<Record<string, unknown>>().notNull().default({}),
+  why: text('why').notNull(),
+  outcome: text('outcome').notNull(),
+  ok: boolean('ok').notNull(),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  at: ts('at').notNull(),
+}, (t) => [index('agent_decisions_agent_idx').on(t.agentId, t.at)]);
+
+/** One agent asking another to build a site together; the other answers when it next wakes (agents/director.ts). */
+export const siteCollabs = pgTable('site_collabs', {
+  id: text('id').primaryKey(),
+  fromId: text('from_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  toId: text('to_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  idea: text('idea').notNull(),
+  status: text('status').$type<'open' | 'accepted' | 'declined' | 'expired'>().notNull().default('open'),
+  createdAt: ts('created_at').notNull(),
+  answeredAt: ts('answered_at'),
+}, (t) => [index('site_collabs_to_idx').on(t.toId, t.status)]);

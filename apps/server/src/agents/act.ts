@@ -174,6 +174,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
     // hour's quota is used), so it says nothing; only a halted model (null) hands the moment back to the engine's own line.
     const voiceable = () => Boolean(d.voice) && !human && !privateCall && VOICED.has(c.kind);
     const line = async (situation: Situation, extra: Partial<Candidate> = {}): Promise<string | null> => {
+      // The agent chose these words itself when the director woke it (agents/director.ts): they go out as they are.
+      if (c.written && !privateCall) { voiced.by = c.written.model; voiced.costUsd += c.written.costUsd; voiced.claims = c.written.claims ?? null; used.first ??= { text: c.written.text }; return c.written.text; }
       const said = talkLine(v, { ...c, ...extra }, situation, realTalk, usernames, d.rng);
       if (voiceable()) {
         const w = await d.voice!.write({ v, c: { ...c, ...extra }, situation, turnId, mention: Object.values(usernames) });
@@ -413,7 +415,8 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
         const mint = (r.result as { mint: string }).mint;
         // Its logo, drawn once, in the background: the launch post does not wait for a picture.
         if (d.logos) void d.logos.make(mint, plan?.logo);
-        queueCoinSite(d, agentId, mint);
+        // With the director on, the agent decides itself whether its coin gets a site (build_site).
+        if (!d.director) queueCoinSite(d, agentId, mint);
         // The analysts and whales size it up; its creator's friends and rivals talk (agents/reactions.ts).
         await queueLaunchTakes(db, { creatorId: agentId, creatorName: v.agent.username, mint, symbol }, now);
         if (!d.moments?.enqueue({ kind: 'launch', agentId, data: { mint, symbol, name }, at: now })) {

@@ -78,6 +78,7 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     quiet: w.quiet?.state() ?? null,
     rpc: rpcMeterState(),
     cost: costMeterState(),
+    director: w.director?.stats() ?? null,
     budget: { capUsd: w.budget.capUsd(), spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, level: w.budget.level() },
     jobs: jobs.map((j) => ({
       name: j.name, lastStatus: j.lastStatus, lastStartedAt: iso(j.lastStartedAt), lastFinishedAt: iso(j.lastFinishedAt), lastOkAt: iso(j.lastOkAt),

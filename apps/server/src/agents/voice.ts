@@ -527,6 +527,21 @@ const answerOf = (res: { content: { type: string; text?: string }[]; stopReason:
   return wholeSentences(t, res.stopReason === 'max_tokens' || [...t].length > MAX_CHARS + 40);
 };
 
+/**
+ * The same checks a written line passes in write() below, for words an agent chose elsewhere (the director, agents/director.ts):
+ * cleaned, every number from `facts`, no trade it is not making, no phrasebook echo, a reply that answers its parent, none of its
+ * never-words or the feed's worn ones, and the publish gate. The cleaned line, or why it was refused.
+ */
+export async function vetLine(db: Db, v: AgentView, raw: string, facts: string, now: Date, o: { parent?: string; mention: string[] }): Promise<{ text: string } | { why: string }> {
+  const text = cleanModelText(withoutTic(raw.trim()), MAX_CHARS + 40, o.mention);
+  const why = !text ? 'it was empty after cleaning' : !grounded(raw, facts) ? 'it uses a number that is not in what you were told'
+    : claimsTrade(raw, Boolean(v.depth.paper?.length) || v.wallet.positions.length > 0) ? 'it announces a trade; posts never trade (use buy or sell)'
+    : phrasebookEcho(text, bannedLines(v)) ? 'it is a stock line the old phrasebook used; say something only you would say'
+    : o.parent && !answersParent(text, o.parent) ? 'it does not answer the post: take up one of its names, coins, numbers or phrases'
+    : neverWordIn(text, v.depth.persona?.voice.neverWords ?? []) ?? overused(text, await hotWords(db, now)) ?? await ungrounded(db, v.agent.id, text, now);
+  return why || !text ? { why: why ?? 'it was empty after cleaning' } : { text };
+}
+
 export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget; now: () => Date; halt?: ModelHalt; perHour: number; /** Provider names: each agent is written by its own home provider first. */ homes?: readonly string[] }): Voice {
   const hour: number[] = [];
   const perAgent = new Map<string, number[]>();

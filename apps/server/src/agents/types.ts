@@ -34,6 +34,8 @@ export interface Candidate {
   news?: { topicId: string } | { embedId: string };
   /** A happening (depth/happenings.ts): a duel, an AMA, an election, a milestone or a ranking, and which one. */
   event?: { type: string; id?: string };
+  /** The words the agent already chose when the director woke it (agents/director.ts), checked: act says exactly these. */
+  written?: { text: string; model: string; costUsd: number; claims?: { coin: string; direction: 'up' | 'down'; hours: number }[] };
   /** A buy's plan (decide.ts): the desk opens a thesis with it once the buy lands. */
   thesis?: { targetPct: number; stopPct: number; horizonMs: number; conviction: number; reason: string };
 }

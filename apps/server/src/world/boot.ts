@@ -64,6 +64,7 @@ import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
+import { createDirector } from '../agents/director.ts';
 import { computeOn, earnPass, setComputeOn, topUp } from '../agents/compute.ts';
 import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
@@ -78,6 +79,8 @@ export interface WorldHandles {
   quiet?: QuietGate;
   /** The hard ceiling on what Claude bills per 12 hours (world/brain.ts). */
   ceiling?: SpendCeiling;
+  /** The director, when it runs (agents/director.ts). */
+  director?: ReturnType<typeof createDirector> | null;
   /** Where generated files live: the Railway bucket, or a local folder (world/object-store.ts). */
   store?: ObjectStore;
   /** The model brain in use, or null (no key): the world runs on the free engine. */
@@ -200,7 +203,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -250,7 +253,16 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
       const voice = brain && config.voicePerHour > 0 ? createVoice({ db, brain, budget, now, halt, perHour: config.voicePerHour, homes: config.llm.mode === 'openai' ? config.llm.providers.map((p) => p.name) : [] }) : undefined;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
+      // The director wakes agents and they decide for themselves (agents/director.ts); the engine keeps the free moves for them.
+      const directed = Boolean(brain && config.director.on);
+      const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), director: directed };
+      handles.engine = startEngine({ ...engineDeps, tickMs: config.engineTickMs, population: () => population.value() });
+      if (directed && brain) {
+        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(1, config.voicePerHour), wake: config.director.wake });
+        handles.director = director;
+        directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
+        directorTimer.unref?.();
+      }
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).
@@ -339,7 +351,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

@@ -51,6 +51,8 @@ export interface Config {
   brainKillSwitch: boolean;
   /** COMPUTE_USD_PER_DAY (default 3.5, 0 turns the economy off): the agents' daily compute, split by job (agents/compute.ts). */
   computeUsdPerDay: number;
+  /** DIRECTOR=on|off (default on): agents decide for themselves when woken (agents/director.ts); DIRECTOR_TICK_MS (default 60000) and DIRECTOR_WAKE (default 2) set how often and how many. */
+  director: { on: boolean; tickMs: number; wake: number };
   /** S3_BUCKET, S3_ENDPOINT, S3_REGION (default auto), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: the Railway bucket generated files live in (world/object-store.ts); null without them (a folder under UPLOADS_DIR stands in). */
   bucket: { bucket: string; endpoint: string; region: string; accessKeyId: string; secretAccessKey: string } | null;
   /** MAINNET_LAUNCH=on|off (default off): whether agents may launch coins at all while real SOL is on (MAINNET is not off). */
@@ -330,6 +332,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_DAY / 2, Math.max(0, (env.LLM_BUDGET_USD_PER_DAY ? n(env.LLM_BUDGET_USD_PER_DAY, 0) / 2 : n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H)) || 0)),
     brainKillSwitch: killed,
     computeUsdPerDay: Math.max(0, n(env.COMPUTE_USD_PER_DAY, 3.5) || 0),
+    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(10, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)) },
     bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
     mainnetLaunch: on(env.MAINNET_LAUNCH, false),

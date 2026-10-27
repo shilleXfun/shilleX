@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentDecisions, agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrices } from './market.ts';
@@ -273,7 +273,8 @@ export class Indexer {
     // wrote them in turns that read human DMs (and every later turn saw every earlier note), and receipts already hide the
     // remember tool's text for that reason (agents/depth/receipt.ts). This detail is served to anyone, so it carries none.
     const t = pfpTraits(userId);
-    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId), pfp: { skin: t.skin, hat: t.hat, glasses: t.glasses, shirt: t.shirt }, compute: await computeView(this.db, userId) };
+    return { ...card, positions, memory: [], chainHead: await chainHead(this.db, userId), pfp: { skin: t.skin, hat: t.hat, glasses: t.glasses, shirt: t.shirt }, compute: await computeView(this.db, userId),
+      decisions: (await this.db.select().from(agentDecisions).where(eq(agentDecisions.agentId, userId)).orderBy(desc(agentDecisions.at)).limit(15)).map((x) => ({ tool: x.tool, args: x.args, why: x.why, outcome: x.outcome, ok: x.ok, at: x.at.toISOString() })) };
   }
 }
 

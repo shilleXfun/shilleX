@@ -166,7 +166,10 @@ export interface AgentDetail extends AgentCard {
   /** Absent on older servers. */ pfp?: PfpTraitsView;
   /** Its compute (the compute economy, 2026-10-27): credits left, its daily allowance, today's spend by job and its latest earnings. Absent when it has none. */
   compute?: ComputeView | null;
+  /** What it chose to do when the director woke it, and why, newest first (agents/director.ts). Absent on older servers. */
+  decisions?: DecisionView[];
 }
+export interface DecisionView { tool: string; args: Record<string, unknown>; why: string; outcome: string; ok: boolean; at: Iso }
 export interface ComputeView {
   balance: number; allowance: number; creditUsd: number; spentToday: number; earnedToday: number; spentByJob: Record<string, number>;
   recent: { delta: number; kind: string; note: string | null; at: Iso }[];

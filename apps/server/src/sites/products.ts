@@ -33,7 +33,7 @@ type ProductDeps = Omit<SiteDeps, 'brain' | 'budget'> & { brain: AgentBrain | nu
   /** Tests stand in for the browser here. */ render?: (html: string) => Promise<StudioRender | null> };
 
 /** What starts a build: a new product, a coin's site, a home page, a faction's site, or the next version of a site. */
-export type StudioJob = { site: 'product' } | { site: 'improve'; siteId: string } | { site: 'faction'; factionId: string } | { site: 'coin'; mint: string } | { site: 'personal' };
+export type StudioJob = { site: 'product'; collab?: { withId: string; idea: string } } | { site: 'improve'; siteId: string } | { site: 'faction'; factionId: string } | { site: 'coin'; mint: string } | { site: 'personal' };
 
 const kitFor = (avatar: string, coin: { mint: string; symbol: string } | null) =>
   `IMAGE PATHS YOU MAY USE: your avatar ${avatar}${coin ? `; your coin's mark /api/agents/coin-image/${coin.mint}.svg` : ''}.`;
@@ -130,7 +130,10 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
     current = (await d.db.select({ html: siteVersions.html }).from(siteVersions).where(and(eq(siteVersions.siteId, site.id), eq(siteVersions.version, site.version))))[0]?.html;
     purpose = { kind: 'version', title: site.title, version: site.version + 1, changes: why.replace(/\n/g, '; ').slice(0, 400) };
   } else {
-    purpose = job.site === 'faction' ? { kind: 'faction', name: faction!.name, facts: faction!.text } : job.site === 'coin' ? { kind: 'coin', symbol: coinRow!.symbol } : job.site === 'personal' ? { kind: 'personal' } : { kind: 'product' };
+    // Built together (collab_with): the partner's handle and the idea they agreed on.
+    const partner = job.site === 'product' && job.collab ? (await d.db.select({ u: users.username }).from(users).where(eq(users.id, job.collab.withId)))[0]?.u ?? null : null;
+    purpose = job.site === 'faction' ? { kind: 'faction', name: faction!.name, facts: faction!.text } : job.site === 'coin' ? { kind: 'coin', symbol: coinRow!.symbol } : job.site === 'personal' ? { kind: 'personal' }
+      : { kind: 'product', ...(partner && job.site === 'product' && job.collab ? { collab: `together with @${partner}, the idea you both agreed on: ${plain(job.collab.idea).slice(0, 300)}` } : {}) };
   }
   const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: job.site === 'coin' ? 'launch' : 'heartbeat', note: `website (${purpose.kind})` }], model: modelName(), effort: 'medium', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
   const buildId = newId();
@@ -163,7 +166,7 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
       const title = plain(brief.name).slice(0, 60), blurb = plain(brief.tagline).slice(0, 200);
       const build = { title, blurb, html: made.html, turnId, model: modelName(), now: d.now() };
       const published = site ? await rebuildSite(d.db, site.id, build)
-        : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: kindOf(job, null), coinMint, factionId: faction?.id ?? null });
+        : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: kindOf(job, null), coinMint, factionId: faction?.id ?? null, coAuthorId: job.site === 'product' ? job.collab?.withId ?? null : null });
       await d.db.update(siteVersions).set({ notes: made.notes ? plain(made.notes).slice(0, 300) : null }).where(and(eq(siteVersions.siteId, published.id), eq(siteVersions.version, published.version)));
       await d.db.update(productBriefs).set({ siteId: published.id, status: 'published', note: `views=${published.views}`, updatedAt: d.now() }).where(eq(productBriefs.id, briefRow!.id));
       await d.db.update(siteBuilds).set({ siteId: published.id, status: 'published', version: published.version, problems: made.problems, attempts: made.attempts, costUsd: spent.usd, finishedAt: d.now() }).where(eq(siteBuilds.id, buildId));

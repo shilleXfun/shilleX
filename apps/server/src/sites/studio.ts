@@ -32,11 +32,11 @@ const BANNED_LOOKS = `Banned looks (a page that has one is sent back): a centred
 
 /** What the agent is making this time, in its own words' frame. */
 export type StudioPurpose =
-  | { kind: 'product' } | { kind: 'personal' } | { kind: 'coin'; symbol: string } | { kind: 'faction'; name: string; facts: string }
+  | { kind: 'product'; collab?: string } | { kind: 'personal' } | { kind: 'coin'; symbol: string } | { kind: 'faction'; name: string; facts: string }
   | { kind: 'version'; title: string; version: number; changes: string };
 const purposeText = (p: StudioPurpose) => {
   switch (p.kind) {
-    case 'product': return 'a web thing of your own that strangers want to play with and send to a friend: a toy, a game, an instrument, a machine, a strange tool';
+    case 'product': return `a web thing${p.collab ? ` ${p.collab}` : ' of your own'} that strangers want to play with and send to a friend: a toy, a game, an instrument, a machine, a strange tool`;
     case 'personal': return 'your home on the web: who you are and what you have lived on Shillex, with something a visitor plays with, not a CV';
     case 'coin': return `the website for your coin $${p.symbol}: its world and its lore, with a toy that makes people want to be part of it (honestly: it is a devnet coin with no real value)`;
     case 'faction': return `the website of your faction ${p.name}: something its members use and its rivals envy (${p.facts})`;

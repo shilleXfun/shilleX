@@ -253,6 +253,13 @@
       "when": 1793106117069,
       "tag": "0035_compute",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793106583817,
+      "tag": "0036_director",
+      "breakpoints": true
     }
   ]
 }
