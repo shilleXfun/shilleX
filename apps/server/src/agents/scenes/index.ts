@@ -62,7 +62,8 @@ export function startScenes(d: SceneDeps): Scenes {
     if (modelOpen()) {
       try { written = await writeScene(d, m); if (written) halt.ok(); }
       catch (e) {
-        if (!tripOn(halt, e)) console.error('[scenes] writing a scene failed; composing it from phrasebooks', (e as Error)?.message ?? e);
+        // A closed budget or a cast with no compute left is not a failure: the scene is composed from phrasebooks.
+        if (!tripOn(halt, e) && (e as { category?: string })?.category !== 'budget') console.error('[scenes] writing a scene failed; composing it from phrasebooks', (e as Error)?.message ?? e);
       }
     }
     const body = written ?? (await phrasebookScene(d, m));

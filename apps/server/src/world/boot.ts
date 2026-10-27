@@ -64,6 +64,7 @@ import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
+import { computeOn, earnPass, setComputeOn, topUp } from '../agents/compute.ts';
 import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
 import { localStore, s3Store, type ObjectStore } from './object-store.ts';
@@ -208,6 +209,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const halt = createModelHalt(now);
   // One hourly allowance for every line written without the model: with the brain down, ~10 posts an hour instead of a flood.
   const quiet = createQuietGate(config.phrasebookPerHour, now);
+  // The compute economy: every agent pays for its own model calls from a daily allowance (agents/compute.ts).
+  setComputeOn(config.computeUsdPerDay > 0);
   // Coin logos (agents/coin-launch.ts): drawn once into the bucket, or a local folder without one; no OPENAI_API_KEY, no logos.
   const store = config.bucket ? s3Store(config.bucket) : localStore(join(config.uploadsDir, 'objects'));
   const logos = createLogoMaker({ db, store, gen: spotlightImageGen(config), model: config.openaiImageModel, limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
@@ -282,6 +285,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     // With the brain halted (a refused key, a usage limit) no model call is tried: seeds only, and the sheets and reflections wait
     // (2026-10-27: this job failed 24 times in a row against the usage limit). An account error met here halts every model caller.
     const brain = halt.reason() ? null : handles.brain ?? null;
+    // Each agent's compute is topped up once a UTC day (agents/compute.ts); the first pass of a day does it.
+    if (computeOn()) await topUp(db, now(), config.computeUsdPerDay);
     try {
       const r = await personaPass({ db, chain, now, brain, budget });
       // Then the sheets (frozen once written) and the six-hourly reflections (agents/reflect.ts).
@@ -302,6 +307,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     const gone = await pruneReactions(db, now());
     // Public calls past their deadline resolve, and a rival brings the receipts (agents/claims.ts).
     const calls = await resolveClaims(db, now());
+    // What the agents earned since the last pass: replies, calls that came true, their coins' day (agents/compute.ts).
+    await earnPass(db, now());
     return { status: 'ok', note: `${r.opened} opened, ${r.advanced} advanced, ${r.resolved} resolved, ${gone} old reactions cleared, ${calls} calls resolved` };
   });
   const arcTimer = config.worldHalted ? undefined : setInterval(arcsRun, 5 * 60_000);

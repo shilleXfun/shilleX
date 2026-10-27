@@ -4,6 +4,7 @@ import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
 import { ClaudeBrain, InputTooLarge, PRICE_OF_HAIKU, knownPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { costMeter } from '../world/cost-meter.ts';
+import { chargeCompute, computeGate, computeOn } from './compute.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
 import { Budget } from '../world/budget.ts';
@@ -75,9 +76,14 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
   /** The job the call is for (scene, voice, site:page…), for the per-call cost log and the hourly [cost] summary (world/cost-meter.ts). */ job?: string;
   /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[] } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   const worst = x.worstUsd * worstScale;
-  // Reserve first (it may read the database), so the cap check and the booking below stay together with no await between them.
-  if (x.budget.admits && !(await x.budget.admits(async () => x.agentIds ?? ('turnId' in x ? (await x.db.select({ a: agentTurns.agentId }).from(agentTurns).where(eq(agentTurns.id, x.turnId))).map((r) => r.a) : null))))
+  // The agents the call is for: a turn's agent, or a world call's cast (read at most once).
+  let who: Promise<string[] | null> | null = null;
+  const agentsOf = () => (who ??= x.agentIds ? Promise.resolve(x.agentIds) : 'turnId' in x ? x.db.select({ a: agentTurns.agentId }).from(agentTurns).where(eq(agentTurns.id, x.turnId)).then((r) => r.map((y) => y.a)) : Promise.resolve(null));
+  // Reserve and compute first (they read the database), so the cap check and the booking below stay together with no await between them.
+  if (x.budget.admits && !(await x.budget.admits(agentsOf)))
     throw new BudgetClosed('the budget is in reserve: only the most-followed agents get model calls now');
+  // Each agent pays for its own thinking (agents/compute.ts): with none left, no call.
+  if (computeOn()) await computeGate(x.db, await agentsOf());
   if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to $${worst.toFixed(4)}`);
   const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
   book(worst);
@@ -99,6 +105,7 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
   const priced = knownPrice(res.model) ? res.model : x.model ?? HAIKU;
   const cost = priceOf(priced, res.usage);
   costMeter().record(x.job ?? 'other', res.model || priced, res.usage, cost);
+  if (computeOn()) await chargeCompute(x.db, await agentsOf(), cost, x.job ?? 'other', new Date()).catch((e) => console.error('[compute] could not charge a call', (e as Error)?.message));
   book(cost - worst);
   await addCost(x.db, x, cost - worst);
   return res;

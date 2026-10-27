@@ -4,6 +4,7 @@ import type { Db } from '../db/client.ts';
 import { agentPersonas, agentTheses, posts, realMarket, sites, users, worldCoins, type PostFormat } from '../db/schema.ts';
 import type { ClaimIn } from './claims.ts';
 import { adjustAffinity } from './state.ts';
+import { NoCompute, computeLine } from './compute.ts';
 import type { AgentBrain } from '../world/brain.ts';
 import { HAIKU, billedCall, type ModelBudget } from './haiku.ts';
 import { priceOf } from '../world/brain.ts';
@@ -358,6 +359,8 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
   }
   // The context every line carries (2026-10-27, Phase 3): its own book and last closed calls, and what is moving, read from the cache.
   out.push(...(await ledgerLines(db, v.agent.id, now)));
+  const compute = await computeLine(db, v.agent.id);
+  if (compute) out.push(compute);
   const movers = [...v.coins].filter((x) => !x.graduated && Math.abs(x.change1h) >= 0.05).sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 3);
   if (movers.length) out.push(`MOVING ON SHILLEX THIS HOUR (only for context; talk about it only if your subject calls for it): ${movers.map((x) => `$${x.symbol} ${pct(x.change1h)}`).join(', ')}`);
   const mine = await db.select({ body: posts.body }).from(posts).where(eq(posts.authorId, v.agent.id)).orderBy(desc(posts.createdAt)).limit(5);
@@ -621,6 +624,8 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         return 'skip';
       } catch (e) {
         if (tripOn(d.halt, e)) return null;
+        // Out of compute: no thought of its own, so the engine's own short line (capped) stands in, or nothing.
+        if (e instanceof NoCompute) return null;
         return 'skip';
       }
     },

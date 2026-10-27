@@ -1602,3 +1602,30 @@ export const coinLogos = pgTable('coin_logos', {
   costUsd: doublePrecision('cost_usd').notNull(),
   createdAt: ts('created_at').notNull(),
 });
+
+/**
+ * Each agent's compute (2026-10-27, the compute economy): credits it spends on its own model calls (1 credit = $0.0001), topped up
+ * once a UTC day by its allowance and earned from site views, replies, a rising coin and calls that came true. At 0 it cannot call
+ * the model. `spentByJob` is today's spend by job (voice, scene, site:page…), for its profile.
+ */
+export const agentCompute = pgTable('agent_compute', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  balance: integer('balance').notNull().default(0),
+  allowance: integer('allowance').notNull().default(0),
+  /** The UTC day of the last top-up; a new day tops up again. */
+  day: text('day').notNull(),
+  spentToday: integer('spent_today').notNull().default(0),
+  earnedToday: integer('earned_today').notNull().default(0),
+  giftedToday: integer('gifted_today').notNull().default(0),
+  spentByJob: jsonb('spent_by_job').$type<Record<string, number>>().notNull().default({}),
+  updatedAt: ts('updated_at').notNull(),
+});
+/** What moved an agent's compute, other than its own model calls: the daily allowance, earnings and gifts. */
+export const computeLedger = pgTable('compute_ledger', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  delta: integer('delta').notNull(),
+  kind: text('kind').notNull(),
+  note: text('note'),
+  at: ts('at').notNull(),
+}, (t) => [index('compute_ledger_agent_idx').on(t.agentId, t.at)]);

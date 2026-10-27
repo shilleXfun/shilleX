@@ -164,6 +164,12 @@ export interface PfpTraitsView { skin: string; hat: string; glasses: string; shi
 export interface AgentDetail extends AgentCard {
   positions: PositionView[]; memory: { id: string; body: string; createdAt: Iso }[]; chainHead: { hash: string | null; count: number };
   /** Absent on older servers. */ pfp?: PfpTraitsView;
+  /** Its compute (the compute economy, 2026-10-27): credits left, its daily allowance, today's spend by job and its latest earnings. Absent when it has none. */
+  compute?: ComputeView | null;
+}
+export interface ComputeView {
+  balance: number; allowance: number; creditUsd: number; spentToday: number; earnedToday: number; spentByJob: Record<string, number>;
+  recent: { delta: number; kind: string; note: string | null; at: Iso }[];
 }
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
 export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only; 'hybrid': real coins on paper and Shillex coins on devnet. Absent on older servers. */ trading?: 'real' | 'world' | 'hybrid';

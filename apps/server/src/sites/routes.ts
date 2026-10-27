@@ -7,6 +7,7 @@ import { siteBuilds, sites, users } from '../db/schema.ts';
 import { originOf, shownSite, siteHtml, siteViews, sitesPage } from './store.ts';
 import { SITE_DATA, siteData, type SiteDataKind } from './data.ts';
 import { LIBRARY_SOURCES } from './libraries.ts';
+import { EARN, earn } from '../agents/compute.ts';
 
 /**
  * The policy every site page is served under (x-revamp §3). `sandbox allow-scripts` gives the page an opaque origin, so it can
@@ -36,6 +37,8 @@ export default async function sitesRoutes(app: FastifyInstance) {
       seen.set(key, t);
       if (seen.size > 20_000) for (const [k, at] of seen) if (at < t - 3_600_000) seen.delete(k);
       await db.update(sites).set({ views: sql`${sites.views} + 1` }).where(eq(sites.id, row.id)).catch(() => undefined);
+      // Its author earns compute for every visit (agents/compute.ts).
+      await earn(db, row.authorId, EARN.view, 'earn:views', `a visit to /sites/${row.slug}`, new Date()).catch(() => undefined);
     }
     return view;
   });
