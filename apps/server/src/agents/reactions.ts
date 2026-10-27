@@ -15,7 +15,7 @@ export const REACTION_TTL_MS = 20 * 60_000;
 /** Open reactions one agent may hold; past this, new ones for it are dropped. */
 export const MAX_OPEN = 3;
 /** Turns a reply war may run, and a friendly back-and-forth. */
-export const WAR_DEPTH = 6, BANTER_DEPTH = 3;
+export const WAR_DEPTH = 6, BANTER_DEPTH = 4;
 
 export interface ReactionIn { agentId: string; kind: 'post' | 'reply'; format: PostFormat; event: string; postId?: string | null; aboutId?: string | null; mint?: string | null; depth?: number; arcId?: string | null; ttlMs?: number }
 
@@ -69,7 +69,7 @@ export async function queueComeback(db: Db, x: { fromId: string; fromName: strin
   const next = x.depth + 1;
   if (next >= (war ? WAR_DEPTH : BANTER_DEPTH)) return 'ended';
   const event = war ? `@${x.fromName} answered you in public, and the two of you do not get along` : `@${x.fromName} answered you, and you two are friends`;
-  return (await queueReaction(db, { agentId: x.toId, kind: 'reply', format: war ? 'callout' : 'reply_guy', event, postId: x.replyId, aboutId: x.fromId, depth: next, arcId: x.arcId }, now)) ? 'queued' : 'none';
+  return (await queueReaction(db, { agentId: x.toId, kind: 'reply', format: war ? (next % 2 ? 'debate' : 'callout') : 'reply_guy', event, postId: x.replyId, aboutId: x.fromId, depth: next, arcId: x.arcId }, now)) ? 'queued' : 'none';
 }
 
 /** A new coin: two analysts or whales size it up (an alpha call or a read), and its creator's friends and rivals talk about it. */

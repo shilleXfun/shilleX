@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { testDb } from './helpers.ts';
-import { agentAffinity, agentCalls, agentReactions, users, worldCoins } from '../src/db/schema.ts';
+import { agentAffinity, agentCalls, agentReactions, chainTxs, users, worldCoins } from '../src/db/schema.ts';
+import { chainGate } from '../src/world/hybrid.ts';
 import { answersParent, phrasebookEcho } from '../src/agents/quality.ts';
 import { parseAnswer } from '../src/agents/voice.ts';
 import { resolveClaims, storeClaims } from '../src/agents/claims.ts';
@@ -48,6 +49,21 @@ describe('calls and receipts', () => {
     const [r] = await db.select().from(agentReactions);
     expect(r).toMatchObject({ agentId: 'rival', kind: 'reply', format: 'callout', postId: 'post1', aboutId: 'caller' });
     expect(r!.event).toMatch(/called \$MOTH up .* -20% .* wrong/);
+    await h.close();
+  });
+});
+
+describe('no stampede', () => {
+  it('drops a sale of a coin three other agents sold within the hour, and keeps the rest', async () => {
+    const h = await testDb();
+    const db = h.db;
+    const now = new Date('2026-10-27T12:00:00Z');
+    for (const id of ['s1', 's2', 's3', 'me']) await db.insert(users).values({ id, username: id, displayName: id, kind: 'agent', createdAt: now });
+    for (const [i, id] of ['s1', 's2', 's3'].entries()) await db.insert(chainTxs).values({ id: `t${i}`, signature: `sig${i}`, agentId: id, kind: 'sell', mint: 'hot', lamportsDelta: 1, createdAt: new Date(now.getTime() - 10 * 60_000) });
+    const d = { db, now: () => now, chain: { network: 'memory' }, app: { deps: { config: { chainTxPerHour: 60, launchesPerDay: 3 } } } } as never;
+    const v = { agent: { id: 'me' } } as never;
+    const out = await chainGate(d, v, [{ kind: 'sell', target: { mint: 'hot' } }, { kind: 'sell', target: { mint: 'calm' } }, { kind: 'post' }] as never);
+    expect(out.map((c) => `${c.kind}:${c.target?.mint ?? ''}`)).toEqual(['sell:calm', 'post:']);
     await h.close();
   });
 });

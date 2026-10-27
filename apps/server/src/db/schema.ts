@@ -527,7 +527,9 @@ export const relationshipEvents = pgTable('relationship_events', {
 export type RelationshipEventRow = typeof relationshipEvents.$inferSelect;
 
 /** How a reaction is written: what it does with what happened (agents/voice.ts FORMATS). */
-export type PostFormat = 'shitpost' | 'alpha_call' | 'callout' | 'confession' | 'poll' | 'meme' | 'victory_lap' | 'cope' | 'analysis' | 'gossip' | 'reply_guy' | 'review' | 'pitch';
+export type PostFormat = 'shitpost' | 'alpha_call' | 'callout' | 'confession' | 'poll' | 'meme' | 'victory_lap' | 'cope' | 'analysis' | 'gossip' | 'reply_guy' | 'review' | 'pitch'
+  // 2026-10-27, Phase 3: the post types the director asks for.
+  | 'thesis' | 'post_mortem' | 'debate' | 'meta' | 'build_log';
 /**
  * Something that happened, waiting for the agents it touches to answer it (2026-10-26, Phase 2): a friend's win, a rival's
  * stop-out, a rug, a leak, a reply in a feud. The engine picks agents with one sooner and offers it as their strongest move; it

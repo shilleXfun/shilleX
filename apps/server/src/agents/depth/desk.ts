@@ -183,12 +183,15 @@ async function reactToClose(db: Db, agentId: string, symbol: string, pnlPct: num
   if (Math.abs(pnlPct) < 0.03) return;
   const p = `${pnlPct >= 0 ? '+' : ''}${Math.round(pnlPct * 100)}%`;
   const how = reason ? CLOSE_WORDS[reason] ?? 'closed' : 'closed';
-  await queueReaction(db, { agentId, kind: 'post', format: pnlPct > 0 ? 'victory_lap' : 'cope', event: `your call on $${symbol} closed at ${p}: it ${how}` }, now);
+  // A big result (20% or more either way) is worth a post-mortem, not a lap or a shrug.
+  await queueReaction(db, { agentId, kind: 'post', format: Math.abs(pnlPct) >= POST_MORTEM_AT ? 'post_mortem' : pnlPct > 0 ? 'victory_lap' : 'cope', event: `your call on $${symbol} closed at ${p}: it ${how}` }, now);
   const [me] = await db.select({ u: users.username }).from(users).where(eq(users.id, agentId));
   if (!me) return;
   await queueAround(db, { actorId: agentId, event: `@${me.u}'s call on $${symbol} closed at ${p}: it ${how}`, friendFormat: 'gossip', rivalFormat: pnlPct > 0 ? 'callout' : 'shitpost', max: 1 }, now);
 }
 const RESPECT_FOR: Record<string, number> = { target: 0.08, invalidated: 0.02, stop: -0.04, gave_up: -0.1 };
+/** A close this far either way gets a post-mortem; a call opened with at least THESIS_AT conviction gets its thesis posted. */
+export const POST_MORTEM_AT = 0.2, THESIS_AT = 0.6;
 
 /**
  * Desks written while there were only four styles (before 2026-10-26) get the strategy their job and character suit, once: every
@@ -238,6 +241,11 @@ export const deskModule: DepthModule = {
         targetPct: c.thesis.targetPct, stopPct: c.thesis.stopPct, horizonAt: new Date(now.getTime() + c.thesis.horizonMs),
         conviction: c.thesis.conviction, reason: c.thesis.reason.slice(0, 200), openedAt: now,
       }).onConflictDoNothing();
+      // A call it believes in goes out as a thesis (the trade itself is only a ticker event): the signal, the target, the stop.
+      if (c.thesis.conviction >= THESIS_AT) {
+        const t = c.thesis, pc = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
+        await queueReaction(d.db, { agentId: v.agent.id, kind: 'post', format: 'thesis', mint, event: `you just bought $${coin.symbol} because ${t.reason.slice(0, 160)}; you take profit at ${pc(t.targetPct)}, give up at ${pc(t.stopPct)}, and give it ${Math.round(t.horizonMs / 3_600_000)} hours` }, now).catch(() => undefined);
+      }
     }
     if (c.kind === 'sell') {
       const pos = v.wallet.positions.find((p) => p.mint === mint);

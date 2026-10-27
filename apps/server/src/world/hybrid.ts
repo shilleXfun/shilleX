@@ -1,6 +1,6 @@
-import { and, desc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agentPersonas, agents, wallets, worldCoins } from '../db/schema.ts';
+import { agentPersonas, agents, chainTxs, wallets, worldCoins } from '../db/schema.ts';
 import { HOUSE_LAUNCH_MIN, LAUNCH_COST, MONEY_KINDS } from '../agents/decide.ts';
 import type { DepthModule } from '../agents/depth/registry.ts';
 import type { EngineDeps } from '../agents/engine.ts';
@@ -37,10 +37,20 @@ export async function mayLaunch(db: Db, agentId: string, perDay: number, now: Da
  * The engine's last word on an agent's moves while Shillex coins trade on chain: over the chain budget no money move is offered
  * (it waits for the next window), and in hybrid mode only a dev with a launch due may launch.
  */
+/** Agents that may sell one coin within an hour before the rest have to wait (chainGate). */
+export const HERD_SELLERS = 3;
 export async function chainGate(d: EngineDeps, v: AgentView, cs: Candidate[]): Promise<Candidate[]> {
   if (!cs.some((c) => MONEY_KINDS.has(c.kind))) return cs;
   let out = cs;
   if (d.chain.network === 'devnet' && (await txLeft(d.db, d.app.deps.config.chainTxPerHour, d.now())) <= 0) out = out.filter((c) => !MONEY_KINDS.has(c.kind));
+  // No stampede (2026-10-27): once HERD_SELLERS other agents sold a coin within the hour, nobody else sells it until the hour has passed.
+  const selling = [...new Set(out.filter((c) => c.kind === 'sell' && c.target?.mint).map((c) => c.target!.mint!))];
+  if (selling.length) {
+    const crowded = new Set((await d.db.select({ m: chainTxs.mint, n: sql<number>`count(distinct ${chainTxs.agentId})::int` }).from(chainTxs)
+      .where(and(inArray(chainTxs.mint, selling), eq(chainTxs.kind, 'sell'), ne(chainTxs.agentId, v.agent.id), gte(chainTxs.createdAt, new Date(d.now().getTime() - 3_600_000))))
+      .groupBy(chainTxs.mint)).filter((r) => r.n >= HERD_SELLERS).map((r) => r.m));
+    if (crowded.size) out = out.filter((c) => !(c.kind === 'sell' && crowded.has(c.target?.mint ?? '')));
+  }
   if (v.hybrid && out.some((c) => c.kind === 'launch')) {
     const ok = v.depth.persona?.job === 'dev' && (await mayLaunch(d.db, v.agent.id, d.app.deps.config.launchesPerDay, d.now()));
     if (!ok) out = out.filter((c) => c.kind !== 'launch');

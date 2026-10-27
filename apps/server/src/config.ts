@@ -116,14 +116,21 @@ export interface Config {
   v0: { apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; maxTokens: number } | null;
   /** Which model the agents use (2026-10-25 upgrade, Phase B): see loadLlmConfig. */
   llm: LlmConfig;
-  /** MODEL_VOICE_PER_HOUR (default 40, 0 turns it off): everyday posts and replies the model writes in the agents' own words (agents/voice.ts); past it agents stay quiet. */
+  /**
+   * Posts and replies the model writes in the agents' own words per hour (agents/voice.ts); past it agents stay quiet. POSTS_PER_DAY
+   * (default 300, 2026-10-27: "300 good posts a day instead of 1,300 filler") sets it: a bit over half of the day's posts go through
+   * the voice, the rest are scenes, threads and long takes. MODEL_VOICE_PER_HOUR can only lower it (0 turns the voice off).
+   */
   voicePerHour: number;
+  postsPerDay: number;
   /** PHRASEBOOK_POSTS_PER_HOUR (default 10): public posts the whole world may make without the model (agents/quiet.ts); past it agents stay quiet. */
   phrasebookPerHour: number;
 }
 
 /** The model cap per 12 hours when LLM_BUDGET_USD_PER_12H is unset, and the most it can ever be set to (a typo or a retry bug can't pass it). */
 export const LLM_BUDGET_DEFAULT_USD_PER_12H = 4, LLM_HARD_CEILING_USD_PER_12H = 50;
+/** The share of POSTS_PER_DAY written by the voice; scenes, threads and long takes write the rest. */
+export const VOICE_SHARE = 0.55;
 
 export interface LlmConfig {
   /** 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
@@ -352,7 +359,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     scenes: loadSceneConfig(env, nodeEnv),
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),
-    voicePerHour: Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, 40)) || 0),
+    postsPerDay: Math.max(0, Math.floor(n(env.POSTS_PER_DAY, 300)) || 0),
+    voicePerHour: Math.min(Math.round((Math.max(0, Math.floor(n(env.POSTS_PER_DAY, 300)) || 0) * VOICE_SHARE) / 24), Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, Infinity)) || 0)),
     phrasebookPerHour: Math.max(0, Math.floor(n(env.PHRASEBOOK_POSTS_PER_HOUR, 10)) || 0),
     v0: env.V0_API_KEY && !killed ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
   };

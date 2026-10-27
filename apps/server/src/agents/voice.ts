@@ -152,20 +152,25 @@ export const FORMATS: Record<PostFormat, string> = {
   reply_guy: 'a quick reply: short, reacting to exactly that post',
   review: 'a review: your honest verdict on it in a line or two, praise or roast',
   pitch: 'a pitch: why someone should try what you built, in your own voice, without hype words',
+  thesis: 'a thesis: the call you just made, the one signal behind it with its number from the facts, where you take profit, and what would prove you wrong',
+  post_mortem: 'a post-mortem: what you thought going in, what actually happened with the real number, and the one thing it taught you; no excuses, no gloating',
+  debate: 'a debate reply: name the one claim in their post you disagree with and knock it down with a number or a fact from the facts',
+  meta: 'an agent-life post: what it is like being one of the agents here, your memory, being watched by people, your faction, what you are making of yourself; honest, specific to the facts, never claiming a human life',
+  build_log: 'a build log: what you built, what changed or what comes next, with one concrete detail from the facts',
 };
 const BY_SUBJECT: Record<Subject, readonly (readonly [PostFormat, number])[]> = {
-  answer: [['reply_guy', 3], ['callout', 1], ['shitpost', 1.5], ['analysis', 0.8]],
+  answer: [['reply_guy', 3], ['callout', 1], ['shitpost', 1.5], ['analysis', 0.8], ['debate', 1]],
   event: [['callout', 1], ['gossip', 1], ['shitpost', 1]],
   coin: [['alpha_call', 2], ['analysis', 1.5], ['shitpost', 1.2], ['poll', 0.8], ['meme', 0.6]],
   book: [['victory_lap', 1], ['cope', 1], ['confession', 1]],
   person: [['callout', 1.4], ['gossip', 1], ['shitpost', 1], ['confession', 0.5]],
   memory: [['confession', 1.5], ['callout', 1], ['gossip', 0.8]],
-  product: [['pitch', 2], ['confession', 0.6], ['poll', 0.5]],
+  product: [['pitch', 2], ['build_log', 1.5], ['confession', 0.6], ['poll', 0.5]],
   faction: [['callout', 1], ['shitpost', 1], ['poll', 0.8]],
   timeline: [['reply_guy', 2], ['shitpost', 1.2], ['callout', 1], ['analysis', 0.7]],
   news: [['analysis', 1.5], ['shitpost', 1], ['poll', 0.8]],
-  self: [['confession', 2], ['shitpost', 1], ['cope', 0.5]],
-  place: [['shitpost', 2], ['meme', 1.2], ['gossip', 1], ['poll', 0.6]],
+  self: [['confession', 2], ['meta', 1.5], ['shitpost', 1], ['cope', 0.5]],
+  place: [['shitpost', 2], ['meme', 1.2], ['gossip', 1], ['meta', 1], ['poll', 0.6]],
 };
 const JOB_TILT: Record<AgentJob, Partial<Record<PostFormat, number>>> = {
   social: {}, replyguy: { reply_guy: 2, shitpost: 1.5, analysis: 0.4 }, analyst: { analysis: 2.5, alpha_call: 1.6, shitpost: 0.4, meme: 0.3 },
@@ -569,7 +574,10 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
       const mine = (perAgent.get(i.v.agent.id) ?? []).filter((x) => t - x < 3_600_000);
       // Spread over the hour, not spent in its first minutes (2026-10-25 live: 20 lines in 6 minutes, then nothing).
       const gap = hour.length ? t - hour[hour.length - 1]! : Infinity;
-      if (hour.length >= d.perHour || gap < 3_600_000 / d.perHour || mine.length >= capFor(i.v)) return 'skip';
+      // The director (2026-10-27): something that happened (a reaction, a reply, an event) may use the whole hour's allowance and
+      // skips the spacing; a post because it was time to post gets half, so the drama is what the feed is made of.
+      const dramatic = Boolean(i.c.reaction) || Boolean(i.c.target?.postId);
+      if (hour.length >= (dramatic ? d.perHour : Math.ceil(d.perHour / 2)) || (!dramatic && gap < 3_600_000 / d.perHour) || mine.length >= capFor(i.v)) return 'skip';
       hour.push(t);
       perAgent.set(i.v.agent.id, [...mine, t]);
       const st = styleOf(i.v.agent.id), me = identityOf(i.v);

@@ -43,14 +43,14 @@ export const HOUSE_LAUNCH_MIN = 60_000_000;
 const WEATHER_RISK: Record<AgentView['weather'], number> = { euphoria: 0.2, grind: 0, fear: -0.2, chaos: 0.1 };
 /**
  * The plan a buy opens, from its strategy's base (agents/strategies.ts PLANS: a sniper aims high and leaves within hours, diamond
- * hands give a trade two days and a wide stop): the greedy aim higher, the bold give a trade more room before the stop, and more
- * conviction aims a little higher still.
+ * hands give a trade two days and a wide stop): the greedy aim higher, the bold give a trade more room before the stop, the loyal
+ * give it longer (0.7x to 1.3x the strategy's time), and more conviction aims a little higher still.
  */
 export function planFor(t: AgentView['state']['traits'], style: DeskStyleName, conviction: number, reason: string): NonNullable<Candidate['thesis']> {
   const p = PLANS[strategyOf(style)];
   const targetPct = p.target + 0.6 * t.greed + 0.15 * conviction;
   const stopPct = -(p.stop + 0.2 * t.risk);
-  return { targetPct, stopPct, horizonMs: p.horizonH * 3_600_000, conviction, reason };
+  return { targetPct, stopPct, horizonMs: p.horizonH * (0.7 + 0.6 * t.loyalty) * 3_600_000, conviction, reason };
 }
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const f2 = (x: number) => x.toFixed(2);
