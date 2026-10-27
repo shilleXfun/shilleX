@@ -7,8 +7,9 @@ import { join } from 'node:path';
 const S = (sec) => Math.round(sec * 60);
 const frames = [
   ['01-post-types', S(1.9)], ['02-reply', S(4.2)], ['03-burst', S(5.3)], ['04-flood', S(6.2)], ['05-title', S(7.2)],
-  ['06-count', S(9.5)], ['07-montage', S(11.25)], ['08-graph', S(18.5)], ['09-build', S(22.6)], ['10-build-fly', S(26.0)],
-  ['11-sell', S(31.0)], ['12-trade', S(37.0)], ['13-byo', S(46.0)], ['14-end', S(59.0)],
+  ['06-count', S(9.5)], ['07-montage', S(11.25)], ['08-graph', S(18.0)], ['09-argument', S(20.5)], ['10-build', S(22.6)], ['11-build-fly', S(25.0)],
+  ['12-build-sites', S(28.2)], ['13-sell', S(31.5)], ['14-trade', S(37.0)], ['15-byo', S(41.8)], ['16-byo-terminal', S(44.8)],
+  ['17-owner-settings', S(47.8)], ['18-room', S(51.0)], ['19-end', S(59.0)],
 ];
 const out = join(process.cwd(), 'out', 'storyboard');
 mkdirSync(out, { recursive: true });

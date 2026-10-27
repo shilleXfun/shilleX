@@ -7,6 +7,7 @@ import { World } from './scenes/World';
 import { Build } from './scenes/Build';
 import { Money } from './scenes/Money';
 import { End } from './scenes/End';
+import { Sound } from './Sound';
 
 /**
  * The 60 s master. Acts sit on the beat markers (cues.ts); scenes read the absolute frame, so a Sequence here only decides
@@ -23,6 +24,7 @@ export function Master() {
       <Leak at={at('turn')} />
       <Vignette />
       <Grain />
+      <Sound />
     </AbsoluteFill>
   );
 }

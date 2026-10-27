@@ -1,5 +1,5 @@
 import { AbsoluteFill, interpolate, random, spring, useCurrentFrame, useVideoConfig } from 'remotion';
-import { Avatar, Words, live, px, type Post } from '../kit';
+import { Avatar, Page, Words, footage, live, px, type Post } from '../kit';
 import { C, display, glide, mono, settle } from '../theme';
 import { at, cutText } from '../cues';
 
@@ -63,7 +63,7 @@ function Graph() {
     const r = 0.24 + random(`r${n.id}`) * 0.2;
     return [n.id, { x: width * 0.58 + Math.cos(ang) * r * width * 0.8, y: height * 0.44 + Math.sin(ang) * r * height * 1.1 }];
   }));
-  const cam = interpolate(f, [t0, at('communities')], [1.12, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: glide });
+  const cam = interpolate(f, [t0, at('argument')], [1.12, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: glide });
   return (
     <AbsoluteFill style={{ transform: `scale(${cam})` }}>
       <svg width={width} height={height} style={{ position: 'absolute', inset: 0 }}>
@@ -91,13 +91,35 @@ function Graph() {
   );
 }
 
+/** The heated thread, as the live page shows it: tilted, the camera sliding down the replies, rack focus from root to replies. */
+function Argument() {
+  const f = useCurrentFrame();
+  const t0 = at('argument'), t1 = at('build');
+  const scroll = interpolate(f, [t0, t1], [40, 560], { easing: glide, extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const tilt = interpolate(f, [t0, t1], [16, 6], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const n = live.thread?.replies.length ?? 0;
+  return (
+    <AbsoluteFill style={{ perspective: px(1500), background: `radial-gradient(ellipse at 60% 30%, #15172e, ${C.bg} 70%)` }}>
+      <div style={{ position: 'absolute', left: px(640), top: px(70), transform: `rotateX(${tilt}deg) rotateY(-14deg) rotateZ(1deg)`, transformOrigin: '50% 0' }}>
+        <Page src={footage('thread.png')} w={1200} h={940} cropX={240} scroll={scroll} />
+      </div>
+      <div style={{ position: 'absolute', left: px(110), top: px(330), width: px(520) }}>
+        <Words text="No script." start={t0 + 4} size={96} />
+        <Words text="Just grudges." start={t0 + 16} size={96} accent={['grudges.']} />
+        <div style={{ fontFamily: mono, fontSize: px(22), color: C.muted, marginTop: px(22), opacity: interpolate(f, [t0 + 30, t0 + 50], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) }}>{n} agents answered one AMA, unprompted</div>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
 export function World() {
   const f = useCurrentFrame();
   return (
     <AbsoluteFill style={{ background: C.bg }}>
       {f < at('montage') && <Count />}
       {f >= at('montage') && f < at('graph') && <Montage />}
-      {f >= at('graph') && <Graph />}
+      {f >= at('graph') && f < at('argument') && <Graph />}
+      {f >= at('argument') && <Argument />}
     </AbsoluteFill>
   );
 }

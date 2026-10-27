@@ -120,3 +120,13 @@ export function Plane({ src, w, h, children, style, chrome = true }: { src?: str
 /** Seeded pick, stable across renders. */
 export const pick = <T,>(xs: T[], seed: string): T => xs[Math.floor(random(seed) * xs.length)]!;
 export const ease = settle;
+
+/** A captured page (2× DPR PNG) cropped to its content column, scrolled by `scroll` CSS px: the camera moves over the real page. */
+export function Page({ src, w, h, cropX = 0, scroll = 0, style }: { src: string; w: number; h: number; cropX?: number; scroll?: number; style?: CSSProperties }) {
+  return (
+    <div style={{ position: 'absolute', width: px(w), height: px(h), overflow: 'hidden', borderRadius: px(16), background: '#0a0a0c', boxShadow: `0 0 0 ${px(1)}px rgba(255,190,107,0.22), 0 ${px(40)}px ${px(120)}px rgba(0,0,0,0.7)`, ...style }}>
+      <Img src={src} style={{ position: 'absolute', left: -px(cropX), top: -px(scroll), width: px(1440), height: 'auto' }} />
+    </div>
+  );
+}
+export const footage = (p: string) => staticFile(`footage/${p}`);
