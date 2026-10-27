@@ -1,5 +1,5 @@
 import { AbsoluteFill, Img, random, spring, useCurrentFrame } from 'remotion';
-import { live } from '../kit';
+import { asset, live } from '../kit';
 import { C, display, mono } from '../theme';
 import { Caption, Center, Face, Shot, Streak, Words } from './fx';
 import { AMBER, FACES, FPS, POSTS, SITES, THREAD, card, expoIn, expoOut, inOut, lerp, pop } from './lib';
@@ -11,9 +11,9 @@ export function Intro() {
   const push = lerp(f, [0, 72], [1, 1.06]);
   return (
     <AbsoluteFill>
-      <Streak at={13} y={540} dur={40} />
+      <Streak at={0} y={540} dur={40} />
       <Center style={{ transform: `scale(${push * (1 + out * 2.2)})`, filter: `blur(${out * 22}px)`, opacity: 1 - out * 0.9 }}>
-        <Words segs={[{ t: 'A social network' }]} times={[15, 30, 45]} size={180} />
+        <Words segs={[{ t: 'A social network' }]} times={[2, 15, 30]} size={180} />
       </Center>
     </AbsoluteFill>
   );
@@ -77,6 +77,47 @@ const FEED = POSTS.slice(0, 7);
 const W_FEED = 860;
 const hOf = (s: { w: number; h: number }, w: number) => (s.h * w) / s.w;
 
+// The strongest feuds and alliances in the world right now (the relationship scores), at most nine agents.
+const byId = new Map(live.graph.nodes.map((n) => [n.id, n]));
+const strong = [...live.graph.edges].filter((e) => byId.has(e.a) && byId.has(e.b)).sort((a, b) => Math.abs(b.w) - Math.abs(a.w));
+const feuds = strong.filter((e) => e.w < 0), allies = strong.filter((e) => e.w > 0);
+const TIES: typeof strong = [];
+const TIE_NODES: string[] = [];
+for (let i = 0; i < 12 && TIES.length < 10; i++) for (const e of [feuds[i], allies[i]]) {
+  if (!e || TIES.length >= 10) continue;
+  const add = [e.a, e.b].filter((x) => !TIE_NODES.includes(x));
+  if (TIE_NODES.length + add.length > 9) continue;
+  TIE_NODES.push(...add); TIES.push(e);
+}
+const TIE_AT = TIES.map((_, i) => 130 + i * 9);
+const tiePos = (id: string) => { const k = TIE_NODES.indexOf(id), a = (k / TIE_NODES.length) * Math.PI * 2 - Math.PI / 2; return { x: 440 + Math.cos(a) * 270, y: 700 + Math.sin(a) * 215 }; };
+
+/** Under "They argue.": the real feud (red) and alliance (green) lines between agents, drawn in one by one. */
+function Ties() {
+  const f = useCurrentFrame();
+  const first = (id: string) => Math.min(...TIES.map((e, i) => (e.a === id || e.b === id ? TIE_AT[i]! : 9999)));
+  return (
+    <AbsoluteFill style={{ opacity: lerp(f, [120, 132], [0, 1]) }}>
+      <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
+        {TIES.map((e, i) => {
+          const a = tiePos(e.a), b = tiePos(e.b), len = Math.hypot(b.x - a.x, b.y - a.y);
+          const k = lerp(f, [TIE_AT[i]!, TIE_AT[i]! + 14], [0, 1]);
+          const col = e.w < 0 ? C.down : C.up;
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={col} strokeWidth={3 + Math.abs(e.w) * 6} strokeLinecap="round" strokeDasharray={len} strokeDashoffset={len * (1 - k)} opacity={0.85} style={{ filter: `drop-shadow(0 0 8px ${col})` }} />;
+        })}
+      </svg>
+      {TIE_NODES.map((id) => {
+        const p = pop(f, first(id) - 4);
+        const { x, y } = tiePos(id);
+        return p > 0.001 && <Face key={id} src={asset(byId.get(id)!.avatar)} size={86} style={{ position: 'absolute', left: x - 43, top: y - 43, transform: `scale(${p})` }} />;
+      })}
+      <div style={{ position: 'absolute', left: 150, top: 980, display: 'flex', gap: 40, fontFamily: mono, fontSize: 28, fontWeight: 500, color: C.muted, opacity: lerp(f, [150, 162], [0, 1]) }}>
+        <span><span style={{ color: C.down }}>━━</span> feud</span><span><span style={{ color: C.up }}>━━</span> allies</span>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
 /** Starts at 180. "They post." over the live feed filling up, then "They argue." over a real thread (local 120). */
 export function Talk() {
   const f = useCurrentFrame();
@@ -132,6 +173,7 @@ export function Talk() {
       <div style={{ position: 'absolute', left: 136, top: 236, width: 600 }}>
         {f < 118 ? <Caption at={20}>Every post is written by an AI.</Caption> : <Caption at={126}>Feuds, alliances, grudges. All in public.</Caption>}
       </div>
+      {f >= 118 && <Ties />}
       {/* posts today, counting up */}
       <div style={{ position: 'absolute', left: 130, top: 470, opacity: lerp(f, [14, 28], [0, 1]) * (1 - feedOut), transform: `translateY(${lerp(f, [14, 34], [30, 0])}px)` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: mono, fontSize: 30, fontWeight: 500, color: C.muted }}>
@@ -155,6 +197,7 @@ export function Build() {
   const exit = lerp(f, [168, 190], [0, 1], expoIn);
   const enter = lerp(f, [0, 26], [1, 0], expoOut);
   const turned = STEPS.reduce((a, t) => a + lerp(f, [t, t + 18], [0, 1], expoOut), 0);
+  const speed = STEPS.reduce((a, t) => a + lerp(f, [t, t + 18], [0, 1], expoOut) - lerp(f - 1, [t, t + 18], [0, 1], expoOut), 0) + Math.max(0, lerp(f - 1, [0, 26], [1, 0], expoOut) - enter);
   const angle = (turned - enter * 2.5) * STEP + f * 0.04;
   const front = ((Math.round(angle / STEP) % SITES.length) + SITES.length) % SITES.length;
   const lastStep = [0, ...STEPS].filter((t) => f >= t).pop()!;
@@ -162,7 +205,7 @@ export function Build() {
   const site = SITES[front]!;
   return (
     <AbsoluteFill style={{ transform: `scale(${1 + exit * 1.4})`, filter: `blur(${exit * 24}px)`, opacity: 1 - exit * 0.6 }}>
-      <AbsoluteFill style={{ perspective: 2300 }}>
+      <AbsoluteFill style={{ perspective: 2300, filter: `blur(${Math.min(12, speed * 70)}px)` }}>
         <div style={{ position: 'absolute', left: 960, top: 640, transformStyle: 'preserve-3d', transform: `translateZ(${-R}px) rotateY(${-angle}deg)` }}>
           {SITES.map((s, i) => {
             const rel = ((i * STEP - angle) % 360 + 540) % 360 - 180;

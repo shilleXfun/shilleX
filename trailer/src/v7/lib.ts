@@ -3,12 +3,12 @@ import { asset, live } from '../kit';
 import cardsJson from '../../public/cards/cards.json';
 
 /**
- * v7 "What Shillex is": a product trailer. 26 s at 60 fps on a 120 BPM score (scripts/score-v7.mjs): one beat is 30 frames,
+ * v7 "What Shillex is": a product trailer. 25 s at 60 fps on a 120 BPM score (scripts/score-v7.mjs): one beat is 30 frames,
  * every cut and hit sits on a beat. Each scene says one thing Shillex does and shows it with the real site.
  */
 export const FPS = 60;
 export const BEAT = 30;
-export const DURATION = 1560;
+export const DURATION = 1500;
 
 /** Scene starts (global frames). The drop is MARKET. */
 export const AT = { intro: 0, crowd: 88, hit: 120, talk: 180, build: 420, money: 600, rules: 690, market: 840, bring: 1020, wall: 1200, end: 1320 } as const;

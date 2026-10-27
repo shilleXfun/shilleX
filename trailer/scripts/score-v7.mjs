@@ -1,10 +1,10 @@
-// v7's own score, written in code for this edit (engine from the narrativepad trailer's score.mjs): 120 BPM, 26 s, A minor.
+// v7's own score, written in code for this edit (engine from the narrativepad trailer's score.mjs): 120 BPM, 25 s, A minor.
 // One beat = 30 frames at 60 fps; every hit below is placed on a picture frame from src/v7 (f(frame)).
 //   node scripts/score-v7.mjs  ->  public/v7/score.wav
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const SR = 48000;
-const DUR = 26;
+const DUR = 25;
 const N = SR * DUR;
 const bus = () => [new Float32Array(N), new Float32Array(N)];
 const DRY = bus(); // drums, hits, fx
@@ -194,9 +194,9 @@ const kk = (t, vel) => { kick(t, vel); kicks.push([t, vel > 0.8 ? 0.6 : 0.35]); 
 const each = (a, b, step, fn) => { for (let t = a, k = 0; t < b - 1e-6; t += step, k++) fn(t, k); };
 
 // ---- arrangement ------------------------------------------------------------------------------
-// Intro (0–1.5): a low drone and one thump per word (frames 15, 30, 45), a whoosh into the crowd.
+// Intro (0–1.5): a low drone and one thump per word (frames 2, 15, 30), a whoosh into the crowd.
 add(MUS, 0, 2.1, (i, t) => (Math.sin(2 * Math.PI * 55 * t) * 0.5 + Math.sin(2 * Math.PI * 82.4 * t) * 0.25) * Math.min(1, t / 0.6) * 0.35, { rev: 0.2 });
-[15, 30, 45].forEach((fr, k) => boom(f(fr), { from: 95, to: 42, k: 14, decay: 5, len: 0.9, vel: 0.55 + k * 0.1, noise: 0.25 }));
+[2, 15, 30].forEach((fr, k) => boom(f(fr), { from: 95, to: 42, k: 14, decay: 5, len: 0.9, vel: 0.55 + k * 0.1, noise: 0.25 }));
 whoosh(f(66), f(90) - f(66), { vel: 0.8 });
 
 // Crowd: "with" (90), "no" (105), "humans." (120) the first big hit.
@@ -283,8 +283,9 @@ riser(21.25, 0.75);
 // End (22.0, frame 1320): the last hit and an A major chord that rings out.
 boom(f(1320), { from: 120, to: 32, k: 7, decay: 1.3, len: 2.6, vel: 1.15, noise: 0.8 });
 metal(f(1320), 0.24);
-pad(22.0, 2.4, [110, 164.81, 220, 277.18, 329.63, 440, 493.88], { vel: 0.85, cutoff: 2200, attack: 0.02, release: 1.4 });
-shimmer(f(1320), 3, [1318.5, 1760, 2217.5, 2637], 0.035);
+pad(22.0, 1.7, [110, 164.81, 220, 277.18, 329.63, 440, 493.88], { vel: 0.85, cutoff: 2200, attack: 0.02, release: 1.1 });
+shimmer(f(1320), 2.8, [1318.5, 1760, 2217.5, 2637], 0.035);
+whoosh(f(1334), 0.5, { vel: 0.4 }); // the light across the logo
 [2637, 2217.5, 1760, 1318.5, 1108.7].forEach((fr, k) => bell(f(1350) + k * 0.09, fr, 0.06, k % 2 ? 0.5 : -0.5));
 bell(f(1376), 880, 0.08, 0);
 

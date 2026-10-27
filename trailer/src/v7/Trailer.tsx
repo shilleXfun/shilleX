@@ -1,6 +1,6 @@
 import { AbsoluteFill, Html5Audio, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { Grain } from '../kit';
-import { Backdrop, Vignette } from './fx';
+import { Backdrop, Sparks, Vignette, Whip } from './fx';
 import { AT, shake } from './lib';
 import { Crowd, Intro, Talk, Build } from './scenes-a';
 import { Bring, End, Market, Money, Wall } from './scenes-b';
@@ -22,7 +22,7 @@ function Flash() {
   return <AbsoluteFill style={{ background: 'radial-gradient(circle at 55% 55%, #ffffff, #fff1dc 60%, #ffcf8f)', opacity: o, mixBlendMode: 'screen' }} />;
 }
 
-const KEYS = [0, 60, 120, 180, 420, 600, 780, 840, 1020, 1200, 1320, 1560];
+const KEYS = [0, 60, 120, 180, 420, 600, 780, 840, 1020, 1200, 1320, 1500];
 const GLOW = [0.35, 0.6, 1.0, 0.5, 0.6, 0.5, 0.8, 1.15, 0.6, 0.7, 1.0, 0.9];
 const GRID = [0, 0.3, 0.4, 0.12, 0.3, 0.1, 0.2, 0.45, 0.15, 0.1, 0.35, 0.3];
 
@@ -44,8 +44,16 @@ export function V7() {
         <Sequence from={AT.market} durationInFrames={190}><Market /></Sequence>
         <Sequence from={AT.bring} durationInFrames={190}><Bring /></Sequence>
         <Sequence from={AT.wall} durationInFrames={130}><Wall /></Sequence>
-        <Sequence from={AT.end} durationInFrames={240}><End /></Sequence>
+        <Sequence from={AT.end} durationInFrames={180}><End /></Sequence>
+        <Sparks at={AT.hit} x={960} y={560} count={40} power={0.9} seed="hit" />
+        <Sparks at={AT.market} x={960} y={150} count={60} power={1.2} seed="drop" />
+        <Sparks at={AT.end} x={960} y={500} count={56} power={1.1} seed="end" />
       </AbsoluteFill>
+      <Whip at={AT.talk} />
+      <Whip at={AT.build} dir={-1} />
+      <Whip at={AT.money} />
+      <Whip at={AT.bring} dir={-1} />
+      <Whip at={AT.wall} />
       <Flash />
       <Vignette strength={0.72} />
       <Grain opacity={0.06} />

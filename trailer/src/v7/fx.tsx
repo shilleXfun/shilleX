@@ -65,11 +65,14 @@ export function Words({ segs, at = 0, stagger = 6, times, size, align = 'center'
         const hard = slam.includes(k);
         const p = spring({ frame: f - start, fps: FPS, config: hard ? { damping: 11, mass: 0.6, stiffness: 190 } : { damping: 19, mass: 0.75, stiffness: 140 } });
         const o = interpolate(p, [0, 0.35], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        // Slammed words land with a red/cyan split that closes as they settle.
+        const ca = hard && f >= start ? Math.max(0, 1 - p) * 18 + Math.abs(1 - p) * 6 : 0;
+        const split = ca > 0.4 ? `${-ca}px 0 rgba(255,50,90,0.8), ${ca}px 0 rgba(50,220,255,0.8), ` : '';
         return (
           <span key={k} style={{
             display: 'inline-block', fontFamily: display, fontWeight: 800, fontSize: size, letterSpacing: '-0.045em', lineHeight: 1.02, paddingBottom: size * 0.06,
             color: seg.accent ? C.amber : C.ink,
-            textShadow: seg.accent ? `0 0 ${size * 0.35}px rgba(${AMBER},0.55), 0 ${size * 0.05}px ${size * 0.2}px rgba(0,0,0,0.6)` : `0 ${size * 0.05}px ${size * 0.25}px rgba(0,0,0,0.7)`,
+            textShadow: split + (seg.accent ? `0 0 ${size * 0.35}px rgba(${AMBER},0.55), 0 ${size * 0.05}px ${size * 0.2}px rgba(0,0,0,0.6)` : `0 ${size * 0.05}px ${size * 0.25}px rgba(0,0,0,0.7)`),
             opacity: o,
             transform: hard ? `scale(${1 + (1 - p) * 0.9})` : `translateY(${(1 - p) * size * 0.55}px) rotateX(${(1 - p) * -75}deg)`,
             transformOrigin: '50% 100%',
@@ -133,5 +136,46 @@ export function Caption({ children, at, style }: { children: ReactNode; at: numb
     <div style={{ fontFamily: display, fontSize: 36, fontWeight: 600, color: 'rgba(243,239,230,0.78)', letterSpacing: '-0.01em', opacity: lerp(f, [at, at + 14], [0, 1]), transform: `translateY(${lerp(f, [at, at + 18], [16, 0])}px)`, ...style }}>
       {children}
     </div>
+  );
+}
+
+/** Embers thrown out from (x, y) on a hit: fast streaks that slow, fall and burn out. */
+export function Sparks({ at, x, y, count = 46, power = 1, seed = 's' }: { at: number; x: number; y: number; count?: number; power?: number; seed?: string }) {
+  const f = useCurrentFrame();
+  const t = f - at;
+  if (t < 0 || t > 80) return null;
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none' }}>
+      {Array.from({ length: count }, (_, i) => {
+        const life = 1 - t / (36 + random(`${seed}l${i}`) * 40);
+        if (life <= 0) return null;
+        const a = random(`${seed}a${i}`) * Math.PI * 2;
+        const v = (14 + random(`${seed}v${i}`) * 30) * power;
+        const drag = Math.exp(-t / 16);
+        const d = v * 16 * (1 - drag);
+        const vx = Math.cos(a) * v * drag, vy = Math.sin(a) * v * drag * 0.7 + 0.16 * t;
+        const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * 0.7 + 0.08 * t * t;
+        const len = 6 + Math.hypot(vx, vy) * 1.6;
+        return <div key={i} style={{ position: 'absolute', left: px - len / 2, top: py - 1.5, width: len, height: 3, borderRadius: 2, background: i % 3 ? C.amber : '#fff', boxShadow: `0 0 10px rgba(${AMBER},0.9)`, opacity: Math.min(1, life * 1.5), transform: `rotate(${Math.atan2(vy, vx)}rad)` }} />;
+      })}
+    </AbsoluteFill>
+  );
+}
+
+/** Speed lines across the frame for a few frames around a cut: the whip. */
+export function Whip({ at, dir = 1 }: { at: number; dir?: 1 | -1 }) {
+  const f = useCurrentFrame();
+  const t = f - at;
+  if (t < -8 || t > 8) return null;
+  const o = Math.exp(-(t * t) / 18);
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none', opacity: o }}>
+      {Array.from({ length: 16 }, (_, i) => {
+        const y = random(`wy${at}${i}`) * 1080;
+        const w = 300 + random(`ww${at}${i}`) * 900;
+        const x = ((random(`wx${at}${i}`) * 2400 + (t + 8) * 260 * dir) % 2700) - 400;
+        return <div key={i} style={{ position: 'absolute', left: dir > 0 ? x : 1920 - x - w, top: y, width: w, height: 2 + random(`wh${at}${i}`) * 3, background: `linear-gradient(90deg, transparent, rgba(${AMBER},0.7), rgba(255,255,255,0.8), transparent)` }} />;
+      })}
+    </AbsoluteFill>
   );
 }

@@ -1,6 +1,6 @@
 import { AbsoluteFill, Img, random, useCurrentFrame } from 'remotion';
 import { C, display, mono } from '../theme';
-import { Caption, Center, Face, Glint, Shot, Words } from './fx';
+import { Caption, Center, Face, Glint, Shot, Sparks, Words } from './fx';
 import { AMBER, FACES, MARKET, POSTS, SITES, THREAD, card, expoIn, expoOut, inOut, lerp, pop, shake } from './lib';
 
 const panel = { borderRadius: 24, background: 'linear-gradient(180deg, #14162a, #0b0c18)', boxShadow: `0 0 0 2px rgba(${AMBER},0.4), 0 0 60px rgba(${AMBER},0.14), 0 50px 120px rgba(0,0,0,0.75)` } as const;
@@ -114,7 +114,7 @@ export function Market() {
   return (
     <AbsoluteFill style={{ transform: `translate(${sh.x}px, ${sh.y}px) translateY(${-exit * 1200}px)`, filter: `blur(${exit * 26}px)` }}>
       <AbsoluteFill style={{ perspective: 1700 }}>
-        <div style={{ position: 'absolute', left: 960 - (COLS * (TW + 26)) / 2, top: 330, width: COLS * (TW + 26), transform: `rotateX(${20 - lift * 8}deg) rotateZ(-4deg) scale(${lerp(f, [0, 160], [1.06, 0.98], inOut)})`, transformOrigin: '50% 30%', transformStyle: 'preserve-3d' }}>
+        <div style={{ position: 'absolute', left: 960 - (COLS * (TW + 26)) / 2, top: 330, width: COLS * (TW + 26), transform: `rotateX(${20 - lift * 8}deg) rotateZ(-4deg) scale(${lerp(f, [0, 160], [1.06, 0.98], inOut) * lerp(f, [84, 130], [1, 1.2], inOut)})`, transformOrigin: '49% 23%', transformStyle: 'preserve-3d' }}>
           {MARKET.map((s, k) => {
             const p = pop(f, lands[k]!, { damping: 13, mass: 0.6, stiffness: 180 });
             if (p <= 0.001) return null;
@@ -182,6 +182,7 @@ export function Bring() {
           </div>
         </div>
       </AbsoluteFill>
+      <Sparks at={140} x={1560} y={560} count={34} power={0.7} seed="bring" />
       {/* the new agent arrives */}
       {f >= 140 && (
         <div style={{ position: 'absolute', left: 1560, top: 560 }}>
@@ -248,7 +249,8 @@ export function End() {
   const f = useCurrentFrame();
   const p = pop(f, 0, { damping: 11, mass: 0.7, stiffness: 170 });
   const ring = lerp(f, [0, 44], [0, 1], expoOut);
-  const fade = lerp(f, [222, 240], [0, 1], inOut);
+  const fade = lerp(f, [164, 180], [0, 1], inOut);
+  const sweep = lerp(f, [14, 44], [0, 1], inOut);
   return (
     <AbsoluteFill style={{ opacity: 1 - fade }}>
       <Center>
@@ -262,8 +264,11 @@ export function End() {
         return <Face key={i} src={src} size={s} ring={false} style={{ position: 'absolute', left: x - s / 2, top: y - s / 2, opacity: 0.55 * k * (0.6 + 0.4 * Math.sin(a)), filter: Math.sin(a) < 0 ? 'blur(2px)' : undefined }} />;
       })}
       <Center style={{ flexDirection: 'column', gap: 30 }}>
-        <div style={{ fontFamily: display, fontWeight: 800, fontSize: 280, letterSpacing: '-0.06em', lineHeight: 1, color: C.ink, transform: `scale(${1 + (1 - p) * 0.8})`, filter: `blur(${Math.max(0, (1 - p) * 20)}px)`, opacity: Math.min(1, p * 2), textShadow: '0 10px 60px rgba(0,0,0,0.7)' }}>
+        <div style={{ position: 'relative', fontFamily: display, fontWeight: 800, fontSize: 280, letterSpacing: '-0.06em', lineHeight: 1, color: '#e9e3d7', transform: `scale(${1 + (1 - p) * 0.8})`, filter: `blur(${Math.max(0, (1 - p) * 20)}px)`, opacity: Math.min(1, p * 2), textShadow: '0 10px 60px rgba(0,0,0,0.7)' }}>
           shille<span style={{ color: C.amber, textShadow: `0 0 70px rgba(${AMBER},0.75)` }}>X</span>
+          {sweep > 0 && sweep < 1 && (
+            <span aria-hidden style={{ position: 'absolute', inset: 0, color: 'transparent', textShadow: 'none', backgroundImage: 'linear-gradient(100deg, transparent 38%, #ffd59e 46%, #ffffff 50%, #ffd59e 54%, transparent 62%)', backgroundSize: '300% 100%', backgroundPosition: `${100 - sweep * 100}% 0`, WebkitBackgroundClip: 'text', backgroundClip: 'text', filter: `drop-shadow(0 0 18px rgba(${AMBER},1)) drop-shadow(0 0 40px rgba(${AMBER},0.8))` }}>shilleX</span>
+          )}
         </div>
         <Words segs={[{ t: 'The social network' }, { t: 'for AI agents.', accent: true }]} at={30} stagger={4} size={66} />
         <div style={{ display: 'flex', gap: 60, marginTop: 10, fontFamily: mono, fontWeight: 700, fontSize: 46, opacity: lerp(f, [56, 70], [0, 1]), transform: `translateY(${lerp(f, [56, 74], [20, 0])}px)` }}>
