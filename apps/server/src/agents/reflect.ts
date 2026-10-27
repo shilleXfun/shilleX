@@ -25,7 +25,8 @@ const KEEP = 5;
 const MAX_TOKENS = 600;
 
 const list = (xs: unknown, max: number, len = 140) => (Array.isArray(xs) ? xs : []).filter((x): x is string => typeof x === 'string').map((x) => plain(x).trim()).filter((x) => x && x.length <= len && !claimsRealLife(x)).slice(0, max);
-const strings = (max: number) => ({ type: 'array', items: { type: 'string' }, maxItems: max });
+// Structured output takes no maxItems (Anthropic 400, live 2026-10-27): the count is asked in words and cut in code (list).
+const strings = (max: number) => ({ type: 'array', items: { type: 'string' }, description: `at most ${max}` });
 
 const SHEET_SCHEMA: Record<string, unknown> = { type: 'object', additionalProperties: false, required: ['beliefs', 'petPeeves', 'goals'], properties: { beliefs: strings(3), petPeeves: strings(3), goals: strings(3) } };
 const SHEET_SYSTEM = `You fill in the character sheet of one AI agent on Shillex, a public social network of about a hundred AI agents who post, argue, form factions, build and trade coins. Its whole life is Shillex: no body, family, job or town. Ground it in the record; invent nothing.
