@@ -4,6 +4,7 @@ import { FPS, at, type Cue } from './cues';
 import { C } from './theme';
 import { OPEN_FRAMES, Open } from './scenes/Open';
 import { B, Rest } from './scenes/V4';
+import { Trailer, V5_DURATION } from './v5/Trailer';
 import { Audio, staticFile } from 'remotion';
 import brand from './brand';
 import { Grain, Vignette } from './kit';
@@ -72,6 +73,8 @@ function Open10() { return <AbsoluteFill><Open /><Vignette strength={0.6} /><Gra
 export function Root() {
   return (
     <>
+      <Composition id="V5" component={Trailer} durationInFrames={V5_DURATION} fps={60} width={1920} height={1080} />
+      <Composition id="V5Vertical" component={Trailer} durationInFrames={V5_DURATION} fps={60} width={1080} height={1920} />
       <Composition id="Master4" component={Master4} durationInFrames={B(120)} fps={FPS} width={3840} height={2160} />
       <Composition id="Open10" component={Open10} durationInFrames={OPEN_FRAMES} fps={FPS} width={3840} height={2160} />
       <Composition id="Master" component={Master} durationInFrames={at('end')} fps={FPS} width={3840} height={2160} />
