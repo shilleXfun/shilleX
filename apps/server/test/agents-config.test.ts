@@ -15,7 +15,9 @@ describe('agents config', () => {
     expect(c.llmBudgetPer12hUsd).toBe(4);
     expect(c.brainKillSwitch).toBe(false);
     // Launch day raises the number; nothing raises it past the ceiling.
-    expect(loadConfig({ NODE_ENV: 'test', LLM_BUDGET_USD_PER_12H: '900', IMAGE_BUDGET_USD_PER_DAY: '3', BRAIN_KILL_SWITCH: 'true' })).toMatchObject({ llmBudgetPer12hUsd: 50, imageDailyBudgetUsd: 3, brainKillSwitch: true });
+    expect(loadConfig({ NODE_ENV: 'test', LLM_BUDGET_USD_PER_12H: '900', IMAGE_BUDGET_USD_PER_DAY: '3', BRAIN_KILL_SWITCH: 'true' })).toMatchObject({ llmBudgetPer12hUsd: 25, imageDailyBudgetUsd: 3, brainKillSwitch: true });
+    // The per-day figure wins and is split over the two halves.
+    expect(loadConfig({ NODE_ENV: 'test', LLM_BUDGET_USD_PER_12H: '4', LLM_BUDGET_USD_PER_DAY: '6' }).llmBudgetPer12hUsd).toBe(3);
     expect(c.imageDailyMax).toBe(15);
     expect(c.engineTickMs).toEqual([2000, 6000]);
   });

@@ -64,21 +64,37 @@ export function accountProblem(e: unknown): string | null {
   if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
   if (status === 403) return 'Anthropic refused this key permission (403); check the key and restart';
   if (status === 400 && /credit balance|billing/i.test(msg)) return 'The Anthropic account is out of credit; top it up and restart';
+  // The account's own spend limit (2026-10-27 live: "You have reached your specified API usage limits. You will regain access on 2026-11-01").
+  if (status === 400 && USAGE_LIMIT.test(msg)) {
+    const back = accessReturns(msg);
+    return `The Anthropic account reached its API usage limit${back ? `; access returns ${back.toISOString().slice(0, 16).replace('T', ' ')} UTC` : ''}. Raise the limit in the Anthropic console, or wait`;
+  }
   // A malformed request fails the same way for every agent, so it is a deploy problem, not a turn problem.
   if (status === 400 && /invalid_request_error/.test(msg)) return `Anthropic rejected the request shape (400): ${/"message":"([^"]+)"/.exec(msg)?.[1] ?? msg.slice(0, 200)}`;
   return null;
 }
 
-/** An account problem that is the key or the money (401, 403, no credit): the brain is down, not just paused (halt.ts). */
+const USAGE_LIMIT = /usage limits?|spend(?:ing)? limit|regain access/i;
+/** When the provider says access comes back ("You will regain access on 2026-11-01 at 00:00 UTC"), or null. */
+export function accessReturns(msg: string): Date | null {
+  const m = /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{2}:\d{2}))?/i.exec(msg);
+  const d = m ? new Date(`${m[1]}T${m[2] ?? '00:00'}:00Z`) : null;
+  return d && !Number.isNaN(d.getTime()) ? d : null;
+}
+
+/** An account problem that is the key or the money (401, 403, no credit, the account's usage limit): the brain is down, not just paused (halt.ts). */
 export function accountDown(e: unknown): boolean {
   if (e instanceof ProviderError) return e.category === 'auth' || e.category === 'credit';
-  const status = (e as { status?: number })?.status;
-  return status === 401 || status === 403 || (status === 400 && /credit balance|billing/i.test((e as Error)?.message ?? ''));
+  const status = (e as { status?: number })?.status, msg = (e as Error)?.message ?? '';
+  return status === 401 || status === 403 || (status === 400 && (/credit balance|billing/i.test(msg) || USAGE_LIMIT.test(msg)));
 }
-/** Pauses model calls when `e` is an account problem, as down or paused; returns the reason, or null for any other failure. */
+/**
+ * Pauses model calls when `e` is an account problem, as down or paused; returns the reason, or null for any other failure. A usage
+ * limit that names when access returns is not probed before then: every probe would be refused.
+ */
 export function tripOn(halt: Pick<ModelHalt, 'trip'> | undefined, e: unknown): string | null {
   const p = accountProblem(e);
-  if (p) halt?.trip(p, accountDown(e) ? 'down' : 'paused');
+  if (p) halt?.trip(p, accountDown(e) ? 'down' : 'paused', accessReturns((e as Error)?.message ?? '') ?? undefined);
   return p;
 }
 

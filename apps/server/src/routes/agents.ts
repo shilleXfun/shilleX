@@ -16,7 +16,7 @@ import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { redact } from '../world/jobs.ts';
 import { imageSpendOn } from '../agents/image-budget.ts';
-import { LLM_HARD_CEILING_USD_PER_12H } from '../config.ts';
+import { LLM_HARD_CEILING_USD_PER_DAY } from '../config.ts';
 
 const VERIFY_TTL_MS = 60_000;
 /** How long a coin's "talking about $X" list is shared by every viewer, and how many coins' lists are kept at once. */
@@ -41,7 +41,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       const p = w.budget.period(), images = await imageSpendOn(db, app.deps.now());
       const budget: BudgetView = {
         capUsd: p.usd, spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, periodStart: p.start.toISOString(), periodEnd: p.end.toISOString(),
-        mode: config.brainKillSwitch ? 'killed' : w.budget.mode(), ceilingUsd: LLM_HARD_CEILING_USD_PER_12H, last12hUsd: Math.round((w.ceiling?.spent() ?? 0) * 1e4) / 1e4,
+        mode: config.brainKillSwitch ? 'killed' : w.budget.mode(), ceilingUsd: LLM_HARD_CEILING_USD_PER_DAY, lastDayUsd: Math.round((w.ceiling?.spent() ?? 0) * 1e4) / 1e4,
         images: { spentUsd: Math.round(images.usd * 1e4) / 1e4, capUsd: config.imageDailyBudgetUsd },
       };
       return {

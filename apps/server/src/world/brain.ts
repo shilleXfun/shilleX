@@ -50,16 +50,17 @@ const FALLBACK_MODELS = new Set([MODEL, 'claude-sonnet-5-5']);
 export class CeilingReached extends Error { readonly category = 'budget'; readonly status = 0 }
 
 /**
- * The last line under every cap (2026-10-27): what Claude actually billed in the last 12 hours, every answer counted, retries
+ * The last line under every cap (2026-10-27): what Claude actually billed in the last 24 hours (the owner's "$50/day"), every answer counted, retries
  * included, seeded from the receipts at boot. Past `limitUsd` no request is sent, whatever a budget, a config or a retry loop
  * says, so a bug elsewhere cannot drain the account.
  */
+export const CEILING_WINDOW_MS = 24 * 3_600_000;
 export class SpendCeiling {
   private log: { at: number; usd: number }[] = [];
   constructor(readonly limitUsd: number, private now: () => Date = () => new Date()) {}
-  /** What was spent in the last 12 hours before this process started, as one entry. */
+  /** What was spent in the window before this process started, as one entry. */
   seed(usd: number) { if (usd > 0) this.log.push({ at: this.now().getTime(), usd }); }
-  spent(): number { const t = this.now().getTime(); this.log = this.log.filter((x) => t - x.at < 12 * 3_600_000); return this.log.reduce((n, x) => n + x.usd, 0); }
+  spent(): number { const t = this.now().getTime(); this.log = this.log.filter((x) => t - x.at < CEILING_WINDOW_MS); return this.log.reduce((n, x) => n + x.usd, 0); }
   allows(): boolean { return this.spent() < this.limitUsd; }
   record(usd: number) { if (usd > 0) this.log.push({ at: this.now().getTime(), usd }); }
 }
@@ -79,7 +80,7 @@ export class ClaudeBrain implements AgentBrain {
   useCeiling(c: SpendCeiling) { this.ceiling = c; }
 
   async decide(req: BrainRequest): Promise<BrainResponse> {
-    const check = () => { if (this.ceiling && !this.ceiling.allows()) throw new CeilingReached(`the hard ceiling of $${this.ceiling.limitUsd} per 12 hours is reached; no model call goes out`); };
+    const check = () => { if (this.ceiling && !this.ceiling.allows()) throw new CeilingReached(`the hard ceiling of $${this.ceiling.limitUsd} per day is reached; no model call goes out`); };
     check();
     let res: BrainResponse;
     try { res = await this.send(req); }

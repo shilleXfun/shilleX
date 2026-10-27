@@ -32,7 +32,7 @@ describe('retries', () => {
 });
 
 describe('the hard ceiling', () => {
-  it('counts what Claude billed and sends nothing once it is reached, until 12 hours pass', async () => {
+  it('counts what Claude billed and sends nothing once it is reached, until a day passes', async () => {
     let t = Date.parse('2026-10-27T12:00:00Z');
     const ceiling = new SpendCeiling(0.15, () => new Date(t));
     ceiling.seed(0.05);
@@ -41,7 +41,7 @@ describe('the hard ceiling', () => {
     await b.brain.decide(req); // a million Haiku input tokens: $0.10
     await expect(b.brain.decide(req)).rejects.toBeInstanceOf(CeilingReached);
     expect(b.calls()).toBe(1);
-    t += 12 * 3_600_000;
+    t += 24 * 3_600_000;
     await expect(b.brain.decide(req)).resolves.toBeTruthy();
   });
 });

@@ -25,7 +25,7 @@ import { buildProduct } from './products.ts';
  * agent posts it through the ordinary post path, linking /sites/<slug>. The build is still a sealed turn (cost 0), so
  * SITES_PER_DAY counts it.
  */
-export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy'> & { budget?: ModelBudget; /** The model products are conceived and built with; none: the local builder only. */ brain?: AgentBrain | null };
+export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy' | 'halt'> & { budget?: ModelBudget; /** The model products are conceived and built with; none: the local builder only. */ brain?: AgentBrain | null };
 /** The model name a site turn records: no model, the local builder. */
 const LOCAL_BUILDER = 'local-site-v2';
 
@@ -98,9 +98,10 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
   // quota spent), buildProduct ships one from a local engine instead (plan E2). Improving a product waits for a model.
   // A faction's site is a product for the faction now (Phase 4): the old members-and-manifesto page is not built any more.
   if (job.site === 'product' || job.site === 'improve' || job.site === 'faction') {
-    if (job.site === 'improve' && !(d.brain && d.budget?.canSpend())) return { status: 'skipped', note: 'no model to improve a product with' };
+    if (job.site === 'improve' && !(d.brain && !d.halt?.reason() && d.budget?.canSpend())) return { status: 'skipped', note: 'no model to improve a product with' };
     if (!(await mayBuild(d.db, agentId, now)) || !(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };
-    return buildProduct({ ...d, brain: d.brain ?? null, budget: d.budget ?? null }, agentId, job);
+    // The brain is down or paused (halt.ts): no model call, the same as having none (2026-10-27: 14 builds refused by a usage limit).
+    return buildProduct({ ...d, brain: d.halt?.reason() ? null : d.brain ?? null, budget: d.budget ?? null }, agentId, job);
   }
   if (!(await mayBuild(d.db, agentId, now))) return { status: 'skipped', note: 'the agent is not an active house agent' };
   if (!(await stillValid(d.db, agentId, job, now))) return { status: 'skipped', note: `the ${job.site} job is no longer valid` };

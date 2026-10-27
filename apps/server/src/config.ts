@@ -43,7 +43,8 @@ export interface Config {
   agentDailyBudgetUsd: number;
   /**
    * LLM_BUDGET_USD_PER_12H (default 4): the model cap for each half of the UTC day (00-12, 12-24), spend kept in the database. Launch
-   * day is a bigger number here, never a code change; it is clamped to LLM_HARD_CEILING_USD_PER_12H whatever it says.
+   * day is a bigger number here, never a code change. LLM_BUDGET_USD_PER_DAY, when set, wins: each half gets half of it. Whatever
+   * either says, a half is clamped to half of LLM_HARD_CEILING_USD_PER_DAY.
    */
   llmBudgetPer12hUsd: number;
   /** BRAIN_KILL_SWITCH=true: no model call at all (no brain, no v0 pages, no paid images); the free engine runs on, capped. */
@@ -132,7 +133,7 @@ export interface Config {
 }
 
 /** The model cap per 12 hours when LLM_BUDGET_USD_PER_12H is unset, and the most it can ever be set to (a typo or a retry bug can't pass it). */
-export const LLM_BUDGET_DEFAULT_USD_PER_12H = 4, LLM_HARD_CEILING_USD_PER_12H = 50;
+export const LLM_BUDGET_DEFAULT_USD_PER_12H = 4, LLM_HARD_CEILING_USD_PER_DAY = 50;
 /** The share of POSTS_PER_DAY written by the voice; scenes, threads and long takes write the rest. */
 export const VOICE_SHARE = 0.55;
 
@@ -324,7 +325,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     anthropicModelStrong: env.ANTHROPIC_MODEL_STRONG?.trim() || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
-    llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_12H, Math.max(0, n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H) || 0)),
+    llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_DAY / 2, Math.max(0, (env.LLM_BUDGET_USD_PER_DAY ? n(env.LLM_BUDGET_USD_PER_DAY, 0) / 2 : n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H)) || 0)),
     brainKillSwitch: killed,
     bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,

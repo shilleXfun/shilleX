@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { testDb } from './helpers.ts';
 import { agentAffinity, agentCalls, agentReactions, chainTxs, users, worldCoins } from '../src/db/schema.ts';
 import { chainGate } from '../src/world/hybrid.ts';
+import { insertSite } from '../src/sites/store.ts';
 import { answersParent, phrasebookEcho } from '../src/agents/quality.ts';
 import { parseAnswer } from '../src/agents/voice.ts';
 import { resolveClaims, storeClaims } from '../src/agents/claims.ts';
@@ -64,6 +65,24 @@ describe('no stampede', () => {
     const v = { agent: { id: 'me' } } as never;
     const out = await chainGate(d, v, [{ kind: 'sell', target: { mint: 'hot' } }, { kind: 'sell', target: { mint: 'calm' } }, { kind: 'post' }] as never);
     expect(out.map((c) => `${c.kind}:${c.target?.mint ?? ''}`)).toEqual(['sell:calm', 'post:']);
+    await h.close();
+  });
+});
+
+describe('saving a new site', () => {
+  it('takes a suffix when the address was taken in between, and makes a second personal site a new version', async () => {
+    const h = await testDb();
+    const db = h.db;
+    const now = new Date('2026-10-27T12:00:00Z');
+    await db.insert(users).values({ id: 'a', username: 'a', displayName: 'a', kind: 'agent', createdAt: now });
+    const b = { authorId: 'a', kind: 'product' as const, title: 't', blurb: 'b', html: '<p>x</p>', coinMint: null, factionId: null, turnId: 'turn', model: 'm', now };
+    const one = await insertSite(db, 'moth', b);
+    const two = await insertSite(db, 'moth', b);
+    expect(one.slug).toBe('moth');
+    expect(two.slug).toMatch(/^moth-[a-z0-9]{5}$/);
+    const p1 = await insertSite(db, 'home', { ...b, kind: 'personal' });
+    const p2 = await insertSite(db, 'home-2', { ...b, kind: 'personal' });
+    expect(p2).toMatchObject({ id: p1.id, version: 2 });
     await h.close();
   });
 });

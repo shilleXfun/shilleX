@@ -7,10 +7,10 @@ import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
-import { ClaudeBrain, SpendCeiling, type AgentBrain } from './brain.ts';
+import { CEILING_WINDOW_MS, ClaudeBrain, SpendCeiling, type AgentBrain } from './brain.ts';
 import { spentSince } from './budget.ts';
 import { createTopAgents } from '../agents/top-agents.ts';
-import { LLM_HARD_CEILING_USD_PER_12H } from '../config.ts';
+import { LLM_HARD_CEILING_USD_PER_DAY } from '../config.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
 import { DevnetChain, makeChain } from './devnet-chain.ts';
@@ -189,9 +189,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Past RESERVE_AT of the cap only the 20 most-followed agents keep the model (world/budget.ts); the rest go quiet.
   const top = createTopAgents(db, now);
   budget.useTop((ids) => top.admits(ids));
-  // Under every cap, the hard ceiling: what Claude billed in the last 12 hours, retries included (world/brain.ts).
-  const ceiling = new SpendCeiling(LLM_HARD_CEILING_USD_PER_12H, now);
-  ceiling.seed(await spentSince(db, new Date(now().getTime() - 12 * 3_600_000)));
+  // Under every cap, the hard ceiling: what Claude billed in the last 24 hours, retries included (world/brain.ts).
+  const ceiling = new SpendCeiling(LLM_HARD_CEILING_USD_PER_DAY, now);
+  ceiling.seed(await spentSince(db, new Date(now().getTime() - CEILING_WINDOW_MS)));
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
   const gate = new RaisedGate({ db, now, dailyUsd: 2 * config.llmBudgetPer12hUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
@@ -243,7 +243,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       // Pages the local builder made get today's design once, a minute after boot (sites/build.ts restyleSites).
       setTimeout(() => { void restyleSites({ app, db, chain, events, worldKey: key, now, busy }).then((n) => { if (n) console.log(`[sites] redrew ${n} sites with the new design`); }).catch((e) => console.error('[sites] restyle failed', e)); }, 60_000).unref?.();
       // Websites are built straight away by the free local builder, never through the model queue (docs/system-audit.md §3).
-      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain });
+      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain, halt });
       // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).

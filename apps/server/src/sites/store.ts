@@ -4,6 +4,7 @@ import type { Db } from '../db/client.ts';
 import { agents, productBriefs, siteBuilds, sites, siteVersions, users, worldCoins, type SiteKind, type SiteRow } from '../db/schema.ts';
 import { newId } from '../lib/ids.ts';
 import { toUserSummary } from '../services/users.ts';
+import { isUniqueViolation } from '../lib/pg-errors.ts';
 
 export const siteUrl = (slug: string) => `/sites/${slug}`;
 /** PUBLIC_URL's origin, where Shillex's own images live; empty when it is not a URL. */
@@ -123,13 +124,37 @@ export async function freeSlug(db: Db, base: string): Promise<string> {
 export interface NewBuild { authorId: string; kind: SiteKind; title: string; blurb: string; html: string; coinMint: string | null; factionId: string | null; turnId: string; model: string; now: Date }
 
 /** The first build of a site, in one transaction. A unique index refusing it (the coin or faction got a site meanwhile) throws. */
+/**
+ * A new site under `slug`. freeSlug() reads before this writes, so two builds can pick the same address (2026-10-27 live: the insert
+ * failed now and then): a slug taken in between gets a short suffix and the insert is tried again, up to three times.
+ */
 export async function insertSite(db: Db, slug: string, b: NewBuild): Promise<SiteRow> {
-  return db.transaction(async (tx) => {
-    const [row] = await tx.insert(sites).values({ id: newId(), slug, authorId: b.authorId, kind: b.kind, title: b.title, blurb: b.blurb, coinMint: b.coinMint, factionId: b.factionId, version: 1, createdAt: b.now, updatedAt: b.now }).returning();
-    await tx.insert(siteVersions).values({ siteId: row!.id, version: 1, html: b.html, turnId: b.turnId, model: b.model, createdAt: b.now });
-    return row!;
-  });
+  for (let attempt = 0; ; attempt++) {
+    const s = attempt === 0 ? slug : `${slug.slice(0, 40)}-${newId().slice(-5).toLowerCase()}`;
+    try {
+      return await db.transaction(async (tx) => {
+        const [row] = await tx.insert(sites).values({ id: newId(), slug: s, authorId: b.authorId, kind: b.kind, title: b.title, blurb: b.blurb, coinMint: b.coinMint, factionId: b.factionId, version: 1, createdAt: b.now, updatedAt: b.now }).returning();
+        await tx.insert(siteVersions).values({ siteId: row!.id, version: 1, html: b.html, turnId: b.turnId, model: b.model, createdAt: b.now });
+        return row!;
+      });
+    } catch (e) {
+      if (!isUniqueViolation(e) || attempt >= 3) throw e;
+      // The coin, the faction or the author's personal site already has one (a second build raced the first): this build is its next version.
+      const which = constraintOf(e);
+      if (which && which !== 'sites_slug_idx') {
+        const [have] = await db.select({ id: sites.id }).from(sites).where(
+          which === 'sites_coin_idx' && b.coinMint ? eq(sites.coinMint, b.coinMint) : which === 'sites_faction_idx' && b.factionId ? eq(sites.factionId, b.factionId) : and(eq(sites.authorId, b.authorId), eq(sites.kind, 'personal'))).limit(1);
+        if (!have) throw e;
+        return rebuildSite(db, have.id, b);
+      }
+    }
+  }
 }
+/** The name of the unique index a Postgres error broke, looked for up to four causes down. */
+const constraintOf = (e: unknown): string | null => {
+  for (let x: any = e, i = 0; x && i < 4; x = x.cause, i++) if (typeof x.constraint === 'string') return x.constraint;
+  return null;
+};
 
 /** A rebuild: version + 1, with the new title, blurb and HTML. */
 export async function rebuildSite(db: Db, siteId: string, b: Pick<NewBuild, 'title' | 'blurb' | 'html' | 'turnId' | 'model' | 'now'>): Promise<SiteRow> {

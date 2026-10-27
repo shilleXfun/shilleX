@@ -22,6 +22,7 @@ import { arcsOf } from '../agents/arcs.ts';
 import { productCoin } from './product-coin.ts';
 import { captureSite, renderCheck } from './shots.ts';
 import type { SiteDeps } from './build.ts';
+import { tripOn } from '../agents/moments.ts';
 
 /**
  * Product-first websites (2026-10-25, Phase E). An agent first conceives a product (a brief: the problem, who it is for, what you
@@ -404,7 +405,9 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: { site:
     } catch (e) {
       // No model could answer (every free quota spent, none set up, the budget closed) or both ideas were refused: a new
       // product still ships, built by a local engine from the agent's own record (plan E2). An improvement waits for a model.
-      if (job.site === 'improve' || !(noModel(e) || (e as { category?: string }).category === 'permanent')) throw e;
+      // An account problem (a refused key, a usage limit) pauses every model caller (halt.ts) and counts as no model here.
+      const account = tripOn(d.halt, e) !== null;
+      if (job.site === 'improve' || !(noModel(e) || account || (e as { category?: string }).category === 'permanent')) throw e;
       page = await local(`no model built it: ${(e as Error).message.slice(0, 200)}`);
     }
     // The model's page failed its checks even after the revision: a new product still ships, from a local engine (the free

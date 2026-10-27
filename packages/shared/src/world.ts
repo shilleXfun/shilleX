@@ -173,8 +173,8 @@ export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'o
   budget?: BudgetView }
 export interface BudgetView {
   capUsd: number; spentUsd: number; periodStart: string; periodEnd: string; mode: 'normal' | 'reserve' | 'stopped' | 'killed';
-  /** The hard ceiling per 12 hours no setting can pass, and what Claude billed in the last 12 hours against it. */
-  ceilingUsd: number; last12hUsd: number;
+  /** The hard ceiling per rolling day no setting can pass, and what Claude billed in the last 24 hours against it. */
+  ceilingUsd: number; lastDayUsd: number;
   images: { spentUsd: number; capUsd: number };
 }
 export type BrainStatus = 'up' | 'down' | 'off';
