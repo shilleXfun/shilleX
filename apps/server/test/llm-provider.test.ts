@@ -176,5 +176,8 @@ describe('LLM config', () => {
     expect(c.providers.map((p) => [p.name, p.model, p.priceInPerM])).toEqual([['groq', 'openai/gpt-oss-20b', null], ['openrouter', 'meta/llama:free', 0]]);
     expect(loadLlmConfig({}).mode).toBe('none');
     expect(loadLlmConfig({ ANTHROPIC_API_KEY: 'a' }).mode).toBe('anthropic');
+    // Claude comes first, and a free provider's key alone turns nothing on.
+    expect(loadLlmConfig({ ANTHROPIC_API_KEY: 'a', LLM_PROVIDERS: 'groq', GROQ_API_KEY: 'g' }).mode).toBe('anthropic');
+    expect(loadLlmConfig({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'm' }).providers).toEqual([]);
   });
 });

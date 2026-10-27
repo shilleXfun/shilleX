@@ -18,6 +18,8 @@ export interface Chain {
   sell(signer: Keypair, mint: string, rawTokensIn: number, slippageBps: number): Promise<TradeResult>;
   sendSol(signer: Keypair, to: string, lamports: number): Promise<{ signature: string; feeLamports: number }>;
   curve(mint: string): Promise<CurveState | null>;
+  /** Many curves in as few requests as the chain allows (devnet: one per 100 pools); without it, curve() per mint. */
+  curves?(mints: string[]): Promise<Map<string, CurveState | null>>;
   /** Collects the creator's share of a coin's trading fees into its wallet; null when there is too little to be worth a transaction. */
   claimCreatorFees?(signer: Keypair, mint: string): Promise<TradeResult | null>;
   /** Free test SOL from the network's faucet (devnet, a local validator, the memory chain); null when the faucet says no. */

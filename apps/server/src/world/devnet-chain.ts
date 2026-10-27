@@ -1,13 +1,14 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
-import { DynamicBondingCurveClient, SwapMode, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { DynamicBondingCurveClient, SwapMode, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice, type PoolConfig, type VirtualPool } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { CLAIM_MIN_LAMPORTS, ChainError, GRADUATED_MESSAGE, MemoryChain, type Chain, type CurveState, type LaunchInput, type LaunchResult, type TradeResult, type WalletBalances } from './chain.ts';
 import { DBC_CONFIG, getSetting } from './launchpad.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
 import { rulesFromConfig } from '../ledger/rules.ts';
+import { rpcMeter } from './rpc-meter.ts';
 
 /** SOL and token change for `owner` in a confirmed transaction (fees included in the SOL change). */
 export function deltasFromTx(tx: ParsedTransactionWithMeta, owner: string, mint: string | null) {
@@ -54,6 +55,18 @@ const RETRY_MS = 60_000;
 export const READ_GAP_MS = 400;
 /** Reads waiting beyond this many are not queued: the caller gets the stale value or an RPC_BUSY error at once. */
 const READ_QUEUE_MAX = 150;
+/** getMultipleAccounts takes at most this many accounts per call. */
+const ACCOUNTS_PER_CALL = 100;
+
+/** A curve's price and progress from its pool and its config, as the SDK computes them (getPriceFromSqrtPrice; quote reserve over the migration threshold). */
+export function curveFrom(mint: string, pool: string, vp: VirtualPool, config: PoolConfig): CurveState {
+  const priceSol = Number(getPriceFromSqrtPrice(vp.poolState.sqrtPrice, TokenDecimal.SIX, 9).toString());
+  const curveProgress = Math.min(1, Math.max(0, Number(vp.poolState.quoteReserve.toString()) / Number(config.migrationQuoteThreshold.toString())));
+  return {
+    mint, pool, priceLamports: priceSol * 1e9, curveProgress,
+    graduated: Number(vp.poolState.isMigrated) !== 0 || curveProgress >= 1, quoteReserveLamports: Number(vp.poolState.quoteReserve.toString()),
+  };
+}
 
 export class DevnetChain implements Chain {
   readonly network = 'devnet' as const;
@@ -63,6 +76,17 @@ export class DevnetChain implements Chain {
   private failedAt = 0;
   private nextReadAt = 0;
   private queued = 0;
+  /** Pool configs by address: a launchpad config never changes, so each is read once. */
+  private configs = new Map<string, PoolConfig>();
+  private async configOf(address: PublicKey): Promise<PoolConfig> {
+    const key = address.toBase58();
+    const hit = this.configs.get(key);
+    if (hit) return hit;
+    const c = await this.client.state.getPoolConfig(address);
+    if (!c) throw new ChainError('NO_LAUNCHPAD', `No pool config at ${key}`);
+    this.configs.set(key, c);
+    return c;
+  }
   /** Waits for this read's slot in the pace (READ_GAP_MS apart); false when too many are already waiting. */
   private async slot(): Promise<boolean> {
     if (this.queued >= READ_QUEUE_MAX) return false;
@@ -190,7 +214,7 @@ export class DevnetChain implements Chain {
     const pool = this.poolOf(mint);
     const virtualPool = await this.client.state.getPool(pool);
     if (!virtualPool) throw new ChainError('UNKNOWN_MINT', `No bonding-curve pool for mint ${mint}`);
-    const config = (await this.client.state.getPoolConfig(virtualPool.poolState.config))!;
+    const config = await this.configOf(virtualPool.poolState.config);
     // A curve that reached its threshold refuses swaps until it migrates, so it counts as graduated already.
     if (Number(virtualPool.poolState.isMigrated) !== 0 || virtualPool.poolState.quoteReserve.gte(config.migrationQuoteThreshold)) throw new ChainError('GRADUATED', GRADUATED_MESSAGE);
     const currentPoint = await getCurrentPoint(this.conn, config.activationType);
@@ -241,16 +265,28 @@ export class DevnetChain implements Chain {
     return { signature, feeLamports: (await this.deltas(signature, signer.publicKey.toBase58(), null)).feeLamports };
   }
 
-  async curve(mint: string): Promise<CurveState | null> {
-    const pool = this.poolOf(mint);
-    const vp = await this.client.state.getPool(pool);
-    if (!vp) return null;
-    const priceSol = Number(getPriceFromSqrtPrice(vp.poolState.sqrtPrice, TokenDecimal.SIX, 9).toString());
-    const curveProgress = await this.client.state.getPoolQuoteTokenCurveProgress(pool);
-    return {
-      mint, pool: pool.toBase58(), priceLamports: priceSol * 1e9, curveProgress,
-      graduated: Number(vp.poolState.isMigrated) !== 0 || curveProgress >= 1, quoteReserveLamports: Number(vp.poolState.quoteReserve.toString()),
-    };
+  async curve(mint: string): Promise<CurveState | null> { return (await this.curves([mint])).get(mint) ?? null; }
+
+  /**
+   * Many curves at once (2026-10-27): one getMultipleAccounts per 100 pools, decoded here, and each config read once ever. The SDK's
+   * own path read the pool twice and its config once per coin, three requests a coin, which ran the free devnet RPC into 429s.
+   * A mint with no pool (or an account that is not one) maps to null.
+   */
+  async curves(mints: string[]): Promise<Map<string, CurveState | null>> {
+    const out = new Map<string, CurveState | null>();
+    const pools = mints.flatMap((m) => { try { return [{ mint: m, pool: this.poolOf(m) }]; } catch { out.set(m, null); return []; } });
+    for (let i = 0; i < pools.length; i += ACCOUNTS_PER_CALL) {
+      const chunk = pools.slice(i, i + ACCOUNTS_PER_CALL);
+      const infos = await this.conn.getMultipleAccountsInfo(chunk.map((p) => p.pool), 'confirmed');
+      for (const [j, p] of chunk.entries()) {
+        const info = infos[j];
+        let vp: VirtualPool | null = null;
+        // The coder checks the account's discriminator and throws on anything that is not a virtual pool.
+        try { vp = info ? (this.client.state.program.coder.accounts.decode('virtualPool', info.data) as VirtualPool) : null; } catch { vp = null; }
+        out.set(p.mint, vp ? curveFrom(p.mint, p.pool.toBase58(), vp, await this.configOf(vp.poolState.config)) : null);
+      }
+    }
+    return out;
   }
 }
 
@@ -259,7 +295,8 @@ export class DevnetChain implements Chain {
  * the world still starts (agents wait out an RPC outage as before), and the check runs again before the first transaction.
  */
 /** web3.js's own retry on a 429 waits and re-sends in a loop; off, so a rate-limited read falls back to the cached value at once. */
-const defaultConnect = (url: string) => new Connection(url, { commitment: 'confirmed', disableRetryOnRateLimit: true });
+/** Every request is counted (rpc-meter.ts), so the credits it burns show in the hourly log. */
+const defaultConnect = (url: string) => new Connection(url, { commitment: 'confirmed', disableRetryOnRateLimit: true, fetch: rpcMeter().fetch });
 export async function makeChain(config: Config, db: Db, connect = defaultConnect, now: () => Date = () => new Date()): Promise<Chain> {
   if (config.worldChain === 'memory') return new MemoryChain();
   // Shillex's own books (mainnet spec Â§2): no RPC at all, and so nothing to check the network of.

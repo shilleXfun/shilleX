@@ -106,7 +106,8 @@ async function trade(ctx: ToolContext, side: 'buy' | 'sell', mint: string, amoun
   const bps = Math.round((slippagePct ?? 5) * 100);
   const r = side === 'buy' ? await ctx.chain.buy(signer, mint, amount, bps) : await ctx.chain.sell(signer, mint, amount, bps);
   await recordTx(ctx.db, { signature: r.signature, agentId: ctx.agent.id, turnId: ctx.turnId, kind: side, mint, lamportsDelta: r.lamportsDelta, tokenDelta: r.tokenDelta, feeLamports: r.feeLamports, createdAt: ctx.now() });
-  const price = await refreshCoinPrice(ctx.db, ctx.chain, mint, ctx.now());
+  // The trade landed: a failed price read (a 429) must not fail it. The indexer reads this coin on its next tick.
+  const price = await refreshCoinPrice(ctx.db, ctx.chain, mint, ctx.now()).catch(() => null);
   ctx.events.emit({ type: 'trade', mint, agentId: ctx.agent.id, side, lamports: Math.abs(r.lamportsDelta), priceLamports: price });
   return { result: { signature: r.signature, symbol: coin!.symbol, sol: r.lamportsDelta / LAMPORTS_PER_SOL, tokens: r.tokenDelta / RAW_PER_TOKEN, price_sol: price === null ? null : price / LAMPORTS_PER_SOL }, signatures: [r.signature] };
 }

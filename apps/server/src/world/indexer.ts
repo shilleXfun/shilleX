@@ -4,13 +4,16 @@ import type { Db } from '../db/client.ts';
 import { agentGrants, agentTheses, agentTurns, agents, chainTxs, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
-import { holdersOf, refreshCoinPrice } from './market.ts';
+import { holdersOf, refreshCoinPrices } from './market.ts';
 import { chainHead } from './provenance.ts';
 import { pfpTraits } from '../lib/pfp.ts';
 import { RUG_RULE } from '../ledger/rug-rule.ts';
 
 const SUPPLY = 1_000_000_000, DAY = 86_400_000, START = 0.1;
 const CAPITAL_KINDS = new Set(['fund', 'opening', 'deposit', 'withdraw']);
+/** Price ticks: every 30 s the coins traded since their last read; every 10 min every live coin; after a 429, up to 10 min apart. */
+export const PRICE_TICK_MS = 30_000, PRICE_SWEEP_MS = 10 * 60_000, PRICE_BACKOFF_MAX_MS = 10 * 60_000;
+const rateLimited = (e: unknown) => /\b429\b|too many requests|rate limit/i.test((e as Error)?.message ?? '');
 
 /** Each agent's desk record from its theses: closed trades, wins, the average result, and its best and worst call. */
 export function trackRecords(rows: { a: string; symbol: string; status: string; pnl: number | null }[]): Map<string, TrackRecord> {
@@ -61,19 +64,40 @@ export function sparkOf(mine: ChainTxRow[], now: number): { spark: number[]; cha
 export class Indexer {
   private balances = new Map<string, { at: number; b: WalletBalances }>();
   private timer: NodeJS.Timeout | null = null;
-  private ticks = 0;
+  private lastSweep = 0;
+  private backoff = 0;
   private board: { at: number; value: Promise<AgentCard[]> } | null = null;
   constructor(private db: Db, private chain: Chain, private now: () => Date, private opts: { balanceTtlMs?: number; viewTtlMs?: number } = {}) {}
 
+  /**
+   * Keeps world_coins' prices fresh, the cache agents, the feed and the API read. A curve only moves when it is traded, so a tick
+   * reads just the coins with a trade since their last read (every trade also reads its coin at once, tools.ts), and nothing at
+   * all when none moved; a sweep reads every live coin now and then in case something was missed. All in one batched request
+   * per 100 coins. A 429 doubles the wait, up to PRICE_BACKOFF_MAX_MS, and says so once.
+   */
   start() {
     const loop = async () => {
+      let wait = PRICE_TICK_MS;
       try {
-        // Every tick: coins traded in the last 10 minutes; every 8th: anything traded today. Quiet coins keep their last price.
-        const since = new Date(this.now().getTime() - (this.ticks++ % 8 === 0 ? DAY : 10 * 60_000));
-        const mints = (await this.db.selectDistinct({ m: chainTxs.mint }).from(chainTxs).where(and(gte(chainTxs.createdAt, since), inArray(chainTxs.kind, ['buy', 'sell', 'launch'])))).map((r) => r.m!).filter(Boolean);
-        for (const m of mints) await refreshCoinPrice(this.db, this.chain, m, this.now());
-      } catch (e) { console.error('[world] indexer tick failed', e); }
-      this.timer = setTimeout(loop, 15_000);
+        const t = this.now().getTime();
+        const sweep = t - this.lastSweep >= PRICE_SWEEP_MS;
+        const live = and(isNull(worldCoins.archivedAt), isNull(worldCoins.graduatedAt));
+        const mints = sweep
+          ? (await this.db.select({ m: worldCoins.mint }).from(worldCoins).where(live)).map((r) => r.m)
+          : (await this.db.selectDistinct({ m: worldCoins.mint }).from(worldCoins).innerJoin(chainTxs, eq(chainTxs.mint, worldCoins.mint))
+            .where(and(live, inArray(chainTxs.kind, ['buy', 'sell', 'launch']), or(isNull(worldCoins.refreshedAt), sql`${chainTxs.createdAt} > ${worldCoins.refreshedAt}`)))).map((r) => r.m);
+        if (mints.length) await refreshCoinPrices(this.db, this.chain, mints, this.now());
+        if (sweep) this.lastSweep = t;
+        if (this.backoff) console.log('[world] price reads work again');
+        this.backoff = 0;
+      } catch (e) {
+        if (rateLimited(e)) {
+          this.backoff++;
+          wait = Math.min(PRICE_TICK_MS * 2 ** this.backoff, PRICE_BACKOFF_MAX_MS);
+          if (this.backoff === 1) console.warn(`[world] the RPC is rate-limiting price reads (429); backing off, up to ${PRICE_BACKOFF_MAX_MS / 60_000} min between tries`);
+        } else console.error('[world] indexer tick failed', e);
+      }
+      this.timer = setTimeout(loop, wait);
       this.timer.unref?.();
     };
     void loop();

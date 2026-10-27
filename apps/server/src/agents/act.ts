@@ -174,11 +174,15 @@ async function actLocked(d: EngineDeps, v: AgentView, c: Candidate): Promise<Act
       }
       // A reaction (agents/reactions.ts) answers one moment; a stock line would not, so without the agent's own words it stays unsaid.
       if (c.reaction) return null;
+      // A public line without the model takes from the world's hourly allowance (quiet.ts); with none left the agent says nothing.
+      const allowed = () => privateCall || !d.quiet || d.quiet.take();
       if (said && !seen.has(normalizeBody(said))) {
+        if (!allowed()) return null;
         used.first ??= { text: said, line: { key: `talk:${situation}`, template: said, situation } };
         return said;
       }
       const r = composeLine(v.phrasebook, situation, { ...slotsFor(v, { ...c, ...extra, situation }, usernames), ...(c.slots ?? {}) }, state.recentLines, d.rng, seen);
+      if (r && !allowed()) return null;
       if (r) {
         state.recentLines = [...state.recentLines, r.key];
         used.first ??= { text: r.text, line: { key: r.key, template: r.template, situation } };

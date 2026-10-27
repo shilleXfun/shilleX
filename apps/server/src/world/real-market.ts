@@ -2,6 +2,7 @@ import { desc, gte, inArray } from 'drizzle-orm';
 import { isValidSolanaAddress } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { realMarket, realPositions, type RealMarketRow } from '../db/schema.ts';
+import { DexCooling, dexLimiter } from './dex-limiter.ts';
 
 /**
  * Real Solana coins for the desk's paper book (2026-10-24 upgrade: "make them trade outside their coins"). DexScreener's free
@@ -31,11 +32,8 @@ const logoOf = (v: unknown): string | null => {
 };
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/[\u0000-\u001f]/g, '').slice(0, max) : '');
 
-async function getJson(url: string, fetchImpl: typeof fetch): Promise<unknown> {
-  const res = await fetchImpl(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`dexscreener http ${res.status}`);
-  return res.json();
-}
+/** Paced, cached for a minute and backed off on 429 (dex-limiter.ts). */
+const getJson = (url: string, fetchImpl: typeof fetch): Promise<unknown> => dexLimiter(fetchImpl).get(url);
 
 /** Solana token addresses DexScreener is boosting now (top and latest), deduplicated. */
 export async function trendingAddresses(fetchImpl: typeof fetch = fetch): Promise<string[]> {
@@ -53,7 +51,13 @@ export async function pairsFor(addresses: string[], source: (a: string) => strin
   for (let i = 0; i < addresses.length; i += 30) {
     const chunk = addresses.slice(i, i + 30);
     let data: unknown;
-    try { data = await getJson(`${API}/tokens/v1/solana/${chunk.join(',')}`, fetchImpl); } catch (e) { console.warn('[real] dexscreener read failed', (e as Error).message); continue; }
+    try { data = await getJson(`${API}/tokens/v1/solana/${chunk.join(',')}`, fetchImpl); }
+    catch (e) {
+      // Backing off (the limiter said so once): the rest of the batch waits for the next refresh, the stored rows stand.
+      if (e instanceof DexCooling || /\b429\b/.test((e as Error).message)) break;
+      console.warn('[real] dexscreener read failed', (e as Error).message);
+      continue;
+    }
     if (!Array.isArray(data)) continue;
     const best = new Map<string, any>();
     for (const p of data as any[]) {

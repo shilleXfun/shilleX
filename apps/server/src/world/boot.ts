@@ -47,6 +47,7 @@ import { xDigestHandler } from '../x/digest.ts';
 import { restyleSites, siteBuilder } from '../sites/build.ts';
 import { backfillShots } from '../sites/shots.ts';
 import { createModelHalt, type ModelHalt } from '../agents/halt.ts';
+import { createQuietGate, type QuietGate } from '../agents/quiet.ts';
 import { createVoice } from '../agents/voice.ts';
 import { deskMomentHandler } from '../agents/depth/desk.ts';
 import { LedgerChain } from '../ledger/ledger-chain.ts';
@@ -63,6 +64,8 @@ export interface WorldHandles {
   indexer: Indexer; budget: Budget; chain: Chain; key: Buffer; engine: Engine | null; moments: Moments | null; network: Chain['network'];
   /** Why model calls are paused, shared by moments and scenes (agents/halt.ts). */
   halt?: ModelHalt;
+  /** The world's hourly allowance of public posts written without the model (agents/quiet.ts). */
+  quiet?: QuietGate;
   /** The model brain in use, or null (no key): the world runs on the free engine. */
   brain?: AgentBrain | null;
   scenes?: Scenes | null;
@@ -183,6 +186,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const busy = new Set<string>();
   // One pause for every model caller: a rejected key stops moments and scenes alike, and a later probe call restarts both.
   const halt = createModelHalt(now);
+  // One hourly allowance for every line written without the model: with the brain down, ~10 posts an hour instead of a flood.
+  const quiet = createQuietGate(config.phrasebookPerHour, now);
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
   if (!config.worldHalted) indexer.start();
@@ -194,7 +199,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, brain: null, scenes: null,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, brain: null, scenes: null,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -218,12 +223,12 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
       const voice = brain && config.voicePerHour > 0 ? createVoice({ db, brain, budget, now, halt, perHour: config.voicePerHour, homes: config.llm.mode === 'openai' ? config.llm.providers.map((p) => p.name) : [] }) : undefined;
-      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
+      handles.engine = startEngine({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), tickMs: config.engineTickMs, population: () => population.value() });
       // Scores exist from the first tick, not five minutes in; a failure here only means agents start with none.
       void reputation.refresh(db, now()).catch((e) => console.error('[depth] reputation boot refresh failed', e));
       // Agents talking to each other in public threads, long takes, and the storylines they make (agents/scenes, agents/stories).
       if (config.scenes.on) {
-        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
+        scenesH = startScenes({ app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, moments: handles.moments ?? undefined, brain, budget, share, config: config.scenes });
         handles.scenes = scenesH;
         storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => halt.reason() });
         scenesH.onSceneEnd(() => storiesH?.soon());

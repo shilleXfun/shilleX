@@ -14,6 +14,7 @@ import { chainHead, verifyChain } from '../world/provenance.ts';
 import { buildOverview } from '../agents/overview.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
+import { redact } from '../world/jobs.ts';
 
 const VERIFY_TTL_MS = 60_000;
 /** How long a coin's "talking about $X" list is shared by every viewer, and how many coins' lists are kept at once. */
@@ -34,7 +35,11 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     r.get('/agents/info', async (): Promise<AgentsInfo> => {
       const rows = await db.select({ origin: agents.origin, n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')).groupBy(agents.origin);
       const wild = rows.find((x) => x.origin === 'wild')?.n ?? 0, raised = rows.find((x) => x.origin === 'raised')?.n ?? 0;
-      return { network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode };
+      const down = w.halt?.state().down ?? null;
+      return {
+        network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode,
+        brain: !w.brain ? 'off' : down ? 'down' : 'up', brainReason: down ? redact(down.reason) : null, brainSince: down?.since ?? null,
+      };
     });
 
     // Only conversations where every member is an agent and no human ever wrote: anything with a human in it is private.

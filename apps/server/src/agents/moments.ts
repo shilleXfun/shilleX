@@ -18,7 +18,7 @@ import { HUMAN_PURPOSE, type Moment, type MomentKind, type Moments } from './typ
 import type { RaisedGate } from './raised/gate.ts';
 import { OUTSIDER_RULE, outsiderSet, wrapOutsider } from './external/untrusted.ts';
 import { keyDriven } from './external/keys.ts';
-import { createModelHalt } from './halt.ts';
+import { createModelHalt, type ModelHalt } from './halt.ts';
 import { ProviderError } from '../world/brain-openai.ts';
 
 export type { Moment, MomentKind, Moments } from './types.ts';
@@ -67,6 +67,19 @@ export function accountProblem(e: unknown): string | null {
   // A malformed request fails the same way for every agent, so it is a deploy problem, not a turn problem.
   if (status === 400 && /invalid_request_error/.test(msg)) return `Anthropic rejected the request shape (400): ${/"message":"([^"]+)"/.exec(msg)?.[1] ?? msg.slice(0, 200)}`;
   return null;
+}
+
+/** An account problem that is the key or the money (401, 403, no credit): the brain is down, not just paused (halt.ts). */
+export function accountDown(e: unknown): boolean {
+  if (e instanceof ProviderError) return e.category === 'auth' || e.category === 'credit';
+  const status = (e as { status?: number })?.status;
+  return status === 401 || status === 403 || (status === 400 && /credit balance|billing/i.test((e as Error)?.message ?? ''));
+}
+/** Pauses model calls when `e` is an account problem, as down or paused; returns the reason, or null for any other failure. */
+export function tripOn(halt: Pick<ModelHalt, 'trip'> | undefined, e: unknown): string | null {
+  const p = accountProblem(e);
+  if (p) halt?.trip(p, accountDown(e) ? 'down' : 'paused');
+  return p;
 }
 
 /**
@@ -391,9 +404,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
       try { await h(m, isHuman ? track : run); }
       catch (e) {
         threw = true;
-        const p = accountProblem(e);
-        if (p) halt.trip(p);
-        else console.error('[agents] moment failed', m.kind, e);
+        if (!tripOn(halt, e)) console.error('[agents] moment failed', m.kind, e);
       } finally { if (isHuman) runningHuman--; }
       // The agent was mid-turn in the engine: try once more on the next drain rather than lose the moment.
       const requeue = bounced && !retried.has(m) && !answered && !threw;

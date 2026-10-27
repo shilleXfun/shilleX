@@ -4,6 +4,7 @@ import { agentTurns, agents, siteVersions, wallets } from '../db/schema.ts';
 import { jobStates, redact } from './jobs.ts';
 import type { WorldHandles } from './boot.ts';
 import { RoutedBrain } from './brain-openai.ts';
+import { rpcMeterState } from './rpc-meter.ts';
 
 /** No good engine tick for this long, while the engine runs, is a warning. */
 export const TICK_WARN_MS = 15 * 60_000;
@@ -49,7 +50,8 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
   }
   if (siteJob && siteJob.failures >= 2) warnings.push(`Website builds failed ${siteJob.failures} times in a row (${siteJob.errorCategory}): ${siteJob.lastError ?? ''}`);
   if (w.brain instanceof RoutedBrain && !w.brain.status().some((p) => p.why === null)) warnings.push(`No model provider is usable: ${w.brain.status().map((p) => `${p.name}: ${p.why}`).join('; ')}`);
-  if (pause?.reason) warnings.push(`Model calls are paused until ${pause.until}: ${redact(pause.reason)}`);
+  if (pause?.down) warnings.push(`The brain is down since ${pause.down.since} (${pause.down.probes} probes failed): ${redact(pause.down.reason)}`);
+  else if (pause?.reason) warnings.push(`Model calls are paused until ${pause.until}: ${redact(pause.reason)}`);
   if (w.engine && w.budget.level() === 'stopped') warnings.push('The model budget of this period is spent: model posts wait, the free engine and site builder go on.');
   for (const j of jobs) {
     if (j.lastStatus === 'running' && j.leaseUntil && j.leaseUntil < t) warnings.push(`Job ${j.name} stopped mid-run (its lease expired ${iso(j.leaseUntil)}); the next run takes it over.`);
@@ -66,11 +68,14 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     sites: { perDay: config.sitesPerDay, lastBuiltAt: iso(lastSiteAt), lastStatus: siteJob?.lastStatus ?? null, lastNote: siteJob?.lastNote ?? null, failuresInRow: siteJob?.failures ?? 0 },
     model: {
       brain: w.brain ? w.brain.name ?? 'on' : 'off',
+      down: pause?.down ? { ...pause.down, reason: redact(pause.down.reason) } : null,
       providers: w.brain instanceof RoutedBrain ? w.brain.status().map((p) => ({ ...p, lastError: p.lastError ? redact(p.lastError) : null })) : [],
       paused: pause?.reason ? { reason: redact(pause.reason), until: pause.until } : null,
       pausesInRow: pause?.trips ?? 0,
       queued: w.moments?.size() ?? 0,
     },
+    quiet: w.quiet?.state() ?? null,
+    rpc: rpcMeterState(),
     budget: { capUsd: w.budget.capUsd(), spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, level: w.budget.level() },
     jobs: jobs.map((j) => ({
       name: j.name, lastStatus: j.lastStatus, lastStartedAt: iso(j.lastStartedAt), lastFinishedAt: iso(j.lastFinishedAt), lastOkAt: iso(j.lastOkAt),

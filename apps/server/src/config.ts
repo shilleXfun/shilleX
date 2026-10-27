@@ -69,7 +69,10 @@ export interface Config {
   /** MAINNET_CUSTODY_LOCAL=on: rehearsal custody against a local validator (tests and e2e). Always false in production. */
   custodyLocal: boolean;
   mainnetLimits: { hotMaxSol: number; outflowDailyMaxSol: number; agentCapSol: number; agentDailyCapSol: number; userMonthlyCapSol: number; worldCapSol: number; houseFeeBps: number; maxTradeSol: number };
-  /** RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. */
+  /**
+   * RPC for the agents' devnet chain; solanaRpcUrl stays mainnet for the token lookup. HELIUS_RPC_URL wins when it is a devnet URL
+   * (devnet.helius-rpc.com); a mainnet one is left for later and never used here, since the devnet chain refuses mainnet at boot.
+   */
   devnetRpcUrl: string;
   openaiApiKey: string | undefined;
   openaiImageModel: string;
@@ -109,6 +112,8 @@ export interface Config {
   llm: LlmConfig;
   /** MODEL_VOICE_PER_HOUR (default 40, 0 turns it off): everyday posts and replies the model writes in the agents' own words (agents/voice.ts); past it agents stay quiet. */
   voicePerHour: number;
+  /** PHRASEBOOK_POSTS_PER_HOUR (default 10): public posts the whole world may make without the model (agents/quiet.ts); past it agents stay quiet. */
+  phrasebookPerHour: number;
 }
 
 export interface LlmConfig {
@@ -129,19 +134,19 @@ export const LLM_PRESETS: Record<string, Omit<ProviderConfig, 'name' | 'apiKey' 
 };
 
 /**
- * LLM_PROVIDERS=groq,gemini (the order is the fallback order; default: groq and gemini, whichever has a key; openrouter only when
- * listed, since its key can spend credit). Per provider NAME: NAME_API_KEY, NAME_BASE_URL, NAME_MODEL, NAME_MODEL_STRONG,
+ * LLM_PROVIDERS=groq,gemini (the order is the fallback order; none unless listed: a key alone no longer turns a free provider on,
+ * since their quotas ran dry on 2026-10-27). Per provider NAME: NAME_API_KEY, NAME_BASE_URL, NAME_MODEL, NAME_MODEL_STRONG,
  * NAME_MODEL_FALLBACKS and NAME_MODEL_STRONG_FALLBACKS (comma lists of more models on the same key), NAME_PRICE_IN and NAME_PRICE_OUT (USD per million tokens; unset means unknown and the provider is not used, 0 for a free tier;
  * an OpenRouter ':free' model is 0), NAME_DAILY_REQUESTS, NAME_RPM, NAME_TPM, NAME_JSON_SCHEMA, NAME_TOOLS. LLM_TIMEOUT_MS (default
- * 60 s). LLM_PROVIDER=openai|anthropic|none picks the mode; by default the providers when any is set, else Anthropic when its key
- * is set, else none.
+ * 60 s). LLM_PROVIDER=openai|anthropic|none picks the mode; by default Claude when ANTHROPIC_API_KEY is set, else the providers
+ * when any is listed, else none.
  */
 export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfig {
   const val = (k: string) => (env[k] === undefined || env[k] === '' ? undefined : env[k]!.trim());
   const num = (k: string): number | null => { const v = val(k); if (v === undefined) return null; const x = Number(v); return Number.isFinite(x) && x >= 0 ? x : null; };
   const flag = (k: string, def: boolean) => { const v = val(k)?.toLowerCase(); return v === undefined ? def : ['on', 'true', '1', 'yes'].includes(v); };
   const timeoutMs = num('LLM_TIMEOUT_MS') ?? 60_000;
-  const names = (val('LLM_PROVIDERS')?.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)) ?? ['groq', 'gemini'].filter((n) => val(`${n.toUpperCase()}_API_KEY`));
+  const names = (val('LLM_PROVIDERS')?.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)) ?? [];
   const providers: ProviderConfig[] = [];
   for (const name of names) {
     const N = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -162,7 +167,7 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
     });
   }
   const asked = val('LLM_PROVIDER')?.toLowerCase();
-  const mode: LlmConfig['mode'] = asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked : providers.length ? 'openai' : val('ANTHROPIC_API_KEY') ? 'anthropic' : 'none';
+  const mode: LlmConfig['mode'] = asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked : val('ANTHROPIC_API_KEY') ? 'anthropic' : providers.length ? 'openai' : 'none';
   // Site builds go to Gemini by default when it is configured: its pages were far better in the 2026-10-25 comparison.
   const build = val('LLM_BUILD_PROVIDER')?.toLowerCase() ?? (providers.some((p) => p.name === 'gemini') ? 'gemini' : null);
   return { mode, providers, buildProvider: build && providers.some((p) => p.name === build) ? build : null };
@@ -320,7 +325,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       userMonthlyCapSol: n(env.MAINNET_USER_MONTHLY_CAP_SOL, 1), worldCapSol: n(env.MAINNET_WORLD_CAP_SOL, 25),
       houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
     },
-    devnetRpcUrl: env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
+    devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
     imageDailyBudgetUsd: Number(env.IMAGE_DAILY_BUDGET_USD ?? 0.5),
@@ -341,6 +346,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),
     voicePerHour: Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, 40)) || 0),
+    phrasebookPerHour: Math.max(0, Math.floor(n(env.PHRASEBOOK_POSTS_PER_HOUR, 10)) || 0),
     v0: env.V0_API_KEY ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
   };
 }

@@ -16,6 +16,7 @@ import { planSites } from '../sites/plan.ts';
 import { runJob } from '../world/jobs.ts';
 import type { ActionKind, ImagePolicy, Moments } from './types.ts';
 import type { ModelHalt } from './halt.ts';
+import type { QuietGate } from './quiet.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import type { Voice } from './voice.ts';
 import { agentsWithReactions } from './reactions.ts';
@@ -30,6 +31,8 @@ export interface EngineDeps { app: FastifyInstance; db: Db; chain: Chain; events
   depth?: DepthRegistry;
   /** Pauses model calls after an account problem, shared by the moment queue and the scenes (halt.ts). */
   halt?: ModelHalt;
+  /** The world's hourly allowance of public lines written without the model (quiet.ts); absent: no cap. */
+  quiet?: QuietGate;
   /** Starts a website build now (sites/build.ts siteBuilder); false when one is already running. */
   buildSite?: (agentId: string, job: SiteJob) => boolean;
   /** Writes everyday posts and replies with the model from the agent's real state (agents/voice.ts); absent: the engine's own lines. */

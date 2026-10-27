@@ -19,29 +19,42 @@ export async function holdersOf(db: Db, mint: string): Promise<Map<string, numbe
 }
 
 export async function refreshCoinPrice(db: Db, chain: Chain, mint: string, now: Date): Promise<number | null> {
-  const c = await chain.curve(mint);
-  if (!c) return null;
-  const [row] = await db.select({ graduatedAt: worldCoins.graduatedAt }).from(worldCoins).where(eq(worldCoins.mint, mint));
-  await db.update(worldCoins).set({ priceLamports: c.priceLamports, curveProgress: c.curveProgress, refreshedAt: now, graduatedAt: c.graduated ? (row?.graduatedAt ?? now) : null }).where(eq(worldCoins.mint, mint));
-  return c.priceLamports;
+  return (await refreshCoinPrices(db, chain, [mint], now)).get(mint) ?? null;
+}
+
+/**
+ * Reads many curves at once (chain.curves: one RPC request per 100 coins on devnet) and stores each price, progress and
+ * graduation on world_coins, the cache every reader uses. Returns each refreshed coin's price; throws what the chain threw.
+ */
+export async function refreshCoinPrices(db: Db, chain: Chain, mints: string[], now: Date): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!mints.length) return out;
+  const curves = chain.curves ? await chain.curves(mints) : new Map(await Promise.all(mints.map(async (m) => [m, await chain.curve(m)] as const)));
+  const graduated = new Map((await db.select({ mint: worldCoins.mint, at: worldCoins.graduatedAt }).from(worldCoins).where(inArray(worldCoins.mint, mints))).map((r) => [r.mint, r.at]));
+  for (const [mint, c] of curves) {
+    if (!c) continue;
+    await db.update(worldCoins).set({ priceLamports: c.priceLamports, curveProgress: c.curveProgress, refreshedAt: now, graduatedAt: c.graduated ? (graduated.get(mint) ?? now) : null }).where(eq(worldCoins.mint, mint));
+    out.set(mint, c.priceLamports);
+  }
+  return out;
 }
 
 const usernames = async (db: Db, ids: string[]) =>
   ids.length ? new Map((await db.select({ id: users.id, u: users.username }).from(users).where(inArray(users.id, [...new Set(ids)]))).map((r) => [r.id, r.u])) : new Map<string, string>();
 
-export async function coinFacts(db: Db, chain: Chain, mint: string) {
+/** A coin as agents read it, from the cache only (world_coins, kept fresh by the indexer and every trade): no RPC request. */
+export async function coinFacts(db: Db, _chain: Chain, mint: string) {
   const [coin] = await db.select().from(worldCoins).where(eq(worldCoins.mint, mint));
   if (!coin) return null;
-  const curve = await chain.curve(mint);
   const holders = await holdersOf(db, mint);
   const trades = await db.select().from(chainTxs).where(eq(chainTxs.mint, mint)).orderBy(desc(chainTxs.id)).limit(20);
   const names = await usernames(db, [coin.creatorId, ...holders.keys(), ...trades.map((t) => t.agentId!).filter(Boolean)]);
-  const priceSol = curve ? sol(curve.priceLamports) : coin.priceLamports !== null ? sol(coin.priceLamports) : null;
+  const priceSol = coin.priceLamports !== null ? sol(coin.priceLamports) : null;
   return {
     mint, pool: coin.pool, name: coin.name, symbol: coin.symbol, description: coin.description, emoji: coin.emoji,
     creatorId: coin.creatorId, creator: names.get(coin.creatorId) ?? '?', launchedAt: coin.launchedAt.toISOString(),
     priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY_TOKENS,
-    curveProgress: curve?.curveProgress ?? coin.curveProgress, graduated: curve?.graduated ?? Boolean(coin.graduatedAt),
+    curveProgress: coin.curveProgress, graduated: Boolean(coin.graduatedAt),
     holders: [...holders].sort((a, b) => b[1] - a[1]).map(([id, raw]) => ({ username: names.get(id) ?? '?', tokens: tokens(raw) })),
     recentTrades: trades.map((t) => ({ username: t.agentId ? (names.get(t.agentId) ?? null) : null, kind: t.kind as ChainTxKind, sol: sol(t.lamportsDelta), tokens: tokens(t.tokenDelta), at: t.createdAt.toISOString() })),
   };

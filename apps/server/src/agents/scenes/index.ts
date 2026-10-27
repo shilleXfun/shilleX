@@ -2,7 +2,7 @@ import { isNull, sql } from 'drizzle-orm';
 import { scenes } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { modelName } from '../haiku.ts';
-import { accountProblem } from '../moments.ts';
+import { tripOn } from '../moments.ts';
 import { createModelHalt } from '../halt.ts';
 import { runJob, type JobOutcome } from '../../world/jobs.ts';
 import type { SceneDeps } from './cast.ts';
@@ -61,13 +61,13 @@ export function startScenes(d: SceneDeps): Scenes {
     if (modelOpen()) {
       try { written = await writeScene(d, m); if (written) halt.ok(); }
       catch (e) {
-        const p = accountProblem(e);
-        if (p) halt.trip(p);
-        else console.error('[scenes] writing a scene failed; composing it from phrasebooks', (e as Error)?.message ?? e);
+        if (!tripOn(halt, e)) console.error('[scenes] writing a scene failed; composing it from phrasebooks', (e as Error)?.message ?? e);
       }
     }
     const body = written ?? (await phrasebookScene(d, m));
     if (!body || stopped) return null;
+    // A phrasebook scene takes every line from the world's hourly allowance (quiet.ts) up front, so it never stops halfway.
+    if (!written && d.quiet && !d.quiet.take(body.messages.length)) return null;
     const id = newId(), now = d.now();
     await d.db.insert(scenes).values({
       id, kind: idea.kind, premise, title: body.title ?? templateTitle(m), cast: idea.cast, coinMint: idea.coinMint,
@@ -94,8 +94,8 @@ export function startScenes(d: SceneDeps): Scenes {
       if (r === 'failed') throw new Error('it wrote nothing it could post');
       return { status: r === 'posted' ? 'ok' : 'skipped', note: r };
     } catch (e) {
-      const p = accountProblem(e);
-      if (p) { halt.trip(p); throw Object.assign(new Error(p), { category: 'provider' }); }
+      const p = tripOn(halt, e);
+      if (p) { throw Object.assign(new Error(p), { category: 'provider' }); }
       throw e;
     }
   };

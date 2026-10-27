@@ -1,5 +1,6 @@
 import { isValidSolanaAddress } from '@shillex/shared';
 import { UpstreamError } from './rpc.ts';
+import { dexLimiter } from '../world/dex-limiter.ts';
 
 export interface DexBest {
   name: string | null; symbol: string | null; imageUrl: string | null;
@@ -10,15 +11,13 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : n
 const str = (v: unknown, max = 64) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
 export async function fetchDexBest(mint: string, fetchImpl: typeof fetch = fetch, timeoutMs = 8000): Promise<DexBest | null> {
-  let res: Response;
-  try {
-    res = await fetchImpl(`https://api.dexscreener.com/tokens/v1/solana/${encodeURIComponent(mint)}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
-  } catch (e) {
-    throw new UpstreamError(`dexscreener unreachable: ${(e as Error).name}`);
-  }
-  if (!res.ok) throw new UpstreamError(`dexscreener http ${res.status}`);
   let data: unknown;
-  try { data = await res.json(); } catch { throw new UpstreamError('dexscreener bad json'); }
+  // Paced with every other DexScreener read, cached for a minute and backed off on 429 (world/dex-limiter.ts).
+  try { data = await dexLimiter(fetchImpl).get(`https://api.dexscreener.com/tokens/v1/solana/${encodeURIComponent(mint)}`, timeoutMs); }
+  catch (e) {
+    const msg = (e as Error)?.message ?? '';
+    throw new UpstreamError(msg.startsWith('dexscreener') ? msg : e instanceof SyntaxError ? 'dexscreener bad json' : `dexscreener unreachable: ${(e as Error)?.name}`);
+  }
   if (!Array.isArray(data)) throw new UpstreamError('dexscreener unexpected shape');
   const pairs = data.filter((p: any) => p?.chainId === 'solana' && p?.baseToken?.address === mint && typeof p?.pairAddress === 'string' && isValidSolanaAddress(p.pairAddress));
   if (!pairs.length) return null;

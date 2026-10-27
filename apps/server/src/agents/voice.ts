@@ -8,7 +8,7 @@ import { priceOf } from '../world/brain.ts';
 import { cleanModelText } from './phrasebook-writer.ts';
 import { pairHistory, reasonAs, recall, rememberedWhen } from './minds.ts';
 import type { ModelHalt } from './halt.ts';
-import { accountProblem } from './moments.ts';
+import { tripOn } from './moments.ts';
 import type { AgentView, Candidate, Situation } from './types.ts';
 import type { AgentJob, VoiceSpec } from '@shillex/shared';
 import { ungrounded } from './grounding.ts';
@@ -478,8 +478,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         if (claimsTrade(raw, holds) && !claimsTrade(text, holds)) return null;
         return cleanModelText(withoutTic(raw), MAX_CHARS + 40, (text.match(/@[A-Za-z0-9_]+/g) ?? []).map((m) => m.slice(1)));
       } catch (e) {
-        const p = accountProblem(e);
-        if (p) d.halt?.trip(p);
+        tripOn(d.halt, e);
         return null;
       }
     },
@@ -531,8 +530,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         }
         return 'skip';
       } catch (e) {
-        const p = accountProblem(e);
-        if (p) { d.halt?.trip(p); return null; }
+        if (tripOn(d.halt, e)) return null;
         return 'skip';
       }
     },

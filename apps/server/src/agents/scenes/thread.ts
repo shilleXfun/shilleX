@@ -202,8 +202,11 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
   if (useModel) await d.db.update(worldModelCalls).set({ status, costUsd: spent.usd, finishedAt: d.now() }).where(eq(worldModelCalls.id, callId));
   if (thrown) throw thrown;
   // A model thread that came back short falls back to the composed one.
-  if (texts.length < THREAD_MIN) texts = cleanAll(plan.local);
+  let composed = !useModel;
+  if (texts.length < THREAD_MIN) { texts = cleanAll(plan.local); composed = true; }
   if (texts.length < THREAD_MIN) return 'failed';
+  // A composed thread takes all its posts from the world's hourly allowance (quiet.ts), or is not posted.
+  if (composed && d.quiet && !d.quiet.take(texts.length)) return 'skipped';
   // Numbered like a thread; an investigation's last post carries one receipt link, added here, never written by the model.
   const n = texts.length;
   const bodies = texts.map((t, i) => `${i + 1}/${n} ${t}`);
