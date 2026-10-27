@@ -69,7 +69,7 @@ async function modelHatch(d: HatchDeps, req: AgentHatchRow, budget: ModelBudget)
   const p = hatchPrompt(req.handle, req.description);
   let res: BrainResponse;
   try {
-    res = await billedCall({ db: d.db, budget, turnId, worstUsd: HATCH_WORST, spent },
+    res = await billedCall({ job: 'hatch', db: d.db, budget, turnId, worstUsd: HATCH_WORST, spent },
       () => d.brain!.decide({ system: p.system, tools: [], effort: 'low', tier: 2, maxTokens: PHRASEBOOK_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: HATCH_SCHEMA }, messages: [{ role: 'user', content: p.content }] }));
   } catch (e) {
     await seal('failed', ZERO, 'hatch: the call failed').catch((err) => console.error('[raised] hatch receipt left unsealed until restart', turnId, err));

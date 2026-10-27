@@ -49,6 +49,23 @@ const FALLBACK_MODELS = new Set([MODEL, 'claude-sonnet-5-5']);
 /** The hard ceiling refused the request: nothing was sent (`status` 0, so billedCall releases its reservation). */
 export class CeilingReached extends Error { readonly category = 'budget'; readonly status = 0 }
 
+/** No request carries more than this many input tokens (2026-10-27 cost audit); a larger one is refused before it is sent. */
+export const MAX_INPUT_TOKENS = 20_000;
+/** The request was larger than MAX_INPUT_TOKENS: nothing was sent. */
+export class InputTooLarge extends Error { readonly category = 'budget'; readonly status = 0 }
+/**
+ * A request's input tokens, counted generously: 3.5 characters per token over the system, the messages and the tool schemas (HTML
+ * and JSON run denser than prose), and 1,600 tokens per image (a screenshot at Claude's largest size).
+ */
+export function inputTokens(req: Pick<BrainRequest, 'system' | 'messages' | 'tools'>): number {
+  let chars = req.system.reduce((n, b) => n + b.text.length, 0) + JSON.stringify(req.tools).length, images = 0;
+  for (const m of req.messages) {
+    if (typeof m.content === 'string') { chars += m.content.length; continue; }
+    for (const b of m.content) { if (b.type === 'image') images++; else chars += JSON.stringify(b).length; }
+  }
+  return Math.ceil(chars / 3.5) + images * 1600;
+}
+
 /**
  * The last line under every cap (2026-10-27): what Claude actually billed in the last 24 hours (the owner's "$50/day"), every answer counted, retries
  * included, seeded from the receipts at boot. Past `limitUsd` no request is sent, whatever a budget, a config or a retry loop
@@ -82,6 +99,8 @@ export class ClaudeBrain implements AgentBrain {
   async decide(req: BrainRequest): Promise<BrainResponse> {
     const check = () => { if (this.ceiling && !this.ceiling.allows()) throw new CeilingReached(`the hard ceiling of $${this.ceiling.limitUsd} per day is reached; no model call goes out`); };
     check();
+    const tokens = inputTokens(req);
+    if (tokens > MAX_INPUT_TOKENS) throw new InputTooLarge(`the request carries about ${tokens} input tokens, over the ${MAX_INPUT_TOKENS} cap`);
     let res: BrainResponse;
     try { res = await this.send(req); }
     catch (e) {
@@ -126,18 +145,20 @@ export class FakeBrain implements AgentBrain {
 }
 
 let fakeIds = 0;
+/** The fake brain answers as the everyday model, so a test's prices are Haiku's, as in production. */
+const FAKE_MODEL = 'claude-haiku-5-5';
 const usage = { input: 1000, output: 100, cacheRead: 0, cacheWrite: 0 };
 export const fakeReply = {
   tools: (...uses: { name: string; input: unknown }[]): BrainResponse => ({
     content: uses.map((u) => ({ type: 'tool_use', id: `toolu_fake_${++fakeIds}`, name: u.name, input: u.input }) as unknown as Anthropic.ContentBlock),
-    stopReason: 'tool_use', usage, model: MODEL,
+    stopReason: 'tool_use', usage, model: FAKE_MODEL,
   }),
   end: (text = '', thinking = ''): BrainResponse => ({
     content: [
       ...(thinking ? [{ type: 'thinking', thinking, signature: 'fake' } as unknown as Anthropic.ContentBlock] : []),
       { type: 'text', text, citations: null } as unknown as Anthropic.ContentBlock,
     ],
-    stopReason: 'end_turn', usage, model: MODEL,
+    stopReason: 'end_turn', usage, model: FAKE_MODEL,
   }),
-  refusal: (): BrainResponse => ({ content: [], stopReason: 'refusal', usage: { ...usage, output: 0 }, model: MODEL }),
+  refusal: (): BrainResponse => ({ content: [], stopReason: 'refusal', usage: { ...usage, output: 0 }, model: FAKE_MODEL }),
 };

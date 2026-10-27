@@ -64,6 +64,7 @@ import { arcPass } from '../agents/arcs.ts';
 import { pruneReactions } from '../agents/reactions.ts';
 import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
+import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
 import { localStore, s3Store, type ObjectStore } from './object-store.ts';
 import { join } from 'node:path';
@@ -280,10 +281,18 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Who each agent is (agents/personas.ts): every house agent gets a job and a seeded persona on the first pass, then a few are
   // written from their own records each pass, so free model quotas are not spent at once.
   const personas = () => void runJob(db, 'personas', { now, leaseMs: 10 * 60_000 }, async () => {
-    const r = await personaPass({ db, chain, now, brain: handles.brain ?? null, budget });
-    // Then the sheets (frozen once written) and the six-hourly reflections (agents/reflect.ts).
-    const m = handles.brain ? await reflectPass({ db, brain: handles.brain, budget, now }) : { sheets: 0, reflections: 0 };
-    return { status: 'ok', note: `${r.seeded} seeded, ${r.written} written, ${m.sheets} sheets, ${m.reflections} reflections` };
+    // With the brain halted (a refused key, a usage limit) no model call is tried: seeds only, and the sheets and reflections wait
+    // (2026-10-27: this job failed 24 times in a row against the usage limit). An account error met here halts every model caller.
+    const brain = halt.reason() ? null : handles.brain ?? null;
+    try {
+      const r = await personaPass({ db, chain, now, brain, budget });
+      // Then the sheets (frozen once written) and the six-hourly reflections (agents/reflect.ts).
+      const m = brain ? await reflectPass({ db, brain, budget, now }) : { sheets: 0, reflections: 0 };
+      return { status: 'ok', note: `${r.seeded} seeded, ${r.written} written, ${m.sheets} sheets, ${m.reflections} reflections` };
+    } catch (e) {
+      if (tripOn(halt, e)) return { status: 'skipped', note: 'the brain is halted' };
+      throw e;
+    }
   });
   const personaTimer = config.worldHalted ? undefined : setInterval(personas, 3 * 60_000);
   personaTimer?.unref?.();

@@ -45,7 +45,7 @@ async function ask(d: ReflectDeps, agentId: string, purpose: string, system: str
   await d.db.insert(worldModelCalls).values({ id: worldCallId, purpose, costUsd: 0, status: 'running', startedAt: d.now() });
   const spent = { usd: 0 };
   try {
-    const res = await billedCall({ db: d.db, budget: d.budget, worldCallId, agentIds: [agentId], worstUsd: priceOf(HAIKU, { input: (content.length + system.length) / 4, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
+    const res = await billedCall({ job: purpose, db: d.db, budget: d.budget, worldCallId, agentIds: [agentId], worstUsd: priceOf(HAIKU, { input: (content.length + system.length) / 4, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
       () => d.brain.decide({ system: [{ type: 'text', text: system }], tools: [], effort: 'low', tier: 1, maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema }, messages: [{ role: 'user', content }] }));
     if (res.stopReason === 'max_tokens' || res.stopReason === 'refusal') return null;
     try { return JSON.parse(res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('')) as Record<string, unknown>; } catch { return null; }

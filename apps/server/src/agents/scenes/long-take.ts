@@ -103,7 +103,7 @@ export async function runLongTake(d: SceneDeps): Promise<'posted' | 'skipped' | 
   let text: string | null = null, status: 'done' | 'failed' = 'failed', thrown: unknown = null;
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: LONG_TAKE_SYSTEM, cache_control: { type: 'ephemeral' } }];
-    const res = await billedCall({ db: d.db, budget, worldCallId: id, worstUsd: worst, spent, agentIds: [author.id] },
+    const res = await billedCall({ job: 'long-take', db: d.db, budget, worldCallId: id, worstUsd: worst, spent, agentIds: [author.id] },
       () => d.brain!.decide({ system, tools: [], effort: 'low', tier: 2, maxTokens: LONG_TAKE_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: LONG_TAKE_SCHEMA }, messages: [{ role: 'user', content }] }));
     status = 'done';
     if (res.stopReason !== 'max_tokens' && res.stopReason !== 'refusal') {

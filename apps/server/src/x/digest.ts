@@ -87,7 +87,7 @@ export async function runDigest(d: DigestDeps): Promise<{ topics: number } | nul
   try {
     const lines = batch.map((p) => `[${p.id}] ${p.authorHandle ? `x.com/${p.authorHandle}` : 'search'} (${p.metrics.likes} likes, ${p.metrics.reposts} reposts): ${(p.text ?? '').replace(/\s+/g, ' ').slice(0, 280)}`);
     const content = `${wrap(lines.join('\n'))}\n\nSummarise what these posts are about as up to 5 topics.`;
-    const res = await billedCall({ db: d.db, budget: d.budget, worldCallId: id, worstUsd: DIGEST_WORST, spent },
+    const res = await billedCall({ job: 'x-digest', db: d.db, budget: d.budget, worldCallId: id, worstUsd: DIGEST_WORST, spent },
       () => d.brain.decide({ system: [{ type: 'text', text: DIGEST_SYSTEM }], tools: [], effort: 'low', maxTokens: DIGEST_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: DIGEST_SCHEMA }, messages: [{ role: 'user', content }] }));
     const raw = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     let parsed: unknown = null;

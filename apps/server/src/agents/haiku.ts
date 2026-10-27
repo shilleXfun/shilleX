@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
-import { ClaudeBrain, PRICE_OF_HAIKU, isProviderModel, knownPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
+import { ClaudeBrain, InputTooLarge, PRICE_OF_HAIKU, knownPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
+import { costMeter } from '../world/cost-meter.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
 import { Budget } from '../world/budget.ts';
@@ -70,7 +71,8 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
  * status, and keeps its worst case otherwise (a network error, a timeout, an abort or a dropped response may have been billed).
  * The budget in memory and `spent` (the turn's total, for its receipt) get the same figure.
  */
-export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string;
+export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model when the answer names none it knows (default Haiku). */ model?: string;
+  /** The job the call is for (scene, voice, site:page…), for the per-call cost log and the hourly [cost] summary (world/cost-meter.ts). */ job?: string;
   /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[] } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   const worst = x.worstUsd * worstScale;
   // Reserve first (it may read the database), so the cap check and the booking below stay together with no await between them.
@@ -84,6 +86,7 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
   let res: BrainResponse;
   try { res = await call(); }
   catch (e) {
+    if (e instanceof InputTooLarge) costMeter().refused(x.job ?? 'other', e.message);
     if (answeredWithError(e)) {
       book(-worst);
       // If the reservation cannot be taken back from the receipt, it stays there: the cap errs safe.
@@ -91,8 +94,11 @@ export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: num
     }
     throw e;
   }
-  // A configured provider's model (registered at boot) is priced as itself; anything else as the caller says, Haiku by default.
-  const cost = priceOf(isProviderModel(res.model) ? res.model : x.model ?? HAIKU, res.usage);
+  // Priced as the model that answered, whenever its price is known (2026-10-27 cost audit: Sonnet answers had been priced as Haiku,
+  // a twentieth of what they cost, so the cap let twenty times its money through); an unknown answer as the caller says, Haiku by default.
+  const priced = knownPrice(res.model) ? res.model : x.model ?? HAIKU;
+  const cost = priceOf(priced, res.usage);
+  costMeter().record(x.job ?? 'other', res.model || priced, res.usage, cost);
   book(cost - worst);
   await addCost(x.db, x, cost - worst);
   return res;

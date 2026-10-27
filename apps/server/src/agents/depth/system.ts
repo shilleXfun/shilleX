@@ -96,7 +96,7 @@ export async function oneShotTool(d: ModelDeps, agentId: string, purpose: string
     const seal = (status: 'quiet' | 'failed', usage: TurnUsage) =>
       finishTurn(d.db, turnId, { status, context: [{ kind: 'moment', text: purpose }], reasoning: purpose, toolCalls: [], usage, costUsd: spent.usd, finishedAt: d.now() });
     let res: BrainResponse;
-    try { res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ ...req, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
+    try { res = await billedCall({ job: 'depth', db: d.db, budget: d.budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ ...req, effort: 'low', maxTokens: MOMENT_MAX_TOKENS })); }
     catch (e) {
       await seal('failed', { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }).catch((err) => console.error('[agents] model receipt left unsealed until restart', turnId, err));
       throw e;

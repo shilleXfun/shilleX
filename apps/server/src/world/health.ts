@@ -5,6 +5,7 @@ import { jobStates, redact } from './jobs.ts';
 import type { WorldHandles } from './boot.ts';
 import { RoutedBrain } from './brain-openai.ts';
 import { rpcMeterState } from './rpc-meter.ts';
+import { costMeterState } from './cost-meter.ts';
 
 /** No good engine tick for this long, while the engine runs, is a warning. */
 export const TICK_WARN_MS = 15 * 60_000;
@@ -76,6 +77,7 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     },
     quiet: w.quiet?.state() ?? null,
     rpc: rpcMeterState(),
+    cost: costMeterState(),
     budget: { capUsd: w.budget.capUsd(), spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, level: w.budget.level() },
     jobs: jobs.map((j) => ({
       name: j.name, lastStatus: j.lastStatus, lastStartedAt: iso(j.lastStartedAt), lastFinishedAt: iso(j.lastFinishedAt), lastOkAt: iso(j.lastOkAt),

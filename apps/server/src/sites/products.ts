@@ -193,7 +193,7 @@ async function call(d: ProductDeps, l: Ledger, req: BrainRequest, maxTokens: num
   l.calls++;
   const input = JSON.stringify(req.messages).length / 4 + req.system.reduce((n, b) => n + b.text.length, 0) / 4;
   const worstUsd = priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 });
-  const res = await billedCall({ db: d.db, budget, turnId: l.turnId, worstUsd, spent: l.spent }, () => brain.decide({ ...req, maxTokens }));
+  const res = await billedCall({ job: `site:${req.outputFormat ? (maxTokens <= 1500 ? "critique" : "brief") : "page"}`, db: d.db, budget, turnId: l.turnId, worstUsd, spent: l.spent }, () => brain.decide({ ...req, maxTokens }));
   return res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
 }
 
@@ -278,13 +278,16 @@ const kitFor = (avatar: string, coin: { mint: string; symbol: string } | null) =
   `IMAGE PATHS YOU MAY USE: your avatar ${avatar}${coin ? `; your coin's mark /api/agents/coin-image/${coin.mint}.svg` : ''}.`;
 const briefText = (b: ProductBrief) => BRIEF_FIELDS.filter((f) => b[f]).map((f) => `${f}: ${plain(b[f]!).slice(0, 400)}`).join('\n') + `\npalette: ${JSON.stringify(b.palette)}`;
 
+/** The most of a page sent back to the model (a rebuild, a revision): inside the 20k-token input cap with the brief and the rules (world/brain.ts MAX_INPUT_TOKENS). */
+const PAGE_CHARS = 45_000;
+
 /** Build (or rebuild) the page, check it, have it critiqued, and revise once. Returns the publishable page or the problems. */
 async function makePage(d: ProductDeps, l: Ledger, o: { username: string; brief: ProductBrief; kit: string; current?: string; changes?: string }): Promise<{ html: string | null; problems: string[]; notes: string | null; attempts: number }> {
   const publicUrl = d.app.deps.config.publicUrl;
   const system = `You are @${o.username}, an AI agent on Shillex, building your own product as one web page. ${BUILD_RULES}
 Answer with one line "NOTES: <what this version does or changes, one sentence>", then the complete HTML document and nothing after it.`;
   const ask = o.current
-    ? `<world_content>\nYOUR PRODUCT BRIEF:\n${briefText(o.brief)}\n\n${o.kit}\n\nWHAT CHANGED SINCE THE LAST VERSION:\n${o.changes ?? 'nothing in particular'}\n\nTHE CURRENT PAGE:\n${o.current.slice(0, 60_000)}\n</world_content>\nWrite the next version: keep what works, make the core action better, and add one meaningful thing tied to what changed.`
+    ? `<world_content>\nYOUR PRODUCT BRIEF:\n${briefText(o.brief)}\n\n${o.kit}\n\nWHAT CHANGED SINCE THE LAST VERSION:\n${o.changes ?? 'nothing in particular'}\n\nTHE CURRENT PAGE:\n${o.current.slice(0, PAGE_CHARS)}\n</world_content>\nWrite the next version: keep what works, make the core action better, and add one meaningful thing tied to what changed.`
     : `<world_content>\nYOUR PRODUCT BRIEF:\n${briefText(o.brief)}\n\n${o.kit}\n</world_content>\nBuild it.`;
   const prefer = d.app.deps.config.llm.buildProvider;
   let text = await call(d, l, { system: [{ type: 'text', text: system }], tools: [], effort: 'high', tier: 2, prefer, timeoutMs: PAGE_TIMEOUT_MS, messages: [{ role: 'user', content: ask }] }, 24_000);
@@ -308,7 +311,7 @@ Answer with one line "NOTES: <what this version does or changes, one sentence>",
   if (problems.length && l.calls < MAX_CALLS) {
     attempts++;
     text = await call(d, l, { system: [{ type: 'text', text: system }], tools: [], effort: 'high', tier: 2, prefer, timeoutMs: PAGE_TIMEOUT_MS,
-      messages: [{ role: 'user', content: `<world_content>\nYOUR PRODUCT BRIEF:\n${briefText(o.brief)}\n\n${o.kit}\n\nYOUR PAGE:\n${(html ?? '').slice(0, 60_000)}\n</world_content>\nThe checks and the review found these problems:\n${problems.map((p) => `- ${p}`).join('\n')}\nFix every one and answer with the full corrected page.` }] }, 24_000);
+      messages: [{ role: 'user', content: `<world_content>\nYOUR PRODUCT BRIEF:\n${briefText(o.brief)}\n\n${o.kit}\n\nYOUR PAGE:\n${(html ?? '').slice(0, PAGE_CHARS)}\n</world_content>\nThe checks and the review found these problems:\n${problems.map((p) => `- ${p}`).join('\n')}\nFix every one and answer with the full corrected page.` }] }, 24_000);
     const next = pageOf(text);
     if (next.html) {
       const again = await checkPage(next.html, publicUrl);

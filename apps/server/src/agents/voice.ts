@@ -543,7 +543,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
       try {
         const content = `<world_content>\nTHE LINE: "${text.replaceAll('</world_content>', '')}"\n</world_content>`;
         const prefer = d.homes?.length ? d.homes[Math.floor(unit(`${v.agent.id}:home`) * d.homes.length)]! : null;
-        const res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: priceOf(HAIKU, { input: content.length / 4 + 600, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
+        const res = await billedCall({ job: 'voice:rewrite', db: d.db, budget: d.budget, turnId, worstUsd: priceOf(HAIKU, { input: content.length / 4 + 600, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
           () => d.brain.decide({ system: [{ type: 'text', text: REWRITE_SYSTEM(v.agent.username, me.about, me.how) }], tools: [], effort: 'low', tier: 1, prefer, maxTokens: VOICE_MAX_TOKENS, messages: [{ role: 'user', content }] }));
         const raw = answerOf(res);
         d.halt?.ok();
@@ -589,7 +589,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
         const messages: { role: 'user' | 'assistant'; content: string }[] = [{ role: 'user', content }];
         // One draft, checked; a refused draft gets one more try with the reason, then the agent says nothing (2026-10-26).
         for (let attempt = 0; attempt < 2; attempt++) {
-          const res = await billedCall({ db: d.db, budget: d.budget, turnId: i.turnId, worstUsd: priceOf(HAIKU, { input: JSON.stringify(messages).length / 4 + 700, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
+          const res = await billedCall({ job: 'voice', db: d.db, budget: d.budget, turnId: i.turnId, worstUsd: priceOf(HAIKU, { input: JSON.stringify(messages).length / 4 + 700, output: VOICE_MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
             // Who it is goes first and is cached: the same for every line this agent writes.
             () => d.brain.decide({ system: [{ type: 'text', text: systemFor(i.v.agent.username, me.about, me.how), cache_control: { type: 'ephemeral' } }], tools: [], effort: 'low', tier: 1, prefer, maxTokens: VOICE_MAX_TOKENS,
               outputFormat: { type: 'json_schema', schema: VOICE_SCHEMA as unknown as Record<string, unknown> }, messages }));

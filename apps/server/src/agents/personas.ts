@@ -144,7 +144,7 @@ async function modelPersona(d: PersonaDeps & { brain: AgentBrain; budget: ModelB
   const content = `<world_content>\n${facts.replaceAll('</world_content>', '')}\n</world_content>\nWrite its persona.`;
   const worldCallId = newId();
   await d.db.insert(worldModelCalls).values({ id: worldCallId, purpose: 'persona', costUsd: 0, status: 'running', startedAt: now });
-  const res = await billedCall({ db: d.db, budget: d.budget, worldCallId, worstUsd: priceOf(HAIKU, { input: content.length / 4 + 400, output: 900, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
+  const res = await billedCall({ job: 'persona', db: d.db, budget: d.budget, worldCallId, worstUsd: priceOf(HAIKU, { input: content.length / 4 + 400, output: 900, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
     () => d.brain.decide({ system: [{ type: 'text', text: PERSONA_SYSTEM }], tools: [], effort: 'low', tier: 1, maxTokens: 900, outputFormat: { type: 'json_schema', schema: PERSONA_SCHEMA }, messages: [{ role: 'user', content }] }))
     .finally(() => d.db.update(worldModelCalls).set({ status: 'done', finishedAt: d.now() }).where(eq(worldModelCalls.id, worldCallId)).catch(() => undefined));
   const text = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');

@@ -141,7 +141,7 @@ async function modelNarration(d: NarratorDeps, s: StoryRow, beats: StoryBeatRow[
   let out: { headline: string; summary: string } | null = null, status: 'done' | 'failed' = 'failed', thrown: unknown = null;
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: STORY_SYSTEM, cache_control: { type: 'ephemeral' } }];
-    const res = await billedCall({ db: d.db, budget: d.budget, worldCallId: id, worstUsd: STORY_WORST, spent },
+    const res = await billedCall({ job: 'story', db: d.db, budget: d.budget, worldCallId: id, worstUsd: STORY_WORST, spent },
       () => d.brain!.decide({ system, tools: [], effort: 'low', maxTokens: STORY_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: STORY_SCHEMA },
         messages: [{ role: 'user', content: `<world_content>\n${material.replaceAll('</world_content>', '')}\n</world_content>\n\nWrite the headline and summary.` }] }));
     status = 'done';

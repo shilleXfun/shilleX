@@ -57,7 +57,7 @@ export function createCoinWriter(d: { db: Db; brain: AgentBrain; budget: ModelBu
       ].filter(Boolean).join('\n');
       const content = `<world_content>\n${facts.replaceAll('</world_content>', '')}\n</world_content>\nWrite your coin.`;
       try {
-        const res = await billedCall({ db: d.db, budget: d.budget, turnId, worstUsd: priceOf(HAIKU, { input: (content.length + 2000) / 4, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
+        const res = await billedCall({ job: 'coin-launch', db: d.db, budget: d.budget, turnId, worstUsd: priceOf(HAIKU, { input: (content.length + 2000) / 4, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent: { usd: 0 } },
           () => d.brain.decide({ system: [{ type: 'text', text: SYSTEM(v.agent.username, me.about) }], tools: [], effort: 'low', tier: 2, maxTokens: MAX_TOKENS, outputFormat: { type: 'json_schema', schema: SCHEMA }, messages: [{ role: 'user', content }] }));
         if (res.stopReason === 'max_tokens' || res.stopReason === 'refusal') return null;
         return checkPlan(JSON.parse(res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('')) as Record<string, unknown>, taken);

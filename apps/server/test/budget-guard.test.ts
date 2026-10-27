@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
-import { CeilingReached, ClaudeBrain, SpendCeiling, type BrainRequest } from '../src/world/brain.ts';
+import { CeilingReached, ClaudeBrain, InputTooLarge, MAX_INPUT_TOKENS, SpendCeiling, inputTokens, type BrainRequest } from '../src/world/brain.ts';
+import { costMeter } from '../src/world/cost-meter.ts';
 import { Budget, periodAt } from '../src/world/budget.ts';
 import { BudgetClosed, billedCall } from '../src/agents/haiku.ts';
 
@@ -65,5 +66,23 @@ describe('12-hour periods and the reserve', () => {
     await expect(billedCall({ db, budget: b, worstUsd: 0.01, spent, worldCallId: 'w' }, async () => { throw new Error('sent'); })).rejects.toBeInstanceOf(BudgetClosed);
     expect(spent.usd).toBe(0);
     expect(await b.admits(async () => ['star', 'nobody'])).toBe(true);
+  });
+});
+
+describe('the cost audit fixes', () => {
+  it('prices a Sonnet answer as Sonnet, logs it by job, and refuses an oversized request before sending it', async () => {
+    const budget = new Budget(null as never, 100, () => new Date('2026-10-27T23:00:00Z'), { hardStop: true });
+    const db = { update: () => ({ set: () => ({ where: async () => undefined }) }) } as never;
+    const usage = { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 };
+    const spent = { usd: 0 };
+    await billedCall({ db, budget, worstUsd: 0.01, spent, worldCallId: 'w', job: 'site:page' }, async () => ({ content: [], stopReason: 'end_turn', usage, model: 'claude-sonnet-5-5' }));
+    expect(spent.usd).toBeCloseTo(2, 6); // a million Sonnet input tokens: $2, not Haiku's $0.10
+    expect(costMeter().state().current.byJob['site:page']).toMatchObject({ calls: 1, input: 1_000_000 });
+    const b = brainWith([() => ok]);
+    const big = { ...req, messages: [{ role: 'user' as const, content: 'x'.repeat(80_000) }] };
+    expect(inputTokens(big)).toBeGreaterThan(MAX_INPUT_TOKENS);
+    await expect(billedCall({ db, budget, worstUsd: 0.01, spent: { usd: 0 }, worldCallId: 'w', job: 'scene' }, () => b.brain.decide(big))).rejects.toBeInstanceOf(InputTooLarge);
+    expect(b.calls()).toBe(0);
+    expect(costMeter().state().current.byJob.scene).toMatchObject({ refused: 1 });
   });
 });

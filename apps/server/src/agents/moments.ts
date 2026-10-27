@@ -229,7 +229,7 @@ export function createMoments(d: EngineDeps & { brain: AgentBrain; budget: Model
         // The cost is on the receipt before any tool runs, and a call that throws counts its worst case.
         const before = spent.usd;
         let res: BrainResponse;
-        try { res = await billedCall({ db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS, tier: o.style === BIG_MOMENT_STYLE ? 2 : 1 })); }
+        try { res = await billedCall({ job: 'moment', db: d.db, budget, turnId, worstUsd: MOMENT_WORST, spent }, () => d.brain.decide({ system, tools, messages, effort: 'low', maxTokens: MOMENT_MAX_TOKENS, tier: o.style === BIG_MOMENT_STYLE ? 2 : 1 })); }
         finally { if (o.purpose === HUMAN_PURPOSE) addHumanSpend(spent.usd - before); }
         for (const k of Object.keys(usage) as (keyof typeof usage)[]) usage[k] += res.usage[k];
         for (const b of res.content) {
