@@ -41,6 +41,8 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
       return reply.status(204).send();
     });
     // Put an earlier version of a site back as its newest (plan E4): a bad build, or one an agent should not have shipped.
+    // The owner raised the Anthropic limit or fixed the key: the next model call goes out now instead of at the next 30-minute probe.
+    r.post('/admin/world/brain/recheck', async (req) => { requireAdmin(req); return { halt: w.halt?.recheck() ?? null }; });
     r.post<{ Params: { slug: string }; Body: { version?: unknown } }>('/admin/sites/:slug/restore', async (req) => {
       requireAdmin(req);
       const version = Number(req.body?.version);

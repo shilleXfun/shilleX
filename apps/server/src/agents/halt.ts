@@ -19,12 +19,17 @@ export interface ModelHaltState {
   down: { reason: string; since: string; probes: number } | null;
 }
 export interface ModelHalt {
-  /** Pause model calls for `reason`. A second trip while the pause runs changes nothing. `resumeAt`: when the provider said access returns; no call goes out before then. */
+  /**
+   * Pause model calls for `reason`. A second trip while the pause runs changes nothing. `resumeAt`: when the provider said access
+   * returns; it is told, but the probes go on every DOWN_PROBE_MS, so a limit raised in the console is noticed without a restart.
+   */
   trip(reason: string, kind?: HaltKind, resumeAt?: Date): void;
   /** The reason while paused, else null (a call may go out, and is the probe after a pause). */
   reason(): string | null;
   /** A model call worked: the pause and its backoff are forgotten. */
   ok(): void;
+  /** Lets the next model call through now (the owner raised a limit or fixed a key): it works and clears the pause, or trips it again. */
+  recheck(): ModelHaltState;
   state(): ModelHaltState;
 }
 
@@ -39,9 +44,9 @@ export function createModelHalt(now: () => Date, log: (msg: string) => void = (m
       if (kind === 'down' || down) {
         // Said once; each failed probe after that only waits for the next one.
         if (down) { down.probes++; down.reason = r; }
-        else { down = { reason: r, since: t, probes: 0 }; log(`[alert] brain down: ${r}; ${resumeAt && resumeAt.getTime() > t + DOWN_PROBE_MS ? `no call is tried before ${resumeAt.toISOString()}` : `one call is tried every ${DOWN_PROBE_MS / 60_000} min until it works`}`); }
+        else { down = { reason: r, since: t, probes: 0 }; log(`[alert] brain down: ${r}; one call is tried every ${DOWN_PROBE_MS / 60_000} min until it works${resumeAt ? ` (the provider says access returns ${resumeAt.toISOString()})` : ''}`); }
         trips++;
-        reason = r; last = r; until = Math.max(t + DOWN_PROBE_MS, resumeAt?.getTime() ?? 0);
+        reason = r; last = r; until = t + DOWN_PROBE_MS;
         return;
       }
       const wait = HALT_BACKOFF_MS[Math.min(trips, HALT_BACKOFF_MS.length - 1)]!;
@@ -54,6 +59,10 @@ export function createModelHalt(now: () => Date, log: (msg: string) => void = (m
       if (down) log(`[agents] brain back up after ${Math.round((now().getTime() - down.since) / 60_000)} min`);
       else if (trips) log('[agents] model calls work again');
       reason = null; until = 0; trips = 0; down = null;
+    },
+    recheck() {
+      if (reason !== null) { until = 0; log('[agents] model calls re-checked on request: the next call goes out now'); }
+      return this.state();
     },
     state: () => ({
       reason: paused() ? reason : null, until: paused() ? new Date(until).toISOString() : null, trips, last,

@@ -90,7 +90,7 @@ export function accountDown(e: unknown): boolean {
 }
 /**
  * Pauses model calls when `e` is an account problem, as down or paused; returns the reason, or null for any other failure. A usage
- * limit that names when access returns is not probed before then: every probe would be refused.
+ * limit's return date goes into the log; the probes go on every 30 minutes anyway, so a limit raised in the console is noticed.
  */
 export function tripOn(halt: Pick<ModelHalt, 'trip'> | undefined, e: unknown): string | null {
   const p = accountProblem(e);

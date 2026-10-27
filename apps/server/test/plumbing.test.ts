@@ -105,16 +105,19 @@ describe('batched curves', () => {
 });
 
 describe('a usage limit', () => {
-  it('is brain down with the date in the reason, and no call goes out before access returns', () => {
+  it('is brain down with the date in the reason, still probed every 30 min, and re-checked at once on request', () => {
     const c = clock(Date.parse('2026-10-27T12:00:00Z')), logs: string[] = [];
     const halt = createModelHalt(c.now, (m) => logs.push(m));
     const e = Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}'), { status: 400 });
     expect(tripOn(halt, e)).toMatch(/usage limit; access returns 2026-11-01 00:00 UTC/);
     expect(halt.state().down).not.toBeNull();
-    c.add(DOWN_PROBE_MS * 10);
     expect(halt.reason()).not.toBeNull();
-    c.add(Date.parse('2026-11-01T00:00:00Z') - c.ms());
+    c.add(DOWN_PROBE_MS);
+    expect(halt.reason()).toBeNull(); // the probe goes out, in case the limit was raised
+    tripOn(halt, e);
+    expect(halt.reason()).not.toBeNull();
+    halt.recheck();
     expect(halt.reason()).toBeNull();
-    expect(logs[0]).toMatch(/no call is tried before 2026-11-01T00:00:00.000Z/);
+    expect(logs[0]).toContain('every 30 min until it works (the provider says access returns 2026-11-01T00:00:00.000Z)');
   });
 });
