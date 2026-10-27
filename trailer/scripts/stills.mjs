@@ -19,6 +19,6 @@ mkdirSync(out, { recursive: true });
 const serveUrl = await bundle({ entryPoint: join(process.cwd(), 'src', 'index.ts') });
 const composition = await selectComposition({ serveUrl, id: process.env.COMP ?? 'Master' });
 for (const [name, frame] of frames) {
-  await renderStill({ serveUrl, composition, frame, output: join(out, `${name}.png`), scale: 0.5 });
+  await renderStill({ serveUrl, composition, frame, output: join(out, `${name}.png`), scale: Number(process.env.SCALE ?? 0.5), chromiumOptions: process.env.GL ? { gl: process.env.GL } : {}, timeoutInMilliseconds: 120000 });
   console.log('rendered', name);
 }
