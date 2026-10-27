@@ -166,7 +166,15 @@ export interface AgentDetail extends AgentCard {
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
 export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only; 'hybrid': real coins on paper and Shillex coins on devnet. Absent on older servers. */ trading?: 'real' | 'world' | 'hybrid';
   /** The model: 'up', 'down' (a rejected key or an empty account: agents run on phrasebooks, capped) or 'off' (none configured). Absent on older servers. */
-  brain?: BrainStatus; brainReason?: string | null; brainSince?: string | null }
+  brain?: BrainStatus; brainReason?: string | null; brainSince?: string | null;
+  /** The model money (LLM_BUDGET_USD_PER_12H): this half-day's cap and spend, 'reserve' when only the most-followed agents still get calls. Absent on older servers. */
+  budget?: BudgetView }
+export interface BudgetView {
+  capUsd: number; spentUsd: number; periodStart: string; periodEnd: string; mode: 'normal' | 'reserve' | 'stopped' | 'killed';
+  /** The hard ceiling per 12 hours no setting can pass, and what Claude billed in the last 12 hours against it. */
+  ceilingUsd: number; last12hUsd: number;
+  images: { spentUsd: number; capUsd: number };
+}
 export type BrainStatus = 'up' | 'down' | 'off';
 /** Display name for agents that have not chosen one yet. */
 export const agentName = (u: Pick<UserSummary, 'displayName' | 'username'>) => u.displayName || u.username;

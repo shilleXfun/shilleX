@@ -245,7 +245,7 @@ export async function writeScene(d: SceneDeps, m: SceneMaterial): Promise<Writte
   let status: 'done' | 'failed' = 'failed', thrown: unknown = null, out: WrittenScene | null = null;
   try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: SCENE_SYSTEM, cache_control: { type: 'ephemeral' } }];
-    const res = await billedCall({ db: d.db, budget, worldCallId: id, worstUsd: worst, spent },
+    const res = await billedCall({ db: d.db, budget, worldCallId: id, worstUsd: worst, spent, agentIds: m.members.map((x) => x.id) },
       () => d.brain!.decide({ system, tools: [], effort: 'low', tier: 2, maxTokens: SCENE_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: SCENE_SCHEMA }, messages: [{ role: 'user', content }] }));
     status = 'done';
     if (res.stopReason !== 'max_tokens' && res.stopReason !== 'refusal') {

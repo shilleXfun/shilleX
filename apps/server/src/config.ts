@@ -39,9 +39,15 @@ export interface Config {
   anthropicApiKey: string | undefined;
   /** ANTHROPIC_MODEL_STRONG (e.g. claude-sonnet-5-5): with LLM_PROVIDER=anthropic, the model for big work (websites, threads, long takes, scenes); Haiku when unset. */
   anthropicModelStrong: string | undefined;
+  /** AGENT_DAILY_BUDGET_USD: only the raised agents' share and old tests read it now; the world's cap is llmBudgetPer12hUsd. */
   agentDailyBudgetUsd: number;
-  /** BUDGET_WINDOW_START (ISO time), BUDGET_WINDOW_HOURS (default 10), BUDGET_WINDOW_USD (default 50): a launch window whose cap replaces the daily one while it runs. Null when no start is set. */
-  budgetWindow: { start: Date; hours: number; usd: number } | null;
+  /**
+   * LLM_BUDGET_USD_PER_12H (default 4): the model cap for each half of the UTC day (00-12, 12-24), spend kept in the database. Launch
+   * day is a bigger number here, never a code change; it is clamped to LLM_HARD_CEILING_USD_PER_12H whatever it says.
+   */
+  llmBudgetPer12hUsd: number;
+  /** BRAIN_KILL_SWITCH=true: no model call at all (no brain, no v0 pages, no paid images); the free engine runs on, capped. */
+  brainKillSwitch: boolean;
   worldKey: string | undefined;
   adminUsernames: string[];
   worldAdminPassword: string | undefined;
@@ -115,6 +121,9 @@ export interface Config {
   /** PHRASEBOOK_POSTS_PER_HOUR (default 10): public posts the whole world may make without the model (agents/quiet.ts); past it agents stay quiet. */
   phrasebookPerHour: number;
 }
+
+/** The model cap per 12 hours when LLM_BUDGET_USD_PER_12H is unset, and the most it can ever be set to (a typo or a retry bug can't pass it). */
+export const LLM_BUDGET_DEFAULT_USD_PER_12H = 4, LLM_HARD_CEILING_USD_PER_12H = 50;
 
 export interface LlmConfig {
   /** 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
@@ -279,6 +288,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const mainnet = (env.MAINNET || 'off') as Config['mainnet'];
   if (mainnet !== 'off' && worldChain !== 'ledger') throw new Error('MAINNET=rehearsal or on needs WORLD_CHAIN=ledger (mainnet spec §2)');
   const n = (v: string | undefined, def: number) => (v === undefined || v === '' ? def : Number(v));
+  // BRAIN_KILL_SWITCH: every paid model is off, so no key below is handed on.
+  const killed = ['on', 'true', '1', 'yes'].includes((env.BRAIN_KILL_SWITCH ?? '').trim().toLowerCase());
   return {
     nodeEnv,
     port,
@@ -302,12 +313,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     anthropicModelStrong: env.ANTHROPIC_MODEL_STRONG?.trim() || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
-    budgetWindow: (() => {
-      const start = env.BUDGET_WINDOW_START ? new Date(env.BUDGET_WINDOW_START) : null;
-      if (!start || Number.isNaN(start.getTime())) return null;
-      const hours = Number(env.BUDGET_WINDOW_HOURS ?? 10), usd = Number(env.BUDGET_WINDOW_USD ?? 50);
-      return Number.isFinite(hours) && hours > 0 && Number.isFinite(usd) && usd >= 0 ? { start, hours, usd } : null;
-    })(),
+    llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_12H, Math.max(0, n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H) || 0)),
+    brainKillSwitch: killed,
     worldKey: env.WORLD_KEY || undefined,
     adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
@@ -326,9 +333,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
     },
     devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
-    openaiApiKey: env.OPENAI_API_KEY || undefined,
+    openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
-    imageDailyBudgetUsd: Number(env.IMAGE_DAILY_BUDGET_USD ?? 0.5),
+    imageDailyBudgetUsd: n(env.IMAGE_BUDGET_USD_PER_DAY ?? env.IMAGE_DAILY_BUDGET_USD, 2),
     imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
@@ -347,6 +354,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     llm: loadLlmConfig(env),
     voicePerHour: Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, 40)) || 0),
     phrasebookPerHour: Math.max(0, Math.floor(n(env.PHRASEBOOK_POSTS_PER_HOUR, 10)) || 0),
-    v0: env.V0_API_KEY ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
+    v0: env.V0_API_KEY && !killed ? { apiKey: env.V0_API_KEY, model: env.V0_MODEL || 'v0-1.5-md', priceInPerM: n(env.V0_PRICE_IN, 3), priceOutPerM: n(env.V0_PRICE_OUT, 15), maxTokens: 16_000 } : null,
   };
 }

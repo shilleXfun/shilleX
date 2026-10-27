@@ -124,7 +124,8 @@ async function buildSite(d: SiteDeps, agentId: string, job: SiteJob): Promise<Jo
     if (v0 && d.budget) {
       const kit = siteKit(data, { avatar: avatarFor(agent), coin: brief.coinMint ? `/api/agents/coin-image/${brief.coinMint}.svg` : null });
       const worst = worstUsd(v0, brief.ask.length + kit.length + 4000);
-      if (d.budget.canSpend() && d.budget.canAfford(worst)) {
+      // In reserve (world/budget.ts) only the most-followed agents' pages are worth the money.
+      if ((await (d.budget.admits?.(async () => [agentId]) ?? true)) && d.budget.canSpend() && d.budget.canAfford(worst)) {
         try {
           const p = await v0Page(v0, brief.ask, kit);
           costUsd = p.costUsd;

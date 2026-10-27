@@ -99,6 +99,7 @@ export class RaisedGate {
       canAfford: (usd) => budget.canAfford(usd) && this.canAfford(usd),
       add: (usd) => { budget.add(usd); this.add(usd); },
       spentToday: () => budget.spentToday(),
+      ...(budget.admits ? { admits: (who: () => Promise<string[] | null>) => budget.admits!(who) } : {}),
     };
   }
 

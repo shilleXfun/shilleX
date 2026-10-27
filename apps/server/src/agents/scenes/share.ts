@@ -47,6 +47,7 @@ export class SceneShare {
       canAfford: (usd) => budget.canAfford(usd) && this.canAfford(usd) && budget.spentToday() + usd <= SCENE_HEADROOM * this.capOfPeriod() + 1e-12,
       add: (usd) => { budget.add(usd); this.add(usd); },
       spentToday: () => budget.spentToday(),
+      ...(budget.admits ? { admits: (who: () => Promise<string[] | null>) => budget.admits!(who) } : {}),
     };
   }
 }

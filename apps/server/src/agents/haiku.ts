@@ -5,11 +5,12 @@ import { agentTurns, worldModelCalls } from '../db/schema.ts';
 import { ClaudeBrain, PRICE_OF_HAIKU, isProviderModel, knownPrice, priceOf, registerPrice, type AgentBrain, type BrainResponse } from '../world/brain.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
-import { Budget, type BudgetWindow } from '../world/budget.ts';
+import { Budget } from '../world/budget.ts';
 import { anthropicClient } from '../lib/anthropic.ts';
 
 export const HAIKU = 'claude-haiku-5-5';
-export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean; /** The current period's cap (the day, or the launch window). */ capUsd?(): number }
+export interface ModelBudget { canSpend(): boolean; add(usd: number): void; spentToday(): number; canAfford(usd: number): boolean; /** The current period's cap (the day, or the launch window). */ capUsd?(): number;
+  /** Reserve (Budget.admits): whether a call for these agents may go out; absent, every call may. */ admits?(who: () => Promise<string[] | null>): Promise<boolean> }
 /** No retries inside the client: a retried attempt may have been billed without billedCall seeing it. A failed call is one call, booked at its worst case. */
 export const haikuBrain = (apiKey: string, strong?: string) => new ClaudeBrain(apiKey, HAIKU, anthropicClient(apiKey, 0), strong);
 /**
@@ -20,9 +21,10 @@ export const haikuBrain = (apiKey: string, strong?: string) => new ClaudeBrain(a
 let modelLabel = HAIKU, worstScale = 1;
 export const modelName = () => modelLabel;
 
-/** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only). */
-export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong'>>, now: () => Date): AgentBrain | null {
+/** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only; always with BRAIN_KILL_SWITCH). */
+export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong' | 'brainKillSwitch'>>, now: () => Date): AgentBrain | null {
   let brain: AgentBrain | null = null;
+  if (config.brainKillSwitch) { modelLabel = HAIKU; return null; }
   if (config.llm.mode === 'openai' && config.llm.providers.length) {
     const haiku = PRICE_OF_HAIKU();
     for (const p of config.llm.providers) {
@@ -42,7 +44,7 @@ export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> 
   return brain;
 }
 
-export const modelBudget = (db: Db, dailyUsd: number, now: () => Date, window: BudgetWindow | null = null) => new Budget(db, dailyUsd, now, { hardStop: true, window });
+export const modelBudget = (db: Db, capUsd: number, now: () => Date, periodHours = 24) => new Budget(db, capUsd, now, { hardStop: true, periodHours });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
 export type CostTarget = { turnId: string } | { worldCallId: string };
@@ -68,8 +70,12 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
  * status, and keeps its worst case otherwise (a network error, a timeout, an abort or a dropped response may have been billed).
  * The budget in memory and `spent` (the turn's total, for its receipt) get the same figure.
  */
-export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
+export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model (default Haiku). */ model?: string;
+  /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[] } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
   const worst = x.worstUsd * worstScale;
+  // Reserve first (it may read the database), so the cap check and the booking below stay together with no await between them.
+  if (x.budget.admits && !(await x.budget.admits(async () => x.agentIds ?? ('turnId' in x ? (await x.db.select({ a: agentTurns.agentId }).from(agentTurns).where(eq(agentTurns.id, x.turnId))).map((r) => r.a) : null))))
+    throw new BudgetClosed('the budget is in reserve: only the most-followed agents get model calls now');
   if (!(x.budget.canSpend() && x.budget.canAfford(worst))) throw new BudgetClosed(`no room under the model cap for a call of up to $${worst.toFixed(4)}`);
   const book = (usd: number) => { x.budget.add(usd); x.spent.usd += usd; };
   book(worst);

@@ -110,7 +110,7 @@ export async function registerAdminDevRoutes(app: FastifyInstance, w: WorldHandl
       return {
         world: { network: w.network, agents: cards.length, runtime: w.engine ? 'on' : 'off', engine: w.engine?.stats() ?? null, queue: w.moments?.size() ?? 0, halted: w.moments?.halted() ?? null },
         budgets: {
-          model: { spentUsd: w.budget.spentToday(), capUsd: config.agentDailyBudgetUsd, level: w.budget.level() },
+          model: { spentUsd: w.budget.spentToday(), capUsd: w.budget.capUsd(), level: w.budget.level() },
           images: { spentUsd: images.usd, capUsd: config.imageDailyBudgetUsd, countToday: images.count, maxPerDay: config.imageDailyMax },
         },
         weather,

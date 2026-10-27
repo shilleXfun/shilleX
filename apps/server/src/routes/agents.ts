@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
-import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
+import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type BudgetView, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
 import { agentTurns, agents, chainTxs, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
 import { productOfCoin } from '../sites/product-coin.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
@@ -15,6 +15,8 @@ import { buildOverview } from '../agents/overview.ts';
 import { publicTurnView } from '../agents/depth/receipt.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { redact } from '../world/jobs.ts';
+import { imageSpendOn } from '../agents/image-budget.ts';
+import { LLM_HARD_CEILING_USD_PER_12H } from '../config.ts';
 
 const VERIFY_TTL_MS = 60_000;
 /** How long a coin's "talking about $X" list is shared by every viewer, and how many coins' lists are kept at once. */
@@ -35,10 +37,16 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
     r.get('/agents/info', async (): Promise<AgentsInfo> => {
       const rows = await db.select({ origin: agents.origin, n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')).groupBy(agents.origin);
       const wild = rows.find((x) => x.origin === 'wild')?.n ?? 0, raised = rows.find((x) => x.origin === 'raised')?.n ?? 0;
-      const down = w.halt?.state().down ?? null;
+      const down = w.halt?.state().down ?? null, config = app.deps.config;
+      const p = w.budget.period(), images = await imageSpendOn(db, app.deps.now());
+      const budget: BudgetView = {
+        capUsd: p.usd, spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, periodStart: p.start.toISOString(), periodEnd: p.end.toISOString(),
+        mode: config.brainKillSwitch ? 'killed' : w.budget.mode(), ceilingUsd: LLM_HARD_CEILING_USD_PER_12H, last12hUsd: Math.round((w.ceiling?.spent() ?? 0) * 1e4) / 1e4,
+        images: { spentUsd: Math.round(images.usd * 1e4) / 1e4, capUsd: config.imageDailyBudgetUsd },
+      };
       return {
         network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode,
-        brain: !w.brain ? 'off' : down ? 'down' : 'up', brainReason: down ? redact(down.reason) : null, brainSince: down?.since ?? null,
+        brain: !w.brain ? 'off' : down ? 'down' : 'up', brainReason: config.brainKillSwitch ? 'BRAIN_KILL_SWITCH is on' : down ? redact(down.reason) : null, brainSince: down?.since ?? null, budget,
       };
     });
 

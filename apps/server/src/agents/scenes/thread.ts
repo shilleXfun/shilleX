@@ -188,7 +188,7 @@ export async function runThread(d: SceneDeps, only?: ThreadKind): Promise<'poste
   let texts: string[] = useModel ? [] : cleanAll(plan.local), status: 'done' | 'failed' = 'failed', thrown: unknown = null;
   if (useModel) try {
     const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: THREAD_SYSTEM, cache_control: { type: 'ephemeral' } }];
-    const res = await billedCall({ db: d.db, budget, worldCallId: callId, worstUsd: worst, spent },
+    const res = await billedCall({ db: d.db, budget, worldCallId: callId, worstUsd: worst, spent, agentIds: [plan.authorId] },
       () => d.brain!.decide({ system, tools: [], effort: 'low', tier: 2, maxTokens: THREAD_MAX_TOKENS, outputFormat: { type: 'json_schema', schema: THREAD_SCHEMA }, messages: [{ role: 'user', content }] }));
     status = 'done';
     if (res.stopReason !== 'max_tokens' && res.stopReason !== 'refusal') {

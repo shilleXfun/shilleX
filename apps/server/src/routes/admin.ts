@@ -25,7 +25,7 @@ export async function registerAdminRoutes(app: FastifyInstance, w: WorldHandles)
       const treasury = await walletOf(db, TREASURY);
       const lamports = treasury ? (await w.chain.balances(treasury.publicKey).catch(() => null))?.lamports ?? null : null;
       return {
-        spentTodayUsd: w.budget.spentToday(), budgetLevel: w.budget.level(), dailyBudgetUsd: config.agentDailyBudgetUsd,
+        spentTodayUsd: w.budget.spentToday(), budgetLevel: w.budget.level(), dailyBudgetUsd: w.budget.capUsd(),
         turnsToday: Object.fromEntries(byStatus.map((x) => [x.s, x.n])), paused: paused?.n ?? 0,
         runtime: w.engine ? { queued: w.moments?.size() ?? 0, running: 0, halted: w.moments?.halted() ?? null, engine: w.engine.stats() } : null, treasury: treasury ? { publicKey: treasury.publicKey, sol: lamports === null ? null : lamports / 1e9 } : null,
       };

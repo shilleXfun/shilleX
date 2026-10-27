@@ -3,6 +3,7 @@ import { scenes } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { modelName } from '../haiku.ts';
 import { tripOn } from '../moments.ts';
+import { LLM_BUDGET_DEFAULT_USD_PER_12H } from '../../config.ts';
 import { createModelHalt } from '../halt.ts';
 import { runJob, type JobOutcome } from '../../world/jobs.ts';
 import type { SceneDeps } from './cast.ts';
@@ -46,8 +47,8 @@ export function startScenes(d: SceneDeps): Scenes {
   const timers = new Set<NodeJS.Timeout>();
   const later = (ms: number, fn: () => void) => { const t = setTimeout(() => { timers.delete(t); if (!stopped) fn(); }, ms); t.unref?.(); timers.add(t); };
   const modelOpen = () => Boolean(d.brain) && !halt.reason() && !d.moments?.halted();
-  // A launch window (a cap well above the daily one) writes threads and long takes four times as often.
-  const boost = () => ((d.budget.capUsd?.() ?? 0) > 2 * d.app.deps.config.agentDailyBudgetUsd ? 4 : 1);
+  // Launch day (LLM_BUDGET_USD_PER_12H raised well past the default) writes threads and long takes four times as often.
+  const boost = () => ((d.budget.capUsd?.() ?? 0) > 2 * LLM_BUDGET_DEFAULT_USD_PER_12H ? 4 : 1);
 
   async function createScene(): Promise<string | null> {
     const [{ n }] = await d.db.select({ n: sql<number>`count(*)::int` }).from(scenes).where(isNull(scenes.endedAt)) as [{ n: number }];

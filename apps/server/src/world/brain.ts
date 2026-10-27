@@ -46,12 +46,54 @@ export function priceOf(model: string, u: TurnUsage): number {
 /** Models that take the server-side refusal fallback (`fallbacks: 'default'`); Haiku has none. */
 const FALLBACK_MODELS = new Set([MODEL, 'claude-sonnet-5-5']);
 
+/** The hard ceiling refused the request: nothing was sent (`status` 0, so billedCall releases its reservation). */
+export class CeilingReached extends Error { readonly category = 'budget'; readonly status = 0 }
+
+/**
+ * The last line under every cap (2026-10-27): what Claude actually billed in the last 12 hours, every answer counted, retries
+ * included, seeded from the receipts at boot. Past `limitUsd` no request is sent, whatever a budget, a config or a retry loop
+ * says, so a bug elsewhere cannot drain the account.
+ */
+export class SpendCeiling {
+  private log: { at: number; usd: number }[] = [];
+  constructor(readonly limitUsd: number, private now: () => Date = () => new Date()) {}
+  /** What was spent in the last 12 hours before this process started, as one entry. */
+  seed(usd: number) { if (usd > 0) this.log.push({ at: this.now().getTime(), usd }); }
+  spent(): number { const t = this.now().getTime(); this.log = this.log.filter((x) => t - x.at < 12 * 3_600_000); return this.log.reduce((n, x) => n + x.usd, 0); }
+  allows(): boolean { return this.spent() < this.limitUsd; }
+  record(usd: number) { if (usd > 0) this.log.push({ at: this.now().getTime(), usd }); }
+}
+
+/** One retry, only for an answer that was not billed and may pass: a 429 or a server error (5xx, 529). Never another 4xx, never a dropped connection. */
+const retryable = (e: unknown) => e instanceof Anthropic.APIError && typeof e.status === 'number' && (e.status === 429 || e.status >= 500);
+const retryWaitMs = (e: unknown) => {
+  const s = Number((e as { headers?: { get?(k: string): string | null } }).headers?.get?.('retry-after'));
+  return Math.min(20_000, Math.max(1000, Number.isFinite(s) && s > 0 ? s * 1000 : 2000));
+};
+
 export class ClaudeBrain implements AgentBrain {
   private client: Anthropic;
+  private ceiling: SpendCeiling | null = null;
   /** `strong`: the model tier-2 requests (websites, threads, long takes, scenes) go to; the everyday model when unset. */
-  constructor(apiKey: string, private model = MODEL, client?: Anthropic, private strong?: string) { this.client = client ?? anthropicClient(apiKey, 1); }
+  constructor(apiKey: string, private model = MODEL, client?: Anthropic, private strong?: string, private sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) { this.client = client ?? anthropicClient(apiKey, 1); }
+  useCeiling(c: SpendCeiling) { this.ceiling = c; }
 
   async decide(req: BrainRequest): Promise<BrainResponse> {
+    const check = () => { if (this.ceiling && !this.ceiling.allows()) throw new CeilingReached(`the hard ceiling of $${this.ceiling.limitUsd} per 12 hours is reached; no model call goes out`); };
+    check();
+    let res: BrainResponse;
+    try { res = await this.send(req); }
+    catch (e) {
+      if (!retryable(e)) throw e;
+      await this.sleep(retryWaitMs(e));
+      check();
+      res = await this.send(req);
+    }
+    this.ceiling?.record(priceOf(res.model, res.usage));
+    return res;
+  }
+
+  private async send(req: BrainRequest): Promise<BrainResponse> {
     const model = req.tier === 2 && this.strong ? this.strong : this.model;
     // Thinking can't be disabled on current models; effort controls depth. Forced tool_choice is a 400, so always auto.
     const base = {

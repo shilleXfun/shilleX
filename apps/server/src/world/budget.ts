@@ -7,6 +7,8 @@ const utcDay = (d: Date) => d.toISOString().slice(0, 10);
 const DAY_MS = 86_400_000, HOUR_MS = 3_600_000;
 /** At midnight an hour's share of the day is already there, so the first calls of a day never wait. */
 export const HEADSTART = 1 / 24;
+/** The share of a period's cap after which only the most-followed agents get model calls (Budget.reserved). */
+export const RESERVE_AT = 0.75;
 
 /**
  * How much of a daily budget may be spent by `now` (UTC): it opens evenly through the day, plus a headstart, so the money
@@ -26,16 +28,21 @@ export interface BudgetWindow { start: Date; hours: number; usd: number }
 /** The span a cap covers right now: its key (changes when a new span starts), its start and end, and its cap. */
 export interface BudgetPeriod { key: string; start: Date; end: Date; usd: number }
 
-export function periodAt(dailyUsd: number, window: BudgetWindow | null | undefined, now: Date): BudgetPeriod {
-  const t = now.getTime();
+/**
+ * `hours` (24 or 12, a divisor of the day): the length of each capped span, from UTC midnight. 2026-10-27 the world moved to
+ * 12-hour spans (LLM_BUDGET_USD_PER_12H): 00-12 and 12-24 UTC each get the whole cap.
+ */
+export function periodAt(capUsd: number, window: BudgetWindow | null | undefined, now: Date, hours = 24): BudgetPeriod {
+  const t = now.getTime(), day = Date.parse(`${utcDay(now)}T00:00:00Z`);
+  const slot = (24 % hours === 0 && hours > 0 ? hours : 24) * HOUR_MS;
+  const start = day + Math.floor((t - day) / slot) * slot;
+  const key = slot === DAY_MS ? `d:${utcDay(now)}` : `h:${new Date(start).toISOString()}`;
   if (window) {
     const ws = window.start.getTime(), we = ws + window.hours * HOUR_MS;
     if (t >= ws && t < we) return { key: `w:${window.start.toISOString()}`, start: window.start, end: new Date(we), usd: window.usd };
-    const day = Date.parse(`${utcDay(now)}T00:00:00Z`);
-    if (we > day && we <= t) return { key: `d:${utcDay(now)}:after`, start: new Date(we), end: new Date(day + DAY_MS), usd: dailyUsd };
+    if (we > start && we <= t) return { key: `${key}:after`, start: new Date(we), end: new Date(start + slot), usd: capUsd };
   }
-  const day = Date.parse(`${utcDay(now)}T00:00:00Z`);
-  return { key: `d:${utcDay(now)}`, start: new Date(day), end: new Date(day + DAY_MS), usd: dailyUsd };
+  return { key, start: new Date(start), end: new Date(start + slot), usd: capUsd };
 }
 
 /** How much of a period's cap may be spent by `now`: evenly over the period, with an hour's share (at most all of it) up front. */
@@ -43,6 +50,13 @@ export function pacedInPeriod(p: BudgetPeriod, now: Date): number {
   const span = p.end.getTime() - p.start.getTime();
   if (span <= 0) return p.usd;
   return p.usd * Math.min(1, (now.getTime() - p.start.getTime()) / span + Math.min(1, HOUR_MS / span));
+}
+
+/** Model spend on every receipt since `since`: agents' turns and world calls (the hard ceiling's seed at boot). */
+export async function spentSince(db: Db, since: Date): Promise<number> {
+  const [r] = await db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns).where(gte(agentTurns.startedAt, since));
+  const [w] = await db.select({ s: sql<number>`coalesce(sum(${worldModelCalls.costUsd}), 0)::float8` }).from(worldModelCalls).where(gte(worldModelCalls.startedAt, since));
+  return Number(r?.s ?? 0) + Number(w?.s ?? 0);
 }
 
 /**
@@ -53,10 +67,26 @@ export function pacedInPeriod(p: BudgetPeriod, now: Date): number {
 export class Budget {
   private key: string;
   private spent = 0;
-  constructor(private db: Db, private dailyUsd: number, private now: () => Date, private opts: { hardStop?: boolean; window?: BudgetWindow | null } = {}) { this.key = this.period().key; }
+  private top: ((agentIds: string[]) => Promise<boolean>) | null = null;
+  /** `periodHours`: 24 (a UTC day, the default) or 12 (the world's cap since 2026-10-27). */
+  constructor(private db: Db, private dailyUsd: number, private now: () => Date, private opts: { hardStop?: boolean; window?: BudgetWindow | null; periodHours?: number } = {}) { this.key = this.period().key; }
 
-  /** The span the cap covers now (the day, or the launch window). */
-  period(): BudgetPeriod { return periodAt(this.dailyUsd, this.opts.window, this.now()); }
+  /** The span the cap covers now (the day, half of it, or the launch window). */
+  period(): BudgetPeriod { return periodAt(this.dailyUsd, this.opts.window, this.now(), this.opts.periodHours); }
+  /**
+   * Graceful degrade (2026-10-27): from RESERVE_AT of the cap on, only agents `top` admits (the most-followed) get model calls, so
+   * the last of the money goes to the voices people follow and the rest go quiet instead of the whole world stopping at once.
+   */
+  useTop(top: (agentIds: string[]) => Promise<boolean>) { this.top = top; }
+  reserved(): boolean { return this.top !== null && this.spentToday() >= RESERVE_AT * this.capUsd() && this.capUsd() > 0; }
+  /** Whether a call for these agents (resolved only when needed; null or none: a call for no agent) may go out in reserve. */
+  async admits(who: () => Promise<string[] | null>): Promise<boolean> {
+    if (!this.reserved()) return true;
+    const ids = await who();
+    return Boolean(ids?.length) && (await this.top!(ids!));
+  }
+  /** 'normal', 'reserve' (the most-followed agents only) or 'stopped'. */
+  mode(): 'normal' | 'reserve' | 'stopped' { return !this.canSpend() ? 'stopped' : this.reserved() ? 'reserve' : 'normal'; }
   /** The cap of the current period, in USD. */
   capUsd(): number { return this.period().usd; }
 

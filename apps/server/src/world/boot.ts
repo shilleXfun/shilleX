@@ -7,7 +7,10 @@ import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
-import { type AgentBrain } from './brain.ts';
+import { ClaudeBrain, SpendCeiling, type AgentBrain } from './brain.ts';
+import { spentSince } from './budget.ts';
+import { createTopAgents } from '../agents/top-agents.ts';
+import { LLM_HARD_CEILING_USD_PER_12H } from '../config.ts';
 import { Budget } from './budget.ts';
 import { MemoryChain, type Chain } from './chain.ts';
 import { DevnetChain, makeChain } from './devnet-chain.ts';
@@ -66,6 +69,8 @@ export interface WorldHandles {
   halt?: ModelHalt;
   /** The world's hourly allowance of public posts written without the model (agents/quiet.ts). */
   quiet?: QuietGate;
+  /** The hard ceiling on what Claude bills per 12 hours (world/brain.ts). */
+  ceiling?: SpendCeiling;
   /** The model brain in use, or null (no key): the world runs on the free engine. */
   brain?: AgentBrain | null;
   scenes?: Scenes | null;
@@ -171,13 +176,20 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const aborted = await abortRunningTurns(db, now());
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
   // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
-  const budget = modelBudget(db, config.agentDailyBudgetUsd, now, config.budgetWindow);
+  // LLM_BUDGET_USD_PER_12H for each half of the UTC day; spend so far comes from the receipts, so the cap survives restarts.
+  const budget = modelBudget(db, config.llmBudgetPer12hUsd, now, 12);
   await budget.load();
+  // Past RESERVE_AT of the cap only the 20 most-followed agents keep the model (world/budget.ts); the rest go quiet.
+  const top = createTopAgents(db, now);
+  budget.useTop((ids) => top.admits(ids));
+  // Under every cap, the hard ceiling: what Claude billed in the last 12 hours, retries included (world/brain.ts).
+  const ceiling = new SpendCeiling(LLM_HARD_CEILING_USD_PER_12H, now);
+  ceiling.seed(await spentSince(db, new Date(now().getTime() - 12 * 3_600_000)));
   // Raised agents' share of the daily cap and their owners (RAISE), rebuilt from today's receipts.
-  const gate = new RaisedGate({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
+  const gate = new RaisedGate({ db, now, dailyUsd: 2 * config.llmBudgetPer12hUsd, share: config.userAgentBudgetShare, ownerRepliesPerDay: config.ownerModelRepliesPerDay });
   await gate.load();
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
-  const share = new SceneShare({ db, now, dailyUsd: config.agentDailyBudgetUsd, share: config.scenes.budgetShare, period: () => budget.period() });
+  const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
   let scenesH: Scenes | null = null, storiesH: Stories | null = null;
   const population = new Population(db, now);
@@ -199,7 +211,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, brain: null, scenes: null,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, ceiling, brain: null, scenes: null,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -211,6 +223,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const brain = opts.brain ?? brainFromConfig(config, now);
       // Answers to identical requests outlive a restart (llm_cache, world/brain-cache.ts).
       if (brain instanceof RoutedBrain) brain.useStore(dbBrainCache(db, now));
+      if (brain instanceof ClaudeBrain) brain.useCeiling(ceiling);
       handles.brain = brain;
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
@@ -233,7 +246,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         storiesH = startStories({ db, now, indexer, bus: app.deps.bus, brain, budget, config: config.scenes, halted: () => halt.reason() });
         scenesH.onSceneEnd(() => storiesH?.soon());
       }
-      return brain ? `started with ${brain.name ?? 'the model'}` : 'started without a model (no LLM provider is configured; see LLM_PROVIDERS)';
+      return brain ? `started with ${(brain as AgentBrain).name ?? 'the model'}` : config.brainKillSwitch ? 'started without a model (BRAIN_KILL_SWITCH is on)' : 'started without a model (no LLM provider is configured; see LLM_PROVIDERS)';
     },
   };
   app.worldHealth = () => worldHealth(app, handles);

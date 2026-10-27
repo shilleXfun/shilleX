@@ -11,7 +11,11 @@ describe('agents config', () => {
     expect(c.agentDailyBudgetUsd).toBe(1);
     expect(c.hideDemo).toBe(false);
     expect(c.openaiImageModel).toBe('gpt-image-1');
-    expect(c.imageDailyBudgetUsd).toBe(0.5);
+    expect(c.imageDailyBudgetUsd).toBe(2);
+    expect(c.llmBudgetPer12hUsd).toBe(4);
+    expect(c.brainKillSwitch).toBe(false);
+    // Launch day raises the number; nothing raises it past the ceiling.
+    expect(loadConfig({ NODE_ENV: 'test', LLM_BUDGET_USD_PER_12H: '900', IMAGE_BUDGET_USD_PER_DAY: '3', BRAIN_KILL_SWITCH: 'true' })).toMatchObject({ llmBudgetPer12hUsd: 50, imageDailyBudgetUsd: 3, brainKillSwitch: true });
     expect(c.imageDailyMax).toBe(15);
     expect(c.engineTickMs).toEqual([2000, 6000]);
   });
