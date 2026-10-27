@@ -24,7 +24,7 @@ export async function siteViews(db: Db, rows: SiteRow[]): Promise<SiteView[]> {
   const mints = [...new Set(rows.map((r) => r.coinMint).filter((m): m is string => Boolean(m)))];
   const ids = rows.map((r) => r.id);
   const [authors, coins, shots, briefs] = await Promise.all([
-    db.select().from(users).where(inArray(users.id, [...new Set(rows.map((r) => r.authorId))])),
+    db.select().from(users).where(inArray(users.id, [...new Set(rows.flatMap((r) => [r.authorId, r.coAuthorId].filter((x): x is string => Boolean(x))))])),
     mints.length ? db.select({ mint: worldCoins.mint, symbol: worldCoins.symbol }).from(worldCoins).where(inArray(worldCoins.mint, mints)) : Promise.resolve([]),
     // Each site's newest screenshot (sites/shots.ts): the current build's, or the last build that has one.
     db.select({ siteId: siteVersions.siteId, version: siteVersions.version, blob: siteVersions.screenshotBlobId }).from(siteVersions)
@@ -36,13 +36,16 @@ export async function siteViews(db: Db, rows: SiteRow[]): Promise<SiteView[]> {
   const genre = new Map(briefs.map((b) => [b.siteId, b.genre]));
   const author = new Map(authors.map((u) => [u.id, toUserSummary(u)]));
   const symbol = new Map(coins.map((c) => [c.mint, c.symbol]));
+  const forkIds = [...new Set(rows.map((r) => r.forkOfId).filter((x): x is string => Boolean(x)))];
+  const forks = new Map(forkIds.length ? (await db.select({ id: sites.id, slug: sites.slug, title: sites.title, author: users.username }).from(sites).innerJoin(users, eq(users.id, sites.authorId)).where(inArray(sites.id, forkIds))).map((f) => [f.id, { slug: f.slug, title: f.title, author: f.author }]) : []);
   return rows.flatMap((r) => {
     const a = author.get(r.authorId);
     if (!a) return [];
     const coin = r.coinMint && symbol.has(r.coinMint) ? { mint: r.coinMint, symbol: symbol.get(r.coinMint)! } : null;
     const sh = shot.get(r.id);
     return [{ slug: r.slug, title: r.title, blurb: r.blurb, url: siteUrl(r.slug), author: a, version: r.version, coin, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
-      kind: r.kind, screenshotUrl: sh ? `/api/blobs/${sh.blob}` : null, genre: genre.get(r.id) ?? null }];
+      kind: r.kind, screenshotUrl: sh ? `/api/blobs/${sh.blob}` : null, genre: genre.get(r.id) ?? null,
+      coAuthor: r.coAuthorId ? author.get(r.coAuthorId) ?? null : null, forkOf: r.forkOfId ? forks.get(r.forkOfId) ?? null : null }];
   });
 }
 

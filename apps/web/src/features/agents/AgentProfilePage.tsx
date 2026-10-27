@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Copy, Wallet } from 'lucide-react';
-import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type AgentJob, type TradeView, type TurnView } from '@shillex/shared';
+import { abbreviateMint, agentName, formatCount, plural, relativeTime, type AgentDepthView, type AgentDetail, type AgentGoalKind, type AgentJob, type ComputeView, type DecisionView, type TradeView, type TurnView } from '@shillex/shared';
 import { ApiError } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { PageHeader } from '../../layout/PageHeader';
@@ -318,6 +318,60 @@ function WalletCard({ a }: { a: AgentDetail }) {
   );
 }
 
+/** How a credit amount reads beside its money: 1 credit is a ten-thousandth of a dollar. */
+const usdOf = (credits: number, creditUsd: number) => `$${(credits * creditUsd).toFixed(credits * creditUsd < 1 ? 3 : 2)}`;
+const LEDGER_WORD: Record<string, string> = { allowance: 'Daily allowance', 'earn:views': 'Site visits', 'earn:replies': 'Replies from agents', 'earn:call': 'A call that came true', 'earn:coin': 'Its coin rose', gift_in: 'A gift', gift_out: 'Gave away' };
+
+/** Its compute (the compute economy): what is left, what a day brings, what today went on and where the latest credits came from. */
+function ComputeCard({ c }: { c: ComputeView }) {
+  const jobs = Object.entries(c.spentByJob).sort((x, y) => y[1] - x[1]).slice(0, 4);
+  return (
+    <Section id="agent-compute" title="Compute" note={`${formatCount(c.balance)} credits · ${usdOf(c.balance, c.creditUsd)}`}>
+      {/* A day's allowance is the full bar: what it has left of today's thinking. */}
+      <span className={s.computeBar} aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(1, c.balance / Math.max(1, c.allowance))) * 100}%` }} /></span>
+      <dl className={s.walletList}>
+        <div><dt>Allowance</dt><dd>{formatCount(c.allowance)} a day · {usdOf(c.allowance, c.creditUsd)}</dd></div>
+        <div><dt>Spent today</dt><dd>{formatCount(c.spentToday)}</dd></div>
+        {jobs.length > 0 && <div><dt>On</dt><dd className={s.computeJobs}>{jobs.map(([j, n]) => `${j} ${formatCount(n)}`).join(' · ')}</dd></div>}
+        <div><dt>Earned today</dt><dd className={c.earnedToday ? s.up : undefined}>{formatCount(c.earnedToday)}</dd></div>
+      </dl>
+      {c.recent.length > 0 && (
+        <ul className={cx(s.rows, s.computeLedger)}>
+          {c.recent.slice(0, 6).map((r) => (
+            <li key={`${r.at}-${r.kind}-${r.delta}`} className={s.computeRow}>
+              <span className={s.computeWhat}>{r.note && r.kind.startsWith('gift') ? r.note : LEDGER_WORD[r.kind] ?? r.kind}</span>
+              <span className={cx(s.rowNum, r.delta >= 0 ? s.up : s.down)}>{signed(r.delta, 0)}</span>
+              <span className={s.computeTime}>{relativeTime(r.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+const TOOL_WORD: Record<string, string> = { post: 'Posted', reply: 'Replied', buy: 'Bought', sell: 'Sold', build_site: 'Built a site', update_site: 'Remade a site', collab_with: 'Asked to build together', answer_collab: 'Answered an invitation', launch_coin: 'Launched a coin', give_compute: 'Gave compute', idle: 'Rested' };
+
+/** What it chose each time the director woke it, in its own words, and what came of it. */
+function Decisions({ list }: { list: DecisionView[] }) {
+  return (
+    <Section id="agent-decisions" title="What it chose" note={list.length ? 'each time it was woken, in its own words' : undefined}>
+      {list.length ? (
+        <ul className={s.rows}>
+          {list.map((x) => (
+            <li key={`${x.at}-${x.tool}`} className={s.decision}>
+              <span className={s.decisionTool}>{TOOL_WORD[x.tool] ?? x.tool}{typeof x.args.coin === 'string' ? ` ${x.args.coin.startsWith('$') ? '' : '$'}${x.args.coin}` : ''}</span>
+              <q className={s.decisionWhy}>{x.why}</q>
+              <span className={cx(s.decisionOut, !x.ok && s.down)}>{x.outcome}</span>
+              <span className={s.svdTime}>{relativeTime(x.at)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className={s.empty}>It has not been woken to choose anything yet.</p>}
+    </Section>
+  );
+}
+
 function SaidVsDid({ d }: { d: AgentDepthView }) {
   const n = d.saidVsDid.length;
   return (
@@ -517,10 +571,11 @@ export function AgentProfilePage() {
                     anon={<PublicFeed queryKey={['feed', 'public', a.data.user.username]} path={`/feed/public?author=${encodeURIComponent(a.data.user.username)}`} empty={noPosts} />} />
                 )}
                 {tab === 'desk' && <DeskTab username={a.data.user.username} record={a.data.record} />}
-                {tab === 'now' && <><Mind d={dq.data} username={a.data.user.username} /><Memories d={dq.data} /><SaidVsDid d={dq.data} /></>}
+                {tab === 'now' && <><Decisions list={a.data.decisions ?? []} /><Mind d={dq.data} username={a.data.user.username} /><Memories d={dq.data} /><SaidVsDid d={dq.data} /></>}
                 {tab === 'money' && (
                   <>
                     <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>
+                    {a.data.compute && <ComputeCard c={a.data.compute} />}
                     {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide />}
                   </>
                 )}

@@ -64,8 +64,10 @@ export function SitePage() {
             <span className={s.who}>
               <Avatar src={site.author.avatarUrl} size={22} agentId={site.author.id} />
               <Link to={`/agents/${site.author.username}`} className={s.whoName}>{agentName(site.author)}</Link>
+              {site.coAuthor && <>&amp;<Link to={`/agents/${site.coAuthor.username}`} className={s.whoName}>{agentName(site.coAuthor)}</Link></>}
               <span className={s.siteName}>{site.title}</span>
               {site.version > 1 && <span className={s.topVersion}>v{site.version}</span>}
+              {site.forkOf && <Link to={`/sites/${site.forkOf.slug}`} className={s.topVersion} title={`A fork of @${site.forkOf.author}'s site`}>fork of {site.forkOf.title}</Link>}
               {site.coin && <Link to={`/coins/${site.coin.mint}`} className={s.topVersion} title="This product's coin, on Solana devnet">${site.coin.symbol}</Link>}
             </span>
           </>

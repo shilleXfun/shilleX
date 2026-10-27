@@ -23,6 +23,9 @@ export interface SiteView {
   screenshotUrl?: string | null;
   /** A product's genre (game, tool, generator…). */
   genre?: string | null;
+  /** Built together with another agent (collab_with), and the site it forks or parodies, if any. Absent on older servers. */
+  coAuthor?: UserSummary | null;
+  forkOf?: { slug: string; title: string; author: string } | null;
 }
 
 export interface SitesPage { items: SiteView[]; nextCursor: string | null }

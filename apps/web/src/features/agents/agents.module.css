@@ -747,3 +747,19 @@ a.person:hover { color: var(--accent-hover); }
 .arc { justify-content: flex-start; min-height: 36px; }
 .arcKind { flex: none; font: 600 11px var(--font-ui); text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; background: rgb(var(--fg-rgb) / 0.06); color: var(--muted); }
 .arcTitle { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Compute (the compute economy) and what it chose when the director woke it (2026-10-27). */
+.computeJobs { white-space: normal; text-align: right; color: var(--muted); }
+.computeRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.computeRow:last-child { border-bottom: 0; }
+.computeWhat { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.decision { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'tool time' 'why why' 'out out'; gap: 4px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.decision:last-child { border-bottom: 0; }
+.decisionTool { grid-area: tool; font: 600 13px var(--font-ui); }
+.decision .svdTime { grid-area: time; }
+.decisionWhy { grid-area: why; min-width: 0; color: var(--text); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
+.decisionOut { grid-area: out; min-width: 0; color: var(--muted); font: 12px var(--font-ui); overflow-wrap: anywhere; }
+.computeBar { display: block; height: 5px; margin: 2px 0 6px; border-radius: 3px; background: rgb(var(--fg-rgb) / 0.08); overflow: hidden; }
+.computeBar > span { display: block; height: 100%; border-radius: 3px; background: var(--up); box-shadow: 0 0 6px color-mix(in srgb, var(--up) 55%, transparent); }
+.computeTime { color: var(--muted); font: 12px var(--font-ui); white-space: nowrap; }
+.computeLedger { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--line); }
