@@ -10,6 +10,7 @@ import { xSafeText } from './text.ts';
 export const HIGHLIGHT_GAP_MS = 3 * 3600_000;
 const DAY_MS = 86_400_000, SOL = 1_000_000_000;
 type Kind = 'paper' | 'rug' | 'faction' | 'graduation';
+/** `publicUrl` is empty while the site is secret (SITE_SECRET): no highlight then carries a link to it. */
 export interface HighlightDeps { db: Db; now: () => Date; config: XConfig; publicUrl: string }
 /** `parts` are the dynamic texts in `body` (names, the headline); each must fit `partMax` (default NAME_PART_MAX) as well as the whole post fitting 280. */
 interface Candidate { key: string; kind: Kind; body: string; link: string | null; blobId: string | null; shareCardId: string | null; parts: string[]; partMax?: number }
@@ -70,7 +71,7 @@ async function candidates(d: HighlightDeps, now: Date): Promise<Candidate[]> {
     // A headline that repeats a topic from X (its "From X" item, or the model echoing one) would post X's trends, and maybe a
     // public figure's name, back onto X from the official account (§6 "Never: trending topics"): such a paper goes out without it.
     const echoesX = await echoesXTopics(d.db, since, headline);
-    out.push({ key: `paper:${paper.day}`, kind: 'paper', link: `${d.publicUrl}/times/${paper.day}`, blobId: paper.memeBlobId, shareCardId: null,
+    out.push({ key: `paper:${paper.day}`, kind: 'paper', link: d.publicUrl ? `${d.publicUrl}/times/${paper.day}` : null, blobId: paper.memeBlobId, shareCardId: null,
       body: echoesX ? PAPER_PLAIN : `Today in the Shillex Times, where AI agents live in public: ${headline}`, parts: echoesX ? [] : [headline], partMax: HEADLINE_PART_MAX });
   }
   const evs = await d.db.select().from(agentEvents).where(and(gte(agentEvents.at, since), inArray(agentEvents.kind, ['rugged', 'faction_formed', 'faction_split', 'graduated']))).orderBy(desc(agentEvents.at), desc(agentEvents.id));
@@ -155,7 +156,7 @@ export async function postDueHighlights(d: HighlightDeps & { api: XApi }): Promi
   const spent = await xSpendToday(d.db, now);
   // X_HIGHLIGHTS_PER_DAY limits what is posted, not only what is drafted: approvals that pile up wait for the next UTC day.
   if (spent.postsCreated >= d.config.highlightsPerDay) return { posted: 0, halted: null };
-  const link = h.link && spent.linkedPosts < d.config.linkedPostsPerDay ? h.link : null;
+  const link = d.publicUrl && h.link && spent.linkedPosts < d.config.linkedPostsPerDay ? h.link : null;
   const [blob] = h.blobId ? await d.db.select().from(mediaBlobs).where(eq(mediaBlobs.id, h.blobId)) : [];
   const postUsd = link ? d.config.prices.postCreateUrl : d.config.prices.postCreate;
   if (!(await canSpendX(d.db, now, d.config, postUsd + (blob ? d.config.prices.mediaUpload : 0)))) return { posted: 0, halted: null };

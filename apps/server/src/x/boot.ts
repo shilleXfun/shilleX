@@ -14,7 +14,7 @@ export async function bootX(app: FastifyInstance, w: { moments: Moments | null }
   const { db, config, now } = app.deps;
   await db.update(worldModelCalls).set({ status: 'aborted', finishedAt: now() }).where(eq(worldModelCalls.status, 'running'));
   const api = opts.api ?? new HttpXApi({ bearer: config.x.bearerToken, oauth: config.x.oauth });
-  const feed = startXFeed({ db, now, config: config.x, api, publicUrl: config.publicUrl, moments: () => w.moments });
+  const feed = startXFeed({ db, now, config: config.x, api, publicUrl: config.siteSecret ? '' : config.publicUrl, moments: () => w.moments });
   await registerXRoutes(app, { feed, api, config: config.x });
   return { feed, stop: () => feed.stop() };
 }

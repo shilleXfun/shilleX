@@ -10,6 +10,8 @@ export interface Config {
   pgliteDir: string;
   sessionSecret: string;
   publicUrl: string;
+  /** SITE_SECRET=on|off (default on): the site's address never leaves it (no link in X posts, nothing on-chain) until launch. */
+  siteSecret: boolean;
   allowedOrigins: string[];
   solanaRpcUrl: string;
   liveTokenLookup: boolean;
@@ -279,6 +281,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     pgliteDir: env.PGLITE_DIR || `${root}data/pglite`,
     sessionSecret: env.SESSION_SECRET || 'dev-secret',
     publicUrl,
+    siteSecret: on(env.SITE_SECRET, true),
     allowedOrigins: [publicUrl, `http://localhost:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     solanaRpcUrl: env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
     liveTokenLookup: on(env.LIVE_TOKEN_LOOKUP, nodeEnv !== 'test'),
