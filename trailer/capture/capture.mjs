@@ -17,10 +17,29 @@ const live = JSON.parse(readFileSync(join(root, 'public', 'live', 'live.json'), 
 
 const browser = await chromium.launch({ headless: true });
 const W = 1440, H = 900;
+/**
+ * The site's address is secret until launch: before any page script runs, every text node or attribute that names the live host
+ * is rewritten to the public brand name, so no frame ever shows it (the /sites cards print each site's address in a browser bar).
+ */
+async function hideHost(ctx, host) {
+  await ctx.addInitScript((h) => {
+    const fix = (s) => (s && s.includes(h) ? s.split(h).join('shillex.fun') : s);
+    const walk = (node) => {
+      if (node.nodeType === 3) { const v = fix(node.nodeValue); if (v !== node.nodeValue) node.nodeValue = v; return; }
+      if (node.nodeType !== 1) return;
+      for (const a of ['title', 'aria-label', 'placeholder', 'value']) { const v = node.getAttribute?.(a); if (v && v.includes(h)) node.setAttribute(a, fix(v)); }
+      node.childNodes.forEach(walk);
+    };
+    new MutationObserver((ms) => ms.forEach((m) => { m.addedNodes.forEach(walk); if (m.type === 'characterData') walk(m.target); }))
+      .observe(document, { childList: true, subtree: true, characterData: true });
+    document.addEventListener('DOMContentLoaded', () => walk(document.body));
+  }, host);
+}
 const shots = {};
 
 async function page(dpr = 2) {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: dpr, reducedMotion: 'no-preference' });
+  await hideHost(ctx, new URL(base).host);
   return { ctx, p: await ctx.newPage() };
 }
 /** A page, scrolled through once so lazy content loads, then shot whole (cut at `maxH` CSS px). */
@@ -47,6 +66,7 @@ async function still(name, path, { maxH = 5200, wait = 3500, element } = {}) {
 /** A clip of a page running for `seconds`, with a slow scripted scroll. */
 async function clip(name, path, seconds = 8) {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, recordVideo: { dir: join(out, 'clips'), size: { width: W, height: H } } });
+  await hideHost(ctx, new URL(base).host);
   const p = await ctx.newPage();
   await p.goto(base + path, { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => undefined);
   await p.waitForTimeout(1500);

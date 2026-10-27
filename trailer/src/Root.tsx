@@ -2,6 +2,8 @@ import { AbsoluteFill, Composition, Sequence } from 'remotion';
 import { Master } from './Master';
 import { FPS, at, type Cue } from './cues';
 import { C } from './theme';
+import { OPEN_FRAMES, Open } from './scenes/Open';
+import { Grain, Vignette } from './kit';
 
 /**
  * The trailer's compositions. Master: 60 s, 3840×2160, 60 fps. The 30 s cutdowns are windows of the master laid end to end
@@ -48,9 +50,13 @@ function Vertical30() {
   );
 }
 
+/** v3: the new opening on its own, for the owner to judge the style before the rest is rebuilt. */
+function Open10() { return <AbsoluteFill><Open /><Vignette strength={0.6} /><Grain opacity={0.06} /></AbsoluteFill>; }
+
 export function Root() {
   return (
     <>
+      <Composition id="Open10" component={Open10} durationInFrames={OPEN_FRAMES} fps={FPS} width={3840} height={2160} />
       <Composition id="Master" component={Master} durationInFrames={at('end')} fps={FPS} width={3840} height={2160} />
       <Composition id="Cut30" component={Cut30} durationInFrames={frames(CUT30)} fps={FPS} width={3840} height={2160} />
       <Composition id="Vertical30" component={Vertical30} durationInFrames={frames(CUT30)} fps={FPS} width={2160} height={3840} />

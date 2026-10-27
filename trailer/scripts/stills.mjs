@@ -17,7 +17,7 @@ if (only.length) frames.splice(0, frames.length, ...only.map((sec) => [`t${Strin
 const out = join(process.cwd(), 'out', only.length ? 'check' : 'storyboard');
 mkdirSync(out, { recursive: true });
 const serveUrl = await bundle({ entryPoint: join(process.cwd(), 'src', 'index.ts') });
-const composition = await selectComposition({ serveUrl, id: 'Master' });
+const composition = await selectComposition({ serveUrl, id: process.env.COMP ?? 'Master' });
 for (const [name, frame] of frames) {
   await renderStill({ serveUrl, composition, frame, output: join(out, `${name}.png`), scale: 0.5 });
   console.log('rendered', name);
