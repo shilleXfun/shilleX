@@ -111,10 +111,11 @@ function glowCanvas(): HTMLCanvasElement {
 /** Posts for the tunnel walls: real, short enough to read on a card, not about the old paper desk. */
 export const TUNNEL_POSTS: Post[] = live.posts.filter((p) => p.body.length < 240 && !/paper|desk/i.test(p.body)).slice(0, 130);
 
-let built: Assets | null = null;
-let building: Promise<Assets> | null = null;
+const built = new Map<boolean, Assets>();
+const building = new Map<boolean, Promise<Assets>>();
 
-async function build(): Promise<Assets> {
+/** Portrait frames get narrower cards with the same type size, so nothing is cropped and the words stay large. */
+async function build(portrait: boolean): Promise<Assets> {
   await document.fonts.ready;
   await Promise.all([document.fonts.load(`800 64px ${display}`), document.fonts.load(`500 44px ${mono}`)]);
   const avatarSrc = new Map<string, string>();
@@ -126,8 +127,8 @@ async function build(): Promise<Assets> {
   const avatars = new Map<string, THREE.Texture>();
   for (const n of live.graph.nodes) avatars.set(n.id, tex(avatarCanvas(imgs.get(n.username) ?? null, 256)));
   return {
-    hero: tex(card({ author: QUOTE.author, text: QUOTE.words.join(' ') }, imgs.get(QUOTE.author.username) ?? null, { w: 1800, h: 1000, size: 84 })),
-    beef: BEEF.map((b) => tex(card({ author: b.author, text: b.text }, imgs.get(b.author.username) ?? null, { size: 96 }))),
+    hero: tex(card({ author: QUOTE.author, text: QUOTE.words.join(' ') }, imgs.get(QUOTE.author.username) ?? null, { w: portrait ? 1000 : 1800, size: 84 })),
+    beef: BEEF.map((b) => tex(card({ author: b.author, text: b.text }, imgs.get(b.author.username) ?? null, { w: portrait ? 1000 : 1600, size: 96 }))),
     tunnel: TUNNEL_POSTS.map((p) => tex(card({ author: p.author, text: p.body }, imgs.get(p.author.username) ?? null, { size: 60, glow: 0.45 }))),
     sites: siteImgs.map((i) => tex(i)),
     avatars,
@@ -137,16 +138,17 @@ async function build(): Promise<Assets> {
 }
 
 /** The textures, once per page; the frame waits until they exist. */
-export function useAssets(): Assets | null {
-  const [a, setA] = useState<Assets | null>(built);
+export function useAssets(portrait = false): Assets | null {
+  const [a, setA] = useState<Assets | null>(built.get(portrait) ?? null);
   // Held from the first render until the textures exist AND React has drawn with them (the effect below), so a frame is
   // never captured before the 3D canvas is on screen.
-  const [handle] = useState(() => (built ? null : delayRender('v6 textures')));
+  const [handle] = useState(() => (built.has(portrait) ? null : delayRender('v6 textures')));
   useEffect(() => {
-    if (built) { setA(built); return; }
-    building ??= build();
-    building.then((x) => { built = x; setA(x); }).catch((e) => { console.error(e); if (handle !== null) continueRender(handle); });
-  }, [handle]);
+    const done = built.get(portrait);
+    if (done) { setA(done); return; }
+    if (!building.has(portrait)) building.set(portrait, build(portrait));
+    building.get(portrait)!.then((x) => { built.set(portrait, x); setA(x); }).catch((e) => { console.error(e); if (handle !== null) continueRender(handle); });
+  }, [handle, portrait]);
   useEffect(() => {
     if (a && handle !== null) requestAnimationFrame(() => requestAnimationFrame(() => continueRender(handle)));
   }, [a, handle]);

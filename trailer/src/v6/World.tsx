@@ -50,6 +50,8 @@ const TURN = new Map([...NODES].sort((a, b) => random(`t${a.id}`) - random(`t${b
 /** The camera: every position is a function of the frame. */
 function Rig() {
   const fr = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const V = height > width;
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   let pos = v3(0, 0, 4.6), look = v3(0, 0, 0);
   if (fr < T.nobody) {
@@ -79,7 +81,7 @@ function Rig() {
     look = S.clone();
   } else if (fr < T.logo) {
     const k = interpolate(fr, [T.drop, T.logo], [0, 1], cl);
-    const a = Math.PI * 1.6 + k * 1.1, r = 9 + ease(Math.min(1, k * 3)) * 6;
+    const a = Math.PI * 1.6 + k * 1.1, r = 6.5 + ease(Math.min(1, k * 3)) * 4.5;
     pos = v3(Math.sin(a) * r, 3 - k * 2, Math.cos(a) * r).add(S);
     look = S.clone();
   } else if (fr < T.outro1) {
@@ -94,7 +96,8 @@ function Rig() {
   }
   camera.position.copy(pos);
   camera.lookAt(look);
-  camera.fov = 50;
+  // Portrait frames see as much width as landscape ones would, nearly: a taller lens.
+  camera.fov = V ? 92 : 50;
   camera.near = 0.05; camera.far = 600;
   camera.updateProjectionMatrix();
   return null;
@@ -115,9 +118,12 @@ function Hero({ a }: { a: Assets }) {
   const fr = useCurrentFrame();
   const { fps } = useVideoConfig();
   if (fr >= T.esc + 30) return null;
+  const { width, height } = useVideoConfig();
+  const pw = height > width ? 3.7 : 5.4;
   const s = spring({ frame: fr - 4, fps, config: { damping: 18, stiffness: 70 } });
-  const o = interpolate(fr, [T.nobody, T.nobody + 18], [1, 0], cl);
-  return <Card map={a.hero} w={5.4 * (0.85 + 0.15 * s)} pos={v3(0, 0, -(1 - s) * 3)} opacity={Math.min(1, s * 1.4) * o} />;
+  // Gone before the camera reaches where it hung (the dive passes z = 0 a third of the way in).
+  const o = interpolate(fr, [T.nobody - 8, T.nobody + 4], [1, 0], cl);
+  return <Card map={a.hero} w={pw * (0.85 + 0.15 * s)} pos={v3(0, 0, -(1 - s) * 3)} opacity={Math.min(1, s * 1.4) * o} />;
 }
 
 /** The tunnel: real posts on the walls, spiralling down to the sphere. */
@@ -134,16 +140,16 @@ function Tunnel({ a }: { a: Assets }) {
     <>
       {items.map((it, i) => {
         const p = v3(it.x, it.y, it.z).lerp(S, ease(collapse));
-        return <Card key={it.id} map={a.tunnel[i]!} w={4.2} pos={p} rot={[0, -it.x * 0.07, 0]} opacity={(1 - collapse) * (fr < T.nobody ? interpolate(fr, [T.nobody - 30, T.nobody], [0, 1], cl) : 1)} />;
+        return <Card key={it.id} map={a.tunnel[i]!} w={4.2} pos={p} rot={[0, -it.x * 0.07, 0]} opacity={interpolate(fr, [T.build, T.build + 24], [1, 0], cl) * (fr < T.nobody ? interpolate(fr, [T.nobody - 30, T.nobody], [0, 1], cl) : 1)} />;
       })}
     </>
   );
 }
 
-function SiteCard({ map, pos, opacity }: { map: THREE.Texture; pos: THREE.Vector3; opacity: number }) {
+function SiteCard({ map, w, pos, opacity }: { map: THREE.Texture; w: number; pos: THREE.Vector3; opacity: number }) {
   return (
     <mesh position={pos}>
-      <planeGeometry args={[6.2, 6.2 / ((map.userData.aspect as number) || 1.6)]} />
+      <planeGeometry args={[w, w / ((map.userData.aspect as number) || 1.6)]} />
       <meshBasicMaterial map={map} transparent opacity={opacity} toneMapped={false} color={new THREE.Color(0.72, 0.72, 0.74)} />
     </mesh>
   );
@@ -152,6 +158,8 @@ function SiteCard({ map, pos, opacity }: { map: THREE.Texture; pos: THREE.Vector
 /** The stations of the flight: real beef and the sites, on the axis, each lit when the camera arrives. */
 function Stations({ a }: { a: Assets }) {
   const fr = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const V = height > width;
   if (fr < T.nobody || fr >= T.build + 40) return null;
   return (
     <>
@@ -159,9 +167,9 @@ function Stations({ a }: { a: Assets }) {
         const z = STATION_Z(k);
         const lit = interpolate(fr, [sh.from - 20, sh.from + 6], [0.25, 1], cl);
         const gone = interpolate(fr, [T.build, T.build + 40], [1, 0], cl);
-        if (sh.shot.kind === 'beef') return <Card key={k} map={a.beef[sh.shot.i]!} w={5.6} pos={v3(0, 0, z)} opacity={lit * gone} />;
+        if (sh.shot.kind === 'beef') return <Card key={k} map={a.beef[sh.shot.i]!} w={V ? 3.8 : 5.6} pos={v3(0, 0, z)} opacity={lit * gone} />;
         // A site is shown a touch dimmer than white, so bloom keeps its details instead of blowing them out.
-        return <SiteCard key={k} map={a.sites[sh.shot.i]!} pos={v3(0, 0.15, z)} opacity={lit * gone} />;
+        return <SiteCard key={k} map={a.sites[sh.shot.i]!} w={V ? 4.6 : 6.2} pos={v3(0, 0.15, z)} opacity={lit * gone} />;
       })}
     </>
   );
@@ -179,7 +187,9 @@ function Agents({ a }: { a: Assets }) {
   return (
     <>
       {NODES.map((n) => {
-        const at = T.build + 6 + Math.round(dur * (TURN.get(n.id)! / 100) ** 0.7);
+        // The first dozen land at once with the cut, then the rest faster and faster.
+        const turn = TURN.get(n.id)!;
+        const at = turn < 12 ? T.build + turn : T.build + 12 + Math.round(dur * ((turn - 12) / 88) ** 0.7);
         const pop = fr >= T.drop ? 1 : spring({ frame: fr - at, fps, config: { damping: 12, stiffness: 180 } });
         if (pop <= 0.001) return null;
         const sp = SPHERE.get(n.id)!.clone().sub(S).applyAxisAngle(v3(0, 1, 0), spin).add(S);

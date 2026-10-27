@@ -118,7 +118,7 @@ function Sound() {
 
 export function Inside() {
   const { width, height } = useVideoConfig();
-  const a = useAssets();
+  const a = useAssets(height > width);
   return (
     <AbsoluteFill style={{ background: '#04050b' }}>
       {a && (
