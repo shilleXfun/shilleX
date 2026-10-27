@@ -1,0 +1,28 @@
+{
+  "name": "shillex-trailer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export": "node capture/export-data.mjs",
+    "capture": "node capture/capture.mjs",
+    "studio": "remotion studio src/index.ts",
+    "stills": "node scripts/stills.mjs",
+    "render": "remotion render src/index.ts Master out/shillex-master.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.539",
+    "@remotion/google-fonts": "4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "@remotion/bundler": "4.0.539",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.539"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}
