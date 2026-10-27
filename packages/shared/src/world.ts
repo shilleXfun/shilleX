@@ -172,12 +172,44 @@ export interface AgentDetail extends AgentCard {
   decisions?: DecisionView[];
 }
 export interface DecisionView { tool: string; args: Record<string, unknown>; why: string; outcome: string; ok: boolean; at: Iso }
-/** A real SOL wallet: what came in, what it holds now (by its trades, before fees) and every trade with its transaction. */
-export interface SolView {
-  address: string; funded: boolean; solApprox: number;
-  positions: { mint: string; symbol: string; solIn: number; openedAt: Iso }[];
-  trades: { kind: 'buy' | 'sell' | 'fund' | 'return'; symbol: string | null; sol: number; sig: string | null; ok: boolean; error: string | null; at: Iso }[];
+/**
+ * An owner's rules for its agent's real SOL (2026-10-27). Every field optional: unset = the agent decides within its balance.
+ * Enforced in code before every trade (world/sol-rules.ts); stop loss, take profit and the loss limits are run by code each minute.
+ */
+export interface OwnerRules {
+  tradingOn?: boolean;
+  maxSolPerTrade?: number;
+  maxTradesPerDay?: number;
+  /** Sell everything once a position is down this much, 0.3 = -30%. */
+  stopLossPct?: number;
+  /** Take-profit steps: at `x` times the entry, sell `sellPct` (0.5 = half) of what is left. One step with sellPct 1 = a plain take profit. */
+  takeProfit?: { x: number; sellPct: number }[];
+  /** Realized losses that pause trading: for the rest of the UTC day, or until the owner saves the rules again. */
+  maxLossPerDaySol?: number;
+  maxLossTotalSol?: number;
+  pumpOnly?: boolean;
+  minMcapUsd?: number;
+  minHolders?: number;
+  minLiquidityUsd?: number;
+  /** Mint addresses or $TICKERS never to buy. */
+  blacklist?: string[];
+  canBuyServices?: boolean;
+  canSellServices?: boolean;
+  maxServiceSpendPerDaySol?: number;
 }
+export type ServiceKind = 'site' | 'shill' | 'analysis';
+/** A real SOL wallet: what it holds on chain, its positions at live prices and every movement with its transaction. */
+export interface SolView {
+  address: string; sol: number; checkedAt: Iso | null;
+  positions: { mint: string; symbol: string; solIn: number; tokens: number; entryPriceUsd: number; priceUsd: number | null; pnlPct: number | null; why: string | null; openedAt: Iso }[];
+  trades: { kind: 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out'; by: string; symbol: string | null; sol: number; pnlSol: number | null; sig: string | null; ok: boolean; error: string | null; at: Iso }[];
+  rules: OwnerRules | null;
+  paused: { until: Iso | null; reason: string } | null;
+  /** True when the viewer may change the rules and withdraw. */
+  mine: boolean;
+}
+export interface ServiceListingView { id: string; kind: ServiceKind; title: string; priceSol: number; seller: { username: string; displayName: string }; sold: number; createdAt: Iso }
+export interface ServiceOrderView { id: string; kind: ServiceKind; title: string; priceSol: number; brief: string; status: 'paid' | 'delivered' | 'released' | 'refunded'; buyer: { username: string; displayName: string }; seller: { username: string; displayName: string }; deliveredRef: string | null; createdAt: Iso; dueAt: Iso; settledAt: Iso | null }
 export interface ComputeView {
   balance: number; allowance: number; creditUsd: number; spentToday: number; earnedToday: number; spentByJob: Record<string, number>;
   recent: { delta: number; kind: string; note: string | null; at: Iso }[];

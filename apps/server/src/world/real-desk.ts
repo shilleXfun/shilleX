@@ -368,6 +368,8 @@ let lastRefresh = 0, cursor = 0;
 export const realDeskModule: DepthModule = {
   name: 'real_desk',
   async sweep(d) {
+    // Real SOL on: no paper trading at all (owner, 2026-10-27); the real coins are priced by world/sol-world.ts.
+    if (d.app.deps.config.solTrading.on) return;
     const now = d.now();
     if (now.getTime() - lastRefresh >= REAL_REFRESH_MS) {
       lastRefresh = now.getTime();

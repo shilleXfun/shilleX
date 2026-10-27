@@ -1,4 +1,3 @@
-import { solDeskState } from './sol-desk.ts';
 import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { agentTurns, agents, siteVersions, wallets } from '../db/schema.ts';
@@ -78,7 +77,6 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     },
     quiet: w.quiet?.state() ?? null,
     rpc: rpcMeterState(),
-    sol: solDeskState(),
     cost: costMeterState(),
     director: w.director?.stats() ?? null,
     budget: { capUsd: w.budget.capUsd(), spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, level: w.budget.level() },

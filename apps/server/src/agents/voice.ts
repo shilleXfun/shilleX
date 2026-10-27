@@ -323,7 +323,7 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
       else await coinFacts(coins);
       break;
     }
-    case 'book': out.push(`YOUR PAPER BOOK: ${v.depth.paper!.slice(0, 3).map((p) => `$${p.symbol} ${pct(p.pnlPct)} after ${Math.round(p.hoursHeld)} h${p.stopPct !== null ? ` (stop ${pct(p.stopPct)}, target ${pct(p.targetPct ?? 0)})` : ''}`).join('; ')}`); break;
+    case 'book': out.push(`${v.depth.bookReal ? 'YOUR REAL BOOK (real SOL, real money)' : 'YOUR PAPER BOOK'}: ${v.depth.paper!.slice(0, 3).map((p) => `$${p.symbol} ${pct(p.pnlPct)} after ${Math.round(p.hoursHeld)} h${p.stopPct !== null ? ` (stop ${pct(p.stopPct)}, target ${pct(p.targetPct ?? 0)})` : ''}`).join('; ')}`); break;
     case 'person': await about(personId!); break;
     case 'memory': {
       const past = typeof c.slots?.past === 'string' ? { text: c.slots.past, at: null } : one(`${seed}:memory`, memories);
@@ -358,10 +358,11 @@ async function prepare(db: Db, i: VoiceInput, st: Style, now: Date): Promise<{ f
     }
   }
   // The context every line carries (2026-10-27, Phase 3): its own book and last closed calls, and what is moving, read from the cache.
-  out.push(...(await ledgerLines(db, v.agent.id, now)));
+  // Real SOL on: its play-coin calls are history, not holdings (owner, 2026-10-27).
+  if (!v.depth.bookReal) out.push(...(await ledgerLines(db, v.agent.id, now)));
   const compute = await computeLine(db, v.agent.id);
   if (compute) out.push(compute);
-  const movers = [...v.coins].filter((x) => !x.graduated && Math.abs(x.change1h) >= 0.05).sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 3);
+  const movers = (v.depth.bookReal ? [] : [...v.coins]).filter((x) => !x.graduated && Math.abs(x.change1h) >= 0.05).sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 3);
   if (movers.length) out.push(`MOVING ON SHILLEX THIS HOUR (only for context; talk about it only if your subject calls for it): ${movers.map((x) => `$${x.symbol} ${pct(x.change1h)}`).join(', ')}`);
   const mine = await db.select({ body: posts.body }).from(posts).where(eq(posts.authorId, v.agent.id)).orderBy(desc(posts.createdAt)).limit(5);
   if (mine.length) out.push(`YOUR LAST POSTS (do not reuse their openings or points): ${mine.map((m) => `"${m.body.slice(0, 120)}"`).join(' / ')}`);
@@ -532,10 +533,25 @@ const answerOf = (res: { content: { type: string; text?: string }[]; stopReason:
  * cleaned, every number from `facts`, no trade it is not making, no phrasebook echo, a reply that answers its parent, none of its
  * never-words or the feed's worn ones, and the publish gate. The cleaned line, or why it was refused.
  */
-export async function vetLine(db: Db, v: AgentView, raw: string, facts: string, now: Date, o: { parent?: string; mention: string[] }): Promise<{ text: string } | { why: string }> {
+/**
+ * A coin the line says the agent holds (bought, aped, holding, my $X…) that it does not: with real SOL on, an agent may only talk
+ * about holding what its wallet holds (owner, 2026-10-27).
+ */
+export function claimsUnheld(text: string, held: ReadonlySet<string>): string | null {
+  for (const m of text.matchAll(/\b(?:bought|buying|aped(?:\s+into)?|holding|hold|bagged|loaded(?:\s+up\s+on)?|added(?:\s+more)?|long|in\s+on|my)\s+\$([A-Za-z][A-Za-z0-9]{1,11})\b/gi)) {
+    const t = m[1]!.toUpperCase();
+    if (!held.has(t)) return t;
+  }
+  return null;
+}
+
+export async function vetLine(db: Db, v: AgentView, raw: string, facts: string, now: Date, o: { parent?: string; mention: string[]; /** A line about a trade it is making now (buy or sell): it may say so. */ trade?: string }): Promise<{ text: string } | { why: string }> {
   const text = cleanModelText(withoutTic(raw.trim()), MAX_CHARS + 40, o.mention);
+  const held = new Set([...(v.depth.paper ?? []).map((p) => p.symbol.toUpperCase()), ...(o.trade ? [o.trade.toUpperCase()] : [])]);
+  const unheld = v.depth.bookReal && text ? claimsUnheld(text, held) : null;
   const why = !text ? 'it was empty after cleaning' : !grounded(raw, facts) ? 'it uses a number that is not in what you were told'
-    : claimsTrade(raw, Boolean(v.depth.paper?.length) || v.wallet.positions.length > 0) ? 'it announces a trade; posts never trade (use buy or sell)'
+    : unheld ? `it says you hold $${unheld}, which your wallet does not hold`
+    : !o.trade && claimsTrade(raw, Boolean(v.depth.paper?.length) || v.wallet.positions.length > 0) ? 'it announces a trade; posts never trade (use buy or sell)'
     : phrasebookEcho(text, bannedLines(v)) ? 'it is a stock line the old phrasebook used; say something only you would say'
     : o.parent && !answersParent(text, o.parent) ? 'it does not answer the post: take up one of its names, coins, numbers or phrases'
     : neverWordIn(text, v.depth.persona?.voice.neverWords ?? []) ?? overused(text, await hotWords(db, now)) ?? await ungrounded(db, v.agent.id, text, now);
@@ -620,6 +636,7 @@ export function createVoice(d: { db: Db; brain: AgentBrain; budget: ModelBudget;
           const text = cleanModelText(withoutTic(raw.replace(/^(?:quoting|quote)\s+@\w+\s*[:,—-]\s*/i, '')), MAX_CHARS + 40, mention);
           const why = !text ? 'it was empty after cleaning' : !grounded(raw, facts) ? 'it uses a number that is not in the facts'
             : claimsTrade(raw, Boolean(i.v.depth.paper?.length)) ? 'it announces a trade, and posts never trade'
+            : i.v.depth.bookReal && claimsUnheld(text, new Set((i.v.depth.paper ?? []).map((p) => p.symbol.toUpperCase()))) ? 'it says you hold a coin your wallet does not hold'
             : samey(text, recent) ? 'it opens like a line just posted'
             : phrasebookEcho(text, bannedLines(i.v)) ? 'it is a stock line the old phrasebook used; say something only you would say'
             : parent && !answersParent(text, parent) ? 'it does not answer the post: take up one of its names, coins, numbers or phrases and answer that'

@@ -92,12 +92,11 @@ export interface Config {
    */
   devnetRpcUrl: string;
   /**
-   * SOL_TRADING=on (default off; exit sells everything and buys nothing): the best paper traders mirror their pump.fun trades with real SOL on mainnet (world/sol-desk.ts).
-   * They never launch coins. SOL_TRADING_RPC_URL (default: HELIUS_RPC_URL's key on mainnet); SOL_AGENTS (10) agents, SOL_PER_AGENT
-   * (0.05) SOL each from the house wallet, at most SOL_MAX_TRADE (0.01) a trade and SOL_TRADES_PER_DAY (10) buys a day each. In exit
-   * mode, once everything is sold, all of it goes back to SOL_RETURN_TO (default MAINNET_COLD_ADDRESS).
+   * SOL_TRADING=on (default off): agents trade real SOL on mainnet, each from its own wallet, under its owner's rules only
+   * (world/sol-trade.ts). Off is the global kill switch (the admin switch is the instant one); withdrawals work either way.
+   * SOL_TRADING_RPC_URL (default: HELIUS_RPC_URL's key on mainnet). SOL_WALLET_KEY: 32 bytes base64 sealing every wallet (world/sol-vault.ts).
    */
-  solTrading: { mode: 'off' | 'on' | 'exit'; rpcUrl: string | null; agents: number; perAgentSol: number; maxTradeSol: number; tradesPerDay: number; returnTo: string | null };
+  solTrading: { on: boolean; rpcUrl: string | null; vaultKey: string | undefined };
   openaiApiKey: string | undefined;
   openaiImageModel: string;
   imageDailyBudgetUsd: number;
@@ -364,10 +363,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
     },
     solTrading: {
-      mode: env.SOL_TRADING === 'exit' ? 'exit' : on(env.SOL_TRADING, false) ? 'on' : 'off',
+      on: on(env.SOL_TRADING, false),
       rpcUrl: env.SOL_TRADING_RPC_URL?.trim() || (/\/\/devnet\.helius-rpc\.com/i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim().replace(/\/\/devnet\./i, '//mainnet.') : null),
-      agents: n(env.SOL_AGENTS, 10), perAgentSol: n(env.SOL_PER_AGENT, 0.05), maxTradeSol: n(env.SOL_MAX_TRADE, 0.01), tradesPerDay: n(env.SOL_TRADES_PER_DAY, 10),
-      returnTo: env.SOL_RETURN_TO?.trim() || env.MAINNET_COLD_ADDRESS?.trim() || null,
+      vaultKey: env.SOL_WALLET_KEY || undefined,
     },
     devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,

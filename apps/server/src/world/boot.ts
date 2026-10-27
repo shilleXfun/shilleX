@@ -4,6 +4,7 @@ import type { Db } from '../db/client.ts';
 import { agents, chainTxs, wallets, worldCoins } from '../db/schema.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
+import { registerSolRoutes } from '../routes/sol.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
@@ -66,7 +67,8 @@ import { resolveClaims } from '../agents/claims.ts';
 import { reflectPass } from '../agents/reflect.ts';
 import { createDirector } from '../agents/director.ts';
 import { remasterPass } from '../sites/remaster.ts';
-import { createSolDesk, houseAddress, solNet } from './sol-desk.ts';
+import { bootSol, type SolHandles } from './sol-world.ts';
+import { systemAct } from '../agents/depth/system.ts';
 import { computeOn, earnPass, setComputeOn, topUp } from '../agents/compute.ts';
 import { tripOn } from '../agents/moments.ts';
 import { createCoinWriter, createLogoMaker } from '../agents/coin-launch.ts';
@@ -90,6 +92,8 @@ export interface WorldHandles {
   scenes?: Scenes | null;
   /** A ledger world's custody and routes (mainnet spec); null or absent everywhere else. */
   mainnet?: MainnetHandles | null;
+  /** Real SOL: the bank (trades, withdrawals, escrow) and the marketplace; null without SOL_WALLET_KEY (world/sol-world.ts). */
+  sol?: SolHandles | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -180,6 +184,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // A ledger world: frozen state, the ledger's rug rule, custody and its routes. Throws (and so stops boot) when MAINNET is
   // misconfigured or MAINNET=on meets a closed launch gate (mainnet spec §9).
   const mainnet = await bootMainnet(app, { chain, worldKey: key });
+  // Real SOL (world/sol-world.ts): every agent's own mainnet wallet, its owner's rules, the marketplace's escrow.
+  const sol = await bootSol(db, config, now).catch((e) => { console.error('[sol] boot failed', e); return null; });
   if (chain instanceof MemoryChain) {
     // The in-memory chain starts empty each boot (local and e2e use only): rebuild it from the database, or on a first boot give every wallet its 0.1 SOL.
     const restored = await restoreMemoryChain(db, chain);
@@ -205,7 +211,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined, solTimer: NodeJS.Timeout | undefined;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -232,7 +238,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, halt, quiet, ceiling, store, brain: null, scenes: null,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, sol, halt, quiet, ceiling, store, brain: null, scenes: null,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -260,21 +266,13 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), director: directed };
       handles.engine = startEngine({ ...engineDeps, tickMs: config.engineTickMs, population: () => population.value() });
       if (directed && brain) {
-        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(1, config.voicePerHour), wake: config.director.wake });
+        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(1, config.voicePerHour), wake: config.director.wake, sol });
         handles.director = director;
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
       }
-      // Real SOL (world/sol-desk.ts): the best paper traders mirror their pump.fun trades on mainnet, once a minute.
-      if (config.solTrading.mode !== 'off') {
-        if (!config.solTrading.rpcUrl) console.error('[sol] SOL_TRADING needs SOL_TRADING_RPC_URL (or a Helius HELIUS_RPC_URL)');
-        else {
-          const desk = createSolDesk({ d: engineDeps, config: config.solTrading, key, net: solNet(config.solTrading.rpcUrl) });
-          solTimer = setInterval(() => { void desk.tick().catch((e) => console.error('[sol] tick failed', e)); }, 60_000);
-          solTimer.unref?.();
-          void houseAddress(db, key, now()).then((a) => console.log(`[sol] real SOL trading ${config.solTrading.mode}: send SOL to the house wallet ${a}`));
-        }
-      }
+      // What agents say about their real SOL (deposits, the owner's stop loss, escrow) is a post of theirs.
+      sol?.setSay((id, text) => systemAct(engineDeps, id, 'post', { body: text }, 'its real SOL'));
       // The daily remaster: checked every 10 minutes, it runs once a UTC day after 00:30 (sites/remaster.ts).
       if (brain && config.remastersPerDay > 0) {
         const remasterDeps = { app, db, chain, events, worldKey: key, now, busy, budget, brain, halt };
@@ -301,6 +299,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerDepthRoutes(app, { indexer: handles.indexer });
   await registerStoryRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
+  await registerSolRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
   const pump = createHatchPump({
@@ -372,7 +371,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); clearInterval(solTimer); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

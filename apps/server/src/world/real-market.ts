@@ -1,7 +1,7 @@
 import { desc, gte, inArray } from 'drizzle-orm';
 import { isValidSolanaAddress } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { realMarket, realPositions, type RealMarketRow } from '../db/schema.ts';
+import { realMarket, realPositions, solPositions, type RealMarketRow } from '../db/schema.ts';
 import { DexCooling, dexLimiter } from './dex-limiter.ts';
 
 /**
@@ -45,6 +45,16 @@ export async function trendingAddresses(fetchImpl: typeof fetch = fetch): Promis
   return [...out];
 }
 
+/** The busiest pump.fun coins now (DexScreener search, their PumpSwap and curve pairs): what agents trading real SOL can reach. */
+export async function pumpAddresses(fetchImpl: typeof fetch = fetch): Promise<string[]> {
+  const out = new Set<string>();
+  for (const q of ['pumpswap', 'pumpfun']) {
+    const r = await getJson(`${API}/latest/dex/search?q=${q}`, fetchImpl).catch(() => null) as { pairs?: { chainId?: string; dexId?: string; baseToken?: { address?: string } }[] } | null;
+    for (const p of r?.pairs ?? []) if (p.chainId === 'solana' && (p.dexId === 'pumpswap' || p.dexId === 'pumpfun') && typeof p.baseToken?.address === 'string' && isValidSolanaAddress(p.baseToken.address)) out.add(p.baseToken.address);
+  }
+  return [...out];
+}
+
 /** Each address's deepest Solana pair, as a row for real_market. Up to 30 addresses per request. */
 export async function pairsFor(addresses: string[], source: (a: string) => string, now: Date, fetchImpl: typeof fetch = fetch): Promise<RealMarketRow[]> {
   const rows: RealMarketRow[] = [];
@@ -83,9 +93,9 @@ export async function pairsFor(addresses: string[], source: (a: string) => strin
 
 /** Reads the trending list and the majors and stores their prices; returns how many coins it priced. */
 export async function refreshRealMarket(db: Db, now: Date, fetchImpl: typeof fetch = fetch): Promise<number> {
-  const trending = await trendingAddresses(fetchImpl).catch(() => [] as string[]);
+  const trending = [...new Set([...(await trendingAddresses(fetchImpl).catch(() => [] as string[])), ...(await pumpAddresses(fetchImpl).catch(() => [] as string[]))])];
   // Coins agents still hold stay priced even after they leave the trending list.
-  const held = (await db.selectDistinct({ a: realPositions.address }).from(realPositions)).map((r) => r.a);
+  const held = [...new Set([...(await db.selectDistinct({ a: realPositions.address }).from(realPositions)).map((r) => r.a), ...(await db.selectDistinct({ a: solPositions.mint }).from(solPositions)).map((r) => r.a)])];
   const all = [...new Set([...MAJORS, ...trending, ...held])].slice(0, 120);
   const major = new Set(MAJORS), hot = new Set(trending);
   const rows = await pairsFor(all, (a) => (major.has(a) ? 'major' : hot.has(a) ? 'trending' : 'held'), now, fetchImpl);

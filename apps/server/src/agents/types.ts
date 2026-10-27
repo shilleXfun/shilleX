@@ -91,6 +91,8 @@ export interface DepthView {
   theses?: Record<string, ThesisView>;
   /** Its real-coin paper positions now (the desk): what it holds, how it is doing, and its plan's target and stop. */
   paper?: { symbol: string; pnlPct: number; hoursHeld: number; targetPct: number | null; stopPct: number | null }[];
+  /** True when paper holds its real SOL positions (real SOL on, 2026-10-27): what it says it holds is real money. */
+  bookReal?: boolean;
   /** What happened that it has not answered yet (agents/reactions.ts). */
   reactions?: { id: string; kind: 'post' | 'reply'; format: PostFormat; event: string; postId: string | null; aboutId: string | null; mint: string | null; depth: number; arcId: string | null }[];
   /** Who it is and how it writes (agents/personas.ts); absent until its persona exists. */

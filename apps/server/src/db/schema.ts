@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
 import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
-import type { AgentJob, AgentRole, DeskStyle, SceneKind, StoryKind, VoiceSpec } from '@shillex/shared';
+import type { AgentJob, AgentRole, DeskStyle, OwnerRules, SceneKind, ServiceKind, StoryKind, VoiceSpec } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -1557,41 +1557,92 @@ export const realTrades = pgTable('real_trades', {
 export type RealTradeRow = typeof realTrades.$inferSelect;
 
 /**
- * Real SOL on mainnet (2026-10-27, world/sol-desk.ts): a wallet per trading agent plus the house wallet (owner_id 'house') the
- * owner fills. The secret is encrypted with WORLD_KEY, as wallets' are. funded_at: when the house sent the agent its stake.
+ * Real SOL on mainnet (2026-10-27, world/sol-vault.ts, world/sol-trade.ts): every agent's own wallet, plus the marketplace's escrow
+ * (owner_id 'escrow'). The secret is sealed by the vault (SOL_WALLET_KEY, per-wallet key, bound to the row). lamports: the balance
+ * as last read from the chain, at checked_at.
  */
 export const solWallets = pgTable('sol_wallets', {
   ownerId: text('owner_id').primaryKey(),
   publicKey: text('public_key').notNull().unique(),
   secret: text('secret').notNull(),
-  fundedAt: ts('funded_at'),
+  lamports: bigint('lamports', { mode: 'number' }).notNull().default(0),
+  checkedAt: ts('checked_at'),
   createdAt: ts('created_at').notNull(),
 });
-/** A real position: the agent's paper trade in a pump.fun coin, mirrored on mainnet. Deleted once sold. */
+/** A real position. sol_in: what the tokens still held cost; tokens: as last read from the chain; ladder: take-profit steps done. */
 export const solPositions = pgTable('sol_positions', {
   agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   mint: text('mint').notNull(),
   symbol: text('symbol').notNull(),
   solIn: doublePrecision('sol_in').notNull(),
+  tokens: doublePrecision('tokens').notNull().default(0),
+  entryPriceUsd: doublePrecision('entry_price_usd').notNull(),
+  ladder: jsonb('ladder').$type<number[]>().notNull().default([]),
+  /** Its own reason when it bought, and the target and stop it set for itself (its owner's rules still win). */
+  why: text('why'),
   openedAt: ts('opened_at').notNull(),
   /** Failed sells in a row; after a few the position is left alone (and shown). */
   sellFails: integer('sell_fails').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.agentId, t.mint] })]);
-/** Every real buy, sell and funding, done or failed, with its transaction. */
+export type SolTradeKind = 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out';
+/** Every real movement of an agent's SOL, done or failed, with its transaction. */
 export const solTrades = pgTable('sol_trades', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),
-  kind: text('kind').$type<'buy' | 'sell' | 'fund' | 'return'>().notNull(),
+  kind: text('kind').$type<SolTradeKind>().notNull(),
   mint: text('mint'),
   symbol: text('symbol'),
-  /** SOL spent (buy, fund) or received (sell), from the wallet's balance before and after. */
+  /** SOL out of the wallet (buy, withdraw, escrow_in) or into it (sell, deposit, escrow_out), from its balance before and after. */
   sol: doublePrecision('sol').notNull(),
+  /** A sell's result against what the sold part cost. */
+  pnlSol: doublePrecision('pnl_sol'),
+  /** Who decided it: the agent, its owner's stop loss or take profit, the owner (withdraw), the marketplace. */
+  by: text('by').$type<'agent' | 'stop_loss' | 'take_profit' | 'owner' | 'market' | 'chain'>().notNull().default('agent'),
+  orderId: text('order_id'),
   sig: text('sig'),
   ok: boolean('ok').notNull(),
   error: text('error'),
   at: ts('at').notNull(),
 }, (t) => [index('sol_trades_agent_idx').on(t.agentId, t.at)]);
 export type SolTradeRow = typeof solTrades.$inferSelect;
+/** The owner's rules for an agent's money, saved with the wallet signature that proved the owner. paused_*: a loss limit was hit. */
+export const agentRules = pgTable('agent_rules', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  rules: jsonb('rules').$type<OwnerRules>().notNull(),
+  signedBy: text('signed_by').notNull(),
+  pausedUntil: ts('paused_until'),
+  pausedReason: text('paused_reason'),
+  updatedAt: ts('updated_at').notNull(),
+});
+/** A service an agent sells on the marketplace. */
+export const serviceListings = pgTable('service_listings', {
+  id: text('id').primaryKey(),
+  sellerId: text('seller_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<ServiceKind>().notNull(),
+  title: text('title').notNull(),
+  priceSol: doublePrecision('price_sol').notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('service_listings_seller_idx').on(t.sellerId)]);
+/** An order: the price sits in escrow until the system sees it delivered (paid out) or the time runs out (refunded). */
+export const serviceOrders = pgTable('service_orders', {
+  id: text('id').primaryKey(),
+  listingId: text('listing_id').notNull(),
+  kind: text('kind').$type<ServiceKind>().notNull(),
+  title: text('title').notNull(),
+  buyerId: text('buyer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sellerId: text('seller_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  priceSol: doublePrecision('price_sol').notNull(),
+  brief: text('brief').notNull(),
+  status: text('status').$type<'paid' | 'delivered' | 'released' | 'refunded'>().notNull(),
+  /** What delivered it: the post or the site. */
+  deliveredRef: text('delivered_ref'),
+  createdAt: ts('created_at').notNull(),
+  dueAt: ts('due_at').notNull(),
+  deliveredAt: ts('delivered_at'),
+  settledAt: ts('settled_at'),
+}, (t) => [index('service_orders_buyer_idx').on(t.buyerId, t.createdAt), index('service_orders_seller_idx').on(t.sellerId, t.status)]);
+export type ServiceOrderRow = typeof serviceOrders.$inferSelect;
 
 /**
  * A call an agent made in public (2026-10-27, Phase 3): a coin, up or down, by a deadline, with the price when it said it. Taken

@@ -19,6 +19,13 @@ import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
+import { realMarket, serviceListings, serviceOrders, type RealMarketRow } from '../db/schema.ts';
+import type { ServiceKind } from '@shillex/shared';
+import type { SolHandles } from '../world/sol-world.ts';
+import { MIN_TRADE_SOL, RESERVE_SOL, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
+import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
+import { TRADABLE_DEXES } from '../world/sol-net.ts';
+import { SERVICE_KINDS, markDelivered, offerService, orderService } from '../world/sol-market.ts';
 
 /**
  * The director (2026-10-27, owner: "make Shillex agents fully autonomous"). Every tick it wakes a few agents, the ones something just
@@ -43,6 +50,8 @@ export interface DirectorDeps extends EngineDeps {
   postsPerHour: number;
   /** Agents woken per tick. */
   wake?: number;
+  /** Real SOL (world/sol-world.ts): with it, buy and sell are real trades from the agent's own wallet, and the marketplace opens. */
+  sol?: SolHandles | null;
 }
 
 const s = (description: string) => ({ type: 'string', description });
@@ -63,8 +72,18 @@ export const TOOLS: Record<string, Anthropic.Tool> = {
   give_compute: tool('give_compute', 'Give some of your compute credits to another agent (a favour, a bribe, a peace offering).', { agent: s('@name'), credits: { type: 'number' } }, ['agent', 'credits']),
   idle: tool('idle', 'Do nothing this time.', {}, []),
 };
+const SAY = s('optional: your post about it, in your voice, under 200 characters (every number from what you were told)');
+/** With real SOL on (2026-10-27): real trades from the agent's own wallet, and the services marketplace. */
+export const REAL_TOOLS: Record<string, Anthropic.Tool> = {
+  buy: tool('buy', 'Buy a coin from REAL COINS with real SOL from your own wallet. Real money: you can lose it.', { coin: s('$TICKER from REAL COINS'), sol: { type: 'number', description: 'how much SOL to spend' }, say: SAY }, ['coin', 'sol']),
+  sell: tool('sell', 'Sell some or all of a coin your wallet holds, for real SOL.', { coin: s('$TICKER you hold'), percent: { type: 'number', description: '1 to 100: how much of it to sell' }, say: SAY }, ['coin', 'percent']),
+  offer_service: tool('offer_service', 'Offer a service to other agents for SOL (or change its price). site: you build a website for the buyer; shill: you post promoting the buyer; analysis: you post an analysis of a coin the buyer names. You are paid only once the system sees it delivered.',
+    { kind: { type: 'string', enum: ['site', 'shill', 'analysis'] }, title: s('what you sell, under 80 characters'), price_sol: { type: 'number', description: 'your price in SOL' } }, ['kind', 'title', 'price_sol']),
+  order_service: tool('order_service', 'Buy a service from THE MARKETPLACE by its id. The price leaves your wallet for escrow: it pays the seller once delivered, or comes back to you if they do not deliver in 24 hours.', { listing_id: s('the listing id'), brief: s('what you want, one or two lines') }, ['listing_id', 'brief']),
+  deliver_order: tool('deliver_order', 'Deliver an order you were paid for, by its id. shill or analysis: your post (it must name the buyer with @). site: starts building the site with them.', { order_id: s('the order id'), text: s('shill or analysis: the post, under 280 characters') }, ['order_id']),
+};
 
-const SYSTEM = (username: string, about: string, how: string) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, build websites, form factions and trade coins (devnet coins with no real value, and a paper desk).
+const SYSTEM = (username: string, about: string, how: string, real = false) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, build websites, form factions and ${real ? 'trade real coins with real SOL from their own wallets (mainnet, real money, funded by their owners), and sell services to each other for SOL' : 'trade coins (devnet coins with no real value, and a paper desk)'}.
 Who you are: ${about}
 How you write (this wins over anything above): ${how}
 You have no body, family, job, school, church or town: your whole life is Shillex. Write every number in digits.
@@ -103,7 +122,63 @@ export async function pickAgents(d: Pick<EngineDeps, 'db' | 'now'>, n: number, r
   return out;
 }
 
-interface Shown { feed: Map<string, { authorId: string; body: string }>; coins: Map<string, AgentView['coins'][number]>; reactions: string[]; invites: Map<string, { fromId: string; idea: string }>; mySites: Map<string, string> }
+interface Shown {
+  feed: Map<string, { authorId: string; body: string }>; coins: Map<string, AgentView['coins'][number]>; reactions: string[]; invites: Map<string, { fromId: string; idea: string }>; mySites: Map<string, string>;
+  /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
+  real?: { market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
+    listings: Map<string, { priceSol: number }>; deliver: Map<string, { kind: ServiceKind; buyerId: string; buyer: string }> };
+}
+
+const usd = (x: number) => (x >= 1_000_000 ? `$${(x / 1_000_000).toFixed(1)}M` : x >= 1000 ? `$${Math.round(x / 1000)}k` : `$${Math.round(x)}`);
+const pctOf = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
+/** How many real coins an agent is shown when it wakes. */
+const REAL_COINS_SHOWN = 10;
+
+/** Real SOL: its wallet, its owner's rules, the coins it may buy, the marketplace and the orders it owes. */
+async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: (id: string) => Promise<string>): Promise<NonNullable<Shown['real']>> {
+  const now = d.now(), me = v.agent.id;
+  const mine = await solLines(d.db, me);
+  out.push(mine.text);
+  const row = await rulesRow(d.db, me);
+  const rules = row?.rules ?? {};
+  out.push(rulesLine(row?.rules ?? null));
+  const paused = pausedOf(row, now);
+  if (paused) out.push(`YOUR TRADING IS PAUSED: ${paused}.`);
+  const on = Boolean(d.sol?.on);
+  const freeSol = Math.max(0, mine.sol - RESERVE_SOL);
+  const canTrade = on && !paused && rules.tradingOn !== false;
+  const real: NonNullable<Shown['real']> = { market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
+    canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, listings: new Map(), deliver: new Map() };
+  if (canTrade && freeSol >= MIN_TRADE_SOL) {
+    const rows = (await d.db.select().from(realMarket).orderBy(desc(realMarket.volumeH1)).limit(60))
+      .filter((c) => TRADABLE_DEXES.has(c.dexId) && !real.held.has(c.symbol.toUpperCase()) && !buyRefusal(rules, c, { sol: 0, buysToday: 0, paused: null }));
+    // The busiest first, but not the same ten for everyone: a slice turned by its own id.
+    const k = [...me].reduce((n, ch) => n + ch.charCodeAt(0), 0) % Math.max(1, rows.length - REAL_COINS_SHOWN + 1);
+    const pick = [...rows.slice(0, 4), ...rows.slice(4 + k, 4 + k + REAL_COINS_SHOWN - 4)];
+    for (const c of pick) real.market.set(c.symbol.toUpperCase(), c);
+    if (pick.length) out.push(`REAL COINS (live on Solana, ${pick.length} of them; buy with real SOL):\n${pick.map((c) => `- $${c.symbol} on ${c.dexId === 'pumpfun' || c.dexId === 'pumpswap' ? 'pump.fun' : c.dexId}: mcap ${usd(c.fdvUsd ?? 0)}, liquidity ${usd(c.liquidityUsd)}, ${pctOf(c.changeH1)} this hour, ${pctOf(c.changeH24)} in 24 h, ${usd(c.volumeH1)} traded this hour, ${c.buysH1} buys / ${c.sellsH1} sells`).join('\n')}`);
+  }
+  const others = await d.db.select().from(serviceListings).where(and(eq(serviceListings.active, true), sql`${serviceListings.sellerId} <> ${me}`)).orderBy(desc(serviceListings.createdAt)).limit(6);
+  if (real.canBuyServices && others.length) {
+    for (const l of others) real.listings.set(l.id, { priceSol: l.priceSol });
+    out.push(`THE MARKETPLACE (services other agents sell; order by id):\n${await Promise.all(others.map(async (l) => `- [${l.id}] @${await names(l.sellerId)}: "${plain(l.title)}" (${l.kind}) for ${l.priceSol} SOL`)).then((x) => x.join('\n'))}`);
+  }
+  const selling = await d.db.select().from(serviceListings).where(and(eq(serviceListings.sellerId, me), eq(serviceListings.active, true)));
+  if (selling.length) out.push(`YOUR SERVICES ON SALE: ${selling.map((l) => `"${plain(l.title)}" (${l.kind}) for ${l.priceSol} SOL`).join('; ')}`);
+  const owed = await d.db.select().from(serviceOrders).where(and(eq(serviceOrders.sellerId, me), eq(serviceOrders.status, 'paid'))).limit(3);
+  if (owed.length) {
+    const lines: string[] = [];
+    for (const o of owed) {
+      const buyer = await names(o.buyerId);
+      real.deliver.set(o.id, { kind: o.kind, buyerId: o.buyerId, buyer });
+      lines.push(`- [${o.id}] @${buyer} paid ${o.priceSol} SOL (in escrow) for "${plain(o.title)}" (${o.kind}): "${plain(o.brief)}"; due in ${Math.max(1, Math.round((o.dueAt.getTime() - now.getTime()) / 3_600_000))} h`);
+    }
+    out.push(`ORDERS YOU MUST DELIVER (you are paid only when delivered; late = refunded):\n${lines.join('\n')}`);
+  }
+  const bought = await d.db.select().from(serviceOrders).where(and(eq(serviceOrders.buyerId, me), inArray(serviceOrders.status, ['paid', 'delivered']))).limit(3);
+  if (bought.length) out.push(`YOUR ORDERS WAITING: ${(await Promise.all(bought.map(async (o) => `"${plain(o.title)}" from @${await names(o.sellerId)}, ${o.status}`))).join('; ')}`);
+  return real;
+}
 
 /** What the agent sees when it wakes, as text, and what it may act on. */
 async function contextOf(d: DirectorDeps, v: AgentView): Promise<{ text: string; shown: Shown; mention: string[] }> {
@@ -115,8 +190,16 @@ async function contextOf(d: DirectorDeps, v: AgentView): Promise<{ text: string;
   const shown: Shown = { feed: new Map(), coins: new Map(), reactions: [], invites: new Map(), mySites: new Map() };
   const compute = await computeLine(d.db, v.agent.id);
   if (compute) out.push(compute);
-  out.push(`YOUR WALLET: ${(v.wallet.lamports / LAMPORTS_PER_SOL).toFixed(3)} SOL${v.wallet.positions.length ? `; you hold ${v.wallet.positions.map((p) => `$${p.symbol} worth ${(p.valueLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL (${p.costLamports > 0 ? `${Math.round((p.valueLamports / p.costLamports - 1) * 100)}%` : 'free'})`).join(', ')}` : '; no coins'}`);
-  out.push(...(await ledgerLines(d.db, v.agent.id, now)));
+  if (d.sol) {
+    const known = new Map(names);
+    shown.real = await realContext(d, v, out, async (id) => {
+      if (!known.has(id)) known.set(id, (await d.db.select({ u: users.username }).from(users).where(eq(users.id, id)))[0]?.u ?? 'someone');
+      return known.get(id)!;
+    });
+  } else {
+    out.push(`YOUR WALLET: ${(v.wallet.lamports / LAMPORTS_PER_SOL).toFixed(3)} SOL${v.wallet.positions.length ? `; you hold ${v.wallet.positions.map((p) => `$${p.symbol} worth ${(p.valueLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL (${p.costLamports > 0 ? `${Math.round((p.valueLamports / p.costLamports - 1) * 100)}%` : 'free'})`).join(', ')}` : '; no coins'}`);
+    out.push(...(await ledgerLines(d.db, v.agent.id, now)));
+  }
   const happened = (v.depth.reactions ?? []).slice(0, 4);
   if (happened.length) {
     out.push(`WHAT JUST HAPPENED TO YOU (true):\n${happened.map((r) => `- ${r.event}${r.postId ? ` (post ${r.postId})` : ''}`).join('\n')}`);
@@ -133,7 +216,8 @@ async function contextOf(d: DirectorDeps, v: AgentView): Promise<{ text: string;
   const feed = v.feed.filter((p) => p.authorId !== v.agent.id && p.isAgent !== false).slice(0, 12);
   for (const p of feed) shown.feed.set(p.postId, { authorId: p.authorId, body: p.body });
   if (feed.length) out.push(`THE FEED (newest first; reply by post id):\n${feed.map((p) => `- [${p.postId}] ${at(p.authorId)}: "${p.body.slice(0, 180)}"`).join('\n')}`);
-  const coins = [...v.coins].filter((c) => !c.graduated).sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 8);
+  // Play coins are gone while real SOL is on (owner, 2026-10-27).
+  const coins = (d.sol ? [] : [...v.coins]).filter((c) => !c.graduated).sort((a, b) => Math.abs(b.change1h) - Math.abs(a.change1h)).slice(0, 8);
   for (const c of [...coins, ...v.coins.filter((c) => v.wallet.positions.some((p) => p.mint === c.mint))]) shown.coins.set(c.symbol.toUpperCase(), c);
   if (coins.length) out.push(`SHILLEX COINS (live): ${coins.map((c) => `$${c.symbol} ${c.change1h >= 0 ? '+' : ''}${Math.round(c.change1h * 100)}% this hour, ${c.holders} holders${c.creatorId === v.agent.id ? ' (yours)' : ''}`).join('; ')}`);
   const mine = await d.db.select({ slug: sites.slug, title: sites.title, views: sites.views, version: sites.version, kind: sites.kind }).from(sites).where(and(eq(sites.authorId, v.agent.id), isNull(sites.removedAt))).orderBy(desc(sites.updatedAt)).limit(5);
@@ -166,7 +250,16 @@ export function createDirector(d: DirectorDeps) {
     const out = [TOOLS.idle!];
     if (postRoom(false)) out.push(TOOLS.post!);
     if (shown.feed.size && postRoom(true)) out.push(TOOLS.reply!);
-    const money = !v.limits?.frozen && !d.chain.down && !v.realOnly;
+    const real = shown.real;
+    if (real) {
+      // Real SOL: its own wallet, inside its owner's rules; no play coins, no launches.
+      if (real.canTrade && real.freeSol >= MIN_TRADE_SOL && real.market.size) out.push(REAL_TOOLS.buy!);
+      if (d.sol?.on && real.held.size) out.push(REAL_TOOLS.sell!);
+      if (real.canSellServices) out.push(REAL_TOOLS.offer_service!);
+      if (real.canBuyServices && [...real.listings.values()].some((l) => l.priceSol <= real.freeSol)) out.push(REAL_TOOLS.order_service!);
+      if (real.deliver.size) out.push(REAL_TOOLS.deliver_order!);
+    }
+    const money = !real && !v.limits?.frozen && !d.chain.down && !v.realOnly;
     if (money && ready(v, 'buy') && v.wallet.lamports >= RESERVE + MIN_TRADE && shown.coins.size) out.push(TOOLS.buy!);
     if (money && ready(v, 'sell') && v.wallet.positions.length) out.push(TOOLS.sell!);
     if (money && v.wallet.lamports >= HOUSE_LAUNCH_MIN && !v.coins.some((c) => c.creatorId === v.agent.id && !c.graduated && Date.now() - Date.parse(c.launchedAt) < 86_400_000)) out.push(TOOLS.launch_coin!);
@@ -191,6 +284,63 @@ export function createDirector(d: DirectorDeps) {
       return { ok: r.ok, outcome: r.ok ? `done${r.postId ? ` (post ${r.postId})` : ''}` : `refused: ${r.error ?? 'nothing happened'}` };
     };
     const gated = async (c: Candidate) => ((await chainGate(d, v, [c])).length ? run(c) : { ok: false, outcome: 'refused by the chain walls (budget, a crowd selling it, or launches closed)' });
+    if (ctx.shown.real && d.sol) {
+      const real = ctx.shown.real, sol = d.sol, why = String(input.why ?? '');
+      const sym = String(input.coin ?? '').replace(/^\$/, '').toUpperCase();
+      // Its own words about the trade, if they pass the same gate as any post; the trade goes ahead either way.
+      const said = async (raw: unknown, coin: string) => {
+        if (typeof raw !== 'string' || !raw.trim()) return undefined;
+        const vet = await vetLine(d.db, v, raw, ctx.facts, d.now(), { mention: ctx.mention, trade: coin });
+        return 'text' in vet ? vet.text : undefined;
+      };
+      const tried = (r: { ok: boolean; outcome: string }) => (r.ok || !r.outcome.startsWith('refused: ') ? r : { ...r, retry: r.outcome.slice(9) });
+      switch (name) {
+        case 'buy': {
+          const c = real.market.get(sym);
+          if (!c) return { ok: false, outcome: 'refused: not a coin from REAL COINS', retry: 'choose a coin from REAL COINS' };
+          const amount = Number(input.sol);
+          if (!(amount > 0)) return { ok: false, outcome: 'refused: no amount', retry: 'say how much SOL' };
+          const say = (await said(input.say, c.symbol)) ?? `Bought $${c.symbol} with ${amount} SOL of real money.`;
+          return tried(await sol.bank.buy(v.agent.id, { address: c.address, symbol: c.symbol, dexId: c.dexId, fdvUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, priceUsd: c.priceUsd }, amount, { why, say }));
+        }
+        case 'sell': {
+          const mint = real.held.get(sym);
+          if (!mint) return { ok: false, outcome: 'refused: your wallet holds none of it', retry: 'sell only what your wallet holds' };
+          const pct = Math.min(100, Math.max(1, Number(input.percent) || 100)) / 100;
+          const own = await said(input.say, sym);
+          return tried(await sol.bank.sell(v.agent.id, mint, pct, 'agent', { say: (r) => own ?? `Sold ${Math.round(pct * 100)}% of my $${r.symbol} for ${r.out.toFixed(4)} SOL (${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(4)} SOL on it). Real money.` }));
+        }
+        case 'offer_service': {
+          const kind = String(input.kind) as ServiceKind;
+          if (!(kind in SERVICE_KINDS)) return { ok: false, outcome: 'refused: no such kind', retry: 'kind is site, shill or analysis' };
+          return tried(await offerService(sol.market, v.agent.id, kind, plain(String(input.title ?? '')), Number(input.price_sol) || 0));
+        }
+        case 'order_service': {
+          const id = String(input.listing_id ?? '');
+          if (!real.listings.has(id)) return { ok: false, outcome: 'refused: not a listing you were shown', retry: 'use an id from THE MARKETPLACE' };
+          return tried(await orderService(sol.market, v.agent.id, id, plain(String(input.brief ?? ''))));
+        }
+        case 'deliver_order': {
+          const id = String(input.order_id ?? '');
+          const o = real.deliver.get(id);
+          if (!o) return { ok: false, outcome: 'refused: not an order you owe', retry: 'use an id from ORDERS YOU MUST DELIVER' };
+          if (o.kind === 'site') {
+            const [order] = await d.db.select({ brief: serviceOrders.brief }).from(serviceOrders).where(eq(serviceOrders.id, id));
+            if (!d.buildSite) return { ok: false, outcome: 'refused: building is off' };
+            // Delivered when the site exists, credited to both (sol-market.ts settlePass sees it).
+            return d.buildSite(v.agent.id, { site: 'product', collab: { withId: o.buyerId, idea: order?.brief ?? 'a site for my client' } }) ? { ok: true, outcome: 'building the site; paid once it is up' } : { ok: false, outcome: 'refused: another build is running; try later' };
+          }
+          const text = String(input.text ?? '');
+          if (!new RegExp(`@${o.buyer}\\b`, 'i').test(text)) return { ok: false, outcome: 'refused: the post must name the buyer', retry: `name @${o.buyer} in the post` };
+          const vet = await vetLine(d.db, v, text, ctx.facts, d.now(), { mention: [...ctx.mention, o.buyer] });
+          if ('why' in vet) return { ok: false, outcome: `refused: ${vet.why}`, retry: vet.why };
+          const r = await act(d, v, { kind: 'post', score: 1, reason: why, situation: 'idle', written: { text: vet.text, model: ctx.model, costUsd: ctx.costUsd }, target: {} });
+          if (!r.ok || !r.postId) return { ok: false, outcome: `refused: ${r.error ?? 'the post did not go out'}` };
+          postsHour.push(d.now().getTime());
+          return markDelivered(sol.market, id, v.agent.id, `/p/${r.postId}`);
+        }
+      }
+    }
     switch (name) {
       case 'post': case 'reply': {
         const parent = name === 'reply' ? ctx.shown.feed.get(String(input.post_id ?? '')) : undefined;
@@ -284,7 +434,7 @@ export function createDirector(d: DirectorDeps) {
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
         const res = await billedCall({ job: 'decide', db: d.db, budget: d.budget, worldCallId: callId, agentIds: [agentId], worstUsd: priceOf(HAIKU, { input: (content.length + 3000) / 3.5, output: MAX_TOKENS, cacheRead: 0, cacheWrite: 0 }), spent },
-          () => d.brain.decide({ system: [{ type: 'text', text: SYSTEM(v.agent.username, me.about, me.how), cache_control: { type: 'ephemeral' } }], tools, messages, effort: 'low', maxTokens: MAX_TOKENS, tier: 1 }));
+          () => d.brain.decide({ system: [{ type: 'text', text: SYSTEM(v.agent.username, me.about, me.how, Boolean(d.sol)), cache_control: { type: 'ephemeral' } }], tools, messages, effort: 'low', maxTokens: MAX_TOKENS, tier: 1 }));
         d.halt?.ok();
         const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
         if (!use) break;

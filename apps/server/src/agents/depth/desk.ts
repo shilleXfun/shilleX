@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import type { AgentJob } from '@shillex/shared';
-import { agentDesks, agentPersonas, agentTheses, chainTxs, realMarket, realPositions, users, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
+import { agentDesks, agentPersonas, agentTheses, chainTxs, realMarket, realPositions, solPositions, users, worldCoins, type DeskStyle, type ThesisRow, type ThesisStatus } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { modelName } from '../haiku.ts';
 import type { MomentHandler } from '../moments.ts';
@@ -217,6 +217,15 @@ export const deskModule: DepthModule = {
     const [desk] = await d.db.select().from(agentDesks).where(eq(agentDesks.agentId, v.agent.id));
     if (desk) v.depth.desk = { style: desk.style, risk: desk.risk, watch: desk.watch };
     const open = await d.db.select().from(agentTheses).where(and(eq(agentTheses.agentId, v.agent.id), eq(agentTheses.market, 'world'), eq(agentTheses.status, 'open')));
+    // Real SOL on: its book is its real wallet's positions, and nothing else (owner, 2026-10-27: no claiming coins it does not hold).
+    if (d.app.deps.config.solTrading.on) {
+      const real = await d.db.select({ p: solPositions, price: realMarket.priceUsd }).from(solPositions).leftJoin(realMarket, eq(realMarket.address, solPositions.mint)).where(eq(solPositions.agentId, v.agent.id));
+      const nowMs = d.now().getTime();
+      v.depth.paper = real.map(({ p, price }) => ({ symbol: p.symbol, pnlPct: price && p.entryPriceUsd > 0 ? price / p.entryPriceUsd - 1 : 0, hoursHeld: (nowMs - p.openedAt.getTime()) / 3_600_000, targetPct: null, stopPct: null }));
+      v.depth.bookReal = true;
+      v.depth.theses = {};
+      return;
+    }
     // Its paper book of real coins, so its posts can talk about what it actually holds.
     const book = await d.db.select({ p: realPositions, price: realMarket.priceUsd }).from(realPositions).leftJoin(realMarket, eq(realMarket.address, realPositions.address)).where(eq(realPositions.agentId, v.agent.id));
     if (book.length) {
