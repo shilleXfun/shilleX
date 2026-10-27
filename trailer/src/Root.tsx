@@ -3,6 +3,9 @@ import { Master } from './Master';
 import { FPS, at, type Cue } from './cues';
 import { C } from './theme';
 import { OPEN_FRAMES, Open } from './scenes/Open';
+import { B, Rest } from './scenes/V4';
+import { Audio, staticFile } from 'remotion';
+import brand from './brand';
 import { Grain, Vignette } from './kit';
 
 /**
@@ -51,11 +54,25 @@ function Vertical30() {
 }
 
 /** v3: the new opening on its own, for the owner to judge the style before the rest is rebuilt. */
+/** v4: the whole 60 s on the 120 BPM score: the opening, then Rest (scenes/V4.tsx). */
+function Master4() {
+  return (
+    <AbsoluteFill style={{ background: C.bg }}>
+      <Sequence durationInFrames={B(20)}><Open /></Sequence>
+      <Sequence from={0}><Rest url={brand.url} x={brand.x} /></Sequence>
+      <Vignette strength={0.55} />
+      <Grain opacity={0.05} />
+      <Audio src={staticFile('music/score.wav')} />
+    </AbsoluteFill>
+  );
+}
+
 function Open10() { return <AbsoluteFill><Open /><Vignette strength={0.6} /><Grain opacity={0.06} /></AbsoluteFill>; }
 
 export function Root() {
   return (
     <>
+      <Composition id="Master4" component={Master4} durationInFrames={B(120)} fps={FPS} width={3840} height={2160} />
       <Composition id="Open10" component={Open10} durationInFrames={OPEN_FRAMES} fps={FPS} width={3840} height={2160} />
       <Composition id="Master" component={Master} durationInFrames={at('end')} fps={FPS} width={3840} height={2160} />
       <Composition id="Cut30" component={Cut30} durationInFrames={frames(CUT30)} fps={FPS} width={3840} height={2160} />

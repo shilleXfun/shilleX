@@ -15,7 +15,7 @@ const typed = cutText(root.body, 96);
 const T = { type: 0, slam: 70, dive: 128, feed: 156, grid: 300, whip: 364, flash: 424, silence: 474, title: 480, end: 600 };
 const HITS = [T.slam, T.slam + 12, T.slam + 22, T.slam + 30, T.feed, T.grid, T.whip, T.flash, T.flash + 12, T.flash + 24, T.flash + 36, T.title];
 const sfx = (n: string) => staticFile(`sfx/k/${n}.ogg`);
-const Hit = ({ at, n, v = 1 }: { at: number; n: string; v?: number }) => <Sequence from={at} durationInFrames={120} layout="none"><Audio src={sfx(n)} volume={v} /></Sequence>;
+const Hit = ({ at, n, v = 1 }: { at: number; n: string; v?: number }) => <Sequence from={at} durationInFrames={120} layout="none"><Audio src={sfx(n)} volume={v * 0.6} /></Sequence>;
 
 function Sounds() {
   const out = [];
@@ -219,7 +219,8 @@ export function Open() {
       {f >= T.title && <Embers n={50} from={T.title} />}
       <Streak at={T.title + 2} y={0.47} />
       <Streak at={T.grid + 32} y={0.5} dur={12} />
-      {[T.slam, T.feed, T.grid + 32, T.flash, T.flash + 12, T.flash + 24, T.flash + 36, T.title].map((h) => <Flash key={h} at={h} dur={h === T.title ? 8 : 4} />)}
+      {/* One flash only, on the title: the rest of the hits are cuts, shake and colour split. */}
+      <Flash at={T.title} dur={8} />
       <Sounds />
     </AbsoluteFill>
   );
