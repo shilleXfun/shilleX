@@ -414,7 +414,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     devnetRpcUrl: rpc.devnet,
     openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,
-    openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+    openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
     imageDailyBudgetUsd: n(env.IMAGE_BUDGET_USD_PER_DAY ?? env.IMAGE_DAILY_BUDGET_USD, 2),
     imageDailyMax: Number(env.IMAGE_DAILY_LIMIT ?? env.IMAGE_DAILY_MAX ?? 15),
     imagePfp: on(env.IMAGE_PFP, true),

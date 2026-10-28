@@ -32,17 +32,17 @@ describe('OpenAI image generator', () => {
     const r = await new OpenAIImageGen('sk-test', 'gpt-image-1', fetchFn).generate('a raccoon', '1024x1024');
     expect(seen[0]!.url).toBe('https://api.openai.com/v1/images/generations');
     expect((seen[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer sk-test');
-    expect(JSON.parse(String(seen[0]!.init.body))).toEqual({ model: 'gpt-image-1', prompt: 'a raccoon', size: '1024x1024', n: 1, quality: 'low' });
+    expect(JSON.parse(String(seen[0]!.init.body))).toEqual({ model: 'gpt-image-1', prompt: 'a raccoon', size: '1024x1024', n: 1, quality: 'medium' });
     expect(r.png.equals(base)).toBe(true);
     // Recorded above the bare image price: the prompt's text tokens are billed too.
-    expect(r.usd).toBeGreaterThan(IMAGE_PRICE_USD['1024x1024']);
+    expect(r.usd).toBeGreaterThan(IMAGE_PRICE_USD['gpt-image-1']!['1024x1024']);
     expect(r.usd).toBeLessThanOrEqual(WORST_IMAGE_USD);
   });
   it('records the response token usage when it costs more than the table price', async () => {
-    const usage = { input_tokens: 50, output_tokens: 400, input_tokens_details: { text_tokens: 50, image_tokens: 0 } };
+    const usage = { input_tokens: 50, output_tokens: 2000, input_tokens_details: { text_tokens: 50, image_tokens: 0 } };
     const fetchFn = (async () => new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }], usage }), { status: 200 })) as unknown as typeof fetch;
     const r = await new OpenAIImageGen('sk-test', 'gpt-image-1', fetchFn).generate('a raccoon', '1024x1024');
-    expect(r.usd).toBeCloseTo(50 * 5e-6 + 400 * 40e-6, 9);
+    expect(r.usd).toBeCloseTo(50 * 5e-6 + 2000 * 40e-6, 9);
   });
   it('cuts a very long prompt so a call never costs more than the worst case', async () => {
     const seen: string[] = [];
@@ -50,7 +50,7 @@ describe('OpenAI image generator', () => {
       seen.push(String(init.body));
       return new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }] }), { status: 200 });
     }) as unknown as typeof fetch;
-    const r = await new OpenAIImageGen('sk-test', 'gpt-image-1', fetchFn).generate('z'.repeat(5000), '1536x1024');
+    const r = await new OpenAIImageGen('sk-test', 'gpt-image-2', fetchFn).generate('z'.repeat(5000), '1536x1024');
     expect(JSON.parse(seen[0]!).prompt).toHaveLength(MAX_PROMPT_CHARS);
     expect(r.usd).toBeCloseTo(WORST_IMAGE_USD, 9);
   });
@@ -63,7 +63,7 @@ describe('OpenAI image generator', () => {
   it('charges the highest known price for a model it has no price for', async () => {
     const fetchFn = (async () => new Response(JSON.stringify({ data: [{ b64_json: base.toString('base64') }] }), { status: 200 })) as unknown as typeof fetch;
     const r = await new OpenAIImageGen('sk-test', 'some-future-model', fetchFn).generate('x', '1024x1024');
-    expect(r.usd).toBeGreaterThan(Math.max(...Object.values(IMAGE_PRICE_USD)));
+    expect(r.usd).toBeGreaterThan(IMAGE_PRICE_USD['gpt-image-2']!['1024x1024']);
     expect(r.usd).toBeLessThanOrEqual(WORST_IMAGE_USD);
   });
 });
@@ -79,7 +79,7 @@ describe('image budget and templates', () => {
     expect(await canGenerate(t.db, { usd: 0.03, max: 2 }, new Date(now.getTime() + 86_400_000))).toBe(true); // next UTC day
   });
   it('refuses a call whose worst-case price would cross the budget', async () => {
-    const now = new Date('2026-12-05T12:00:00Z');
+    const now = new Date('2026-12-05T23:00:00Z'); // late in the day: the paced allowance is the whole budget
     await recordImageSpend(t.db, 0.011, now);
     expect(await canGenerate(t.db, { usd: 0.02, max: 10 }, now)).toBe(true);
     expect(await canGenerate(t.db, { usd: 0.02, max: 10 }, now, WORST_IMAGE_USD)).toBe(false);
@@ -104,7 +104,7 @@ describe('image budget and templates', () => {
   });
   it('returns null without a generator or when generation fails, and does not record spend', async () => {
     const u = await t.createUser('nogen');
-    const d = { db: t.db, limits: { usd: 1, max: 99 }, now: () => new Date('2026-12-01T00:00:00Z') };
+    const d = { db: t.db, limits: { usd: 1, max: 99 }, now: () => new Date('2026-12-01T12:00:00Z') };
     expect(await generateTemplate({ ...d, gen: null }, { brief: 'x', tags: [], authorId: u.id })).toBeNull();
     const failing: ImageGen = { async generate() { throw new Error('OPENAI_IMAGE_500: down'); } };
     const { result, logged } = await quietly(() => generateTemplate({ ...d, gen: failing }, { brief: 'x', tags: [], authorId: u.id }));
