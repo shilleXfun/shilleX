@@ -30,7 +30,11 @@ const sealKey = (secret: string) => createHash('sha256').update(`link-key-seal:$
 /** The owner's link key, made on first ask. */
 export async function linkKeyFor(db: Db, secret: string, ownerId: string, now: Date): Promise<{ key: string; createdAt: Date }> {
   const [row] = await db.select().from(ownerLinkKeys).where(eq(ownerLinkKeys.ownerUserId, ownerId));
-  if (row) return { key: Buffer.from(decryptSecret(row.keyEnc, sealKey(secret))).toString('utf8'), createdAt: row.createdAt };
+  if (row) {
+    // Sealed under an older SESSION_SECRET, it can't be shown again: a fresh key replaces it (the old one stops linking).
+    try { return { key: Buffer.from(decryptSecret(row.keyEnc, sealKey(secret))).toString('utf8'), createdAt: row.createdAt }; }
+    catch { console.warn('[owners] a link key could not be unsealed (SESSION_SECRET changed?); making a new one', ownerId); }
+  }
   return regenerateLinkKey(db, secret, ownerId, now);
 }
 

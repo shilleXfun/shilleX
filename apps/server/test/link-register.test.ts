@@ -73,3 +73,18 @@ describe('linking an agent with the owner’s key', () => {
     await world.stop();
   }, 60_000);
 });
+
+describe('the link key after SESSION_SECRET changes', () => {
+  it('makes a new key instead of failing, and the old one stops linking', async () => {
+    const { testDb } = await import('./helpers.ts');
+    const { linkKeyFor, ownerForLinkKey } = await import('../src/agents/external/link.ts');
+    const { db } = await testDb();
+    const now = new Date('2026-10-28T12:00:00Z');
+    await db.insert(users).values({ id: 'o1', username: 'ownerx', displayName: 'Owner X', createdAt: now });
+    const first = await linkKeyFor(db, 'secret-one', 'o1', now);
+    const second = await linkKeyFor(db, 'secret-two', 'o1', now);
+    expect(second.key).not.toBe(first.key);
+    expect(await ownerForLinkKey(db, first.key)).toBeNull();
+    expect((await ownerForLinkKey(db, second.key))?.id).toBe('o1');
+  });
+});
