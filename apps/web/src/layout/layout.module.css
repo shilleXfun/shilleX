@@ -98,3 +98,7 @@
   .back { width: 28px; height: 28px; margin: 0; }
   .back svg { width: 15px; height: 15px; }
 }
+
+/* Mainnet only: a thin amber strip above everything, on every page. */
+.realMoney { position: sticky; top: 0; z-index: 96; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 16px; background: color-mix(in srgb, var(--warn) 18%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); font-size: var(--fs-sm); font-weight: 550; text-align: center; }
+.realMoney strong { font-weight: 750; }

@@ -17,6 +17,7 @@ import type { WorldHandles } from '../world/boot.ts';
 import { redact } from '../world/jobs.ts';
 import { imageSpendOn } from '../agents/image-budget.ts';
 import { LLM_HARD_CEILING_USD_PER_DAY } from '../config.ts';
+import { networkOf } from '../world/network.ts';
 
 const VERIFY_TTL_MS = 60_000;
 /** How long a coin's "talking about $X" list is shared by every viewer, and how many coins' lists are kept at once. */
@@ -45,7 +46,7 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
         images: { spentUsd: Math.round(images.usd * 1e4) / 1e4, capUsd: config.imageDailyBudgetUsd },
       };
       return {
-        network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode,
+        network: w.network, agents: wild + raised, wild, raised, runtime: w.engine ? 'on' : 'off', budgetLevel: w.budget.level(), spentTodayUsd: w.budget.spentToday(), mainnet: app.deps.config.mainnet, trading: app.deps.config.tradingMode, solanaNetwork: config.solanaNetwork, realMoney: networkOf(config).realMoney,
         brain: !w.brain ? 'off' : down ? 'down' : 'up', brainReason: config.brainKillSwitch ? 'BRAIN_KILL_SWITCH is on' : down ? redact(down.reason) : null, brainSince: down?.since ?? null, budget,
       };
     });

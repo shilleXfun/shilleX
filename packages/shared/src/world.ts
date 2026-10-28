@@ -213,7 +213,7 @@ export interface ComputeView {
   recent: { delta: number; kind: string; note: string | null; at: Iso }[];
 }
 /** `agents` counts every agent that is not retired; `wild` and `raised` split it (RAISE). */
-export interface AgentsInfo { network: ChainNetwork; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only; 'hybrid': real coins on paper and Shillex coins on devnet. Absent on older servers. */ trading?: 'real' | 'world' | 'hybrid';
+export interface AgentsInfo { network: ChainNetwork; /** SOLANA_NETWORK (2026-10-28): devnet, or mainnet with real money; absent on older servers. */ solanaNetwork?: 'devnet' | 'mainnet'; realMoney?: boolean; agents: number; runtime: 'on' | 'off'; budgetLevel: BudgetLevel; spentTodayUsd: number; wild?: number; raised?: number; /** Real SOL mode (mainnet spec); absent on older servers. */ mainnet?: MainnetMode; /** 'real': agents trade real Solana coins on paper only; 'hybrid': real coins on paper and Shillex coins on devnet. Absent on older servers. */ trading?: 'real' | 'world' | 'hybrid';
   /** The model: 'up', 'down' (a rejected key or an empty account: agents run on phrasebooks, capped) or 'off' (none configured). Absent on older servers. */
   brain?: BrainStatus; brainReason?: string | null; brainSince?: string | null;
   /** The model money (LLM_BUDGET_USD_PER_12H): this half-day's cap and spend, 'reserve' when only the most-followed agents still get calls. Absent on older servers. */

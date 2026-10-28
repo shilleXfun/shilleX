@@ -9,16 +9,13 @@ import { isUniqueViolation } from '../../lib/pg-errors.ts';
 import { issueChallenge, verifyProof } from '../../services/wallet-auth.ts';
 import { verifiedWalletOwner } from '../../services/wallets.ts';
 import type { Chain } from '../../world/chain.ts';
-import { recordTx } from '../../world/ledger.ts';
-import { TREASURY, createWallet, signerFor, walletOf } from '../../world/wallets.ts';
-import { TREASURY_FLOOR } from '../raised/grants.ts';
-import { HOUSE, PRACTICE_SEASONS, currentSeason, lamportsOf as lamportsOnBooks } from '../../ledger/accounts.ts';
-import { LedgerChain } from '../../ledger/ledger-chain.ts';
+import { createWallet } from '../../world/wallets.ts';
 import { loadState } from '../state.ts';
+import { retrySoon, sendStartGrant } from './grant.ts';
 import { CLAIM_TOKEN, hashClaimToken, liveOutsiders } from './register.ts';
 
+export { retryStartGrants } from './grant.ts';
 export interface ClaimDeps { db: Db; config: Config; now: () => Date; chain: Chain; key: Buffer }
-const FEE = 5_000;
 export const X_TIMEOUT_MS = 5_000;
 /** A public post on X: https://x.com/<user>/status/<id> (or twitter.com, www., mobile.). */
 const POST_URL = /^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/status(?:es)?\/\d{1,25}(?:[/?#][^\s]*)?$/;
@@ -161,70 +158,9 @@ export async function activate(d: ClaimDeps, agentId: string): Promise<boolean> 
   await loadState(d.db, agentId, now);
   await createWallet(d.db, agentId, d.key, now);
   await d.db.update(agents).set({ status: 'active' }).where(and(eq(agents.userId, agentId), eq(agents.origin, 'external'), eq(agents.status, 'paused')));
-  return sendStartGrant(d, agentId);
-}
-
-const inFlight = new Set<string>();
-/**
- * EXTERNAL_START_LAMPORTS from the treasury, once: a 'fund' chain row (as a wild agent's start), an agent_grants 'start' row
- * (as a raised agent's), and wallets.funded_at. False when the treasury is short or unreadable, or the send failed.
- */
-export async function sendStartGrant(d: ClaimDeps, agentId: string): Promise<boolean> {
-  const lamports = d.config.external.startLamports;
-  const [done] = await d.db.select({ id: agentGrants.id }).from(agentGrants).where(and(eq(agentGrants.agentId, agentId), eq(agentGrants.kind, 'start')));
-  if (done) return true;
-  if (lamports <= 0) { await d.db.update(wallets).set({ fundedAt: d.now() }).where(eq(wallets.ownerId, agentId)); return true; }
-  if (inFlight.has(agentId)) return false;
-  inFlight.add(agentId);
-  try {
-    if (d.chain instanceof LedgerChain) return await ledgerStartGrant(d, d.chain, agentId, lamports);
-    const to = await walletOf(d.db, agentId), t = await walletOf(d.db, TREASURY);
-    if (!to || !t) return false;
-    const have = (await d.chain.balances(t.publicKey)).lamports;
-    if (have - lamports - FEE < TREASURY_FLOOR) return false;
-    const treasury = await signerFor(d.db, TREASURY, d.key);
-    const r = await d.chain.sendSol(treasury, to.publicKey, lamports);
-    const now = d.now();
-    await recordTx(d.db, { signature: r.signature, agentId, turnId: null, kind: 'fund', counterparty: treasury.publicKey.toBase58(), lamportsDelta: lamports, createdAt: now });
-    await d.db.insert(agentGrants).values({ id: newId(), agentId, lamports, kind: 'start', signature: r.signature, createdAt: now });
-    await d.db.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, agentId));
-    return true;
-  } catch (e) {
-    console.error('[agents-api] start grant failed; the sweep retries it', agentId, e);
-    return false;
-  } finally { inFlight.delete(agentId); }
-}
-
-/**
- * The start grant in a ledger world, where there is no treasury wallet (mainnet spec). Outside agents play with practice SOL
- * only: in a practice season (dev, rehearsal) the grant is a move from the house's practice books; in a real-SOL season the
- * house gives an outside agent nothing, so the grant is recorded as zero and the sweep stops asking.
- */
-async function ledgerStartGrant(d: ClaimDeps, chain: LedgerChain, agentId: string, lamports: number): Promise<boolean> {
-  const to = await walletOf(d.db, agentId);
-  if (!to) return false;
-  const real = !PRACTICE_SEASONS.has(await currentSeason(d.db));
-  const amount = real ? 0 : lamports, signature = `ldg_grant_${newId()}`, now = d.now();
-  if (amount > 0) {
-    if ((await lamportsOnBooks(d.db, HOUSE)) < amount) return false;
-    await chain.transfer(HOUSE, to.publicKey, amount, 'grant', signature);
-    await recordTx(d.db, { signature, agentId, turnId: null, kind: 'fund', counterparty: HOUSE, lamportsDelta: amount, createdAt: now });
-  }
-  await d.db.insert(agentGrants).values({ id: newId(), agentId, lamports: amount, kind: 'start', signature, createdAt: now });
-  // A real-season outside agent holds nothing on the books: no funded wallet, so no START-based P&L basis either.
-  if (amount > 0) await d.db.update(wallets).set({ fundedAt: now }).where(eq(wallets.ownerId, agentId));
-  return true;
-}
-
-/** Claimed, active outside agents still owed their start grant (the treasury was short): the 10-minute sweep sends them. */
-export async function retryStartGrants(d: ClaimDeps): Promise<number> {
-  const owed = await d.db.select({ id: agents.userId }).from(agents)
-    .innerJoin(externalRegistrations, eq(externalRegistrations.agentId, agents.userId))
-    .where(and(eq(agents.origin, 'external'), eq(agents.status, 'active'), eq(externalRegistrations.status, 'claimed'),
-      sql`not exists (select 1 from ${agentGrants} where ${agentGrants.agentId} = ${agents.userId} and ${agentGrants.kind} = 'start')`));
-  let sent = 0;
-  for (const a of owed) if (await sendStartGrant(d, a.id)) sent++;
-  return sent;
+  const r = await sendStartGrant(d, agentId);
+  if (r === 'owed') retrySoon(d, agentId);
+  return r !== 'owed';
 }
 
 /** What the claim page (/claim/<token>) shows: the pending agent and the public code its X post must carry. */

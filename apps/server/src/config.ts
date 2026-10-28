@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { loadXConfig, type XConfig } from './x/config.ts';
 import type { ProviderConfig } from './world/brain-openai.ts';
+import { rpcFromEnv, type SolanaNetwork } from './world/network.ts';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface Config {
@@ -12,6 +13,14 @@ export interface Config {
   publicUrl: string;
   /** SITE_SECRET=on|off (default on): the site's address never leaves it (no link in X posts, nothing on-chain) until launch. */
   siteSecret: boolean;
+  /**
+   * SOLANA_NETWORK=devnet|mainnet (default devnet; world/network.ts). Mainnet means TRADING_MODE=real, SOL_TRADING on unless set
+   * off, no start grant: owners fund their agents. SOLANA_DEVNET_RPC_URL / SOLANA_MAINNET_RPC_URL (older names still read).
+   */
+  solanaNetwork: SolanaNetwork;
+  rpc: { devnet: string; mainnet: string | null };
+  /** DEVNET_TREASURY_SECRET: the devnet treasury's secret key (base58 or a JSON byte array); the database's treasury wallet otherwise. */
+  devnetTreasurySecret: string | undefined;
   allowedOrigins: string[];
   solanaRpcUrl: string;
   liveTokenLookup: boolean;
@@ -312,6 +321,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const mainnet = (env.MAINNET || 'off') as Config['mainnet'];
   if (mainnet !== 'off' && worldChain !== 'ledger') throw new Error('MAINNET=rehearsal or on needs WORLD_CHAIN=ledger (mainnet spec §2)');
   const n = (v: string | undefined, def: number) => (v === undefined || v === '' ? def : Number(v));
+  const net = (env.SOLANA_NETWORK?.trim().toLowerCase() || 'devnet') as SolanaNetwork;
+  if (net !== 'devnet' && net !== 'mainnet') throw new Error(`SOLANA_NETWORK must be devnet or mainnet (got ${JSON.stringify(env.SOLANA_NETWORK)})`);
+  const rpc = rpcFromEnv(env);
+  const mainnetNet = net === 'mainnet';
   // BRAIN_KILL_SWITCH: every paid model is off, so no key below is handed on.
   const killed = ['on', 'true', '1', 'yes'].includes((env.BRAIN_KILL_SWITCH ?? '').trim().toLowerCase());
   return {
@@ -322,6 +335,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionSecret: env.SESSION_SECRET || 'dev-secret',
     publicUrl,
     siteSecret: on(env.SITE_SECRET, true),
+    solanaNetwork: net,
+    rpc,
+    devnetTreasurySecret: env.DEVNET_TREASURY_SECRET?.trim() || undefined,
     allowedOrigins: [publicUrl, `http://localhost:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     solanaRpcUrl: env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
     liveTokenLookup: on(env.LIVE_TOKEN_LOOKUP, nodeEnv !== 'test'),
@@ -331,7 +347,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDistDir: `${root}apps/web/dist`,
     agentsOn,
     worldHalted,
-    tradingMode: env.TRADING_MODE === 'world' ? 'world' : env.TRADING_MODE === 'hybrid' ? 'hybrid' : 'real',
+    tradingMode: mainnetNet ? 'real' : env.TRADING_MODE === 'world' ? 'world' : env.TRADING_MODE === 'hybrid' ? 'hybrid' : 'real',
     chainTxPerHour: Math.max(0, Number(env.CHAIN_TX_PER_HOUR ?? 60) || 0),
     launchesPerDay: Math.max(0, Number(env.LAUNCHES_PER_DAY ?? 4) || 0),
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
@@ -363,11 +379,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       houseFeeBps: n(env.MAINNET_HOUSE_FEE_BPS, 50), maxTradeSol: n(env.MAINNET_MAX_TRADE_SOL, 0.05),
     },
     solTrading: {
-      on: on(env.SOL_TRADING, false),
-      rpcUrl: env.SOL_TRADING_RPC_URL?.trim() || env.HELIUS_MAINNET_RPC_URL?.trim() || (/\/\/devnet\.helius-rpc\.com/i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim().replace(/\/\/devnet\./i, '//mainnet.') : null),
+      on: on(env.SOL_TRADING, mainnetNet),
+      rpcUrl: rpc.mainnet,
       vaultKey: env.SOL_WALLET_KEY || undefined,
     },
-    devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
+    devnetRpcUrl: rpc.devnet,
     openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
     imageDailyBudgetUsd: n(env.IMAGE_BUDGET_USD_PER_DAY ?? env.IMAGE_DAILY_BUDGET_USD, 2),
@@ -383,7 +399,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
     x: loadXConfig(env),
-    external: (() => { const x = externalConfig(env); return worldHalted ? { ...x, on: false } : x; })(),
+    // Mainnet: no free starting SOL, the owner funds the agent's wallet.
+    external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),
     scenes: loadSceneConfig(env, nodeEnv),
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),

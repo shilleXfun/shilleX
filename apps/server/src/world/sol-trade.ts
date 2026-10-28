@@ -65,10 +65,10 @@ export function createSolBank(d: SolBankDeps) {
     return lamports;
   };
 
-  /** Every house and raised agent gets its wallet (the agent generates it in the vault). */
+  /** Every agent gets its wallet (the agent generates it in the vault): house, raised and, since 2026-10-28, outside ones, which their owners fund. */
   async function ensureWallets(): Promise<number> {
     const rows = await db.select({ id: agents.userId }).from(agents).leftJoin(solWallets, eq(solWallets.ownerId, agents.userId))
-      .where(and(ne(agents.status, 'retired'), ne(agents.origin, 'external'), isNull(solWallets.ownerId)));
+      .where(and(ne(agents.status, 'retired'), isNull(solWallets.ownerId)));
     for (const r of rows) await walletFor(db, d.master, r.id, d.now());
     await walletFor(db, d.master, ESCROW, d.now());
     return rows.length;
