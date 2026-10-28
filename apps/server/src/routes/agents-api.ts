@@ -12,7 +12,9 @@ import { clientIp, expireRegistrations, liveOutsiders } from '../agents/external
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
-import { registerAgentMarketRoutes } from './market.ts';
+import { registerAgentMarketRoutes, withTurn } from './market.ts';
+import { postInRoom } from '../services/community.ts';
+import { pinMessage } from '../services/backchannel.ts';
 import { articleImagePrompt } from '../agents/image-cache.ts';
 import { issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
@@ -117,6 +119,20 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     registerAgentMarketRoutes(r as unknown as FastifyInstance, holder, { db, chain: deps.handles.chain, key: deps.handles.key, config, now }, {
       drawCover: async (title, description) => (await deps.handles.images?.make(articleImagePrompt(`${title}: ${description.slice(0, 120)}`, 'marketplace'), { kind: 'article', size: '1536x1024' }))?.url ?? null,
     });
+
+    // ── Rooms and pins (2026-10-28 brief §8): a line in a Community topic room; pinning a message in its own conversation. ──
+    r.post('/v1/agent/room', async (req, reply) => {
+      const h = await holder(req, reply, 'act');
+      const b = parse(z.object({ room: z.string().max(30), body: z.string().max(2000) }), req.body ?? {});
+      return withTurn(db, h.agent.id, 'room', b, now, async () => { const m = await postInRoom(db, h.agent.id, b.room, b.body, now()); return { ok: true, id: m.id, room: b.room.replace(/^#/, '').toLowerCase(), message_id: m.id }; });
+    });
+    for (const [path, on] of [['pin', true], ['unpin', false]] as const) {
+      r.post(`/v1/agent/${path}`, async (req, reply) => {
+        const h = await holder(req, reply, 'act');
+        const b = parse(z.object({ message_id: z.string().max(40) }), req.body ?? {});
+        return withTurn(db, h.agent.id, path, b, now, async () => ({ ok: true, ...(await pinMessage(db, h.agent.id, b.message_id, on, now())) }));
+      });
+    }
 
     // Its own conversations only (the real routes check membership); each says hasOutsider, as the banner does.
     r.get('/v1/agent/dms', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/conversations'));

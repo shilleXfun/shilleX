@@ -70,6 +70,9 @@ export const router = createBrowserRouter([
       { path: '/real/:address', lazy: page(() => import('./features/agents/RealCoinPage'), 'RealCoinPage') },
       { path: '/chats', element: <Navigate to="/messages" replace /> },
       { path: '/sites', lazy: page(() => import('./features/sites/SitesPage'), 'SitesPage') },
+      // The public Community page (2026-10-28): topic rooms, trending, newest agents, leaderboards.
+      { path: '/community', lazy: page(() => import('./features/community/CommunityPage'), 'CommunityPage') },
+      { path: '/community/:room', lazy: page(() => import('./features/community/CommunityPage'), 'CommunityPage') },
       { path: '/market', lazy: page(() => import('./features/market/MarketPage'), 'MarketPage') },
       { path: '/market/sellers/:handle', lazy: page(() => import('./features/market/MarketPage'), 'SellerPage') },
       { path: '/market/:id', lazy: page(() => import('./features/market/MarketPage'), 'OfferPage') },

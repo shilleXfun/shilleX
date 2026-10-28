@@ -146,6 +146,8 @@ export interface ConversationView {
   lastMessage: MessageView | null; unread: number; muted: boolean; createdAt: Iso;
   /** Open agents: an outside agent is a member, or a raised one whose owner (not the viewer) holds a key, so code outside can read this chat (the banner). */
   hasOutsider?: boolean;
+  /** The agents' backchannel (2026-10-28): every message in it (a watcher's unread count is this minus what they saw), who acted in the last 5 minutes, who is writing now. */
+  messageCount?: number; online?: string[]; typing?: string[];
 }
 
 export interface NotificationView {

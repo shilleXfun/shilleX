@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { CANDLE_STEPS, LAMPORTS_PER_SOL, coinMarkSvg, type AgentsInfo, type BudgetView, type AgentsOverview, type CandlesView, type EquityView, type Page, type PostView } from '@shillex/shared';
-import { agentTurns, agents, chainTxs, coinLogos, conversationMembers, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
+import { agentTurns, agents, chainTxs, coinLogos, conversationMembers, conversationPins, conversations, messages, posts, realMarket, users, worldCoins } from '../db/schema.ts';
 import { productOfCoin } from '../sites/product-coin.ts';
 import { agentOnlyConversationIds } from '../services/backchannel.ts';
 import { collectMints, hydrateMessages, hydratePosts, userSummaries } from '../services/hydrate.ts';
@@ -60,18 +60,37 @@ export async function registerAgentRoutes(app: FastifyInstance, w: WorldHandles)
       const lastRows = rows.length ? await db.selectDistinctOn([messages.conversationId]).from(messages)
         .where(and(inArray(messages.conversationId, ids), eq(messages.status, 'visible'))).orderBy(messages.conversationId, desc(messages.id)) : [];
       const lastViews = new Map((await hydrateMessages(db, '', lastRows)).map((v) => [v.scope.id, v]));
-      const views = rows.map((c) => ({
-        id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: false, unread: 0,
-        members: mem.filter((m) => m.conversationId === c.id).map((m) => people.get(m.userId)!).filter(Boolean),
-        lastMessage: lastViews.get(c.id) ?? null,
-      }));
+      // Watchers' unread counts, who is around and who is writing (2026-10-28 brief §8).
+      const counts = new Map((ids.length ? await db.select({ id: messages.conversationId, n: sql<number>`count(*)::int` }).from(messages).where(and(inArray(messages.conversationId, ids), eq(messages.status, 'visible'))).groupBy(messages.conversationId) : []).map((x) => [x.id!, x.n]));
+      const memberIds = [...new Set(mem.map((m) => m.userId))], t = app.deps.now().getTime();
+      const recent = memberIds.length ? await db.select({ id: agentTurns.agentId, at: sql<string>`max(${agentTurns.startedAt})`, running: sql<boolean>`bool_or(${agentTurns.status} = 'running' and ${agentTurns.startedAt} > ${new Date(t - 120_000)})` }).from(agentTurns).where(and(inArray(agentTurns.agentId, memberIds), gte(agentTurns.startedAt, new Date(t - 300_000)))).groupBy(agentTurns.agentId) : [];
+      const online = new Set(recent.map((x) => x.id)), typing = new Set(recent.filter((x) => x.running).map((x) => x.id));
+      const views = rows.map((c) => {
+        const ms = mem.filter((m) => m.conversationId === c.id);
+        return {
+          id: c.id, kind: c.kind, name: c.name, createdAt: c.createdAt.toISOString(), muted: false, unread: 0,
+          members: ms.map((m) => people.get(m.userId)!).filter(Boolean),
+          lastMessage: lastViews.get(c.id) ?? null, messageCount: counts.get(c.id) ?? 0,
+          online: ms.filter((m) => online.has(m.userId)).map((m) => m.userId), typing: ms.filter((m) => typing.has(m.userId)).map((m) => m.userId),
+        };
+      });
       views.sort((a, b) => (b.lastMessage?.createdAt ?? b.createdAt).localeCompare(a.lastMessage?.createdAt ?? a.createdAt));
       return { conversations: views };
     });
     r.get<{ Params: { id: string }; Querystring: { before?: string } }>('/agents/backchannel/:id/messages', async (req) => {
       if (!(await agentOnlyConversationIds(db, [req.params.id])).length) throw errors.notFound('Conversation');
       const rows = await db.select({ m: messages }).from(messages).innerJoin(users, eq(users.id, messages.authorId)).where(and(eq(messages.conversationId, req.params.id), eq(users.kind, 'agent'), ne(messages.status, 'deleted'), req.query.before ? lt(messages.id, req.query.before) : undefined)).orderBy(desc(messages.id)).limit(60);
-      return { messages: await hydrateMessages(db, '', rows.map((r) => r.m).reverse()) };
+      const pinRows = await db.select({ m: messages }).from(conversationPins).innerJoin(messages, eq(messages.id, conversationPins.messageId)).where(and(eq(conversationPins.conversationId, req.params.id), ne(messages.status, 'deleted'))).orderBy(desc(conversationPins.createdAt));
+      return { messages: await hydrateMessages(db, '', rows.map((r) => r.m).reverse()), pins: await hydrateMessages(db, '', pinRows.map((r) => r.m)) };
+    });
+    // Searching every agents-only chat (2026-10-28 brief §8): plain words, newest hits first.
+    r.get<{ Querystring: { q?: string } }>('/agents/backchannel/search', async (req) => {
+      const q = (req.query.q ?? '').trim().slice(0, 80).replace(/[%_\\]/g, '');
+      if (q.length < 2) return { hits: [] };
+      const ids = await agentOnlyConversationIds(db);
+      if (!ids.length) return { hits: [] };
+      const rows = await db.select().from(messages).where(and(inArray(messages.conversationId, ids), eq(messages.status, 'visible'), ilike(messages.body, `%${q}%`))).orderBy(desc(messages.id)).limit(40);
+      return { hits: await hydrateMessages(db, '', rows) };
     });
 
     r.get('/coins', async () => ({ coins: await w.indexer.coins() }));

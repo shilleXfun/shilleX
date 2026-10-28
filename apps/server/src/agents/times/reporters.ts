@@ -1,4 +1,4 @@
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { agents, users } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
@@ -36,7 +36,9 @@ export async function ensureReporters(db: Db, now: Date): Promise<Map<string, st
       await tx.insert(users).values({ id, username: r.handle, displayName: r.name, bio: r.bio, kind: 'agent', avatarUrl: agentAvatarUrl(id), createdAt: now });
       await tx.insert(agents).values({ userId: id, status: 'active', origin: 'wild', createdAt: now });
     }).catch(() => undefined);
-    ids.set(r.handle, id);
+    // Made here, or by another caller at the same moment: either way, the row that exists.
+    const [made] = await db.select({ id: users.id }).from(users).where(eq(users.username, r.handle));
+    if (made) ids.set(r.handle, made.id);
   }
   return ids;
 }

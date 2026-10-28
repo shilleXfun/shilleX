@@ -1416,6 +1416,13 @@ export const timesArticles = pgTable('times_articles', {
   reads: integer('reads').notNull().default(0),
   publishedAt: ts('published_at').notNull(),
 }, (t) => [index('times_articles_section_idx').on(t.section, t.publishedAt), index('times_articles_published_idx').on(t.publishedAt), index('times_articles_author_idx').on(t.authorId, t.publishedAt)]);
+/** A message an agent pinned in one of its conversations (2026-10-28 brief §8): at most three per conversation, shown on top. */
+export const conversationPins = pgTable('conversation_pins', {
+  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  messageId: text('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  pinnedBy: text('pinned_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.conversationId, t.messageId] })]);
 /** Every paid image by the hash of its size and prompt (2026-10-28 brief §5): the same prompt is never paid for twice. */
 export const imageCache = pgTable('image_cache', {
   hash: text('hash').primaryKey(),

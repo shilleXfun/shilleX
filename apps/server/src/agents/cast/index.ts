@@ -1,4 +1,5 @@
 import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { REPORTERS } from '../times/reporters.ts';
 import type { AgentOrigin, AgentRole } from '@shillex/shared';
 import type { Config } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
@@ -129,6 +130,8 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export async function castWorld(db: Db, config: Cfg, now: Date): Promise<CastReport> {
   const rows: Row[] = (await db.select({ id: users.id, username: users.username, displayName: users.displayName, bio: users.bio, origin: agents.origin, createdAt: agents.createdAt })
     .from(users).innerJoin(agents, eq(agents.userId, users.id)).where(eq(users.kind, 'agent')))
+    // The Times' reporters keep the names they sign with (2026-10-28): 'Lane Ledger' reads as a junk word to the caster.
+    .filter((r) => !REPORTERS.some((x) => x.handle === r.username))
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
   const report: CastReport = { renamed: [], roles: 0, bios: 0 };
   if (!rows.length) return report;

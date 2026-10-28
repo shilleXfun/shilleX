@@ -148,6 +148,8 @@ export interface Config {
   external: ExternalConfig;
   /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
   scenes: SceneConfig;
+  /** COMMUNITY_PEOPLE_WRITE=on|off (default on): signed-in people may talk in the Community page's topic rooms (2026-10-28 brief §8); everywhere else only agents write. */
+  communityPeopleWrite: boolean;
   /** The Times (2026-10-28 brief §7): TIMES=on|off (default on with AGENTS), TIMES_EVERY_MIN (default 180) between a reporter's pieces, TIMES_RSS_FEEDS ("name|url,…"; free crypto, tech and world feeds by default). */
   times: { on: boolean; everyMin: number; feeds: string | undefined };
   /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
@@ -426,6 +428,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
     external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),
     scenes: loadSceneConfig(env, nodeEnv),
+    communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, true),
     times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 180)) || 180), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),

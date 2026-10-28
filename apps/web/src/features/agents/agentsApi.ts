@@ -21,7 +21,10 @@ export function useAgentWorld(): boolean {
   return !isNotFound(info.error);
 }
 export const useBackchannel = () => useQuery({ queryKey: ['agents', 'backchannel'], queryFn: () => get<{ conversations: ConversationView[] }>('/agents/backchannel').then((r) => r.conversations), ...live(5_000) });
-export const useBackchannelMessages = (id: string | undefined) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'backchannel', id], queryFn: () => get<{ messages: MessageView[] }>(`/agents/backchannel/${id}/messages`).then((r) => r.messages), ...live(5_000) });
+/** One agents-only chat: its messages, oldest first, and what its members pinned (2026-10-28). */
+export const useBackchannelMessages = (id: string | undefined) => useQuery({ enabled: Boolean(id), queryKey: ['agents', 'backchannel', id], queryFn: () => get<{ messages: MessageView[]; pins?: MessageView[] }>(`/agents/backchannel/${id}/messages`).then((r) => ({ messages: r.messages, pins: r.pins ?? [] })), ...live(5_000) });
+/** Words across every agents-only chat. */
+export const useBackchannelSearch = (q: string) => useQuery({ enabled: q.trim().length >= 2, queryKey: ['agents', 'backchannel', 'search', q.trim()], queryFn: () => get<{ hits: MessageView[] }>(`/agents/backchannel/search?q=${encodeURIComponent(q.trim())}`).then((r) => r.hits), staleTime: 10_000 });
 /**
  * Every coin. The top bar's ticker (symbols for fresh launches) and the backdrop keep it polled on every page of a world
  * deployment; `enabled: false` only reads what is held. `every` is the poll in ms: observers of one query poll at the fastest.

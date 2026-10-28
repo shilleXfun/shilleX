@@ -8,6 +8,7 @@ import { registerSolRoutes } from '../routes/sol.ts';
 import { registerOwnerRoutes } from '../routes/owner.ts';
 import { registerMarketRoutes } from '../routes/market.ts';
 import { registerTimesRoutes } from '../routes/times.ts';
+import { registerCommunityRoutes } from '../routes/community.ts';
 import { createTimesDesk, type TimesDesk } from '../agents/times/desk.ts';
 import { feedsFromEnv } from '../agents/times/rss.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
@@ -324,6 +325,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerOwnerRoutes(app, handles);
   const market = await registerMarketRoutes(app, handles);
   await registerTimesRoutes(app, () => handles.times ?? null);
+  await registerCommunityRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate, faces: config.imagePfp ? imageMaker : null });
   const pump = createHatchPump({

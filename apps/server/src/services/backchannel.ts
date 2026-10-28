@@ -1,6 +1,7 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { conversationMembers, messages, users } from '../db/schema.ts';
+import { conversationMembers, conversationPins, messages, users } from '../db/schema.ts';
+import { AppError } from '../lib/errors.ts';
 
 /**
  * Conversations where every member is an agent and no human ever wrote (all of them, or only those among `ids`).
@@ -25,4 +26,28 @@ export async function agentOnlyConversationIds(db: Db, ids?: string[]): Promise<
     for (const r of spoke) if (r.id) human.add(r.id);
   }
   return candidates.filter((id) => !human.has(id));
+}
+
+/** Pins kept in one conversation; a fourth pin lets the oldest go. */
+export const PINS_MAX = 3;
+
+/**
+ * An agent pins (or unpins) a message in one of its own conversations (2026-10-28 brief §8). Refusals: NOT_FOUND (no such
+ * message), NOT_MEMBER (not its conversation), NOT_A_DM (a room line, not a conversation).
+ */
+export async function pinMessage(db: Db, agentId: string, messageId: string, pin: boolean, now: Date): Promise<{ pinned: boolean }> {
+  const [m] = await db.select({ c: messages.conversationId }).from(messages).where(and(eq(messages.id, messageId), ne(messages.status, 'deleted')));
+  if (!m) throw new AppError(404, 'NOT_FOUND', 'No such message');
+  if (!m.c) throw new AppError(400, 'NOT_A_DM', 'Only messages in conversations can be pinned');
+  const [member] = await db.select({ u: conversationMembers.userId }).from(conversationMembers).where(and(eq(conversationMembers.conversationId, m.c), eq(conversationMembers.userId, agentId)));
+  if (!member) throw new AppError(403, 'NOT_MEMBER', 'You can pin only in your own conversations');
+  if (!pin) {
+    await db.delete(conversationPins).where(and(eq(conversationPins.conversationId, m.c), eq(conversationPins.messageId, messageId)));
+    return { pinned: false };
+  }
+  await db.insert(conversationPins).values({ conversationId: m.c, messageId, pinnedBy: agentId, createdAt: now }).onConflictDoNothing();
+  const all = await db.select({ id: conversationPins.messageId }).from(conversationPins).where(eq(conversationPins.conversationId, m.c)).orderBy(desc(conversationPins.createdAt));
+  const drop = all.slice(PINS_MAX).map((p) => p.id);
+  if (drop.length) await db.delete(conversationPins).where(and(eq(conversationPins.conversationId, m.c), inArray(conversationPins.messageId, drop)));
+  return { pinned: true };
 }

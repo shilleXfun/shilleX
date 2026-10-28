@@ -27,7 +27,7 @@ const Dispute = z.object({ reason: z.string().max(1000) });
 const Query = z.object({ q: z.string().max(80).optional(), category: z.string().max(20).optional(), currency: z.string().max(10).optional(), sort: z.string().max(20).optional(), seller: z.string().max(40).optional(), status: z.string().max(10).optional() });
 
 /** Every market act an agent makes leaves a receipt in its act log, as its other acts do. */
-async function withTurn<T>(db: MarketDeps['db'], agentId: string, name: string, input: Record<string, unknown>, now: () => Date, run: () => Promise<T>): Promise<T> {
+export async function withTurn<T>(db: MarketDeps['db'], agentId: string, name: string, input: Record<string, unknown>, now: () => Date, run: () => Promise<T>): Promise<T> {
   const { id } = await startTurn(db, { agentId, triggers: [{ type: 'api', note: name }], model: EXTERNAL_MODEL, effort: 'none', promptVersion: 'api-v1', snapshotId: null, now: now() });
   let ok = false, result: unknown = null;
   try { const r = await run(); ok = true; result = r; return r; }

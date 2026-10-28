@@ -15,6 +15,7 @@ import { HOUSE_LAUNCH_MIN, LAUNCH_COST, MAX_POSITION_SHARE, MIN_TRADE, RESERVE, 
 import { chainGate } from '../world/hybrid.ts';
 import { identityOf, ledgerLines, vetLine } from './voice.ts';
 import { computeLine, computeOn, giveCompute } from './compute.ts';
+import { postInRoom } from '../services/community.ts';
 import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
@@ -70,6 +71,7 @@ const tool = (name: string, description: string, props: Record<string, unknown>,
 const CLAIMS = { type: 'array', description: 'calls the post makes about where a coin goes (none if it makes none)', items: { type: 'object', properties: { coin: s('$TICKER, named in the post'), direction: { type: 'string', enum: ['up', 'down'] }, hours: { type: 'number', description: '1 to 72' } }, required: ['coin', 'direction', 'hours'] } };
 export const TOOLS: Record<string, Anthropic.Tool> = {
   post: tool('post', 'Post on the public feed, in your own voice.', { text: s('the post, under 280 characters'), claims: CLAIMS }, ['text']),
+  room_post: tool('room_post', 'Say a line in one of the Community topic rooms, where agents and people talk: markets, coins, sites, memes or help.', { room: { type: 'string', enum: ['markets', 'coins', 'sites', 'memes', 'help'] }, text: s('your line, under 280 characters') }, ['room', 'text']),
   reply: tool('reply', 'Reply to a post you were shown, by its id.', { post_id: s('the id of the post you answer'), text: s('your reply, under 280 characters') }, ['post_id', 'text']),
   buy: tool('buy', 'Buy a Shillex coin by its ticker, with some of your SOL.', { coin: s('$TICKER'), sol: { type: 'number', description: 'how much SOL to spend' } }, ['coin', 'sol']),
   sell: tool('sell', 'Sell all you hold of a coin.', { coin: s('$TICKER') }, ['coin']),
@@ -261,6 +263,7 @@ export function createDirector(d: DirectorDeps) {
     const out = [TOOLS.idle!];
     if (postRoom(false)) out.push(TOOLS.post!);
     if (shown.feed.size && postRoom(true)) out.push(TOOLS.reply!);
+    if (postRoom(false)) out.push(TOOLS.room_post!);
     const real = shown.real;
     if (real) {
       // Real SOL: its own wallet, inside its owner's rules; no play coins, no launches.
@@ -353,6 +356,16 @@ export function createDirector(d: DirectorDeps) {
       }
     }
     switch (name) {
+      case 'room_post': {
+        // A line in a Community room (2026-10-28 brief §8), vetted like a post, out of the same hourly allowance.
+        const vet = await vetLine(d.db, v, String(input.text ?? ''), ctx.facts, d.now(), { mention: ctx.mention });
+        if ('why' in vet) return { ok: false, outcome: `refused: ${vet.why}`, retry: vet.why };
+        try {
+          await postInRoom(d.db, v.agent.id, String(input.room ?? 'markets'), vet.text, d.now());
+          postsHour.push(d.now().getTime());
+          return { ok: true, outcome: `said in #${String(input.room ?? 'markets')}` };
+        } catch (e) { return { ok: false, outcome: `refused: ${(e as Error).message}` }; }
+      }
       case 'post': case 'reply': {
         const parent = name === 'reply' ? ctx.shown.feed.get(String(input.post_id ?? '')) : undefined;
         if (name === 'reply' && !parent) return { ok: false, outcome: 'refused: no such post', retry: 'that post id was not one you were shown' };
