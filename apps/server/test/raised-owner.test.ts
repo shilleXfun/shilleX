@@ -20,7 +20,7 @@ describe('raised agents: data and lookups', () => {
     expect(await originOf(w.t.db, 'nobody')).toBeNull();
   });
 
-  it('ownerOf and raisedAgentOf follow agents.owner_id, and a human owns at most one agent', async () => {
+  it('ownerOf and raisedAgentOf follow agents.owner_id; an owner may also own outside agents (2026-10-28)', async () => {
     w = await worldTestCtx();
     const human = await w.t.createUser('raiser');
     const [a, b] = [w.agents[0]!, w.agents[1]!];
@@ -28,7 +28,9 @@ describe('raised agents: data and lookups', () => {
     expect(await ownerOf(w.t.db, a.id)).toBe(human.id);
     expect(await originOf(w.t.db, a.id)).toBe('raised');
     expect(await raisedAgentOf(w.t.db, human.id)).toEqual({ agentId: a.id, status: 'active' });
-    await expect(w.t.db.update(agents).set({ origin: 'raised', ownerId: human.id }).where(eq(agents.userId, b.id))).rejects.toThrow();
+    // One raised agent per human is checked when raising (eligibility, RAISED_PER_OWNER); linked outside agents share the owner.
+    await w.t.db.update(agents).set({ origin: 'external', ownerId: human.id }).where(eq(agents.userId, b.id));
+    expect(await raisedAgentOf(w.t.db, human.id)).toEqual({ agentId: a.id, status: 'active' });
     expect(await ownerOf(w.t.db, 'nobody')).toBeNull();
   });
 

@@ -61,9 +61,13 @@ describe('open agents config', () => {
   it('is on by default, with the plan’s limits', () => {
     const c = loadConfig({ NODE_ENV: 'test' });
     expect(c.external).toEqual({
-      on: true, max: 50, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: 5, readsPerMin: 60, actsPerMin: 10,
+      on: true, max: 3000, ownerMax: 3, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: 5, readsPerMin: 60, actsPerMin: 10,
       oembedUrl: 'https://publish.twitter.com/oembed',
     });
+  });
+
+  it('reads MAX_OUTSIDE_AGENTS and OWNER_AGENTS_MAX (2026-10-28)', () => {
+    expect(loadConfig({ NODE_ENV: 'test', MAX_OUTSIDE_AGENTS: '900', OWNER_AGENTS_MAX: '5' }).external).toMatchObject({ max: 900, ownerMax: 5 });
   });
 
   it('parses overrides', () => {
@@ -71,7 +75,7 @@ describe('open agents config', () => {
       NODE_ENV: 'test', EXTERNAL_AGENTS: 'on', EXTERNAL_AGENTS_MAX: '7', EXTERNAL_WALLET_CLAIMS: 'open', EXTERNAL_START_LAMPORTS: '1000',
       EXTERNAL_REGISTRATIONS_PER_IP_DAY: '2', EXTERNAL_KEY_READS_PER_MIN: '30', EXTERNAL_KEY_ACTS_PER_MIN: '3', X_OEMBED_URL: 'http://127.0.0.1:9/oembed',
     });
-    expect(c.external).toEqual({ on: true, max: 7, walletClaims: 'open', startLamports: 1000, regPerIpDay: 2, readsPerMin: 30, actsPerMin: 3, oembedUrl: 'http://127.0.0.1:9/oembed' });
+    expect(c.external).toEqual({ on: true, max: 7, ownerMax: 3, walletClaims: 'open', startLamports: 1000, regPerIpDay: 2, readsPerMin: 30, actsPerMin: 3, oembedUrl: 'http://127.0.0.1:9/oembed' });
   });
 
   it.each([
