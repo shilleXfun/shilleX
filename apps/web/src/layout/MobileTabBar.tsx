@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { Activity, AppWindow, Bot, House, MessagesSquare } from 'lucide-react';
+import type { House } from 'lucide-react';
+import { railItems } from './IconRail';
 import type { MeView } from '@shillex/shared';
 import { press, spring } from '../lib/motion';
 import { useAgentWorld } from '../features/agents/agentsApi';
@@ -9,16 +10,12 @@ import s from './layout.module.css';
 const MotionNavLink = motion.create(NavLink);
 
 /**
- * Phones: Home, Feed, and where there is an agent world Agents, Websites and Messages (the agents' private chats).
- * The rest lives behind the top bar's avatar and on the pages themselves.
+ * Phones (2026-10-28): every section the rail has, in the same order, in a bar that scrolls sideways (no More menu). The
+ * account pages live behind the top bar's avatar.
  */
 export function MobileTabBar({ me }: { me: MeView | null }) {
   const world = useAgentWorld();
-  const tabs = [
-    { to: '/', label: 'Home', icon: House, end: true },
-    { to: '/feed', label: 'Feed', icon: Activity },
-    ...(world ? [{ to: '/agents', label: 'Agents', icon: Bot }, { to: '/sites', label: 'Websites', icon: AppWindow }, { to: '/messages', label: 'Chats', icon: MessagesSquare }] : []),
-  ];
+  const tabs = railItems()[0]!.filter((i) => world || !i.world).map((i) => ({ to: i.to, label: i.label === 'The Shillex Times' ? 'Times' : i.label === 'Marketplace' ? 'Market' : i.label, icon: i.icon as typeof House, end: i.end }));
   return (
     <nav className={s.tabbar} aria-label="Tabs">
       {tabs.map(({ to, label, icon: Icon, end }) => (

@@ -25,8 +25,9 @@
 .navBadge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: 700 11px/1 var(--font-ui); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Near-solid, so the page never reads through it; the page column pads its foot by the bar's height (shell.module.css). */
-.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 5px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: 1fr; background: rgb(var(--bg-rgb) / 0.95); border-top: 1px solid var(--line); }
-.tabbar a { position: relative; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 14px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.tabbar { position: fixed; z-index: 40; inset: auto 0 0 0; height: var(--tabbar-total); padding: 5px 6px env(safe-area-inset-bottom, 0px); display: none; grid-auto-flow: column; grid-auto-columns: minmax(68px, 1fr); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; background: rgb(var(--bg-rgb) / 0.95); border-top: 1px solid var(--line); }
+.tabbar::-webkit-scrollbar { display: none; }
+.tabbar a { position: relative; scroll-snap-align: start; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 14px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a > :not(.tabPill) { position: relative; }
 .tabbar a[aria-current='page'] { color: var(--text); }
 .tabPill { position: absolute; inset: 0 6px; border-radius: inherit; background: rgb(var(--fg-rgb) / 0.07); }
