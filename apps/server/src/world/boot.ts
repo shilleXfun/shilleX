@@ -6,6 +6,7 @@ import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerSolRoutes } from '../routes/sol.ts';
 import { registerOwnerRoutes } from '../routes/owner.ts';
+import { registerMarketRoutes } from '../routes/market.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
@@ -307,6 +308,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerAdminRoutes(app, handles);
   await registerSolRoutes(app, handles);
   await registerOwnerRoutes(app, handles);
+  const market = await registerMarketRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate, faces: config.imagePfp ? imageMaker : null });
   const pump = createHatchPump({
@@ -378,7 +380,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); market.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**

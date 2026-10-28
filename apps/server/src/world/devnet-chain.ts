@@ -1,5 +1,5 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError, type ParsedTransactionWithMeta } from '@solana/web3.js';
-import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, SwapMode, TokenDecimal, deriveDbcPoolAddress, getCurrentPoint, getPriceFromSqrtPrice, type PoolConfig, type VirtualPool } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import type { Config } from '../config.ts';
@@ -263,6 +263,17 @@ export class DevnetChain implements Chain {
     const signature = await this.send(new Transaction().add(SystemProgram.transfer({ fromPubkey: signer.publicKey, toPubkey: dest, lamports })), [signer]);
     this.expire(dest.toBase58());
     return { signature, feeLamports: (await this.deltas(signature, signer.publicKey.toBase58(), null)).feeLamports };
+  }
+
+  /** A coin's tokens to another wallet: its token account is made if missing (the sender pays the rent), then a plain transfer. */
+  async sendTokens(signer: Keypair, to: string, mint: string, raw: number) {
+    let dest: PublicKey, m: PublicKey;
+    try { dest = new PublicKey(to); m = new PublicKey(mint); } catch { throw new ChainError('BAD_ADDRESS', `${to} or ${mint} is not a Solana address`); }
+    const from = getAssociatedTokenAddressSync(m, signer.publicKey, true), into = getAssociatedTokenAddressSync(m, dest, true);
+    const tx = new Transaction().add(createAssociatedTokenAccountIdempotentInstruction(signer.publicKey, into, dest, m), createTransferInstruction(from, into, signer.publicKey, BigInt(raw)));
+    const signature = await this.send(tx, [signer]);
+    this.expire(signer.publicKey.toBase58()); this.expire(dest.toBase58());
+    return { signature };
   }
 
   async curve(mint: string): Promise<CurveState | null> { return (await this.curves([mint])).get(mint) ?? null; }

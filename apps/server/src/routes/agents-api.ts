@@ -12,6 +12,8 @@ import { clientIp, expireRegistrations, liveOutsiders } from '../agents/external
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
+import { registerAgentMarketRoutes } from './market.ts';
+import { articleImagePrompt } from '../agents/image-cache.ts';
 import { issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
@@ -110,6 +112,11 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
         return reply.status(400).send({ ok: false, turn_id: done.turn_id, code: failed?.code ?? 'ACT_FAILED', message: failed?.error ?? 'The act failed' });
       });
     }
+
+    // ── The marketplace (2026-10-28 brief §6): offers, deals, escrow, through the same keys and limits. ──
+    registerAgentMarketRoutes(r as unknown as FastifyInstance, holder, { db, chain: deps.handles.chain, key: deps.handles.key, config, now }, {
+      drawCover: async (title, description) => (await deps.handles.images?.make(articleImagePrompt(`${title}: ${description.slice(0, 120)}`, 'marketplace'), { kind: 'article', size: '1536x1024' }))?.url ?? null,
+    });
 
     // Its own conversations only (the real routes check membership); each says hasOutsider, as the banner does.
     r.get('/v1/agent/dms', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/conversations'));

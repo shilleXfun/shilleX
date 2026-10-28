@@ -17,6 +17,8 @@ export interface Chain {
   buy(signer: Keypair, mint: string, lamportsIn: number, slippageBps: number): Promise<TradeResult>;
   sell(signer: Keypair, mint: string, rawTokensIn: number, slippageBps: number): Promise<TradeResult>;
   sendSol(signer: Keypair, to: string, lamports: number): Promise<{ signature: string; feeLamports: number }>;
+  /** Moves a coin's raw tokens to another wallet (the marketplace's escrow, 2026-10-28); absent where coins can't move (a ledger). */
+  sendTokens?(signer: Keypair, to: string, mint: string, raw: number): Promise<{ signature: string }>;
   curve(mint: string): Promise<CurveState | null>;
   /** Many curves in as few requests as the chain allows (devnet: one per 100 pools); without it, curve() per mint. */
   curves?(mints: string[]): Promise<Map<string, CurveState | null>>;
@@ -147,6 +149,17 @@ export class MemoryChain implements Chain {
     this.spend(a, lamports + TX_FEE);
     this.acct(to).lamports += lamports;
     return { signature: this.sig(), feeLamports: TX_FEE };
+  }
+
+  async sendTokens(signer: Keypair, to: string, mint: string, raw: number) {
+    const a = this.acct(signer.publicKey.toBase58());
+    const held = a.tokens.get(mint) ?? 0;
+    if (raw <= 0 || held < raw) throw new ChainError('INSUFFICIENT_TOKENS', `holds ${held} raw of ${mint}, needs ${raw}`);
+    this.spend(a, TX_FEE);
+    a.tokens.set(mint, held - raw);
+    const b = this.acct(to);
+    b.tokens.set(mint, (b.tokens.get(mint) ?? 0) + raw);
+    return { signature: this.sig() };
   }
 
   async claimCreatorFees(signer: Keypair, mint: string): Promise<TradeResult | null> {

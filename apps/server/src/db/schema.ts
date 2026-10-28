@@ -1337,6 +1337,63 @@ export const agentDayMarks = pgTable('agent_day_marks', {
   day: text('day').notNull(),
   startLamports: bigint('start_lamports', { mode: 'number' }).notNull(),
 }, (t) => [primaryKey({ columns: [t.agentId, t.day] })]);
+// ── THE MARKETPLACE (2026-10-28 brief §6): structured offers, negotiated deals, escrow on the world chain. ──
+export type MarketDealStatus = 'negotiating' | 'escrowing' | 'escrowed' | 'delivered' | 'released' | 'disputed' | 'refunded' | 'cancelled';
+/** What an agent sells: priced in SOL or in a Shillex coin (`currency` is 'SOL' or the coin's mint). */
+export const marketOffers = pgTable('market_offers', {
+  id: text('id').primaryKey(),
+  sellerId: text('seller_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  category: text('category').notNull(),
+  description: text('description').notNull(),
+  priceAmount: doublePrecision('price_amount').notNull(),
+  currency: text('currency').notNull(),
+  currencySymbol: text('currency_symbol').notNull(),
+  deliverables: text('deliverables').notNull(),
+  deadlineHours: integer('deadline_hours').notNull(),
+  quantity: integer('quantity').notNull(),
+  quantityLeft: integer('quantity_left').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  images: jsonb('images').$type<string[]>().notNull().default([]),
+  status: text('status').$type<'open' | 'closed' | 'expired'>().notNull(),
+  createdAt: ts('created_at').notNull(),
+}, (t) => [index('market_offers_status_idx').on(t.status, t.createdAt), index('market_offers_seller_idx').on(t.sellerId)]);
+/** One deal on an offer: the price on the table and whose turn it is, then escrow, delivery and settlement. */
+export const marketDeals = pgTable('market_deals', {
+  id: text('id').primaryKey(),
+  offerId: text('offer_id').notNull().references(() => marketOffers.id, { onDelete: 'cascade' }),
+  buyerId: text('buyer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sellerId: text('seller_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  quantity: integer('quantity').notNull(),
+  /** The whole price for the quantity, in the offer's currency (SOL, or whole tokens of the coin). */
+  priceAmount: doublePrecision('price_amount').notNull(),
+  currency: text('currency').notNull(),
+  currencySymbol: text('currency_symbol').notNull(),
+  status: text('status').$type<MarketDealStatus>().notNull(),
+  /** Who must answer next while negotiating: the other side may only wait. */
+  turnOf: text('turn_of').$type<'buyer' | 'seller'>(),
+  dueAt: ts('due_at'),
+  deliveredAt: ts('delivered_at'),
+  deliveryNote: text('delivery_note'),
+  deliveryRef: text('delivery_ref'),
+  disputeReason: text('dispute_reason'),
+  escrowSig: text('escrow_sig'),
+  payoutSig: text('payout_sig'),
+  createdAt: ts('created_at').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+  settledAt: ts('settled_at'),
+}, (t) => [index('market_deals_offer_idx').on(t.offerId), index('market_deals_buyer_idx').on(t.buyerId, t.status), index('market_deals_seller_idx').on(t.sellerId, t.status), index('market_deals_status_idx').on(t.status, t.updatedAt)]);
+/** Every step of a deal, in order: its public history. `actorId` null for Shillex's own steps (the sweep). */
+export const marketEvents = pgTable('market_events', {
+  id: text('id').primaryKey(),
+  dealId: text('deal_id').notNull().references(() => marketDeals.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id'),
+  kind: text('kind').notNull(),
+  priceAmount: doublePrecision('price_amount'),
+  note: text('note'),
+  sig: text('sig'),
+  at: ts('at').notNull(),
+}, (t) => [index('market_events_deal_idx').on(t.dealId, t.at)]);
 /** Every paid image by the hash of its size and prompt (2026-10-28 brief §5): the same prompt is never paid for twice. */
 export const imageCache = pgTable('image_cache', {
   hash: text('hash').primaryKey(),

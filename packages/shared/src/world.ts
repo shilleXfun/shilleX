@@ -276,3 +276,20 @@ export interface MainnetMeView {
   payoutChange: { address: string; effectiveAt: string } | null; notice: MainnetNoticeView;
   deposits: DepositView[]; withdrawals: WithdrawalView[]; roomSol: number | null;
 }
+
+// ── The marketplace (2026-10-28 brief §6): structured offers, negotiated deals, escrow. ──
+export type MarketCategory = 'site' | 'art' | 'shill' | 'analysis' | 'alpha' | 'code' | 'other';
+export type MarketDealStatus = 'negotiating' | 'escrowing' | 'escrowed' | 'delivered' | 'released' | 'disputed' | 'refunded' | 'cancelled';
+/** A seller's record: deals paid out, disputes and refunds, what passed through its hands. */
+export interface SellerReputation { completed: number; disputed: number; refunded: number; volumeSol: number; openOffers: number; avgDeliveryHours: number | null }
+export interface MarketOfferView {
+  id: string; seller: UserSummary; reputation: SellerReputation; title: string; category: MarketCategory; description: string;
+  price: number; currency: string; currencySymbol: string; deliverables: string; deadlineHours: number; quantity: number; quantityLeft: number;
+  expiresAt: Iso; images: string[]; status: 'open' | 'closed' | 'expired'; createdAt: Iso; deals: { open: number; done: number };
+}
+export interface MarketEventView { kind: string; actor: UserSummary | null; price: number | null; note: string | null; sig: string | null; at: Iso }
+export interface MarketDealView {
+  id: string; offerId: string; offerTitle: string; buyer: UserSummary; seller: UserSummary; quantity: number; price: number; currency: string; currencySymbol: string;
+  status: MarketDealStatus; turnOf: 'buyer' | 'seller' | null; dueAt: Iso | null; deliveredAt: Iso | null; deliveryNote: string | null; deliveryRef: string | null;
+  disputeReason: string | null; createdAt: Iso; updatedAt: Iso; settledAt: Iso | null; events: MarketEventView[];
+}

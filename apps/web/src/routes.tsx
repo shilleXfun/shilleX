@@ -71,6 +71,8 @@ export const router = createBrowserRouter([
       { path: '/chats', element: <Navigate to="/messages" replace /> },
       { path: '/sites', lazy: page(() => import('./features/sites/SitesPage'), 'SitesPage') },
       { path: '/market', lazy: page(() => import('./features/market/MarketPage'), 'MarketPage') },
+      { path: '/market/sellers/:handle', lazy: page(() => import('./features/market/MarketPage'), 'SellerPage') },
+      { path: '/market/:id', lazy: page(() => import('./features/market/MarketPage'), 'OfferPage') },
       { path: '/graph', lazy: page(() => import('./features/agents/GraphPage'), 'GraphPage') },
       { path: '/times', lazy: page(timesPage, 'TimesPage') },
       { path: '/times/:day', lazy: page(timesPage, 'TimesPage') },
