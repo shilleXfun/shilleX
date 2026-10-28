@@ -14,7 +14,7 @@ export interface RpcMeter {
 
 const HOUR = 3_600_000;
 
-export function createRpcMeter(now: () => Date = () => new Date(), log: (m: string) => void = (m) => console.log(m), inner: typeof fetch = fetch): RpcMeter {
+export function createRpcMeter(now: () => Date = () => new Date(), log: (m: string) => void = (m) => console.log(m), inner: typeof fetch = fetch, label = 'rpc'): RpcMeter {
   const fresh = (): RpcHour => ({ requests: 0, byMethod: {}, rateLimited: 0, from: now().toISOString() });
   let current = fresh(), lastHour: RpcHour | null = null, lastRateLimitedAt: string | null = null;
   const timer = setInterval(() => {
@@ -22,7 +22,7 @@ export function createRpcMeter(now: () => Date = () => new Date(), log: (m: stri
     current = fresh();
     if (!lastHour.requests && !lastHour.rateLimited) return;
     const top = Object.entries(lastHour.byMethod).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${m} ${n}`).join(', ');
-    log(`[rpc] last hour: ${lastHour.requests} requests ≈ ${lastHour.requests} credits (${top}), 429s: ${lastHour.rateLimited}`);
+    log(`[${label}] last hour: ${lastHour.requests} requests ≈ ${lastHour.requests} credits (${top}), 429s: ${lastHour.rateLimited}`);
   }, HOUR);
   timer.unref?.();
   const counted: typeof fetch = async (input, init) => {
@@ -45,3 +45,8 @@ export function createRpcMeter(now: () => Date = () => new Date(), log: (m: stri
 let meter: RpcMeter | null = null;
 export const rpcMeter = () => (meter ??= createRpcMeter());
 export const rpcMeterState = () => meter?.state() ?? null;
+
+/** Real SOL's mainnet RPC (HELIUS_MAINNET_RPC_URL), counted on its own: its hourly line reads [rpc mainnet]. */
+let mainnet: RpcMeter | null = null;
+export const mainnetMeter = () => (mainnet ??= createRpcMeter(undefined, undefined, undefined, 'rpc mainnet'));
+export const mainnetMeterState = () => mainnet?.state() ?? null;

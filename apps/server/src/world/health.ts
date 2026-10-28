@@ -4,7 +4,7 @@ import { agentTurns, agents, siteVersions, wallets } from '../db/schema.ts';
 import { jobStates, redact } from './jobs.ts';
 import type { WorldHandles } from './boot.ts';
 import { RoutedBrain } from './brain-openai.ts';
-import { rpcMeterState } from './rpc-meter.ts';
+import { mainnetMeterState, rpcMeterState } from './rpc-meter.ts';
 import { costMeterState } from './cost-meter.ts';
 
 /** No good engine tick for this long, while the engine runs, is a warning. */
@@ -77,6 +77,7 @@ export async function worldHealth(app: FastifyInstance, w: WorldHandles) {
     },
     quiet: w.quiet?.state() ?? null,
     rpc: rpcMeterState(),
+    rpcMainnet: mainnetMeterState(),
     cost: costMeterState(),
     director: w.director?.stats() ?? null,
     budget: { capUsd: w.budget.capUsd(), spentUsd: Math.round(w.budget.spentToday() * 1e4) / 1e4, level: w.budget.level() },

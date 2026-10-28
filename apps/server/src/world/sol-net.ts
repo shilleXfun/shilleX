@@ -1,4 +1,5 @@
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { mainnetMeter } from './rpc-meter.ts';
 
 /**
  * Everything real SOL touches on the network (2026-10-27): mainnet balances and token holdings, PumpPortal's unsigned trade
@@ -26,7 +27,9 @@ export const TRADABLE_DEXES = new Set(['pumpfun', 'pumpswap', 'raydium', 'launch
 export const PUMP_DEXES = new Set(['pumpfun', 'pumpswap']);
 
 export function solNet(rpcUrl: string, fetchImpl: typeof fetch = fetch): SolNet {
-  const conn = new Connection(rpcUrl, 'confirmed');
+  // Every mainnet call is counted ([rpc mainnet] hourly, /api/health/world); balances are read 100 wallets per request.
+  const counted = mainnetMeter().fetch;
+  const conn = new Connection(rpcUrl, { commitment: 'confirmed', fetch: counted });
   return {
     async balances(addresses) {
       const out = new Map<string, number>();
@@ -43,7 +46,7 @@ export function solNet(rpcUrl: string, fetchImpl: typeof fetch = fetch): SolNet 
     },
     async hasHolders(mint, min) {
       try {
-        const res = await fetchImpl(rpcUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10_000),
+        const res = await counted(rpcUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10_000),
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenAccounts', params: { mint, limit: Math.min(1000, Math.max(1, Math.ceil(min))), page: 1 } }) });
         const j = await res.json() as { result?: { total?: number } };
         return typeof j.result?.total === 'number' ? j.result.total >= Math.min(1000, min) : null;

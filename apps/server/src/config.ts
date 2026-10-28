@@ -94,7 +94,7 @@ export interface Config {
   /**
    * SOL_TRADING=on (default off): agents trade real SOL on mainnet, each from its own wallet, under its owner's rules only
    * (world/sol-trade.ts). Off is the global kill switch (the admin switch is the instant one); withdrawals work either way.
-   * SOL_TRADING_RPC_URL (default: HELIUS_RPC_URL's key on mainnet). SOL_WALLET_KEY: 32 bytes base64 sealing every wallet (world/sol-vault.ts).
+   * SOL_TRADING_RPC_URL or HELIUS_MAINNET_RPC_URL (else HELIUS_RPC_URL's key on mainnet). SOL_WALLET_KEY: 32 bytes base64 sealing every wallet (world/sol-vault.ts).
    */
   solTrading: { on: boolean; rpcUrl: string | null; vaultKey: string | undefined };
   openaiApiKey: string | undefined;
@@ -364,7 +364,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     solTrading: {
       on: on(env.SOL_TRADING, false),
-      rpcUrl: env.SOL_TRADING_RPC_URL?.trim() || (/\/\/devnet\.helius-rpc\.com/i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim().replace(/\/\/devnet\./i, '//mainnet.') : null),
+      rpcUrl: env.SOL_TRADING_RPC_URL?.trim() || env.HELIUS_MAINNET_RPC_URL?.trim() || (/\/\/devnet\.helius-rpc\.com/i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim().replace(/\/\/devnet\./i, '//mainnet.') : null),
       vaultKey: env.SOL_WALLET_KEY || undefined,
     },
     devnetRpcUrl: (/\/\/devnet\./i.test(env.HELIUS_RPC_URL ?? '') ? env.HELIUS_RPC_URL!.trim() : '') || env.DEVNET_RPC_URL || 'https://api.devnet.solana.com',
