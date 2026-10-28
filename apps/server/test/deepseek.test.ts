@@ -53,4 +53,10 @@ describe('an empty DeepSeek account', () => {
     expect(accountProblem(e)).toMatch(/top it up/);
     expect(accountDown(e)).toBe(true);
   });
+  it('names the AI whose key was refused, not always Anthropic', async () => {
+    const { accountProblem } = await import('../src/agents/moments.ts');
+    const e = Object.assign(new Error('401 Authentication Fails (deepseek)'), { status: 401 });
+    expect(accountProblem(e)).not.toMatch(/ANTHROPIC_API_KEY/);
+    expect(accountProblem(e)).toMatch(/key/);
+  });
 });

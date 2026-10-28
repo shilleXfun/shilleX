@@ -61,8 +61,11 @@ export function accountProblem(e: unknown): string | null {
   if (e instanceof ProviderError) return ['auth', 'credit', 'model', 'bad_request'].includes(e.category) ? e.message : null;
   const status = (e as { status?: number })?.status;
   const msg = (e as Error)?.message ?? '';
-  if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
-  if (status === 403) return 'Anthropic refused this key permission (403); check the key and restart';
+  // Claude or DeepSeek (both speak Anthropic's API): name the one in use, and its key, without assuming Claude.
+  const ds = /deepseek/i.test(msg) || process.env.LLM_PROVIDER?.toLowerCase() === 'deepseek' || (!process.env.LLM_PROVIDER && Boolean(process.env.DEEPSEEK_API_KEY));
+  const who = ds ? 'DeepSeek (DEEPSEEK_API_KEY)' : 'Anthropic (ANTHROPIC_API_KEY)';
+  if (status === 401) return `The AI provider ${who} rejected the key (401); set a valid key and restart`;
+  if (status === 403) return `The AI provider ${who} refused this key permission (403); check the key and restart`;
   if (status === 400 && /credit balance|billing/i.test(msg)) return 'The Anthropic account is out of credit; top it up and restart';
   // DeepSeek (2026-10-28): an empty account answers 402 Insufficient Balance.
   if (status === 402 || /insufficient[_ ]balance/i.test(msg)) return 'The AI account (DeepSeek) is out of balance (402); top it up at platform.deepseek.com';
