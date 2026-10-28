@@ -11,7 +11,7 @@ import { DevnetChain } from '../src/world/devnet-chain.ts';
 const clock = (start = Date.parse('2026-10-27T12:00:00Z')) => { let t = start; return { now: () => new Date(t), ms: () => t, add: (ms: number) => { t += ms; } }; };
 
 describe('brain health', () => {
-  it('a 401 says "brain down" once, probes every half hour without a new alert, and says when it is back', () => {
+  it('a 401 says "brain down" once, probes every 5 minutes without a new alert, and says when it is back', () => {
     const c = clock(), logs: string[] = [];
     const halt = createModelHalt(c.now, (m) => logs.push(m));
     expect(tripOn(halt, Object.assign(new Error('401'), { status: 401 }))).toMatch(/401/);
@@ -24,7 +24,7 @@ describe('brain health', () => {
     expect(logs.filter((l) => l.startsWith('[alert]'))).toHaveLength(1);
     halt.ok();
     expect(halt.state().down).toBeNull();
-    expect(logs.at(-1)).toMatch(/brain back up after 30 min/);
+    expect(logs.at(-1)).toMatch(/brain back up after 5 min/);
   });
 
   it('a bad request shape is a pause, not down', () => {
@@ -105,7 +105,7 @@ describe('batched curves', () => {
 });
 
 describe('a usage limit', () => {
-  it('is brain down with the date in the reason, still probed every 30 min, and re-checked at once on request', () => {
+  it('is brain down with the date in the reason, still probed every 5 min, and re-checked at once on request', () => {
     const c = clock(Date.parse('2026-10-27T12:00:00Z')), logs: string[] = [];
     const halt = createModelHalt(c.now, (m) => logs.push(m));
     const e = Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}'), { status: 400 });
@@ -118,6 +118,6 @@ describe('a usage limit', () => {
     expect(halt.reason()).not.toBeNull();
     halt.recheck();
     expect(halt.reason()).toBeNull();
-    expect(logs[0]).toContain('every 30 min until it works (the provider says access returns 2026-11-01T00:00:00.000Z)');
+    expect(logs[0]).toContain('every 5 min until it works (the provider says access returns 2026-11-01T00:00:00.000Z)');
   });
 });
