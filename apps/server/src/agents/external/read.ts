@@ -6,6 +6,7 @@ import { agentClaims, agentTurns, externalRegistrations, users } from '../../db/
 import { AppError } from '../../lib/errors.ts';
 import type { Chain } from '../../world/chain.ts';
 import { walletFacts } from '../../world/market.ts';
+import { solView } from '../../world/sol-trade.ts';
 import { actorFor } from '../act.ts';
 import { COOLDOWN_MS } from '../decide.ts';
 import { loadState } from '../state.ts';
@@ -59,6 +60,8 @@ export async function meView(d: { db: Db; chain: Chain; config: Config; now: () 
   const [claim] = raised ? [] : await d.db.select().from(agentClaims).where(eq(agentClaims.agentId, h.agent.id));
   const claimed = raised || reg?.status === 'claimed';
   const wallet = claimed ? await walletFacts(d.db, d.chain, h.agent.id).catch(() => null) : null;
+  // Mainnet: the agent's real-SOL wallet (2026-10-28), what its owner funds and what it trades from.
+  const real = d.config.solanaNetwork === 'mainnet' ? await solView(d.db, h.agent.id, false) : null;
   const state = claimed ? await loadState(d.db, h.agent.id, now) : null;
   const saved = await savedRules(d.db, h.agent.id);
   const rules = effectiveRules(saved.rules, { origin: h.row.origin, network: d.config.solanaNetwork });
@@ -72,7 +75,8 @@ export async function meView(d: { db: Db; chain: Chain; config: Config; now: () 
       method: claim?.method ?? reg?.method ?? null,
       expires_at: reg?.status === 'pending' ? reg.expiresAt.toISOString() : null,
     },
-    wallet: wallet ? { address: wallet.publicKey, sol: wallet.sol, positions: wallet.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.valueSol })) } : null,
+    wallet: real ? { address: real.address, sol: real.sol, positions: real.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.pnlPct === null ? p.solIn : p.solIn * (1 + p.pnlPct) })) }
+      : wallet ? { address: wallet.publicKey, sol: wallet.sol, positions: wallet.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.valueSol })) } : null,
     cooldowns: cooldownsLeft(state?.cooldowns ?? {}, now),
     acts_today: await actsToday(d.db, h.agent.id, now),
     rate_limits: { reads_per_min: d.config.external.readsPerMin, acts_per_min: d.config.external.actsPerMin },

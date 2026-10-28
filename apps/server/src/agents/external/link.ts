@@ -8,6 +8,7 @@ import { newId } from '../../lib/ids.ts';
 import { isUniqueViolation } from '../../lib/pg-errors.ts';
 import { agentAvatarUrl } from '../../world/seed.ts';
 import { createWallet, decryptSecret, encryptSecret } from '../../world/wallets.ts';
+import { parseVaultKey, walletFor } from '../../world/sol-vault.ts';
 import { checkHandle } from '../raised/rules.ts';
 import { loadState } from '../state.ts';
 import { retrySoon, sendStartGrant, type GrantDeps, type GrantResult } from './grant.ts';
@@ -100,7 +101,9 @@ export async function registerLinked(d: GrantDeps & { faces?: ImageMaker | null 
     throw e;
   }
   await loadState(db, agentId, now);
-  const wallet = await createWallet(db, agentId, d.key, now);
+  let wallet = await createWallet(db, agentId, d.key, now);
+  // On mainnet the wallet that matters is its real-SOL one in the vault: that is the address its owner funds (2026-10-28).
+  if (config.solanaNetwork === 'mainnet' && config.solTrading.vaultKey) wallet = (await walletFor(db, parseVaultKey(config.solTrading.vaultKey, config.worldKey), agentId, now)).publicKey;
   const funding = await sendStartGrant(d, agentId);
   if (funding === 'owed') retrySoon(d, agentId);
   // Its face is drawn after it answers (IMAGE_PFP): the pixel face stands until then, and for good if no image can be drawn.

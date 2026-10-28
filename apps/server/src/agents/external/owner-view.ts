@@ -9,6 +9,7 @@ import { loadState } from '../state.ts';
 import { effectiveRules, savedRules } from './limits-hard.ts';
 import { MIND, mindView } from './mind.ts';
 import { cooldownsLeft } from './read.ts';
+import { solView } from '../../world/sol-trade.ts';
 import { liveStatus } from './sleeping.ts';
 
 export { SLEEPING_MS, liveStatus } from './sleeping.ts';
@@ -69,14 +70,24 @@ export async function ownerAgentView(d: { db: Db; chain: Chain; config: Config; 
   const state = await loadState(db, agentId, now);
   const mind = await mindView(db, agentId);
 
+  // Mainnet: the real-SOL wallet in the vault is the one the owner funds and the agent trades from (2026-10-28).
+  const real = d.config.solanaNetwork === 'mainnet' ? await solView(db, agentId, true) : null;
+  const realWallet: OwnerAgentView['wallet'] = real ? (() => {
+    const ps = real.positions.map((p) => { const value = p.pnlPct === null ? p.solIn : p.solIn * (1 + p.pnlPct); return { mint: p.mint, symbol: p.symbol, tokens: p.tokens, valueSol: value, netSol: -p.solIn, pnlSol: value - p.solIn }; });
+    const realized = real.trades.filter((t) => t.ok && t.pnlSol !== null).reduce((s, t) => s + (t.pnlSol ?? 0), 0);
+    const funded = real.trades.filter((t) => t.ok && (t.kind === 'deposit' || t.kind === 'withdraw')).reduce((s, t) => s + (t.kind === 'deposit' ? t.sol : -Math.abs(t.sol)), 0);
+    return { address: real.address, sol: real.sol, positions: ps, worthSol: real.sol + ps.reduce((s, p) => s + p.valueSol, 0), pnlSol: realized + ps.reduce((s, p) => s + p.pnlSol, 0), fundedSol: funded };
+  })() : null;
+
   return {
     agent: { id: a.id, handle: a.handle, name: a.name, bio: a.bio, avatarUrl: a.avatarUrl, linkedAt: a.linkedAt.toISOString(), origin: a.origin },
     status: a.origin === 'external' ? liveStatus(a.status, lastCall, a.linkedAt, now) : a.status === 'active' ? 'active' : a.status,
     lastApiCallAt: lastCall?.toISOString() ?? null, network: d.config.solanaNetwork,
     mind: Object.fromEntries(Object.entries(mind).map(([t, v]) => { const m = MIND[t as MindTraitKey]; return [t, { name: m.name, low: m.low, high: m.high, ...v }]; })) as OwnerAgentView['mind'],
     limits: await ownerLimits(db, d.config, { id: a.id, origin: a.origin }, now),
-    wallet: facts ? { address: facts.publicKey, sol: facts.sol, positions, worthSol: worth, pnlSol: positions.reduce((s, p) => s + p.pnlSol, 0) + closedPnl, fundedSol: Number(g?.n ?? 0) / L } : null,
-    trades: tx.map((t) => ({ at: t.at.toISOString(), kind: t.kind, mint: t.mint, symbol: t.symbol, sol: t.delta / L, tokens: t.tokens / 1e6, signature: t.sig })),
+    wallet: d.config.solanaNetwork === 'mainnet' ? realWallet : facts ? { address: facts.publicKey, sol: facts.sol, positions, worthSol: worth, pnlSol: positions.reduce((s, p) => s + p.pnlSol, 0) + closedPnl, fundedSol: Number(g?.n ?? 0) / L } : null,
+    trades: real ? real.trades.map((t) => ({ at: t.at, kind: t.kind, mint: null, symbol: t.symbol, sol: t.kind === 'buy' || t.kind === 'withdraw' || t.kind === 'escrow_in' ? -Math.abs(t.sol) : Math.abs(t.sol), tokens: 0, signature: t.sig ?? '' }))
+      : tx.map((t) => ({ at: t.at.toISOString(), kind: t.kind, mint: t.mint, symbol: t.symbol, sol: t.delta / L, tokens: t.tokens / 1e6, signature: t.sig })),
     posts: own.map((p) => ({ id: p.id, body: p.body, at: p.at.toISOString(), replyTo: p.parentId })),
     dms: msgs.map((m) => ({ conversationId: m.c!, with: members.filter((x) => x.c === m.c && x.id !== agentId).map((x) => x.u), author: m.author, body: m.body, at: m.at.toISOString() })),
     relations: { followers: fo?.n ?? 0, following: fi?.n ?? 0, friends: await ties('friend'), rivals: await ties('rival') },
