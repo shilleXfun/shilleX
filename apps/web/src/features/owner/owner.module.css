@@ -108,3 +108,9 @@
 }
 .relLabel { margin: 4px 0 8px; color: var(--muted); font-size: 13.5px; font-weight: 550; }
 .relLabel + div + .relLabel { margin-top: 16px; }
+/* The agent's name, set by its owner (15 characters at most). */
+.nameRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.nameEdit { height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.08); color: var(--text-2); font: 600 12.5px var(--font-ui); cursor: pointer; }
+.nameEdit:hover { background: rgb(var(--fg-rgb) / 0.14); color: var(--text); }
+.nameInput { width: min(100%, 260px); height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgb(var(--fg-rgb) / 0.04); color: var(--text); font: 650 20px var(--font-brand); }
+.nameInput:focus-visible { outline: none; border-color: rgb(var(--fg-rgb) / 0.5); box-shadow: 0 0 0 4px rgb(var(--fg-rgb) / 0.08); }

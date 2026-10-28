@@ -32,7 +32,7 @@ export function OwnerAgentPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['owner', 'agent', handle], queryFn: () => get<OwnerAgentView>(`/owner/agents/${encodeURIComponent(handle)}`), refetchInterval: 20_000 });
   const [tab, setTab] = useState('acts');
-  const save = async (body: { mind?: Partial<Record<MindTraitKey, number>>; limits?: Record<string, unknown>; wallet?: WalletProof }) => {
+  const save = async (body: { name?: string; mind?: Partial<Record<MindTraitKey, number>>; limits?: Record<string, unknown>; wallet?: WalletProof }) => {
     try { await put(`/owner/agents/${encodeURIComponent(handle)}/settings`, body); await qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] }); toast('Saved. Your agent reads it on its next turn.'); }
     catch (e) { toast(errorMessage(e), { tone: 'error' }); throw e; }
   };
@@ -47,7 +47,7 @@ export function OwnerAgentPage() {
           <div className={s.heroRow}>
             <Avatar src={v.agent.avatarUrl ?? ''} size={72} agent />
             <div className={s.heroWho}>
-              <h2 className={s.title}>{v.agent.name}</h2>
+              <NameField name={v.agent.name} onSave={(name) => save({ name })} />
               <p className={s.handle}>@{v.agent.handle}</p>
               <div className={L.meta}>
                 <StatusPill status={v.status} />
@@ -171,5 +171,32 @@ function Toggle({ label, hint, on, set }: { label: string; hint: string; on: boo
       <span><strong>{label}</strong><small>{hint}</small></span>
       <button type="button" role="switch" aria-checked={on} aria-label={label} className={cx(s.switch, on && s.on)} onClick={() => set(!on)} />
     </div>
+  );
+}
+
+/** The agent's name, which its owner sets (up to 15 characters): shown as the title, edited in place. */
+function NameField({ name, onSave }: { name: string; onSave: (name: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const [busy, setBusy] = useState(false);
+  if (!editing) {
+    return (
+      <div className={s.nameRow}>
+        <h2 className={s.title}>{name}</h2>
+        <button type="button" className={s.nameEdit} onClick={() => { setValue(name); setEditing(true); }}>Rename</button>
+      </div>
+    );
+  }
+  const submit = async () => {
+    setBusy(true);
+    try { await onSave(value.trim()); setEditing(false); } catch { /* the toast said why */ } finally { setBusy(false); }
+  };
+  return (
+    <form className={s.nameRow} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <input className={s.nameInput} value={value} onChange={(e) => setValue(e.target.value)} maxLength={15} aria-label="Agent name" autoFocus />
+      <span className={s.meta}>{[...value].length}/15</span>
+      <Button type="submit" size="sm" variant="primary" loading={busy} disabled={!value.trim()}>Save</Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+    </form>
   );
 }

@@ -15,7 +15,9 @@ import { checkHandle } from '../raised/rules.ts';
 import { hashKey, newKey } from './keys.ts';
 
 export const REGISTRATION_TTL_MS = 24 * 3600_000;
-export const NAME_MAX = 40, BIO_MAX = 160;
+/** An agent name is at most 15 characters (owner, 2026-10-28); its owner can set it from the dashboard. */
+export const NAME_MAX = 15, BIO_MAX = 160;
+const BARE_DOMAIN = /[\p{L}\p{N}-]\.(?:com|net|org|io|xyz|app|gg|co|me|fun|ai|dev|so|sh|link|ly|to|tv|info)\b/iu;
 /** Crockford's base32: no I, L, O or U, so a code read aloud or copied by hand survives. 12 characters, 60 bits. */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const newClaimCode = () => [...randomBytes(12)].map((b) => ALPHABET[b & 31]).join('');
@@ -61,7 +63,8 @@ export function cleanField(code: string, v: string | undefined, max: number, req
   }
   if ([...v.trim()].length > max) throw errors.badRequest(code, `At most ${max} characters`);
   const c = cleanModelText(v, max, []);
-  if (c === null) throw errors.badRequest(code, 'Plain text only: no links, @mentions, markup or control characters');
+  // A bare domain ("see x.com") is a link too: X and most apps turn it into one.
+  if (c === null || BARE_DOMAIN.test(c)) throw errors.badRequest(code, 'Plain text only: no links, @mentions, markup or control characters');
   return c;
 }
 

@@ -83,3 +83,27 @@ describe('through the API', () => {
     await world.stop();
   }, 60_000);
 });
+
+describe('the owner names the agent', () => {
+  it('sets a name of up to 15 characters, plain text only', async () => {
+    const t = await makeTestApp({ config: loadConfig({ NODE_ENV: 'test', SESSION_SECRET: 's', WORLD_CHAIN: 'memory', WORLD_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' }) });
+    const world = await bootAgents(t.app, {});
+    const inj = async (method: 'GET' | 'POST' | 'PUT', url: string, o: { body?: unknown; cookie?: string } = {}) => {
+      const r = await t.app.inject({ method, url, payload: o.body as never, headers: o.cookie ? { cookie: o.cookie } : {} });
+      return { status: r.statusCode, body: r.json() as Record<string, any> };
+    };
+    const s = await t.app.inject({ method: 'POST', url: '/api/auth/signup', payload: { username: 'namer', displayName: 'Namer', password: 'password-123' } });
+    const cookie = String(s.headers['set-cookie']).split(';')[0]!;
+    const key = (await inj('GET', '/api/owner', { cookie })).body.linkKey.key;
+    const long = await inj('POST', '/api/v1/agents/register', { body: { handle: 'longnamebot', name: 'A name far too long here', link_key: key } });
+    expect(long.body.code, JSON.stringify(long)).toBe('NAME_INVALID');
+    await inj('POST', '/api/v1/agents/register', { body: { handle: 'namebot', name: 'Name Bot', link_key: key } });
+    const ok = await inj('PUT', '/api/owner/agents/namebot/settings', { cookie, body: { name: 'Tide Reader' } });
+    expect(ok.status).toBe(200);
+    const [u] = await t.db.select().from(users).where(eq(users.username, 'namebot'));
+    expect(u!.displayName).toBe('Tide Reader');
+    expect((await inj('PUT', '/api/owner/agents/namebot/settings', { cookie, body: { name: 'Sixteen letters!' } })).status).toBe(400);
+    expect((await inj('PUT', '/api/owner/agents/namebot/settings', { cookie, body: { name: 'see x.com' } })).body.code).toBe('NAME_INVALID');
+    await world.stop();
+  }, 60_000);
+});

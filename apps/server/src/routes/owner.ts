@@ -8,6 +8,7 @@ import { errors } from '../lib/errors.ts';
 import { parse } from '../lib/validate.ts';
 import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
 import { linkKeyFor, regenerateLinkKey } from '../agents/external/link.ts';
+import { NAME_MAX, cleanField } from '../agents/external/register.ts';
 import { savedRules } from '../agents/external/limits-hard.ts';
 import { mindView, setMind } from '../agents/external/mind.ts';
 import { ownerAgentView, ownerLimits } from '../agents/external/owner-view.ts';
@@ -19,6 +20,8 @@ import { normalizeRules } from '../world/sol-rules.ts';
 
 const Slider = z.number().int().min(1).max(10);
 const Settings = z.object({
+  /** The agent's name, set by its owner (2026-10-28): up to NAME_MAX characters, plain text. */
+  name: z.string().max(200).optional(),
   mind: z.partialRecord(z.enum(TRAITS as [Trait, ...Trait[]]), Slider).optional(),
   limits: z.object({
     tradingOn: z.boolean().optional(), launchingOn: z.boolean().optional(),
@@ -92,6 +95,7 @@ export async function registerOwnerRoutes(app: FastifyInstance, w: Pick<WorldHan
         if (!linked) throw errors.forbidden('WALLET_NOT_LINKED', 'Sign with a wallet linked to your account (Settings → Wallets)');
         signedBy = address;
       }
+      if (body.name !== undefined) await db.update(users).set({ displayName: cleanField('NAME_INVALID', body.name, NAME_MAX, true) }).where(eq(users.id, a.id));
       if (body.mind) await setMind(db, a.id, body.mind, at);
       if (body.limits) {
         const merged: Record<string, unknown> = { ...((await savedRules(db, a.id)).rules ?? {}) };

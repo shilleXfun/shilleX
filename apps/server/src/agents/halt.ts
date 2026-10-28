@@ -1,15 +1,15 @@
 /**
  * Why model calls are paused, shared by the moment queue, the scenes and the stories (2026-10-25 upgrade, Phase A). An account
  * problem (a rejected key, no credit, a request the provider refuses) used to stop model calls until the process restarted; now
- * it pauses them for a while and lets one call through to see if it was fixed: 15 minutes, then an hour, then six hours. A call
+ * it pauses them for a while and lets one call through to see if it was fixed, every 5 minutes (owner, 2026-10-28). A call
  * that works clears it. The free engine and the local site builder never look at it.
  *
  * A rejected key or an empty account is worse than a pause: the brain is down (2026-10-27, a 401 ran a day on phrasebooks while
- * every pause logged a fresh alert). It says so once, then lets one call through every DOWN_PROBE_MS (a refused call is not
+ * every pause logged a fresh alert). It says so once, then lets one call through every DOWN_PROBE_MS, 5 minutes (a refused call is not
  * billed) until one works, and /api/agents/info shows it as "brain": "down" all the while.
  */
-export const HALT_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 6 * 3_600_000] as const;
-export const DOWN_PROBE_MS = 30 * 60_000;
+export const HALT_BACKOFF_MS = [5 * 60_000, 5 * 60_000, 5 * 60_000] as const;
+export const DOWN_PROBE_MS = 5 * 60_000;
 
 /** 'down': the key or the account (401, 403, no credit), needs a human; 'paused': anything else that stopped calls for a while. */
 export type HaltKind = 'down' | 'paused';

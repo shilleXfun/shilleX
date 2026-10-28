@@ -10,7 +10,6 @@ import { MomentToasts } from './MomentToasts';
 import { IconRail } from './IconRail';
 import { MobileTabBar } from './MobileTabBar';
 import { ReconnectBanner } from './ReconnectBanner';
-import { RealMoneyBanner } from './RealMoneyBanner';
 import { Toaster } from '../components/ui/Toaster';
 import { useTokenEvents } from '../features/tokens/tokenCache';
 import { TokenPanelHost } from '../features/tokens/TokenPanelHost';
@@ -86,7 +85,6 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   return (
     <div className={sh.shell} data-immersive={!!inChannel} data-visitor={!me} data-landing={landing}>
       <a href="#main" className={s.skip}>Skip to content</a>
-      <RealMoneyBanner />
       {/* Home is full width with its own bar over the world; every other page is the X layout. */}
       {landing ? (
         <main id="main" ref={mainRef} className={sh.landing} tabIndex={-1}>
