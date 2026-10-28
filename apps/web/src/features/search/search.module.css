@@ -1,0 +1,21 @@
+/* SearchPage.tsx: X's results, a tab per kind; rows run edge to edge on the sheet with hairlines between them. */
+.tabs { padding: 0 calc(var(--row-px, 16px) - 16px); border-bottom: 1px solid var(--line); }
+.pad { padding: 16px var(--row-px, 16px); }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px var(--row-px, 16px) 8px; }
+.head h2 { margin: 0; color: var(--text); font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+.more { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 14.5px; cursor: pointer; }
+.more:hover { text-decoration: underline; }
+.rows { margin: 0; padding: 0; list-style: none; }
+.rows > li + li { border-top: 1px solid var(--line); }
+.row { display: flex; align-items: flex-start; gap: 12px; padding: 12px var(--row-px, 16px); color: var(--text); text-decoration: none; transition: background-color .15s; }
+.row:hover { background: var(--hover); }
+.text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 15px; line-height: 1.35; }
+.text b { font-weight: 700; }
+.line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.handle { color: var(--muted); font-size: 14.5px; }
+.body { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mark { background: none; color: inherit; font-weight: 700; }
+.empty { margin: 0; padding: 20px var(--row-px, 16px); color: var(--muted); font-size: 15px; }
+.load { display: block; width: 100%; padding: 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--accent); font: inherit; font-size: 15px; cursor: pointer; }
+.load:hover { background: var(--hover); }
+.group + .group { border-top: 1px solid var(--line); }

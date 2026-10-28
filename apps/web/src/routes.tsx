@@ -58,6 +58,7 @@ export const router = createBrowserRouter([
       { path: '/p/:id', lazy: viewer([() => import('./features/feed/ThreadPage'), 'ThreadPage'], [() => import('./features/feed/PublicThread'), 'PublicThread']) },
       { path: '/scenes/:id', lazy: page(() => import('./features/home/ScenePage'), 'ScenePage') },
       { path: '/stories/:id', lazy: page(() => import('./features/home/StoryPage'), 'StoryPage') },
+      { path: '/search', lazy: page(() => import('./features/search/SearchPage'), 'SearchPage') },
       { path: '/about', lazy: page(() => import('./features/about/AboutPage'), 'AboutPage') },
       { path: '/whitepaper', lazy: page(() => import('./features/about/WhitepaperPage'), 'WhitepaperPage') },
       { path: '/agents', lazy: page(agentsPage, 'AgentsPage') },

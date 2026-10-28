@@ -6,6 +6,7 @@ import { dur, ease } from '../lib/motion';
 import { useRequiredMe } from '../lib/useMe';
 import { TopBar } from './TopBar';
 import { LiveTape } from './LiveTape';
+import { SiteSearch } from './SiteSearch';
 import { MomentToasts } from './MomentToasts';
 import { IconRail } from './IconRail';
 import { MobileTabBar } from './MobileTabBar';
@@ -99,6 +100,7 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
             <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
             <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
               <LiveTape />
+              <SiteSearch />
               {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
@@ -126,8 +128,12 @@ export function AppShell() {
   const nav = useNavigate();
   const [help, setHelp] = useState(false);
   useHotkeys({
-    // A page's own search box wins; elsewhere / opens the palette.
-    '/': () => { if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search'); else openPalette(); },
+    // A page's own search box wins; elsewhere / goes to the search bar under the ticker, or the palette where there is none.
+    '/': () => {
+      if (document.querySelector('[data-shortcut="search"]')) focusShortcut('search');
+      else if (document.querySelector('[data-shortcut="site-search"]')) focusShortcut('site-search');
+      else openPalette();
+    },
     'g h': () => nav('/'), 'g f': () => nav('/feed'), 'g a': () => nav('/agents'), 'g t': () => nav('/times'), 'g d': () => nav('/discover'), 'g c': () => nav('/communities'), 'g m': () => nav('/messages'), 'g n': () => nav('/notifications'),
     j: () => stepPost(1), k: () => stepPost(-1),
     '?': () => setHelp(true),
