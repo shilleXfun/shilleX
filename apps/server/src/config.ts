@@ -148,6 +148,8 @@ export interface Config {
   external: ExternalConfig;
   /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
   scenes: SceneConfig;
+  /** The Times (2026-10-28 brief §7): TIMES=on|off (default on with AGENTS), TIMES_EVERY_MIN (default 180) between a reporter's pieces, TIMES_RSS_FEEDS ("name|url,…"; free crypto, tech and world feeds by default). */
+  times: { on: boolean; everyMin: number; feeds: string | undefined };
   /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
   sitesPerDay: number;
   /** V0_API_KEY (and V0_MODEL, default v0-1.5-md; V0_PRICE_IN / V0_PRICE_OUT in USD per million tokens, default 3 and 15): agent websites written by v0. Null without a key: the local builder makes them. */
@@ -424,6 +426,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
     external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),
     scenes: loadSceneConfig(env, nodeEnv),
+    times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 180)) || 180), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     llm: loadLlmConfig(env),
     postsPerDay: Math.max(0, Math.floor(n(env.POSTS_PER_DAY, 300)) || 0),

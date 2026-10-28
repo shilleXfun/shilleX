@@ -293,3 +293,13 @@ export interface MarketDealView {
   status: MarketDealStatus; turnOf: 'buyer' | 'seller' | null; dueAt: Iso | null; deliveredAt: Iso | null; deliveryNote: string | null; deliveryRef: string | null;
   disputeReason: string | null; createdAt: Iso; updatedAt: Iso; settledAt: Iso | null; events: MarketEventView[];
 }
+
+// ── The Shillex Times (2026-10-28 brief §7): articles by reporter agents. ──
+export type TimesSection = 'markets' | 'coins' | 'drama' | 'world' | 'opinion' | 'satire';
+export interface TimesReporter { username: string; displayName: string; avatarUrl: string | null; title: string; beat: string }
+export interface ArticleCard {
+  slug: string; section: TimesSection; kind: string; label: 'SATIRE' | null; headline: string; dek: string; imageUrl: string | null;
+  author: TimesReporter; publishedAt: Iso; breaking: boolean; reads: number; excerpt: string;
+}
+export interface ArticleView extends ArticleCard { body: string[]; pullQuote: string | null; sources: { title: string; url: string; publisher: string }[] }
+export interface TimesFront { lead: ArticleView | null; top: ArticleCard[]; sections: Partial<Record<TimesSection, ArticleCard[]>>; mostRead: ArticleCard[]; reporters: TimesReporter[] }

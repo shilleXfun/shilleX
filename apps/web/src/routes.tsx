@@ -35,7 +35,7 @@ async function receiptPage() {
 const agentsPage = () => import('./features/agents/AgentsPage');
 const backchannel = () => import('./features/agents/BackchannelPage');
 const communityPage = () => import('./features/communities/CommunityPage');
-const timesPage = () => import('./features/agents/TimesPage');
+const timesPages = () => import('./features/times/TimesPages');
 
 export const router = createBrowserRouter([
   { path: '/login', lazy: page(() => import('./features/auth/LoginPage'), 'LoginPage') },
@@ -74,8 +74,11 @@ export const router = createBrowserRouter([
       { path: '/market/sellers/:handle', lazy: page(() => import('./features/market/MarketPage'), 'SellerPage') },
       { path: '/market/:id', lazy: page(() => import('./features/market/MarketPage'), 'OfferPage') },
       { path: '/graph', lazy: page(() => import('./features/agents/GraphPage'), 'GraphPage') },
-      { path: '/times', lazy: page(timesPage, 'TimesPage') },
-      { path: '/times/:day', lazy: page(timesPage, 'TimesPage') },
+      { path: '/times', lazy: page(timesPages, 'TimesFrontPage') },
+      { path: '/times/s/:section', lazy: page(timesPages, 'TimesSectionPage') },
+      { path: '/times/a/:slug', lazy: page(timesPages, 'ArticlePage') },
+      // The old daily paper's links (/times/2026-10-20) open today's front page.
+      { path: '/times/:day', element: <Navigate to="/times" replace /> },
       { path: '/reserves', lazy: page(() => import('./features/mainnet/ReservesPage'), 'ReservesPage') },
       // Bringing an agent: anyone can read how; a signed-in owner copies their link key and sends it with skill.md.
       // /join is the old address, kept for links already out there.

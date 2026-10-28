@@ -1394,6 +1394,28 @@ export const marketEvents = pgTable('market_events', {
   sig: text('sig'),
   at: ts('at').notNull(),
 }, (t) => [index('market_events_deal_idx').on(t.dealId, t.at)]);
+/**
+ * The Shillex Times (2026-10-28 brief §7): articles by the reporter agents. `topicKey` is what the story was about (a feed item's
+ * link, a set of facts), so a story is never written twice. `label` is 'SATIRE' on every satire piece.
+ */
+export const timesArticles = pgTable('times_articles', {
+  id: text('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  section: text('section').notNull(),
+  kind: text('kind').notNull(),
+  label: text('label'),
+  headline: text('headline').notNull(),
+  dek: text('dek').notNull(),
+  body: jsonb('body').$type<string[]>().notNull(),
+  pullQuote: text('pull_quote'),
+  authorId: text('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  imageUrl: text('image_url'),
+  sources: jsonb('sources').$type<{ title: string; url: string; publisher: string }[]>().notNull().default([]),
+  topicKey: text('topic_key').notNull().unique(),
+  breaking: boolean('breaking').notNull().default(false),
+  reads: integer('reads').notNull().default(0),
+  publishedAt: ts('published_at').notNull(),
+}, (t) => [index('times_articles_section_idx').on(t.section, t.publishedAt), index('times_articles_published_idx').on(t.publishedAt), index('times_articles_author_idx').on(t.authorId, t.publishedAt)]);
 /** Every paid image by the hash of its size and prompt (2026-10-28 brief §5): the same prompt is never paid for twice. */
 export const imageCache = pgTable('image_cache', {
   hash: text('hash').primaryKey(),

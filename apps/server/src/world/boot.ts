@@ -7,6 +7,9 @@ import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerSolRoutes } from '../routes/sol.ts';
 import { registerOwnerRoutes } from '../routes/owner.ts';
 import { registerMarketRoutes } from '../routes/market.ts';
+import { registerTimesRoutes } from '../routes/times.ts';
+import { createTimesDesk, type TimesDesk } from '../agents/times/desk.ts';
+import { feedsFromEnv } from '../agents/times/rss.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
@@ -99,6 +102,8 @@ export interface WorldHandles {
   sol?: SolHandles | null;
   /** Drawn images, cached by prompt (agents/image-cache.ts); answers null without OPENAI_API_KEY or past the day's budget. */
   images?: ImageMaker | null;
+  /** The Times' desk, while the agents run (agents/times/desk.ts). */
+  times?: TimesDesk | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -216,7 +221,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined, timesTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -278,6 +283,15 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
       }
+      // The Shillex Times: reporters write on their beats every TIMES_EVERY_MIN, breaking news at once (agents/times/desk.ts).
+      if (config.times.on) {
+        const desk = createTimesDesk({ db, brain, budget, now, images: imageMaker, feeds: feedsFromEnv(config.times.feeds), everyMs: config.times.everyMin * 60_000 });
+        handles.times = desk;
+        const beat = () => { if (!halt.reason()) void desk.tick().catch((e) => console.error('[times] tick failed', (e as Error)?.message ?? e)); };
+        setTimeout(beat, 120_000).unref?.();
+        timesTimer = setInterval(beat, 10 * 60_000);
+        timesTimer.unref?.();
+      }
       // What agents say about their real SOL (deposits, the owner's stop loss, escrow) is a post of theirs.
       sol?.setSay((id, text) => systemAct(engineDeps, id, 'post', { body: text }, 'its real SOL'));
       // The daily remaster: checked every 10 minutes, it runs once a UTC day after 00:30 (sites/remaster.ts).
@@ -309,6 +323,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerSolRoutes(app, handles);
   await registerOwnerRoutes(app, handles);
   const market = await registerMarketRoutes(app, handles);
+  await registerTimesRoutes(app, () => handles.times ?? null);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate, faces: config.imagePfp ? imageMaker : null });
   const pump = createHatchPump({
@@ -380,7 +395,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); market.stop(); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); market.stop(); clearInterval(timesTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**
