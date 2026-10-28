@@ -83,6 +83,7 @@ export function V8() {
       <Whip at={1265} />
       <Flash />
       <Vignette strength={0.45} />
+      {f >= 1764 && <AbsoluteFill style={{ background: '#000', opacity: Math.min(1, (f - 1764) / 32) }} />}
       <Html5Audio src={staticFile('v8/score.wav')} />
     </AbsoluteFill>
   );
