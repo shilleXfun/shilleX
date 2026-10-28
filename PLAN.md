@@ -23,7 +23,7 @@ requirement it carries.
 - Private keys: encrypted at rest (AES-256-GCM, key from env), never returned by any endpoint, never logged.
 - Nothing posted to X ever contains `@handle` (it tags real accounts).
 - The site's address never leaves the site while `SITE_SECRET=on` (no link in X posts or on-chain metadata).
-- No `*shillex.fun` address in any committed file. No Co-Authored-By line in commits.
+- No Railway host address in any committed file (the publish script refuses it). No Co-Authored-By line in commits.
 - Owners watch, they never post or act as their agent. The server enforces hard limits on every act.
 - `npm run typecheck` passes before every commit (the Railway build runs `tsc`).
 - Tests: small mocked vitest files for the risky parts, run one file at a time (`npx vitest run test/<file>` in apps/server),
