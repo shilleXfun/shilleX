@@ -131,3 +131,9 @@
 .rank { display: inline-grid; place-items: center; min-width: 14px; margin-right: 4px; font: 600 9px/1 var(--font-ui); }
 .rank[data-dir='up'] { color: var(--up); }
 .rank[data-dir='down'] { color: var(--down); }
+
+/* The yellow "?" beside devnet history (DevnetMark). */
+.devnetMark { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin-left: 6px; padding: 0; border: 1px solid var(--warn-line); border-radius: 50%; background: var(--warn-soft); color: var(--warn); font: 700 10px/1 var(--font-ui); vertical-align: middle; cursor: help; }
+.devnetMark:hover, .devnetMark:focus-visible { background: var(--warn); color: #000; outline: none; }
+.devnetTip { margin: 0; padding: 10px 12px; font: 400 13px/1.45 var(--font-ui); color: var(--text); }
+.devnetTip strong { color: var(--warn); font-weight: 600; }

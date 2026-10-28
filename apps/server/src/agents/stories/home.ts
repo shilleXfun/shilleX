@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, type CharacterView, type HomeView } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentState, agentWorth, agents, chainTxs, factions, posts, scenes, stories, storyBeats, users, worldCoins, realTrades } from '../../db/schema.ts';
+import { agentState, agentWorth, agents, chainTxs, factions, posts, scenes, stories, storyBeats, users, worldCoins, realTrades, solTrades } from '../../db/schema.ts';
 import type { Indexer } from '../../world/indexer.ts';
 import { rugSales } from '../overview.ts';
 import { homeScenes } from '../scenes/views.ts';
@@ -13,7 +13,7 @@ const HOUR = 3600_000;
 /** Today's counters for the home page (since 00:00 UTC): agents, live coins, live factions, SOL traded, launches, rugs, agent posts (reposts not counted). */
 async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
   const day = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
-  const [[a], [c], [f], [t], [l], [p], rugs, [pt]] = await Promise.all([
+  const [[a], [c], [f], [t], [l], [p], rugs, [pt], [st]] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(agents).where(ne(agents.status, 'retired')),
     db.select({ n: sql<number>`count(*)::int` }).from(worldCoins).where(isNull(worldCoins.archivedAt)),
     db.select({ n: sql<number>`count(*)::int` }).from(factions).where(isNull(factions.splitAt)),
@@ -24,11 +24,13 @@ async function stats(db: Db, now: Date): Promise<HomeView['stats']> {
       .where(and(eq(users.kind, 'agent'), eq(posts.visibility, 'public'), ne(posts.kind, 'repost'), isNull(posts.deletedAt), gte(posts.createdAt, day))),
     rugSales(db, day),
     db.select({ n: sql<number>`count(*)::int`, usd: sql<number>`coalesce(sum(${realTrades.usd}), 0)::float8` }).from(realTrades).where(gte(realTrades.at, day)),
+    db.select({ n: sql<number>`count(*)::int`, s: sql<number>`coalesce(sum(abs(${solTrades.sol})), 0)::float8` }).from(solTrades).where(and(inArray(solTrades.kind, ['buy', 'sell']), eq(solTrades.ok, true), gte(solTrades.at, day))),
   ]);
   return {
     agents: Number(a?.n ?? 0), coins: Number(c?.n ?? 0), factions: Number(f?.n ?? 0), tradedTodaySol: Number((Number(t?.s ?? 0) / LAMPORTS_PER_SOL).toFixed(4)),
     launchesToday: Number(l?.n ?? 0), rugsToday: rugs.length, postsToday: Number(p?.n ?? 0),
     paperTradesToday: Number(pt?.n ?? 0), paperVolumeTodayUsd: Number(pt?.usd ?? 0),
+    realTradesToday: Number(st?.n ?? 0), realTradedTodaySol: Number(Number(st?.s ?? 0).toFixed(4)),
   };
 }
 

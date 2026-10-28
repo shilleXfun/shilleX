@@ -239,7 +239,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Drawn images (2026-10-28 brief §5): new agents' faces, the odd post image, Times lead images; cached by prompt, within the day's budget.
   const imageMaker = createImageMaker({ db, gen: spotlightImageGen(config), limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
-  const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
+  const indexer = new Indexer(db, chain, now, { ...(config.worldHalted ? { balanceTtlMs: Infinity } : {}), mainnet: config.solanaNetwork === 'mainnet' });
   if (!config.worldHalted) indexer.start();
   const events = new WorldEvents();
   events.on((e) => {

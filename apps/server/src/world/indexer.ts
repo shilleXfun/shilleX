@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentApiKeys, agentDecisions, agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentApiKeys, agentDecisions, agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, solPositions, solTrades, solWallets, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrices } from './market.ts';
@@ -69,7 +69,8 @@ export class Indexer {
   private lastSweep = 0;
   private backoff = 0;
   private board: { at: number; value: Promise<AgentCard[]> } | null = null;
-  constructor(private db: Db, private chain: Chain, private now: () => Date, private opts: { balanceTtlMs?: number; viewTtlMs?: number } = {}) {}
+  constructor(private db: Db, private chain: Chain, private now: () => Date, private opts: { balanceTtlMs?: number; viewTtlMs?: number; /** Mainnet: money is the real-SOL wallet's; devnet coins and trades are history. */ mainnet?: boolean } = {}) {}
+  private get dev() { return this.opts.mainnet ? { devnet: true as const } : {}; }
 
   /**
    * Keeps world_coins' prices fresh, the cache agents, the feed and the API read. A curve only moves when it is traded, so a tick
@@ -150,7 +151,7 @@ export class Indexer {
         launchedAt: c.launchedAt.toISOString(), launchSignature: c.launchSignature, priceSol, marketCapSol: priceSol === null ? null : priceSol * SUPPLY,
         curveProgress: c.curveProgress, holders: holders.get(c.mint) ?? 0, volume24hSol: s.volume24hSol, devSoldPct: s.devSoldPct, graduated: Boolean(c.graduatedAt),
         spark, change1hPct, volume1hSol: s.volume1hSol, logo: logos.has(c.mint) ? `/api/agents/coin-logo/${c.mint}.png` : null,
-        ...(c.archivedAt ? { archived: true } : {}),
+        ...(c.archivedAt ? { archived: true } : {}), ...this.dev,
       };
     });
   }
@@ -167,7 +168,7 @@ export class Indexer {
     const people = await this.summaries(rows.map((r) => r.agentId!).filter(Boolean));
     const syms = new Map((await this.db.select({ m: worldCoins.mint, s: worldCoins.symbol }).from(worldCoins)).map((r) => [r.m, r.s]));
     return rows.map((r) => ({ signature: r.signature, agent: r.agentId ? (people.get(r.agentId) ?? null) : null, kind: r.kind, mint: r.mint, symbol: r.mint ? (syms.get(r.mint) ?? null) : null,
-      sol: sol(r.lamportsDelta), tokens: tok(r.tokenDelta), counterparty: r.counterparty, createdAt: r.createdAt.toISOString(), turnId: r.turnId }));
+      sol: sol(r.lamportsDelta), tokens: tok(r.tokenDelta), counterparty: r.counterparty, createdAt: r.createdAt.toISOString(), turnId: r.turnId, ...this.dev }));
   }
 
   async holders(mint: string) {
@@ -177,6 +178,24 @@ export class Indexer {
   }
 
   private async card(u: UserRow, status: AgentCard['status'], c: Awaited<ReturnType<Indexer['context']>>, who: { origin: AgentOrigin; ownerId: string | null } = { origin: 'wild', ownerId: null }): Promise<{ card: AgentCard; positions: PositionView[] }> {
+    const mine = c.coins.filter((x) => x.creatorId === u.id);
+    const ts = c.turnStats.get(u.id);
+    const base = {
+      user: toUserSummary(u), bio: u.bio, status, coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
+      turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
+      origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id), paper: c.papers.get(u.id),
+      ...(who.origin === 'external' && Date.now() - (c.lastCall.get(u.id) ?? u.createdAt).getTime() > SLEEPING_MS ? { sleeping: true as const } : {}),
+    };
+    // Mainnet (owner, 2026-10-28): the money is its real-SOL wallet's, as last read; the devnet balance was test SOL. Its real
+    // holdings are on its wallet panel (/agents/:handle/sol).
+    if (c.real) {
+      const w = c.real.wallets.get(u.id);
+      const held = c.real.positions.get(u.id) ?? [];
+      const tokenValueSol = held.reduce((n, p) => n + p.value, 0);
+      const solBalance = w ? sol(w.lamports) : 0;
+      return { positions: [], card: { ...base, publicKey: w?.pk ?? null, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
+        pnlSol: (c.real.realized.get(u.id) ?? 0) + held.reduce((n, p) => n + p.value - p.solIn, 0), money: 'real' } };
+    }
     const pk = c.pks.get(u.id) ?? null;
     const b = await this.balancesOf(u.id, pk);
     const prices = new Map(c.coins.map((x) => [x.mint, x]));
@@ -192,17 +211,12 @@ export class Indexer {
     // (a memory chain's airdrop) started with START.
     const capitalRows = (c.txsByAgent.get(u.id) ?? []).filter((x) => CAPITAL_KINDS.has(x.kind));
     const basis = capitalRows.length ? capitalRows.reduce((n, x) => n + sol(x.lamportsDelta), 0) : c.funded.has(u.id) ? START : null;
-    const mine = c.coins.filter((x) => x.creatorId === u.id);
-    const ts = c.turnStats.get(u.id);
     return {
       positions,
       card: {
-        user: toUserSummary(u), bio: u.bio, status, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
+        ...base, publicKey: pk, solBalance, tokenValueSol, totalSol: solBalance + tokenValueSol,
         // RAISE's top-ups arrive as 'receive' rows, outside the capital basis, so P&L leaves them out here.
-        pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis - sol(c.topUps.get(u.id) ?? 0), coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
-        turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
-        origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id), paper: c.papers.get(u.id),
-        ...(who.origin === 'external' && Date.now() - (c.lastCall.get(u.id) ?? u.createdAt).getTime() > SLEEPING_MS ? { sleeping: true as const } : {}),
+        pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis - sol(c.topUps.get(u.id) ?? 0),
       },
     };
   }
@@ -234,7 +248,25 @@ export class Indexer {
       records: trackRecords(th),
       lastCall: new Map(keys.map((k) => [k.a, k.last ? new Date(k.last) : null])),
       papers: await this.paperBooks(only),
+      real: this.opts.mainnet ? await this.realMoney(only) : null,
     };
+  }
+
+  /** Mainnet: each agent's vault wallet (balance as last read), its open real positions at the coin's last price, and its realized P&L. */
+  private async realMoney(only?: string) {
+    const [ws, ps, pnl] = await Promise.all([
+      this.db.select({ o: solWallets.ownerId, pk: solWallets.publicKey, l: solWallets.lamports }).from(solWallets).where(only ? eq(solWallets.ownerId, only) : undefined),
+      this.db.select().from(solPositions).where(only ? eq(solPositions.agentId, only) : undefined),
+      this.db.select({ a: solTrades.agentId, s: sql<number>`coalesce(sum(${solTrades.pnlSol}), 0)::float8` }).from(solTrades).where(and(eq(solTrades.ok, true), only ? eq(solTrades.agentId, only) : undefined)).groupBy(solTrades.agentId),
+    ]);
+    const prices = ps.length ? new Map((await this.db.select({ a: realMarket.address, p: realMarket.priceUsd }).from(realMarket).where(inArray(realMarket.address, ps.map((p) => p.mint)))).map((r) => [r.a, r.p])) : new Map<string, number>();
+    const positions = new Map<string, { solIn: number; value: number }[]>();
+    for (const p of ps) {
+      const price = prices.get(p.mint);
+      const value = price && p.entryPriceUsd > 0 ? p.solIn * (price / p.entryPriceUsd) : p.solIn;
+      positions.set(p.agentId, [...(positions.get(p.agentId) ?? []), { solIn: p.solIn, value }]);
+    }
+    return { wallets: new Map(ws.map((w) => [w.o, { pk: w.pk, lamports: Number(w.l) }])), positions, realized: new Map(pnl.map((r) => [r.a, Number(r.s)])) };
   }
 
   /** Every agent's real-coin paper book (or one agent's): cash plus each position at the coin's last price. */

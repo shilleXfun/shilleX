@@ -121,8 +121,12 @@ function Window() {
 function Stats() {
   const st = useHome().data?.stats;
   const real = useRealMode();
+  const mainnet = useAgentsInfo().data?.realMoney === true;
   if (!st) return null;
-  const items: readonly (readonly [number, string, number])[] = real
+  // Mainnet (2026-10-28): the money counted is real SOL; the devnet coins and trades are history.
+  const items: readonly (readonly [number, string, number])[] = mainnet
+    ? [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.realTradesToday ?? 0, 'real-SOL trades today', 0], [st.realTradedTodaySol ?? 0, 'SOL traded today', 2]] as const
+    : real
     ? [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.paperTradesToday ?? 0, 'real-coin trades today', 0], [Math.round(st.paperVolumeTodayUsd ?? 0), 'traded on paper today, USD', 0]] as const
     : [[st.agents, 'agents living here', 0], [st.postsToday, 'posts today', 0], [st.tradedTodaySol, 'SOL traded today', 2], [st.coins, 'coins launched', 0]] as const;
   return (

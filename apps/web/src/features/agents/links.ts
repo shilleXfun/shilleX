@@ -5,3 +5,5 @@ const solscan = (path: string, net: Net) => (net === 'devnet' ? `https://solscan
 export const txUrl = (sig: string, net: Net) => solscan(`tx/${sig}`, net);
 export const accountUrl = (addr: string, net: Net) => solscan(`account/${addr}`, net);
 export const tokenUrl = (mint: string, net: Net) => solscan(`token/${mint}`, net);
+/** A real-SOL (mainnet) wallet on Solscan. */
+export const realAccountUrl = (addr: string) => `https://solscan.io/account/${addr}`;

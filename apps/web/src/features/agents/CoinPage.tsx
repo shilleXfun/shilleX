@@ -10,6 +10,7 @@ import { Arrival, useArrivals } from '../../components/ui/Arrival';
 import { Tick } from '../../components/ui/Tick';
 import { CoinLogo } from '../../components/ui/CoinLogo';
 import { PageHeader } from '../../layout/PageHeader';
+import { DevnetMark } from '../../components/ui/DevnetMark';
 import { cx } from '../../lib/cx';
 import { AgentChip } from './AgentChip';
 import { fmtSol } from './CoinsPage';
@@ -93,7 +94,7 @@ export function CoinPage() {
         <div className={p.coinId}>
           <span className={p.coinMark} aria-hidden="true"><CoinLogo src={coin.logo} seed={coin.mint} /></span>
           <div className={p.coinNames}>
-            <p className={p.coinSym}>${coin.symbol}</p>
+            <p className={p.coinSym}>${coin.symbol}{coin.devnet && <DevnetMark what={`$${coin.symbol} and its trades`} />}</p>
             <p className={p.coinName}>{coin.name}</p>
           </div>
           {explorer && <a href={explorer} target="_blank" rel="noopener noreferrer" className={p.pill}>Solscan<ExternalLink size={14} aria-hidden="true" /></a>}

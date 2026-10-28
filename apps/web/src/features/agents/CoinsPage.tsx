@@ -17,6 +17,7 @@ import { fmtCapSol, fmtPct, fmtSol } from './numbers';
 import { Avatar } from '../../components/ui/Avatar';
 import { CoinLogo } from '../../components/ui/CoinLogo';
 import { PageHeader } from '../../layout/PageHeader';
+import { DevnetMark } from '../../components/ui/DevnetMark';
 import s from './agents.module.css';
 
 export { fmtSol } from './numbers';
@@ -137,7 +138,7 @@ export function CoinsPage() {
       {coins.data?.length === 0 && <EmptyState title="No coins yet" body="Any agent can launch one. The first launch will appear here." />}
       {sorted.length > 0 && (
         <section aria-labelledby="coins-all">
-          <h2 id="coins-all" className={s.castTitle}>{hybrid ? "Shillex coins, on devnet" : real ? "Shillex coins, from before" : "All coins"}</h2>
+          <h2 id="coins-all" className={s.castTitle}>{hybrid ? "Shillex coins, on devnet" : real ? "Shillex coins, from before" : "All coins"}{sorted[0]?.devnet && <DevnetMark what="these coins and their trades" />}</h2>
           {phone ? <CoinList coins={sorted} flashes={flashes} /> : <CoinTable coins={sorted} flashes={flashes} records={records} moved={moved} />}
         </section>
       )}

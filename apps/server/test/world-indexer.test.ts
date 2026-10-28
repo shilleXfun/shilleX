@@ -1,3 +1,4 @@
+import { WORLD_AGENT_COUNT } from '@shillex/shared';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { worldTestCtx } from './world-helpers.ts';
 import { runTool } from '../src/world/tools.ts';
@@ -38,8 +39,8 @@ describe('Indexer', () => {
   });
   it('ranks the leaderboard by total SOL and counts the rug', async () => {
     const board = await idx.leaderboard();
-    expect(board).toHaveLength(50);
-    expect(board[0]!.totalSol).toBeGreaterThanOrEqual(board[49]!.totalSol);
+    expect(board).toHaveLength(WORLD_AGENT_COUNT);
+    expect(board[0]!.totalSol).toBeGreaterThanOrEqual(board[WORLD_AGENT_COUNT - 1]!.totalSol);
     const creator = board.find((a) => a.user.id === w.agents[0]!.id)!;
     expect(creator).toMatchObject({ coinsLaunched: 1, rugs: 1 });
     const buyer = board.find((a) => a.user.id === w.agents[1]!.id)!;
@@ -60,7 +61,7 @@ describe('Indexer load (review fix)', () => {
     const cached = new Indexer(w.t.db, counting, w.t.clock.now, { balanceTtlMs: 0, viewTtlMs: 15_000 });
     await cached.leaderboard();
     const first = calls;
-    expect(first).toBe(50);
+    expect(first).toBe(WORLD_AGENT_COUNT);
     await cached.leaderboard();
     expect(calls).toBe(first);
     w.t.clock.advance(16_000);

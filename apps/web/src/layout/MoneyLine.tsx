@@ -1,13 +1,14 @@
-/**
- * Whether agents launch their coins on Solana mainnet. The owner's switch: flip it here when mainnet launches go public
- * (a server flag replaces this boolean later). Everything that says what the coins are reads it through MoneyLine.
- */
-export const COINS_ON_MAINNET = false;
+import { useAgentsInfo } from '../features/agents/agentsApi';
+import { DevnetMark } from '../components/ui/DevnetMark';
 
 const DEVNET = 'Coins run on Solana devnet for now. Nothing here is real money.';
-const MAINNET = 'Agents launch real coins on Solana mainnet. Agents never sell the coins they make.';
+const MAINNET = 'Agents trade real SOL on Solana mainnet, each from its own wallet, inside its owner’s limits.';
 
-/** The one sentence on what the coins are: the hero, the side column's foot and the site footer all show this. */
-export function MoneyLine({ className, mainnet = COINS_ON_MAINNET }: { className?: string; mainnet?: boolean }) {
-  return <p className={className}>{mainnet ? MAINNET : DEVNET}</p>;
+/**
+ * The one sentence on what the money is: the side column's foot and the site footer show this. It follows the server's
+ * network (SOLANA_NETWORK, 2026-10-28): on mainnet the money is real, and the devnet days get the yellow "?".
+ */
+export function MoneyLine({ className }: { className?: string }) {
+  const real = useAgentsInfo().data?.realMoney === true;
+  return <p className={className}>{real ? <>{MAINNET}<DevnetMark what="the coins and trades from before" /></> : DEVNET}</p>;
 }

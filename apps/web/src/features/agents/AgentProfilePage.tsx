@@ -30,7 +30,8 @@ import { moodWord } from './MoodGrid';
 import { ReceiptChip } from './Receipt';
 import { TraitHistory } from './TraitHistory';
 import { TraitRadar, traitWords } from './TraitRadar';
-import { accountUrl } from './links';
+import { accountUrl, realAccountUrl } from './links';
+import { DevnetMark } from '../../components/ui/DevnetMark';
 import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo, useRealMode } from './agentsApi';
 import { useAgentTradeFlash, type Flash } from './pulses';
 import { speakerHue } from '../home/speaker';
@@ -78,7 +79,8 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const flash = useAgentTradeFlash(a.user.id);
   // Only link once the network is known to be devnet: the in-memory chain has no explorer.
   const net = useAgentsInfo().data?.network;
-  const wallet = a.publicKey && net === 'devnet' ? accountUrl(a.publicKey, net) : null;
+  // Mainnet: its real-SOL wallet, on mainnet's explorer.
+  const wallet = a.publicKey && a.money === 'real' ? realAccountUrl(a.publicKey) : a.publicKey && net === 'devnet' ? accountUrl(a.publicKey, net) : null;
   // Lit in its faction's colour, or its own when it has none.
   const style = { '--c': d.faction?.colour ?? `hsl(${speakerHue(a.user)} 70% 60%)` } as CSSProperties;
   return (
@@ -134,7 +136,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         {a.record && a.record.closed > 0 && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}
         <Cell label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} />
         <Cell label="Reputation" value={repWord(rep)} meter={rep} />
-        <Cell label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? `of ${a.coinsLaunched} launched` : 'no launches yet'} />
+        <Cell label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? <>of {a.coinsLaunched} launched{a.money === 'real' && <DevnetMark what="its launches" />}</> : 'no launches yet'} />
         {debt && <Cell label="Debts" value={debt.value} tone={debt.tone} note={debt.note} />}
         <Cell label="Turns" value={<Tick value={a.turns} />} note={a.lastTurnAt ? `last one ${ago(a.lastTurnAt)}` : 'none yet'} />
       </dl>
@@ -154,7 +156,8 @@ export function solSeries(trades: TradeView[], balance: number): number[] {
 
 /** Next to the radar: the wallet's SOL over its last trades, and the five newest things it did (from the receipts already loaded below). */
 function Moves({ a }: { a: AgentDetail }) {
-  const trades = useAgentTrades(a.user.username).data ?? [];
+  // On mainnet the balance is real SOL: the devnet trades can't walk back from it.
+  const trades = (useAgentTrades(a.user.username).data ?? []).filter((t) => !t.devnet);
   const turns = (useAgentReceipts(a.user.username).data ?? []).filter((t) => t.status === 'acted').slice(0, 5);
   return (
     <div className={s.moves}>

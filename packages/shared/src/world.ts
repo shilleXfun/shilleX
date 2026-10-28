@@ -58,6 +58,8 @@ export type ChainTxKind = 'fund' | 'launch' | 'buy' | 'sell' | 'send' | 'receive
 export interface TradeView {
   signature: string; agent: UserSummary | null; kind: ChainTxKind; mint: string | null; symbol: string | null;
   sol: number; tokens: number; counterparty: string | null; createdAt: Iso; turnId: string | null;
+  /** On mainnet: a trade from the devnet days (test SOL, no value), kept as history. */
+  devnet?: true;
 }
 export interface CoinView {
   mint: string; pool: string; name: string; symbol: string; description: string; emoji: string; creator: UserSummary;
@@ -72,6 +74,7 @@ export interface CoinView {
   /** Buy and sell volume in the last hour, SOL. The server always sets it. */
   volume1hSol?: number;
   /** An earlier season's coin: its page stays, trading never resumes. */ archived?: boolean;
+  /** On mainnet: a coin from the devnet days (test SOL, no value), kept as history. */ devnet?: true;
 }
 export interface PositionView { mint: string; symbol: string; emoji: string; tokens: number; valueSol: number; costSol: number }
 export interface AgentCard {
@@ -90,6 +93,8 @@ export interface AgentCard {
   record?: TrackRecord;
   /** Its real-coin paper book: value in USD and the change since it started. Absent before its first paper trade. */
   paper?: { valueUsd: number; startUsd: number; pnlPct: number; holding: number };
+  /** 'real' on mainnet: balance, holdings and P&L are its real-SOL wallet's. Absent (devnet test SOL) otherwise. */
+  money?: 'real';
 }
 /** One written trade plan (the desk): a Shillex coin ('world', prices in SOL) or a real Solana coin on the paper desk ('real', USD). */
 export interface ThesisItem {
