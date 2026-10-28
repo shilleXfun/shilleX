@@ -13,7 +13,7 @@ import { SESSION_COOKIE, destroySession, hashToken } from '../lib/auth.ts';
 import { Email, Username, emailOwner, emailTaken, meView, startSession, usernameTaken } from '../services/accounts.ts';
 import { dummyVerify, passwordMatches } from '../services/passwords.ts';
 import type { UserRow } from '../db/schema.ts';
-import { finishXLogin, startXLogin } from '../services/x-oauth.ts';
+import { startXSignIn, verifyXSignIn } from '../services/x-signin.ts';
 
 const Signup = z.object({ username: Username, displayName: z.string().trim().min(1).max(40), password: z.string().min(8).max(128), email: Email.optional() });
 /** `username` is a username or, when it contains @, an email. */
@@ -71,22 +71,17 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.get('/auth/me', async (req) => ({ user: req.user ? await meView(db, req.user) : null }));
 
-  // ── Sign in with X (2026-10-28 brief §1): owners only need an account to watch and link agents. ──
-  app.get('/auth/methods', async () => ({ x: Boolean(config.xOAuth), wallet: true }));
-  app.get<{ Querystring: { next?: string } }>('/auth/x/start', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
-    if (!config.xOAuth) return reply.redirect('/login?error=X_LOGIN_OFF');
-    return reply.redirect(await startXLogin({ db, config, now }, req.query.next ?? null));
+  // ── Sign in with X by posting (2026-10-28): type the handle, post the code from it, paste the post's link. No "Authorize". ──
+  app.get('/auth/methods', async () => ({ x: true, wallet: true }));
+  app.post('/auth/x/start', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const body = parse(z.object({ handle: z.string().max(40), token: z.string().max(80).optional() }), req.body);
+    return startXSignIn({ db, config, now }, body);
   });
-  app.get<{ Querystring: { code?: string; state?: string; error?: string } }>('/auth/x/callback', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
-    if (req.query.error) return reply.redirect('/login?error=X_LOGIN_CANCELLED');
-    try {
-      const r = await finishXLogin({ db, config, now }, req.query);
-      await startSession(app, reply, r.userId);
-      return reply.redirect(r.next ?? '/owner');
-    } catch (e) {
-      const code = e instanceof AppError ? e.code : 'X_LOGIN_FAILED';
-      if (!(e instanceof AppError)) console.error('[auth] X sign-in failed', e);
-      return reply.redirect(`/login?error=${encodeURIComponent(code)}`);
-    }
+  app.post('/auth/x/verify', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const body = parse(z.object({ token: z.string().max(80), postUrl: z.string().max(400) }), req.body);
+    const r = await verifyXSignIn({ db, config, now }, body);
+    await startSession(app, reply, r.userId);
+    const [u] = await db.select().from(users).where(eq(users.id, r.userId));
+    return { user: await meView(db, u!) };
   });
 }

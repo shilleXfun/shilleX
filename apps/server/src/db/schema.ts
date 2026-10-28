@@ -1309,12 +1309,23 @@ export const ownerLinkKeys = pgTable('owner_link_keys', {
   keyEnc: text('key_enc').notNull(),
   createdAt: ts('created_at').notNull(),
 });
-/** An X account an owner signs in with (OAuth 2.0). */
-export const userXAccounts = pgTable('user_x_accounts', {
-  xUserId: text('x_user_id').primaryKey(),
+/** The X handle an owner proved by posting (lowercase, no @): it signs them in to this account from then on. */
+export const userXHandles = pgTable('user_x_handles', {
+  handle: text('handle').primaryKey(),
   userId: text('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
-  username: text('username').notNull(),
   linkedAt: ts('linked_at').notNull(),
+});
+/**
+ * A sign-in with X in progress (2026-10-28): the handle the person typed (locked in, fixable until used), the public code their
+ * post must carry, and the secret token their browser holds. Single use, 30 minutes.
+ */
+export const xSignIns = pgTable('x_sign_ins', {
+  tokenHash: text('token_hash').primaryKey(),
+  handle: text('handle').notNull(),
+  code: text('code').notNull(),
+  createdAt: ts('created_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  usedAt: ts('used_at'),
 });
 /** The mind an owner set for their agent (2026-10-28 brief §2): 1..10 per trait, only the ones they touched. */
 export const agentMinds = pgTable('agent_minds', {
@@ -1428,13 +1439,6 @@ export const imageCache = pgTable('image_cache', {
   hash: text('hash').primaryKey(),
   blobId: text('blob_id').notNull().references(() => mediaBlobs.id),
   kind: text('kind').notNull(),
-  createdAt: ts('created_at').notNull(),
-});
-/** An X sign-in in flight: the PKCE verifier for its state, for 10 minutes. */
-export const oauthStates = pgTable('oauth_states', {
-  state: text('state').primaryKey(),
-  verifier: text('verifier').notNull(),
-  next: text('next'),
   createdAt: ts('created_at').notNull(),
 });
 

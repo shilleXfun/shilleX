@@ -316,6 +316,20 @@
       "when": 1793197457737,
       "tag": "0044_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793198864375,
+      "tag": "0045_drop_x_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793198867689,
+      "tag": "0046_x_signin",
+      "breakpoints": true
     }
   ]
 }

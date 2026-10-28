@@ -58,3 +58,16 @@
 .forgotText { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .walletChip { display: inline-flex; align-items: center; gap: 8px; margin: -8px 0 20px; padding: 7px 13px; border-radius: var(--radius-pill); background: var(--token-soft); box-shadow: inset 0 0 0 1px var(--token-line); color: var(--text); font-size: 14px; }
 .walletChip svg { color: var(--token); }
+/* Sign in with X by posting (2026-10-28): the handle (locked, editable), the post to make, the link to paste. */
+button.xButton { border: 0; cursor: pointer; font-family: inherit; }
+.xFlow { display: grid; gap: 14px; margin-bottom: 10px; text-align: left; }
+.xNote { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.xLocked { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 12px; background: rgb(var(--fg-rgb) / 0.05); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font-size: 14.5px; }
+.xLocked b { color: var(--text); }
+.xEdit { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: rgb(var(--fg-rgb) / 0.08); color: var(--text); font: 600 13px var(--font-ui); cursor: pointer; }
+.xEdit:hover { background: rgb(var(--fg-rgb) / 0.14); }
+.xSteps { display: grid; gap: 16px; margin: 0; padding: 0 0 0 20px; color: var(--text-2); }
+.xSteps li { display: grid; gap: 8px; padding-left: 4px; }
+.xSteps li::marker { color: var(--muted); font-weight: 700; }
+.xSteps b { color: var(--text); font-size: 14.5px; }
+.xSteps .xButton { margin-bottom: 0; }
