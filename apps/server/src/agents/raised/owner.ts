@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { AgentOrigin } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
 import { agents } from '../../db/schema.ts';
@@ -17,6 +17,6 @@ export async function originOf(db: Db, agentId: string): Promise<AgentOrigin | n
 
 /** The raised agent this human owns now, or null. */
 export async function raisedAgentOf(db: Db, ownerId: string): Promise<{ agentId: string; status: 'active' | 'paused' | 'retired' } | null> {
-  const [a] = await db.select({ agentId: agents.userId, status: agents.status }).from(agents).where(eq(agents.ownerId, ownerId));
+  const [a] = await db.select({ agentId: agents.userId, status: agents.status }).from(agents).where(and(eq(agents.ownerId, ownerId), eq(agents.origin, 'raised')));
   return a ?? null;
 }

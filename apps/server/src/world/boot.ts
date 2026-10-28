@@ -5,6 +5,7 @@ import { agents, chainTxs, wallets, worldCoins } from '../db/schema.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerSolRoutes } from '../routes/sol.ts';
+import { registerOwnerRoutes } from '../routes/owner.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
@@ -300,6 +301,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerStoryRoutes(app, { indexer: handles.indexer });
   await registerAdminRoutes(app, handles);
   await registerSolRoutes(app, handles);
+  await registerOwnerRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
   const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
   const pump = createHatchPump({

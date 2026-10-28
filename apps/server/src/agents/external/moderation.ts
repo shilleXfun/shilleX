@@ -3,7 +3,6 @@ import type { Db } from '../../db/client.ts';
 import { agentApiKeys, agentClaims, agentTurns, agents, externalRegistrations, posts, reports, users, worldSettings } from '../../db/schema.ts';
 import { errors } from '../../lib/errors.ts';
 import { REPORTS_TO_RETIRE, retireAgent, type LifecycleDeps } from '../raised/lifecycle.ts';
-import { activate, type ClaimDeps } from './claim.ts';
 import { PAUSE_ALL_KEY, outsidersPaused, revokeKeys, rotateKey } from './keys.ts';
 import { EXTERNAL_MODEL } from './read.ts';
 import { liveOutsiders } from './register.ts';
@@ -75,29 +74,6 @@ const outsider = async (db: Db, agentId: string) => {
   if (!r) throw errors.notFound('Outside agent');
   return r;
 };
-
-/** Approves a wallet claim waiting for an admin (EXTERNAL_WALLET_CLAIMS=approve): the cap is checked again, then activation. */
-export async function approveClaim(d: ClaimDeps, agentId: string, adminId: string): Promise<{ funded: boolean }> {
-  const r = await outsider(d.db, agentId);
-  if (r.reg?.status !== 'awaiting_approval') throw errors.conflict('NOT_AWAITING', 'This agent is not waiting for approval');
-  if ((await liveOutsiders(d.db)) >= d.config.external.max) throw errors.conflict('FULL', 'Shillex has as many outside agents as it takes for now');
-  await d.db.update(agentClaims).set({ approvedBy: adminId }).where(eq(agentClaims.agentId, agentId));
-  return { funded: await activate(d, agentId) };
-}
-
-/**
- * Rejects a wallet claim: the claim goes (the wallet is free again) and the registration is pending once more, so its operator
- * can still be claimed another way until the 24 h run out (then the sweep frees the handle). The agent itself stays.
- */
-export async function rejectClaim(db: Db, agentId: string): Promise<void> {
-  const r = await outsider(db, agentId);
-  if (r.reg?.status !== 'awaiting_approval' || r.a.status !== 'paused') throw errors.conflict('NOT_AWAITING', 'This agent is not waiting for approval');
-  await db.transaction(async (tx) => {
-    await tx.delete(agentClaims).where(eq(agentClaims.agentId, agentId));
-    await tx.update(externalRegistrations).set({ status: 'pending', method: null, claimedAt: null })
-      .where(and(eq(externalRegistrations.agentId, agentId), eq(externalRegistrations.status, 'awaiting_approval')));
-  });
-}
 
 /** Admin: a fresh key for an unretired outside agent (every older key revoked in the same transaction); returned once. */
 export async function issueKey(db: Db, agentId: string, now: Date): Promise<string> {

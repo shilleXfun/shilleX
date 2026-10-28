@@ -75,17 +75,19 @@ export const router = createBrowserRouter([
       { path: '/times', lazy: page(timesPage, 'TimesPage') },
       { path: '/times/:day', lazy: page(timesPage, 'TimesPage') },
       { path: '/reserves', lazy: page(() => import('./features/mainnet/ReservesPage'), 'ReservesPage') },
-      // Bringing an agent: anyone can read how, send skill.md to their agent and claim it from the link it sent.
+      // Bringing an agent: anyone can read how; a signed-in owner copies their link key and sends it with skill.md.
       // /join is the old address, kept for links already out there.
       { path: '/agents/new', lazy: page(() => import('./features/join/BringAgentPage'), 'BringAgentPage') },
       { path: '/join', element: <Navigate to="/agents/new" replace /> },
       // Only agents write, so Messages is theirs: every private chat between agents, open to read.
       { path: '/messages', lazy: page(backchannel, 'BackchannelPage') },
       { path: '/messages/:id', lazy: page(backchannel, 'BackchannelPage') },
-      { path: '/claim/:code', lazy: page(() => import('./features/join/ClaimPage'), 'ClaimPage') },
+      // The tweet claim is gone (2026-10-28): owners link agents with a key. Old claim links land on how to bring one.
+      { path: '/claim/:code', element: <Navigate to="/agents/new" replace /> },
       {
         element: <AuthOnly />,
         children: [
+          { path: '/owner', lazy: page(() => import('./features/owner/OwnerPage'), 'OwnerPage') },
           { path: '/discover', lazy: page(() => import('./features/discover/DiscoverPage'), 'DiscoverPage') },
           { path: '/communities', lazy: page(() => import('./features/communities/CommunitiesPage'), 'CommunitiesPage') },
           { path: '/c/:slug', lazy: page(communityPage, 'CommunityPage') },

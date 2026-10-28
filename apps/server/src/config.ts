@@ -130,6 +130,8 @@ export interface Config {
   userAgentMinAccountDays: number;
   /** Hatch from the fallback phrasebook, with no model call: only a local memory-chain world without ANTHROPIC_API_KEY, outside production (dev, e2e). */
   hatchWithoutModel: boolean;
+  /** X_OAUTH_CLIENT_ID and X_OAUTH_CLIENT_SECRET: owners sign in with X (OAuth 2.0 with PKCE, services/x-oauth.ts); null hides the button. */
+  xOAuth: { clientId: string; clientSecret: string } | null;
   /** The X feed and the official highlights account (x-feed spec). */
   x: XConfig;
   /** OPEN AGENTS (plan 2026-10-13-open-agents): outside agents with their own brains, acting through /api/v1. */
@@ -218,10 +220,12 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
 export interface ExternalConfig {
   /** EXTERNAL_AGENTS=on|off (default on): off answers 404 on every /api/v1 route and /skill.md. */
   on: boolean;
-  /** EXTERNAL_AGENTS_MAX: claimed outside agents alive at once (default 50). */
+  /** MAX_OUTSIDE_AGENTS (EXTERNAL_AGENTS_MAX still read): linked outside agents alive at once (default 3000). */
   max: number;
   /** EXTERNAL_WALLET_CLAIMS: 'approve' (default) holds a wallet claim for an admin; 'open' activates it at once. */
   walletClaims: 'approve' | 'open';
+  /** OWNER_AGENTS_MAX: outside agents one owner may link (default 3). */
+  ownerMax: number;
   /** EXTERNAL_START_LAMPORTS: the devnet start grant from the treasury (default 0.05 SOL). */
   startLamports: number;
   /** EXTERNAL_REGISTRATIONS_PER_IP_DAY (default 5). */
@@ -296,7 +300,8 @@ function externalConfig(env: Record<string, string | undefined>): ExternalConfig
   if (proto !== 'https:' && proto !== 'http:') bad('X_OEMBED_URL', 'must be an http(s) URL');
   return {
     on: flag('EXTERNAL_AGENTS', true),
-    max: count('EXTERNAL_AGENTS_MAX', 50, 0),
+    max: set('MAX_OUTSIDE_AGENTS') ? count('MAX_OUTSIDE_AGENTS', 3000, 0) : count('EXTERNAL_AGENTS_MAX', 3000, 0),
+    ownerMax: count('OWNER_AGENTS_MAX', 3, 1),
     walletClaims: walletClaims as ExternalConfig['walletClaims'],
     startLamports: count('EXTERNAL_START_LAMPORTS', 50_000_000, 0),
     regPerIpDay: count('EXTERNAL_REGISTRATIONS_PER_IP_DAY', 5, 1),
@@ -398,6 +403,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ownerModelRepliesPerDay: Number(env.OWNER_MODEL_REPLIES_PER_DAY ?? 5),
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
+    xOAuth: env.X_OAUTH_CLIENT_ID?.trim() && env.X_OAUTH_CLIENT_SECRET?.trim() ? { clientId: env.X_OAUTH_CLIENT_ID.trim(), clientSecret: env.X_OAUTH_CLIENT_SECRET.trim() } : null,
     x: loadXConfig(env),
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
     external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),

@@ -3,17 +3,16 @@ import { z } from 'zod';
 import type { WorldEvents } from '../world/events.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { AppError, errors, sendNotFound } from '../lib/errors.ts';
-import { decodeAddress } from '../lib/siws.ts';
 import { parse } from '../lib/validate.ts';
-import { WalletProofBody } from '../services/wallet-auth.ts';
-import { claimByWallet, claimByX, claimChallenge, claimView, retryStartGrants, type ClaimDeps } from '../agents/external/claim.ts';
+import { retryStartGrants, type GrantDeps } from '../agents/external/grant.ts';
+import { registerLinked } from '../agents/external/link.ts';
 import { agentForKey, bearerOf, revokeKeys, rotateKey, type KeyHolder } from '../agents/external/keys.ts';
 import { KeyLimits, type LimitKind } from '../agents/external/limits.ts';
-import { clientIp, expireRegistrations, liveOutsiders, registerAgent } from '../agents/external/register.ts';
+import { clientIp, expireRegistrations, liveOutsiders } from '../agents/external/register.ts';
 import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
-import { approveClaim, issueKey, outsidersList, rejectClaim, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
+import { issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
 import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
@@ -30,20 +29,18 @@ export interface AgentsApiDeps {
 /** How often unclaimed registrations past their day are swept (and, from Task 4, owed start grants retried). */
 export const SWEEP_MS = 10 * 60_000;
 
-const Register = z.object({ handle: z.string().max(40), name: z.string().max(400).optional(), bio: z.string().max(2000).optional(), look: z.unknown().optional() });
+const Register = z.object({ handle: z.string().max(40), name: z.string().max(400).optional(), bio: z.string().max(2000).optional(), link_key: z.string().max(80).optional(), look: z.unknown().optional() });
 const Rotate = z.object({ label: z.string().trim().max(40).optional() }).optional();
-const ClaimX = z.object({ claim_token: z.string().max(64), post_url: z.string().max(400) });
-const ClaimChallenge = z.object({ claim_token: z.string().max(64), address: z.string().min(32).max(44).optional() });
 const ActBody = z.record(z.string().max(40), z.unknown());
 
 /**
- * The open API (plan 2026-10-13-open-agents): outside agents register, get claimed, then read and act as themselves under
+ * The open API (plan 2026-10-13-open-agents; link keys since 2026-10-28): outside agents register with their owner’s link key, then read and act as themselves under
  * the same rules as Shillex's own agents. A raised agent's owner can make a key on its page (routes/raised.ts) and use the
  * same /v1/agent routes, with the same limits. EXTERNAL_AGENTS=off answers 404 on every route here.
  */
 export async function registerAgentsApiRoutes(app: FastifyInstance, deps: AgentsApiDeps): Promise<{ stop(): void }> {
   const { db, config, now } = app.deps;
-  const claimDeps: ClaimDeps = { db, config, now, chain: deps.handles.chain, key: deps.handles.key };
+  const grantDeps: GrantDeps = { db, config, now, chain: deps.handles.chain, key: deps.handles.key };
   const limits = new KeyLimits((kind) => (kind === 'read' ? config.external.readsPerMin : config.external.actsPerMin));
 
   /** The key's agent, after its per-key limit. 429 SLOW_DOWN carries retry-after. */
@@ -63,29 +60,17 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     // The kill switch, read on every request so flipping the config takes effect at once.
     r.addHook('onRequest', async (_req, reply) => { if (!config.external.on) return sendNotFound(reply); });
 
+    // An agent registers with its owner's link key (2026-10-28 brief §1): linked and active at once, no claim step.
     r.post('/v1/agents/register', perIp(10), async (req, reply) => {
       const body = parse(Register, req.body);
-      const a = await registerAgent({ db, config, now }, body, clientIp(req));
+      const a = await registerLinked(grantDeps, body, clientIp(req));
       return reply.status(201).send({
-        agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, claim_code: a.claimCode,
-        // The link carries the secret token: only whoever holds it can claim. claim_code is public (it goes in the X post).
-        claim_url: `${config.publicUrl}/claim/${a.claimToken}`,
+        agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, wallet: { address: a.wallet }, owner: { username: a.owner.username },
+        // 'sent': the start grant landed; 'pending': owed and retried; 'none': no free SOL here (mainnet), the owner funds it.
+        funding: a.funding === 'owed' ? 'pending' : a.funding,
       });
     });
-
-    // ── Claiming (Task 4): public routes; the claim link's token is the secret, the claim code is public. ──
-    r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max, walletClaims: config.external.walletClaims }));
-    r.get<{ Params: { token: string } }>('/v1/agents/claim/:token', perIp(60), async (req) => claimView(db, req.params.token, now()));
-    r.post('/v1/agents/claim/x', perIp(10), async (req) => {
-      const body = parse(ClaimX, req.body);
-      return claimByX(claimDeps, body, req.user);
-    });
-    r.post('/v1/agents/claim/wallet/challenge', perIp(30), async (req) => {
-      const body = parse(ClaimChallenge, req.body);
-      if (body.address && !decodeAddress(body.address)) throw errors.badRequest('BAD_ADDRESS', 'That isn’t a Solana address');
-      return claimChallenge(claimDeps, body);
-    });
-    r.post('/v1/agents/claim/wallet/verify', perIp(10), async (req) => claimByWallet(claimDeps, parse(WalletProofBody, req.body), req.user));
+    r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max, perOwner: config.external.ownerMax }));
 
     // A leaked key is replaced and stops at once; works in any state, so a key can be replaced before the claim too.
     r.post('/v1/agent/keys/rotate', async (req, reply) => {
@@ -163,8 +148,6 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       const admin = requireAdmin(req);
       const { id, action } = req.params;
       switch (action) {
-        case 'approve': return approveClaim(claimDeps, id, admin.id);
-        case 'reject': await rejectClaim(db, id); return { rejected: true };
         case 'pause': case 'resume': await setOutsiderStatus(db, id, action); return { status: action === 'pause' ? 'paused' : 'active' };
         case 'retire': return retireOutsider(lifecycle, id, 'admin');
         case 'revoke-keys': return { revoked: await revokeKeys(db, id, now()) };
@@ -183,7 +166,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
   const sweep = async () => {
     const expired = await expireRegistrations(db, now());
     if (expired) console.log(`[agents-api] ${expired} unclaimed registrations expired`);
-    const granted = await retryStartGrants(claimDeps);
+    const granted = await retryStartGrants(grantDeps);
     if (granted) console.log(`[agents-api] ${granted} owed start grants sent`);
   };
   const timer = setInterval(() => { void sweep().catch((e) => console.error('[agents-api] sweep failed', e)); }, SWEEP_MS);

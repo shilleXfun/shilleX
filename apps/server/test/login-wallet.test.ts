@@ -35,13 +35,15 @@ describe('wallet challenge', () => {
 });
 
 describe('wallet sign-in', () => {
-  it('an unknown wallet, in either mode, gets a signup token and no session', async () => {
+  it('an unknown wallet, in either mode, gets an owner account at once (one click, 2026-10-28)', async () => {
     for (const make of [signInProof, messageProof]) {
       const w = testWallet();
       const r = await walletPost(ctx, VERIFY, { ...(await make(ctx, w, 'login')), purpose: 'login' });
       expect(r.status).toBe(200);
-      expect(r.body).toMatchObject({ status: 'new', address: w.address, signupToken: expect.any(String) });
-      expect(r.cookie).toBeNull();
+      expect(r.body).toMatchObject({ status: 'signedIn', user: { username: `owner${w.address.slice(0, 6)}` } });
+      expect(r.cookie).toMatch(/^sx_session=/);
+      const [row] = await ctx.db.select().from(userWallets).where(eq(userWallets.address, w.address));
+      expect(row!.verifiedAt).not.toBeNull();
     }
   });
 
@@ -61,16 +63,17 @@ describe('wallet sign-in', () => {
     const w = testWallet();
     const r = await walletPost(ctx, VERIFY, { ...(await signInProof(ctx, w, 'login')), walletName: `  ${'Very Long Wallet Name '.repeat(4)}`, purpose: 'login' });
     expect(r.status).toBe(200);
-    expect(r.body.walletName).toBe('Very Long Wallet Name Very Long Wallet N');
+    const [row] = await ctx.db.select().from(userWallets).where(eq(userWallets.address, w.address));
+    expect(row!.walletName).toBe('Very Long Wallet Name Very Long Wallet N');
   });
 
-  it('a typed (unverified) address never signs anyone in', async () => {
+  it('a typed (unverified) address never signs its typist in: the signer gets an account of its own', async () => {
     const u = await ctx.createUser('typed_owner');
     const w = testWallet();
     await ctx.db.insert(userWallets).values({ address: w.address, userId: u.id, verifiedAt: null, createdAt: ctx.clock.now() });
     const r = await walletPost(ctx, VERIFY, { ...(await signInProof(ctx, w, 'login')), purpose: 'login' });
-    expect(r.body.status).toBe('new');
-    expect(r.cookie).toBeNull();
+    expect(r.body.status).toBe('signedIn');
+    expect(r.body.user.username).not.toBe('typed_owner');
   });
 
   it('replay, expiry and an unknown nonce all give CHALLENGE_EXPIRED', async () => {

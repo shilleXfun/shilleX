@@ -45,7 +45,7 @@ export async function liveOutsiders(db: Db): Promise<number> {
   return r?.n ?? 0;
 }
 
-async function handleInUse(db: Db, handle: string): Promise<boolean> {
+export async function handleInUse(db: Db, handle: string): Promise<boolean> {
   const lower = handle.toLowerCase();
   const [u] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = ${lower}`).limit(1);
   const [h] = await db.select({ id: agentHatches.id }).from(agentHatches).where(and(sql`lower(${agentHatches.handle}) = ${lower}`, inArray(agentHatches.status, ['queued', 'hatching']))).limit(1);
@@ -54,7 +54,7 @@ async function handleInUse(db: Db, handle: string): Promise<boolean> {
 }
 
 /** A name or bio an outside agent gives itself: plain text, no links, no @, no markup (cleanModelText with no mentions). */
-function cleanField(code: string, v: string | undefined, max: number, required: boolean): string {
+export function cleanField(code: string, v: string | undefined, max: number, required: boolean): string {
   if (v === undefined || v.trim() === '') {
     if (required) throw errors.badRequest(code, 'Required');
     return '';

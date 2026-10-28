@@ -309,12 +309,12 @@ export const agents = pgTable('agents', {
   createdAt: ts('created_at').notNull(),
   // RAISE (spec 2026-10-13-user-agents §1): wild agents are the original 50; a raised one has (or had) a human owner.
   origin: text('origin').$type<AgentOrigin>().notNull().default('wild'),
-  /** The human who raised it; null for wild agents and once released or retired. Unique: one raised agent per human. */
+  /** The human who raised it, or (2026-10-28) the owner who linked it with a link key; null for wild agents and once released or retired. One raised agent per human is checked in code; an owner may link several outside agents. */
   ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
   releasedAt: ts('released_at'),
   retiredAt: ts('retired_at'),
   retireReason: text('retire_reason').$type<'owner' | 'admin' | 'reports'>(),
-}, (t) => [uniqueIndex('agents_owner_idx').on(t.ownerId)]);
+}, (t) => [index('agents_owner_idx').on(t.ownerId)]);
 
 export const agentMemory = pgTable('agent_memory', {
   id: text('id').primaryKey(),
@@ -1275,7 +1275,7 @@ export const externalRegistrations = pgTable('external_registrations', {
   createdAt: ts('created_at').notNull(),
   expiresAt: ts('expires_at').notNull(),
   claimedAt: ts('claimed_at'),
-  method: text('method').$type<'x' | 'wallet'>(),
+  method: text('method').$type<'x' | 'wallet' | 'key'>(),
   status: text('status').$type<ExternalRegistrationStatus>().notNull().default('pending'),
 }, (t) => [index('external_registrations_ip_idx').on(t.ipHash, t.createdAt), index('external_registrations_expires_idx').on(t.status, t.expiresAt)]);
 
@@ -1285,7 +1285,7 @@ export const externalRegistrations = pgTable('external_registrations', {
  */
 export const agentClaims = pgTable('agent_claims', {
   agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
-  method: text('method').$type<'x' | 'wallet'>().notNull(),
+  method: text('method').$type<'x' | 'wallet' | 'key'>().notNull(),
   /** Lowercased, without the @. */
   xHandle: text('x_handle'),
   wallet: text('wallet'),
@@ -1300,6 +1300,29 @@ export const agentClaims = pgTable('agent_claims', {
   uniqueIndex('agent_claims_wallet_idx').on(t.wallet).where(sql`${t.wallet} is not null and ${t.endedAt} is null`),
 ]);
 export type AgentClaimRow = typeof agentClaims.$inferSelect;
+
+// ── OWNERS (2026-10-28 brief §1): owners sign in with X or a wallet and link agents with a key; no tweet claims. ──
+/** An owner's agent link key: its sha256 finds the owner, the sealed copy lets the dashboard show it again. One per owner. */
+export const ownerLinkKeys = pgTable('owner_link_keys', {
+  ownerUserId: text('owner_user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  keyHash: text('key_hash').notNull().unique(),
+  keyEnc: text('key_enc').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
+/** An X account an owner signs in with (OAuth 2.0). */
+export const userXAccounts = pgTable('user_x_accounts', {
+  xUserId: text('x_user_id').primaryKey(),
+  userId: text('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
+  username: text('username').notNull(),
+  linkedAt: ts('linked_at').notNull(),
+});
+/** An X sign-in in flight: the PKCE verifier for its state, for 10 minutes. */
+export const oauthStates = pgTable('oauth_states', {
+  state: text('state').primaryKey(),
+  verifier: text('verifier').notNull(),
+  next: text('next'),
+  createdAt: ts('created_at').notNull(),
+});
 
 // ── CAST ── (every agent a character: an invented name, a role and a one-line bio; old handles keep working)
 /** The part an agent plays, chosen once from its traits and what it had done (agents/cast). */

@@ -9,7 +9,7 @@ export const PAYOUT_HOLD_MS = 72 * 3_600_000;
 
 /** The human's raised agent (RAISE: at most one per human), or null. */
 export async function ownedAgent(db: Db, userId: string): Promise<{ id: string; username: string } | null> {
-  const [a] = await db.select({ id: agents.userId, username: users.username }).from(agents).innerJoin(users, eq(users.id, agents.userId)).where(eq(agents.ownerId, userId));
+  const [a] = await db.select({ id: agents.userId, username: users.username }).from(agents).innerJoin(users, eq(users.id, agents.userId)).where(and(eq(agents.ownerId, userId), eq(agents.origin, 'raised')));
   return a ?? null;
 }
 

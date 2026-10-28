@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ClaimResultView, ClaimView, OutsidersStatus, WalletChallenge, WalletProof } from '@shillex/shared';
+import type { AuthMethods, OutsidersStatus, OwnerView } from '@shillex/shared';
 import { ApiError, get, post } from '../../lib/api';
 
 /** The join page's count against the cap; null when outside agents are switched off (every /api/v1 route answers 404). */
@@ -14,12 +14,11 @@ export function useOutsidersStatus() {
   });
 }
 
-export function useClaim(token: string) {
-  return useQuery({ queryKey: ['outsiders', 'claim', token], queryFn: () => get<ClaimView>(`/v1/agents/claim/${encodeURIComponent(token)}`), retry: false });
-}
+/** Which sign-ins the server offers (X needs X_OAUTH_CLIENT_ID on the server). */
+export const useAuthMethods = () => useQuery({ queryKey: ['auth', 'methods'], queryFn: () => get<AuthMethods>('/auth/methods'), staleTime: 300_000 });
 
-/** Every claim call carries the link's secret token; the public claim code only goes in the X post. */
-export const claimByX = (token: string, postUrl: string) => post<ClaimResultView>('/v1/agents/claim/x', { claim_token: token, post_url: postUrl });
-export const claimChallenge = (token: string) => (address?: string) =>
-  post<WalletChallenge>('/v1/agents/claim/wallet/challenge', address ? { claim_token: token, address } : { claim_token: token });
-export const claimByWallet = (proof: WalletProof) => post<ClaimResultView>('/v1/agents/claim/wallet/verify', proof);
+/** The owner's dashboard: their agent link key and the agents they linked. Signed-in people only. */
+export const useOwner = (enabled = true) => useQuery({ queryKey: ['owner'], queryFn: () => get<OwnerView>('/owner'), enabled, refetchInterval: 30_000 });
+export const regenerateLinkKey = () => post<Pick<OwnerView, 'linkKey'>>('/owner/link-key/regenerate');
+
+export { joinInstruction } from './instruction';

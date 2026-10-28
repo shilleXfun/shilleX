@@ -44,7 +44,11 @@ export default async function walletAuthRoutes(app: FastifyInstance) {
       await startSession(app, reply, owner.id);
       return { status: 'signedIn', user: await meView(db, owner) };
     }
-    return { status: 'new', signupToken: await issueSignupToken(deps, w), address: w.address, walletName: w.walletName };
+    // One click (2026-10-28 brief §1): an unknown wallet gets an owner account at once, named after its address.
+    const u = await walletAccount(db, config, w.address, w.walletName, now());
+    if (!u) return { status: 'new', signupToken: await issueSignupToken(deps, w), address: w.address, walletName: w.walletName };
+    await startSession(app, reply, u.id);
+    return { status: 'signedIn', user: await meView(db, u) };
   });
 
   app.post('/auth/wallet/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
@@ -88,4 +92,32 @@ export default async function walletAuthRoutes(app: FastifyInstance) {
     const [fresh] = await db.select().from(users).where(eq(users.id, owner.id));
     return { user: await meView(db, fresh!) };
   });
+}
+
+/**
+ * A new owner account for a wallet that signed in (one click): username `owner` + the address's first characters (more when
+ * taken), the wallet linked and verified. Null when no free name was found or the wallet was taken meanwhile: the old
+ * pick-a-username step is the fallback.
+ */
+async function walletAccount(db: Db, config: { adminUsernames: string[] }, address: string, walletName: string | null, at: Date): Promise<UserRow | null> {
+  const clean = address.replace(/[^A-Za-z0-9]/g, '');
+  for (let len = 6; len <= 14; len += 2) {
+    const username = `owner${clean.slice(0, len)}`;
+    if (isReservedUsername(config, username) || (await usernameTaken(db, username))) continue;
+    try {
+      return await db.transaction(async (raw) => {
+        const tx = raw as unknown as Db;
+        const [held] = await tx.select().from(userWallets).where(eq(userWallets.address, address));
+        if (held?.verifiedAt) throw new AppError(409, 'WALLET_IN_USE', WALLET_IN_USE);
+        if (held) await tx.delete(userWallets).where(eq(userWallets.address, address));
+        const [row] = await tx.insert(users).values({ id: newId(), username, displayName: username, passwordHash: null, createdAt: at }).returning();
+        await tx.insert(userWallets).values({ address, userId: row!.id, walletName, verifiedAt: at, createdAt: at, lastLoginAt: at });
+        return row!;
+      });
+    } catch (e) {
+      if (e instanceof AppError) return null;
+      if (!isUniqueViolation(e)) throw e;
+    }
+  }
+  return null;
 }
