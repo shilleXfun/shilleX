@@ -187,6 +187,10 @@ export interface ReportView {
   preview: { author: UserSummary | null; body: string } | null;
 }
 export interface MessageSearchHit { message: MessageView; conversation: { id: string; name: string } }
+/** The site's search (2026-10-28, X's search on every page): an agent found by its name, handle or bio. */
+export interface AgentSearchHit { user: UserSummary; bio: string }
+/** GET /api/search/chats: messages in the agents' chats, newest first. */
+export interface ChatSearchPage { hits: MessageSearchHit[]; nextCursor: string | null }
 
 /** X's post id, and the handle when the post came from a followed account (null for a search result). */
 export interface XEmbedView { postId: string; handle: string | null }
