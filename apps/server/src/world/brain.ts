@@ -97,6 +97,12 @@ export class ClaudeBrain implements AgentBrain {
   /** `strong`: the model tier-2 requests (websites, threads, long takes, scenes) go to; the everyday model when unset. */
   constructor(apiKey: string, private model = MODEL, client?: Anthropic, private strong?: string, private sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) { this.client = client ?? anthropicClient(apiKey, 1); }
   useCeiling(c: SpendCeiling) { this.ceiling = c; }
+  /**
+   * An Anthropic-compatible API that is not Claude (DeepSeek, 2026-10-28): no thinking settings, no beta endpoint, and since it
+   * ignores the JSON-schema output setting, the schema goes into the system prompt and the answer is cut down to its JSON.
+   */
+  private compat = false;
+  useCompat() { this.compat = true; }
 
   async decide(req: BrainRequest): Promise<BrainResponse> {
     const check = () => { if (this.ceiling && !this.ceiling.allows()) throw new CeilingReached(`the hard ceiling of $${this.ceiling.limitUsd} per day is reached; no model call goes out`); };
@@ -116,6 +122,7 @@ export class ClaudeBrain implements AgentBrain {
   }
 
   private async send(req: BrainRequest): Promise<BrainResponse> {
+    if (this.compat) return this.sendCompat(req);
     const model = req.model?.startsWith('claude-') ? req.model : req.tier === 2 && this.strong ? this.strong : this.model;
     // Thinking can't be disabled on current models; effort controls depth. Forced tool_choice is a 400, so always auto.
     const base = {
@@ -138,6 +145,36 @@ export class ClaudeBrain implements AgentBrain {
       usage: { input: r.usage.input_tokens, output: r.usage.output_tokens, cacheRead: r.usage.cache_read_input_tokens ?? 0, cacheWrite: r.usage.cache_creation_input_tokens ?? 0 },
     };
   }
+
+  private async sendCompat(req: BrainRequest): Promise<BrainResponse> {
+    const model = req.model && !req.model.startsWith('claude-') ? req.model : req.tier === 2 && this.strong ? this.strong : this.model;
+    const schema = req.outputFormat ? [{ type: 'text' as const, text: `Answer with one JSON object and nothing else: no code fences, no words before or after. It must match this JSON schema exactly:\n${JSON.stringify(req.outputFormat.schema)}` }] : [];
+    const base = {
+      model, max_tokens: req.maxTokens ?? 16000, system: [...req.system, ...schema], messages: req.messages,
+      ...(req.tools.length ? { tools: req.tools, tool_choice: { type: 'auto' } } : {}),
+      output_config: { effort: req.effort },
+    } as unknown as Anthropic.MessageCreateParamsNonStreaming;
+    const r = base.max_tokens > 16000 ? await this.client.messages.stream(base).finalMessage() : await this.client.messages.create(base);
+    let content = r.content as unknown as Anthropic.ContentBlock[];
+    if (req.outputFormat) {
+      const text = content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
+      content = [...content.filter((b) => b.type !== 'text'), { type: 'text', text: jsonOnly(text), citations: null } as unknown as Anthropic.ContentBlock];
+    }
+    return {
+      content, stopReason: r.stop_reason, model: r.model || model,
+      usage: { input: r.usage?.input_tokens ?? 0, output: r.usage?.output_tokens ?? 0, cacheRead: r.usage?.cache_read_input_tokens ?? 0, cacheWrite: r.usage?.cache_creation_input_tokens ?? 0 },
+    };
+  }
+}
+
+/** The JSON inside a model's answer: code fences and any words around the outermost object or array dropped. */
+export function jsonOnly(text: string): string {
+  const t = text.replace(/```(?:json)?/gi, '').trim();
+  const a = t.search(/[[{]/);
+  if (a < 0) return t;
+  const close = t[a] === '{' ? '}' : ']';
+  const b = t.lastIndexOf(close);
+  return b > a ? t.slice(a, b + 1) : t;
 }
 
 export class FakeBrain implements AgentBrain {

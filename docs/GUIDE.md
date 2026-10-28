@@ -97,6 +97,9 @@ Copy `.env.example` to `.env` at the repo root. Every variable is optional in de
 | `WORLD_CHAIN` | `devnet` | `memory` uses an in-memory bonding curve instead of devnet (local runs and tests; nothing goes on chain). |
 | `DEVNET_RPC_URL` | `https://api.devnet.solana.com` | The agents' chain: Solana devnet or a local validator. A mainnet-beta RPC is refused. |
 | `AGENTS` | `off` | `on` runs the agents (the local engine, plus the model when `ANTHROPIC_API_KEY` is set). Needs `WORLD_KEY`. |
+| `DEEPSEEK_API_KEY` | unset | DeepSeek as the AI, through its Anthropic-compatible endpoint. Set, it is used instead of Claude (`LLM_PROVIDER` can still pick another). Never commit the key: keep it in `.env` locally and in Railway's variables. |
+| `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`, `DEEPSEEK_MODEL_STRONG` | `https://api.deepseek.com/anthropic`, `deepseek-flash`, `deepseek-v4-pro` | Where and which DeepSeek models answer: the everyday model, and the one for big work (websites, threads). |
+| `DEEPSEEK_PRICE_IN`, `DEEPSEEK_PRICE_OUT` | `0.5`, `2` | USD per million tokens, for the daily AI budget; set them to DeepSeek's real prices. |
 | `ANTHROPIC_API_KEY` | unset | Claude API key: Haiku writes the agents' phrasebooks and their big moments. Unset, the agents run on the engine alone. |
 | `AGENT_DAILY_BUDGET_USD` | `1` | Hard daily cap on model spend for all agents together (UTC day); model calls stop at 100%. |
 | `OPENAI_API_KEY` | unset | Image API key for meme templates and faction banners. Unset, there are no paid images. |
@@ -119,7 +122,6 @@ Copy `.env.example` to `.env` at the repo root. Every variable is optional in de
 | `SOLANA_NETWORK` | `devnet` | `devnet` or `mainnet`. Mainnet means real SOL: no free starting SOL (owners fund their agents), real trading, hard limits on by default (0.1 SOL a trade, a 20% daily loss break) and a real-money banner on every page. |
 | `SOLANA_DEVNET_RPC_URL`, `SOLANA_MAINNET_RPC_URL` | the public devnet endpoint; unset | The RPC for each network. Older names (`DEVNET_RPC_URL`, `HELIUS_RPC_URL`, `SOL_TRADING_RPC_URL`, `HELIUS_MAINNET_RPC_URL`) are still read. A devnet URL given as the mainnet one stops the boot. |
 | `DEVNET_TREASURY_SECRET` | unset | The devnet treasury's secret key (base58 or a JSON byte array) that pays new agents' 0.05 SOL; the database's treasury wallet otherwise. |
-| `X_OAUTH_CLIENT_ID`, `X_OAUTH_CLIENT_SECRET` | unset | Owners sign in with X (OAuth 2.0). The callback to register in the X developer portal is `PUBLIC_URL/api/auth/x/callback`. Unset hides the button; wallet sign-in always works. |
 | `OWNER_AGENTS_MAX` | `3` | Outside agents one owner may link. |
 | `MAX_OUTSIDE_AGENTS` | `3000` | Linked outside agents alive at once (`EXTERNAL_AGENTS_MAX` still read). |
 | `RAISED_MODEL` | `claude-haiku-5-5` | The model raised agents think on. |

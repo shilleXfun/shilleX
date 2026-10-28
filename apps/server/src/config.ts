@@ -46,6 +46,12 @@ export interface Config {
   /** LAUNCHES_PER_DAY: Shillex coins the house agents may launch in 24 hours, all devs together (hybrid; default 4). */
   launchesPerDay: number;
   anthropicApiKey: string | undefined;
+  /**
+   * DeepSeek (2026-10-28): DEEPSEEK_API_KEY through DEEPSEEK_BASE_URL (default its Anthropic-compatible endpoint). DEEPSEEK_MODEL
+   * (default deepseek-flash) for everyday calls, DEEPSEEK_MODEL_STRONG (default deepseek-v4-pro) for big work; DEEPSEEK_PRICE_IN /
+   * DEEPSEEK_PRICE_OUT in USD per million tokens (defaults 0.5 and 2, on the high side so the budget errs safe). Null without a key.
+   */
+  deepseek: { apiKey: string; baseUrl: string; model: string; modelStrong: string; priceInPerM: number; priceOutPerM: number } | null;
   /** ANTHROPIC_MODEL_STRONG (e.g. claude-sonnet-5-5): with LLM_PROVIDER=anthropic, the model for big work (websites, threads, long takes, scenes); Haiku when unset. */
   anthropicModelStrong: string | undefined;
   /** AGENT_DAILY_BUDGET_USD: only the raised agents' share and old tests read it now; the world's cap is llmBudgetPer12hUsd. */
@@ -140,8 +146,6 @@ export interface Config {
   userAgentMinAccountDays: number;
   /** Hatch from the fallback phrasebook, with no model call: only a local memory-chain world without ANTHROPIC_API_KEY, outside production (dev, e2e). */
   hatchWithoutModel: boolean;
-  /** X_OAUTH_CLIENT_ID and X_OAUTH_CLIENT_SECRET: owners sign in with X (OAuth 2.0 with PKCE, services/x-oauth.ts); null hides the button. */
-  xOAuth: { clientId: string; clientSecret: string } | null;
   /** The X feed and the official highlights account (x-feed spec). */
   x: XConfig;
   /** OPEN AGENTS (plan 2026-10-13-open-agents): outside agents with their own brains, acting through /api/v1. */
@@ -175,8 +179,8 @@ export const LLM_BUDGET_DEFAULT_USD_PER_12H = 4, LLM_HARD_CEILING_USD_PER_DAY = 
 export const VOICE_SHARE = 0.55;
 
 export interface LlmConfig {
-  /** 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
-  mode: 'openai' | 'anthropic' | 'none';
+  /** 'deepseek': DEEPSEEK_API_KEY through DeepSeek's Anthropic-compatible endpoint (wins when set); 'openai': the providers below, in order (OpenAI-compatible APIs); 'anthropic': ANTHROPIC_API_KEY; 'none': the free engine only. */
+  mode: 'deepseek' | 'openai' | 'anthropic' | 'none';
   providers: ProviderConfig[];
   /** LLM_BUILD_PROVIDER: the provider site builds ask first (one listed in LLM_PROVIDERS), or null for the usual order. */
   buildProvider: string | null;
@@ -225,7 +229,8 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
     });
   }
   const asked = val('LLM_PROVIDER')?.toLowerCase();
-  const mode: LlmConfig['mode'] = asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked : val('ANTHROPIC_API_KEY') ? 'anthropic' : providers.length ? 'openai' : 'none';
+  const mode: LlmConfig['mode'] = asked === 'deepseek' || asked === 'openai' || asked === 'anthropic' || asked === 'none' ? asked
+    : val('DEEPSEEK_API_KEY') ? 'deepseek' : val('ANTHROPIC_API_KEY') ? 'anthropic' : providers.length ? 'openai' : 'none';
   // Site builds go to Gemini by default when it is configured: its pages were far better in the 2026-10-25 comparison.
   const build = val('LLM_BUILD_PROVIDER')?.toLowerCase() ?? (providers.some((p) => p.name === 'gemini') ? 'gemini' : null);
   return { mode, providers, buildProvider: build && providers.some((p) => p.name === build) ? build : null };
@@ -370,6 +375,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     chainTxPerHour: Math.max(0, Number(env.CHAIN_TX_PER_HOUR ?? 60) || 0),
     launchesPerDay: Math.max(0, Number(env.LAUNCHES_PER_DAY ?? 4) || 0),
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
+    deepseek: killed || !env.DEEPSEEK_API_KEY?.trim() ? null : {
+      apiKey: env.DEEPSEEK_API_KEY.trim(), baseUrl: env.DEEPSEEK_BASE_URL?.trim() || 'https://api.deepseek.com/anthropic',
+      model: env.DEEPSEEK_MODEL?.trim() || 'deepseek-flash', modelStrong: env.DEEPSEEK_MODEL_STRONG?.trim() || 'deepseek-v4-pro',
+      priceInPerM: Math.max(0, n(env.DEEPSEEK_PRICE_IN, 0.5) || 0), priceOutPerM: Math.max(0, n(env.DEEPSEEK_PRICE_OUT, 2) || 0),
+    },
     anthropicModelStrong: env.ANTHROPIC_MODEL_STRONG?.trim() || undefined,
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_DAY / 2, Math.max(0, (env.LLM_BUDGET_USD_PER_DAY ? n(env.LLM_BUDGET_USD_PER_DAY, 0) / 2 : n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H)) || 0)),
@@ -423,7 +433,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ownerModelRepliesPerDay: Number(env.OWNER_MODEL_REPLIES_PER_DAY ?? 5),
     userAgentMinAccountDays: Number(env.USER_AGENTS_MIN_AGE_DAYS ?? 3),
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
-    xOAuth: env.X_OAUTH_CLIENT_ID?.trim() && env.X_OAUTH_CLIENT_SECRET?.trim() ? { clientId: env.X_OAUTH_CLIENT_ID.trim(), clientSecret: env.X_OAUTH_CLIENT_SECRET.trim() } : null,
     x: loadXConfig(env),
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
     external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),

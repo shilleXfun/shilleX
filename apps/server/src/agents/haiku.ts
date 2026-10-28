@@ -24,9 +24,20 @@ let modelLabel = HAIKU, worstScale = 1;
 export const modelName = () => modelLabel;
 
 /** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only; always with BRAIN_KILL_SWITCH). */
-export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong' | 'brainKillSwitch'>>, now: () => Date): AgentBrain | null {
+export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong' | 'brainKillSwitch' | 'deepseek'>>, now: () => Date): AgentBrain | null {
   let brain: AgentBrain | null = null;
   if (config.brainKillSwitch) { modelLabel = HAIKU; return null; }
+  // DeepSeek through its Anthropic-compatible endpoint (2026-10-28): the same brain as Claude's, in its compatible mode.
+  if (config.llm.mode === 'deepseek' && config.deepseek) {
+    const ds = config.deepseek;
+    for (const m of new Set([ds.model, ds.modelStrong])) registerPrice(m, ds.priceInPerM, ds.priceOutPerM);
+    const haiku = PRICE_OF_HAIKU();
+    worstScale = Math.max(worstScale, ds.priceOutPerM / haiku.output, ds.priceInPerM / haiku.input);
+    const b = new ClaudeBrain(ds.apiKey, ds.model, anthropicClient(ds.apiKey, 0, ds.baseUrl), ds.modelStrong);
+    b.useCompat();
+    modelLabel = ds.model;
+    return b;
+  }
   if (config.llm.mode === 'openai' && config.llm.providers.length) {
     const haiku = PRICE_OF_HAIKU();
     for (const p of config.llm.providers) {

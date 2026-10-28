@@ -64,6 +64,8 @@ export function accountProblem(e: unknown): string | null {
   if (status === 401) return 'Anthropic rejected ANTHROPIC_API_KEY (401); set a valid key and restart';
   if (status === 403) return 'Anthropic refused this key permission (403); check the key and restart';
   if (status === 400 && /credit balance|billing/i.test(msg)) return 'The Anthropic account is out of credit; top it up and restart';
+  // DeepSeek (2026-10-28): an empty account answers 402 Insufficient Balance.
+  if (status === 402 || /insufficient[_ ]balance/i.test(msg)) return 'The AI account (DeepSeek) is out of balance (402); top it up at platform.deepseek.com';
   // The account's own spend limit (2026-10-27 live: "You have reached your specified API usage limits. You will regain access on 2026-11-01").
   if (status === 400 && USAGE_LIMIT.test(msg)) {
     const back = accessReturns(msg);
@@ -86,7 +88,7 @@ export function accessReturns(msg: string): Date | null {
 export function accountDown(e: unknown): boolean {
   if (e instanceof ProviderError) return e.category === 'auth' || e.category === 'credit';
   const status = (e as { status?: number })?.status, msg = (e as Error)?.message ?? '';
-  return status === 401 || status === 403 || (status === 400 && (/credit balance|billing/i.test(msg) || USAGE_LIMIT.test(msg)));
+  return status === 401 || status === 403 || status === 402 || /insufficient[_ ]balance/i.test(msg) || (status === 400 && (/credit balance|billing/i.test(msg) || USAGE_LIMIT.test(msg)));
 }
 /**
  * Pauses model calls when `e` is an account problem, as down or paused; returns the reason, or null for any other failure. A usage
