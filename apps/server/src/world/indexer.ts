@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql, type Column } from 'drizzle-orm';
 import { COIN_DECIMALS, LAMPORTS_PER_SOL, type AgentCard, type AgentOrigin, type AgentDetail, type CoinView, type PositionView, type TrackRecord, type TradeView, type UserSummary } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { agentDecisions, agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
+import { agentApiKeys, agentDecisions, agentGrants, agentTheses, agentTurns, agents, chainTxs, coinLogos, realBooks, realMarket, realPositions, externalRegistrations, users, wallets, worldCoins, type ChainTxRow, type UserRow, type WorldCoinRow } from '../db/schema.ts';
 import { toUserSummary } from '../services/users.ts';
 import type { Chain, WalletBalances } from './chain.ts';
 import { holdersOf, refreshCoinPrices } from './market.ts';
 import { chainHead } from './provenance.ts';
+import { SLEEPING_MS } from '../agents/external/sleeping.ts';
 import { pfpTraits } from '../lib/pfp.ts';
 import { RUG_RULE } from '../ledger/rug-rule.ts';
 import { computeView } from '../agents/compute.ts';
@@ -201,6 +202,7 @@ export class Indexer {
         pnlSol: basis === null ? 0 : solBalance + tokenValueSol - basis - sol(c.topUps.get(u.id) ?? 0), coinsLaunched: mine.length, rugs: mine.filter((x) => this.coinStats(x, c.txsByMint.get(x.mint) ?? []).rug).length,
         turns: ts?.n ?? 0, lastTurnAt: ts?.last?.toISOString() ?? null,
         origin: who.origin, owner: who.ownerId ? c.owners.get(who.ownerId) ?? null : null, record: c.records.get(u.id), paper: c.papers.get(u.id),
+        ...(who.origin === 'external' && Date.now() - (c.lastCall.get(u.id) ?? u.createdAt).getTime() > SLEEPING_MS ? { sleeping: true as const } : {}),
       },
     };
   }
@@ -210,7 +212,7 @@ export class Indexer {
     const one = (col: Column) => (only ? eq(col, only) : undefined);
     const coins = await this.db.select().from(worldCoins);
     const made = only ? coins.filter((c) => c.creatorId === only).map((c) => c.mint) : [];
-    const [rows, txs, ts, ws, tu, th] = await Promise.all([
+    const [rows, txs, ts, ws, tu, th, keys] = await Promise.all([
       // Open agents: an outside agent shows only once a human claimed it; until then its name and bio are a stranger's, unvouched.
       this.db.select({ u: users, status: agents.status, origin: agents.origin, ownerId: agents.ownerId }).from(users).innerJoin(agents, eq(agents.userId, users.id))
         .where(and(one(users.id), sql`not (${agents.origin} = 'external' and not exists (select 1 from ${externalRegistrations} where ${externalRegistrations.agentId} = ${agents.userId} and ${externalRegistrations.status} = 'claimed'))`)).orderBy(asc(users.username)),
@@ -219,6 +221,8 @@ export class Indexer {
       this.db.select({ o: wallets.ownerId, pk: wallets.publicKey, f: wallets.fundedAt }).from(wallets).where(one(wallets.ownerId)),
       this.db.select({ a: agentGrants.agentId, s: sql<number>`coalesce(sum(${agentGrants.lamports}), 0)::float8` }).from(agentGrants).where(and(eq(agentGrants.kind, 'top_up'), one(agentGrants.agentId))).groupBy(agentGrants.agentId),
       this.db.select({ a: agentTheses.agentId, symbol: agentTheses.symbol, status: agentTheses.status, pnl: agentTheses.pnlPct }).from(agentTheses).where(and(eq(agentTheses.market, 'world'), one(agentTheses.agentId))),
+      // An outside agent's newest API call: a day without one reads as sleeping (2026-10-28 brief §2).
+      this.db.select({ a: agentApiKeys.agentId, last: sql<string | null>`max(${agentApiKeys.lastUsedAt})` }).from(agentApiKeys).where(and(isNull(agentApiKeys.revokedAt), one(agentApiKeys.agentId))).groupBy(agentApiKeys.agentId),
     ]);
     const owners = await this.summaries(rows.map((r) => r.ownerId).filter((x): x is string => Boolean(x)));
     return {
@@ -228,6 +232,7 @@ export class Indexer {
       pks: new Map(ws.map((w) => [w.o, w.pk])),
       topUps: new Map(tu.map((r) => [r.a, Number(r.s)])),
       records: trackRecords(th),
+      lastCall: new Map(keys.map((k) => [k.a, k.last ? new Date(k.last) : null])),
       papers: await this.paperBooks(only),
     };
   }

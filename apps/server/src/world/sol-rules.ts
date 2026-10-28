@@ -23,7 +23,7 @@ export function normalizeRules(raw: unknown): OwnerRules {
     : undefined;
   const blacklist = Array.isArray(r.blacklist) ? [...new Set((r.blacklist as unknown[]).filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter((b) => b && b.length <= 64))].slice(0, 100) : undefined;
   const out: OwnerRules = {
-    tradingOn: bool(r.tradingOn), maxSolPerTrade: num(r.maxSolPerTrade, 0.001, 1000), maxTradesPerDay: num(r.maxTradesPerDay, 0, 1000),
+    tradingOn: bool(r.tradingOn), launchingOn: bool(r.launchingOn), dailyLossBreakPct: num(r.dailyLossBreakPct, 0.01, 0.99), maxSolPerTrade: num(r.maxSolPerTrade, 0.001, 1000), maxTradesPerDay: num(r.maxTradesPerDay, 0, 1000),
     stopLossPct: num(r.stopLossPct, 0.01, 0.99), takeProfit: ladder?.length ? ladder : undefined,
     maxLossPerDaySol: num(r.maxLossPerDaySol, 0.001, 1e6), maxLossTotalSol: num(r.maxLossTotalSol, 0.001, 1e6),
     pumpOnly: bool(r.pumpOnly), minMcapUsd: num(r.minMcapUsd, 0, 1e12), minHolders: num(r.minHolders, 0, 1e7), minLiquidityUsd: num(r.minLiquidityUsd, 0, 1e12),
@@ -76,6 +76,9 @@ export function rulesLine(r: OwnerRules | null): string {
   if (!r || !Object.keys(r).length) return 'YOUR OWNER SET NO RULES: you decide freely within your balance.';
   const p: string[] = [];
   if (r.tradingOn === false) p.push('trading switched OFF');
+  if (r.launchingOn === false) p.push('launching coins switched OFF');
+  if (r.launchingOn === true) p.push('launching coins allowed');
+  if (r.dailyLossBreakPct !== undefined) p.push(`a break until midnight UTC once you are down ${Math.round(r.dailyLossBreakPct * 100)}% in a day`);
   if (r.maxSolPerTrade !== undefined) p.push(`at most ${r.maxSolPerTrade} SOL a trade`);
   if (r.maxTradesPerDay !== undefined) p.push(`at most ${r.maxTradesPerDay} trades a day`);
   if (r.stopLossPct !== undefined) p.push(`a stop loss at -${Math.round(r.stopLossPct * 100)}% (sold for you)`);

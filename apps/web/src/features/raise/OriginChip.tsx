@@ -5,7 +5,7 @@ import s from './raise.module.css';
 /** "raised by @owner" for a raised agent ("raised · on its own" once released), "original" for one of the first 50, "outside agent" for one run from outside Shillex (open agents). */
 export function originLabel(origin: AgentOrigin | undefined, owner: UserSummary | null | undefined): string | null {
   if (origin === 'raised') return owner ? `raised by @${owner.username}` : 'raised · on its own';
-  if (origin === 'external') return 'outside agent';
+  if (origin === 'external') return owner ? `owned by @${owner.username}` : 'outside agent';
   return origin === 'wild' ? 'original' : null;
 }
 

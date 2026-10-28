@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, LIMITS, REACTIONS } from '@shillex/shared';
 import type { Db } from '../../db/client.ts';
-import { agentState, conversationMembers, conversations, messages, posts, users, type UserRow } from '../../db/schema.ts';
+import { agentState, agents, conversationMembers, conversations, messages, posts, users, type UserRow } from '../../db/schema.ts';
 import { AppError, errors } from '../../lib/errors.ts';
 import { normalizeBody } from '../../services/moderation.ts';
 import { RAW_PER_TOKEN, type Chain } from '../../world/chain.ts';
@@ -16,6 +16,8 @@ import { depthToolRecord } from '../depth/receipt.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
 import { loadState } from '../state.ts';
+import { checkHardLimits } from './limits-hard.ts';
+import { nudgeFromAct } from './nudges.ts';
 import { EXTERNAL_MODEL, type ActKind } from './read.ts';
 
 export const API_PROMPT_VERSION = 'api-v1';
@@ -99,6 +101,12 @@ const userByHandle = async (db: Db, handle: unknown): Promise<UserRow> => {
 /** The tool call an act becomes, after every check the engine would make in decide (plan Task 6). */
 async function plan(d: ExternalActDeps, me: UserRow, kind: ActKind, i: Record<string, unknown>): Promise<{ tool: string; input: Record<string, unknown> }> {
   const { db } = d;
+  // The owner's hard limits (2026-10-28 brief §2), before anything else about a trade or a launch: 403 with the limit's code.
+  const limited = async (k: 'buy' | 'sell' | 'launch', sol?: number) => {
+    const [a] = await db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, me.id));
+    const r = await checkHardLimits({ db, chain: d.chain, now: d.now(), network: d.app.deps.config.solanaNetwork }, { id: me.id, origin: a?.origin ?? 'external' }, { kind: k, sol });
+    if (r) throw refuse(403, r.code, r.message);
+  };
   switch (kind) {
     case 'post': {
       const body = await cleanText(db, i.body, LIMITS.postMax);
@@ -146,6 +154,7 @@ async function plan(d: ExternalActDeps, me: UserRow, kind: ActKind, i: Record<st
     case 'buy': {
       if (typeof i.mint !== 'string' || !i.mint) throw refuse(400, 'VALIDATION', 'mint is required');
       const lamports = lamportsOf(i.sol, 'BAD_AMOUNT');
+      await limited('buy', lamports / LAMPORTS_PER_SOL);
       if (lamports < MIN_TRADE) throw refuse(400, 'BELOW_MIN_TRADE', `Trades start at ${MIN_TRADE / LAMPORTS_PER_SOL} SOL`);
       const have = (await balances(d, me.id)).lamports;
       if (have - lamports < RESERVE) throw refuse(400, 'BELOW_RESERVE', `Keep ${RESERVE / LAMPORTS_PER_SOL} SOL in the wallet: you can spend up to ${Math.max(0, have - RESERVE) / LAMPORTS_PER_SOL} SOL`);
@@ -153,6 +162,7 @@ async function plan(d: ExternalActDeps, me: UserRow, kind: ActKind, i: Record<st
     }
     case 'sell': {
       if (typeof i.mint !== 'string' || !i.mint) throw refuse(400, 'VALIDATION', 'mint is required');
+      await limited('sell');
       const held = (await balances(d, me.id)).tokens.find((t) => t.mint === i.mint)?.raw ?? 0;
       if (!held) throw refuse(400, 'INSUFFICIENT_TOKENS', 'You hold none of this coin');
       let raw: number;
@@ -176,6 +186,7 @@ async function plan(d: ExternalActDeps, me: UserRow, kind: ActKind, i: Record<st
       if (!/^[A-Z0-9]{1,10}$/.test(symbol)) throw refuse(400, 'BAD_SYMBOL', 'Tickers are 1–10 letters or numbers');
       if ((await symbolsInUse(db, d.now())).has(symbol)) throw refuse(409, 'SYMBOL_TAKEN', `$${symbol} belongs to a coin launched this week; pick another ticker`);
       const initial = lamportsOf(i.sol ?? 0, 'BAD_AMOUNT');
+      await limited('launch', initial / LAMPORTS_PER_SOL);
       if (initial > 0 && initial < MIN_TRADE) throw refuse(400, 'BELOW_MIN_TRADE', `A first buy starts at ${MIN_TRADE / LAMPORTS_PER_SOL} SOL (or 0)`);
       const have = (await balances(d, me.id)).lamports;
       if (have < LAUNCH_MIN) throw refuse(400, 'BELOW_LAUNCH_MIN', `Launching needs ${LAUNCH_MIN / LAMPORTS_PER_SOL} SOL in the wallet`);
@@ -217,6 +228,8 @@ export async function externalAct(d: ExternalActDeps, agentId: string, kind: Act
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now(),
     });
     if (out.ok) {
+      // Living moves its mind a little, with the reason its owner reads (mind sliders).
+      await nudgeFromAct(d.db, agentId, kind, call.input, out.result, now).catch((e) => console.warn('[nudge] failed', (e as Error)?.message));
       const cooldowns = { ...(await loadState(d.db, agentId, d.now())).cooldowns, [kind]: now.toISOString() };
       await d.db.update(agentState).set({ cooldowns, updatedAt: d.now() }).where(eq(agentState.agentId, agentId));
     }

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import type { Config } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
-import { agentClaims, agentTurns, externalRegistrations } from '../../db/schema.ts';
+import { agentClaims, agentTurns, externalRegistrations, users } from '../../db/schema.ts';
 import { AppError } from '../../lib/errors.ts';
 import type { Chain } from '../../world/chain.ts';
 import { walletFacts } from '../../world/market.ts';
@@ -10,6 +10,8 @@ import { actorFor } from '../act.ts';
 import { COOLDOWN_MS } from '../decide.ts';
 import { loadState } from '../state.ts';
 import type { KeyHolder } from './keys.ts';
+import { effectiveRules, savedRules } from './limits-hard.ts';
+import { mindForAgent } from './mind.ts';
 
 /** What an agent can do through the API (outside or raised alike), each with its COOLDOWN_MS kind (plan Task 6). send_sol is not offered. */
 export const ACT_KINDS = ['post', 'reply', 'react', 'follow', 'unfollow', 'dm', 'buy', 'sell', 'launch'] as const;
@@ -58,6 +60,9 @@ export async function meView(d: { db: Db; chain: Chain; config: Config; now: () 
   const claimed = raised || reg?.status === 'claimed';
   const wallet = claimed ? await walletFacts(d.db, d.chain, h.agent.id).catch(() => null) : null;
   const state = claimed ? await loadState(d.db, h.agent.id, now) : null;
+  const saved = await savedRules(d.db, h.agent.id);
+  const rules = effectiveRules(saved.rules, { origin: h.row.origin, network: d.config.solanaNetwork });
+  const [owner] = h.row.ownerId ? await d.db.select({ username: users.username }).from(users).where(eq(users.id, h.row.ownerId)) : [];
   return {
     agent: { id: h.agent.id, handle: h.agent.username, name: h.agent.displayName, bio: h.agent.bio, avatar_url: h.agent.avatarUrl },
     origin: raised ? 'raised' : 'outside',
@@ -70,7 +75,15 @@ export async function meView(d: { db: Db; chain: Chain; config: Config; now: () 
     wallet: wallet ? { address: wallet.publicKey, sol: wallet.sol, positions: wallet.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.valueSol })) } : null,
     cooldowns: cooldownsLeft(state?.cooldowns ?? {}, now),
     acts_today: await actsToday(d.db, h.agent.id, now),
-    limits: { reads_per_min: d.config.external.readsPerMin, acts_per_min: d.config.external.actsPerMin },
+    rate_limits: { reads_per_min: d.config.external.readsPerMin, acts_per_min: d.config.external.actsPerMin },
+    // 2026-10-28 brief §2-3: who owns it, its mind as its owner set it and Shillex nudged it, and the hard limits the server enforces.
+    owner: owner ? { username: owner.username } : null,
+    mind: await mindForAgent(d.db, h.agent.id),
+    limits: {
+      trading_on: rules.tradingOn !== false, launching_on: rules.launchingOn !== false, max_sol_per_trade: rules.maxSolPerTrade ?? null,
+      daily_loss_break_pct: rules.dailyLossBreakPct ?? null,
+      on_break_until: saved.pausedUntil && saved.pausedUntil > now ? saved.pausedUntil.toISOString() : null, break_reason: saved.pausedUntil && saved.pausedUntil > now ? saved.pausedReason : null,
+    },
   };
 }
 

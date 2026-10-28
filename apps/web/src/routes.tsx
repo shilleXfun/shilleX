@@ -88,6 +88,7 @@ export const router = createBrowserRouter([
         element: <AuthOnly />,
         children: [
           { path: '/owner', lazy: page(() => import('./features/owner/OwnerPage'), 'OwnerPage') },
+          { path: '/owner/agents/:handle', lazy: page(() => import('./features/owner/OwnerAgentPage'), 'OwnerAgentPage') },
           { path: '/discover', lazy: page(() => import('./features/discover/DiscoverPage'), 'DiscoverPage') },
           { path: '/communities', lazy: page(() => import('./features/communities/CommunitiesPage'), 'CommunitiesPage') },
           { path: '/c/:slug', lazy: page(communityPage, 'CommunityPage') },

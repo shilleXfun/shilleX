@@ -7,6 +7,8 @@ import { getSetting, setSetting } from './launchpad.ts';
 import { signerOf, walletFor } from './sol-vault.ts';
 import { TRADABLE_DEXES, pumpTrade, transferSol, type SolNet } from './sol-net.ts';
 import { buyRefusal, exitFor, lossPause, type CoinFacts } from './sol-rules.ts';
+import { effectiveRules, nextUtcMidnight } from '../agents/external/limits-hard.ts';
+import { agentDayMarks } from '../db/schema.ts';
 
 /**
  * Real SOL (2026-10-27, docs/superpowers/plans/2026-10-27-real-sol-agents.md). Every agent has its own mainnet wallet (the vault
@@ -40,6 +42,11 @@ export async function setKilled(db: Db, killed: boolean) { await setSetting(db, 
 export async function rulesRow(db: Db, agentId: string) {
   const [r] = await db.select().from(agentRules).where(eq(agentRules.agentId, agentId));
   return r ?? null;
+}
+/** The rules real SOL runs under: the owner's, over the mainnet defaults (0.1 SOL a trade, a 20% daily break; 2026-10-28). */
+export async function mainnetRules(db: Db, agentId: string, row: { rules: OwnerRules } | null): Promise<OwnerRules> {
+  const [a] = await db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
+  return effectiveRules(row?.rules ?? null, { origin: a?.origin ?? 'external', network: 'mainnet' });
 }
 /** Why the agent's own trading is paused (a loss limit), or null. */
 export function pausedOf(row: { pausedUntil: Date | null; pausedReason: string | null } | null, now: Date): string | null {
@@ -109,8 +116,10 @@ export function createSolBank(d: SolBankDeps) {
     return withLock(agentId, async () => {
       const now = d.now();
       const w = await walletFor(db, d.master, agentId, now);
+      // The day's first mark is taken before its first buy, so the daily break measures the whole day.
+      await checkLosses(agentId, now);
       const row = await rulesRow(db, agentId);
-      const rules: OwnerRules = row?.rules ?? {};
+      const rules: OwnerRules = await mainnetRules(db, agentId, row);
       const size = Number(solAmount.toFixed(4));
       const no = buyRefusal(rules, coin, { sol: size, buysToday: await buysToday(agentId), paused: pausedOf(row, now) });
       if (no) return { ok: false, outcome: `refused: ${no}` };
@@ -181,6 +190,22 @@ export function createSolBank(d: SolBankDeps) {
   /** A loss limit reached: the agent's trading pauses (until tomorrow, or until its owner saves the rules again). */
   async function checkLosses(agentId: string, now: Date) {
     const row = await rulesRow(db, agentId);
+    const rules = await mainnetRules(db, agentId, row);
+    // The daily loss break (2026-10-28): the wallet's SOL plus what its open positions cost, against the UTC day's first mark.
+    if (rules.dailyLossBreakPct && !pausedOf(row, now)) {
+      const [w] = await db.select({ lamports: solWallets.lamports }).from(solWallets).where(eq(solWallets.ownerId, agentId));
+      const [c] = await db.select({ n: sql<number>`coalesce(sum(${solPositions.solIn}), 0)::float8` }).from(solPositions).where(eq(solPositions.agentId, agentId));
+      const worth = Number(w?.lamports ?? 0) + Math.round(Number(c?.n ?? 0) * L), day = now.toISOString().slice(0, 10);
+      const [mark] = await db.select({ start: agentDayMarks.startLamports }).from(agentDayMarks).where(and(eq(agentDayMarks.agentId, agentId), eq(agentDayMarks.day, day)));
+      if (!mark) await db.insert(agentDayMarks).values({ agentId, day, startLamports: worth }).onConflictDoNothing();
+      else if (Number(mark.start) > 0 && (Number(mark.start) - worth) / Number(mark.start) >= rules.dailyLossBreakPct) {
+        const reason = `down ${Math.round(((Number(mark.start) - worth) / Number(mark.start)) * 100)}% today, the owner's break is at ${Math.round(rules.dailyLossBreakPct * 100)}%`;
+        await db.insert(agentRules).values({ agentId, rules: row?.rules ?? {}, signedBy: 'system', updatedAt: now, pausedUntil: nextUtcMidnight(now), pausedReason: reason })
+          .onConflictDoUpdate({ target: agentRules.agentId, set: { pausedUntil: nextUtcMidnight(now), pausedReason: reason } });
+        await d.say?.(agentId, `Taking a break until midnight UTC: ${reason}. My owner's rule, not mine.`);
+        return;
+      }
+    }
     if (!row || (row.rules.maxLossPerDaySol === undefined && row.rules.maxLossTotalSol === undefined)) return;
     const sum = async (since: Date | null) => {
       const [r] = await db.select({ n: sql<number>`coalesce(sum(${solTrades.pnlSol}), 0)::float8` }).from(solTrades)

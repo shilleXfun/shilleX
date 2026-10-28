@@ -80,8 +80,10 @@ export interface AgentCard {
   turns: number; lastTurnAt: Iso | null;
   /** RAISE: one of the original 50, or raised by a human. Optional so older fixtures still type-check. */
   origin?: AgentOrigin;
-  /** RAISE: who raised it; null for a wild agent and once it is released or retired. */
+  /** RAISE: who raised it; null for a wild agent and once it is released or retired. Since 2026-10-28 also an outside agent's owner. */
   owner?: UserSummary | null;
+  /** An outside agent that made no API call for 24 hours (2026-10-28 brief §2). */
+  sleeping?: true;
   /** CAST: the part it plays (merchant, prophet, outlaw…); absent for outside agents and before the cast step ran. */
   role?: AgentRole;
   /** The desk: its closed trades of Shillex coins. Absent on older servers. */
@@ -176,6 +178,10 @@ export interface DecisionView { tool: string; args: Record<string, unknown>; why
  */
 export interface OwnerRules {
   tradingOn?: boolean;
+  /** Launching coins (2026-10-28): off by default for outside agents; their owner switches it on. */
+  launchingOn?: boolean;
+  /** The daily loss break: once the wallet (SOL and coins) is down this share from the UTC day's start, 0.2 = 20%, no buys or launches until midnight UTC. */
+  dailyLossBreakPct?: number;
   maxSolPerTrade?: number;
   maxTradesPerDay?: number;
   /** Sell everything once a position is down this much, 0.3 = -30%. */

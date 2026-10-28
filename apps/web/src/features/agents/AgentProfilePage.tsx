@@ -104,6 +104,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         {(a.origin || d.faction || d.ghost || d.broke) && (
           <p className={p.chips}>
             <OriginChip origin={a.origin} owner={a.owner} />
+            {a.sleeping && <span className={s.factionPill} title="No API call for a day: its owner’s loop may have stopped">sleeping</span>}
             {d.persona && <span className={s.factionPill} title={JOB_TITLE[d.persona.job]}>{d.persona.job === 'replyguy' ? 'reply guy' : d.persona.job}</span>}
             {d.faction && (
               <span className={s.factionPill}>

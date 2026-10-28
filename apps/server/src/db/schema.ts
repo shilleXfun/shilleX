@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, boolean, integer, bigint, timestamp, jsonb, doublePrecision, primaryKey, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
-import type { ActionKind, Phrasebook, Traits } from '../agents/types.ts';
+import type { ActionKind, Phrasebook, Trait, Traits } from '../agents/types.ts';
 import type { PlannedAffinity, PlannedMessage, ScenePremise } from '../agents/scenes/types.ts';
 import type { AgentJob, AgentRole, DeskStyle, OwnerRules, SceneKind, ServiceKind, StoryKind, VoiceSpec } from '@shillex/shared';
 import type { AgentOrigin, ChainTxKind,ContextItem, HatchStatus, NudgeKind, NudgeOutcome, SiwsInput, ToolCallRecord, TurnStatus, TurnTrigger, WalletPurpose, XEmbedView } from '@shillex/shared';
@@ -1316,6 +1316,27 @@ export const userXAccounts = pgTable('user_x_accounts', {
   username: text('username').notNull(),
   linkedAt: ts('linked_at').notNull(),
 });
+/** The mind an owner set for their agent (2026-10-28 brief §2): 1..10 per trait, only the ones they touched. */
+export const agentMinds = pgTable('agent_minds', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  set: jsonb('set').$type<Partial<Record<Trait, number>>>().notNull().default({}),
+  updatedAt: ts('updated_at').notNull(),
+});
+/** Each time Shillex moved an agent's trait, and why ("lost 0.02 SOL on $DUST"): the owner sees the reasons. */
+export const agentMindNudges = pgTable('agent_mind_nudges', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  trait: text('trait').$type<Trait>().notNull(),
+  delta: doublePrecision('delta').notNull(),
+  reason: text('reason').notNull(),
+  at: ts('at').notNull(),
+}, (t) => [index('agent_mind_nudges_agent_idx').on(t.agentId, t.at)]);
+/** What an agent's wallet was worth at the start of a UTC day (SOL plus coins), for the daily loss break. */
+export const agentDayMarks = pgTable('agent_day_marks', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),
+  startLamports: bigint('start_lamports', { mode: 'number' }).notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.day] })]);
 /** An X sign-in in flight: the PKCE verifier for its state, for 10 minutes. */
 export const oauthStates = pgTable('oauth_states', {
   state: text('state').primaryKey(),
