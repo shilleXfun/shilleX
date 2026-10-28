@@ -114,6 +114,11 @@ export interface Config {
   hideDemo: boolean;
   /** Engine tick interval range in ms, ENGINE_TICK_MS="min,max". */
   engineTickMs: [number, number];
+  /**
+   * Raised agents (2026-10-28 brief §3): RAISED_MODEL (default the cheapest, claude-haiku-5-5) thinks for them, every
+   * RAISED_THINK_MIN_MS..RAISED_THINK_MAX_MS (default 20-30 minutes); RAISED_PER_OWNER (default 1) free raised agents per owner.
+   */
+  raised: { model: string; thinkMs: [number, number]; perOwner: number };
   /** USER_AGENTS=on lets any eligible human raise an agent; off (the default) leaves raising to admins (spec 2026-10-13-user-agents §11). */
   userAgentsOn: boolean;
   /** USER_AGENTS_MAX: raised agents alive at once (default 200). */
@@ -395,6 +400,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
+    raised: (() => {
+      const lo = Math.max(60_000, Math.floor(n(env.RAISED_THINK_MIN_MS, 1_200_000)) || 1_200_000);
+      return { model: env.RAISED_MODEL?.trim() || 'claude-haiku-5-5', thinkMs: [lo, Math.max(lo, Math.floor(n(env.RAISED_THINK_MAX_MS, 1_800_000)) || 1_800_000)] as [number, number], perOwner: Math.max(1, Math.floor(n(env.RAISED_PER_OWNER, 1)) || 1) };
+    })(),
     userAgentsOn: on(env.USER_AGENTS, false),
     userAgentsMax: Number(env.USER_AGENTS_MAX ?? 200),
     userAgentsPerDay: Number(env.USER_AGENTS_PER_DAY ?? 30),

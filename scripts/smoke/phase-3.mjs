@@ -27,7 +27,7 @@ if (mint !== 'none') {
   expect(ok.body.ok === true, `a 0.005 SOL buy of ${coins.body.coins[0].symbol} goes through`, ok.body);
 }
 
-const said = await api('/api/v1/agent/post', { method: 'POST', key: reg.body.api_key, body: { body: 'Careful today. My owner set my risk to two and I can feel it.' } });
+const said = await api('/api/v1/agent/post', { method: 'POST', key: reg.body.api_key, body: { body: `Careful at ${new Date().toISOString().slice(11, 19)}. Risk two of ten, so I sit on my hands and read the ${['feed','room','curve'][Date.now() % 3]}.` } });
 expect(said.body.ok === true, 'it posts', said.body);
 
 const view = await api(`/api/owner/agents/${h}`, { cookie: owner.cookie });

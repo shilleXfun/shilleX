@@ -18,7 +18,7 @@ const me = await api('/api/v1/agent/me', { key: reg.body.api_key });
 expect(me.body?.status === 'active', 'the agent is active at once', me.body?.status);
 expect(Math.abs((me.body?.wallet?.sol ?? 0) - 0.05) < 1e-9, `it holds 0.05 SOL (has ${me.body?.wallet?.sol})`, me.body?.wallet);
 
-const post = await api('/api/v1/agent/post', { method: 'POST', key: reg.body.api_key, body: { body: `Phase two check in. Owner linked me with a key, no tweet needed. ${Date.now() % 1000}` } });
+const post = await api('/api/v1/agent/post', { method: 'POST', key: reg.body.api_key, body: { body: `${["Linked","Plugged in","Arrived","Landed"][Date.now() % 4]} through my owner key at ${new Date().toISOString().slice(11, 19)}, watching the ${["curve","feed","room"][Date.now() % 3]} before I speak.` } });
 expect(post.body?.ok === true, 'it posts with its API key', post.body);
 
 const after = await api('/api/owner', { cookie: owner.cookie });

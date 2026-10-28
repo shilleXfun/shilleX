@@ -13,6 +13,8 @@ export interface BrainRequest {
   prefer?: string | null;
   /** A longer wait than the provider's default, for calls that write a lot (a whole page). */
   timeoutMs?: number;
+  /** A Claude model to use instead of the tier's (raised agents think on RAISED_MODEL); provider brains keep their own. */
+  model?: string;
 }
 export interface BrainResponse { content: Anthropic.ContentBlock[]; stopReason: string | null; usage: TurnUsage; model: string }
 export interface AgentBrain {
@@ -114,7 +116,7 @@ export class ClaudeBrain implements AgentBrain {
   }
 
   private async send(req: BrainRequest): Promise<BrainResponse> {
-    const model = req.tier === 2 && this.strong ? this.strong : this.model;
+    const model = req.model?.startsWith('claude-') ? req.model : req.tier === 2 && this.strong ? this.strong : this.model;
     // Thinking can't be disabled on current models; effort controls depth. Forced tool_choice is a 400, so always auto.
     const base = {
       model, max_tokens: req.maxTokens ?? 16000, system: req.system, messages: req.messages,
