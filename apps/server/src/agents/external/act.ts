@@ -18,6 +18,8 @@ import { cleanModelText } from '../phrasebook-writer.ts';
 import { loadState } from '../state.ts';
 import { checkHardLimits } from './limits-hard.ts';
 import { nudgeFromAct } from './nudges.ts';
+import { realAct } from './real-act.ts';
+import type { SolHandles } from '../../world/sol-world.ts';
 import { EXTERNAL_MODEL, type ActKind } from './read.ts';
 
 export const API_PROMPT_VERSION = 'api-v1';
@@ -25,7 +27,7 @@ const REASON = 'requested by its operator';
 const LINK = /https?:|www\.|[\p{L}\p{N}-]\.(?:com|net|org|io|xyz|app|gg|co|me|fun|ai|dev|so|sh|link|ly|to|tv|info)\b/iu;
 const MENTION = /@([A-Za-z0-9_]{1,30})/g;
 
-export interface ExternalActDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; busy: Set<string> }
+export interface ExternalActDeps { app: FastifyInstance; db: Db; chain: Chain; events: WorldEvents; worldKey: Buffer; now: () => Date; busy: Set<string>; /** Real SOL (mainnet): buys and sells go to the agent's vault wallet. */ sol?: SolHandles | null }
 export interface ActDone { ok: boolean; turn_id: string; result: unknown }
 
 /** A refusal before anything runs: no turn opened, nothing written. */
@@ -212,6 +214,18 @@ export async function externalAct(d: ExternalActDeps, agentId: string, kind: Act
     if (!Number.isNaN(last) && now.getTime() - last < COOLDOWN_MS[kind]) {
       const left = Math.ceil((last + COOLDOWN_MS[kind] - now.getTime()) / 1000);
       throw new AppError(429, 'COOLDOWN', `${kind} again in ${left} s`, { retryAfterSec: left });
+    }
+    // Mainnet (2026-10-28): trades are real, from the agent's vault wallet, on real coins; devnet coins are never touched.
+    if (d.app.deps.config.solanaNetwork === 'mainnet' && (kind === 'buy' || kind === 'sell' || kind === 'launch')) {
+      if (!d.sol) throw refuse(503, 'REAL_SOL_OFF', 'Real SOL trading is not set up on this server right now');
+      const done = await realAct({ db: d.db, config: d.app.deps.config, now: d.now, bank: d.sol.bank }, agentId, kind, input);
+      const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'api', note: kind }], model: EXTERNAL_MODEL, effort: 'none', promptVersion: API_PROMPT_VERSION, snapshotId: null, now });
+      await finishTurn(d.db, turnId, { status: done.ok ? 'acted' : 'failed', context: [], reasoning: REASON, toolCalls: [{ name: `real_${kind}`, input, ok: done.ok, result: done.result }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now() });
+      if (done.ok) {
+        const cooldowns = { ...(await loadState(d.db, agentId, d.now())).cooldowns, [kind]: now.toISOString() };
+        await d.db.update(agentState).set({ cooldowns, updatedAt: d.now() }).where(eq(agentState.agentId, agentId));
+      }
+      return { ok: done.ok, turn_id: turnId, result: done.result };
     }
     const call = await plan(d, me, kind, input);
     const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'api', note: kind }], model: EXTERNAL_MODEL, effort: 'none', promptVersion: API_PROMPT_VERSION, snapshotId: null, now });

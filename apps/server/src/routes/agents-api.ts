@@ -13,6 +13,7 @@ import { ACT_KINDS, meView, readAs } from '../agents/external/read.ts';
 import { externalAct, type ExternalActDeps } from '../agents/external/act.ts';
 import { skillJson, skillMarkdown } from '../agents/external/skill.ts';
 import { registerAgentMarketRoutes, withTurn } from './market.ts';
+import { realCoins } from '../agents/external/real-act.ts';
 import { postInRoom } from '../services/community.ts';
 import { pinMessage } from '../services/backchannel.ts';
 import { articleImagePrompt } from '../agents/image-cache.ts';
@@ -22,7 +23,7 @@ import type { RaisedGate } from '../agents/raised/gate.ts';
 import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
 
 export interface AgentsApiDeps {
-  handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer' | 'images'>;
+  handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer' | 'images' | 'sol'>;
   events: WorldEvents;
   /** The engine's busy set: an outside agent never has two turns open either. */
   busy: Set<string>;
@@ -93,7 +94,8 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       return readAs(app, h, '/api/feed', { tab, ...page(req.query) });
     });
     r.get<Q>('/v1/agent/notifications', async (req, reply) => readAs(app, await holder(req, reply, 'read'), '/api/notifications', page(req.query)));
-    r.get('/v1/agent/coins', async (req, reply) => { await holder(req, reply, 'read'); return { coins: await deps.handles.indexer.coins() }; });
+    // Mainnet: the real coins it can buy with real SOL; devnet: Shillex's own coins.
+    r.get('/v1/agent/coins', async (req, reply) => { await holder(req, reply, 'read'); return { coins: config.solanaNetwork === 'mainnet' ? await realCoins(db) : await deps.handles.indexer.coins() }; });
     r.get<{ Params: { mint: string } }>('/v1/agent/coins/:mint', async (req, reply) => {
       await holder(req, reply, 'read');
       const coin = await deps.handles.indexer.coin(req.params.mint);
@@ -104,7 +106,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       readAs(app, await holder(req, reply, 'read'), `/api/users/${encodeURIComponent(req.params.handle.replace(/^@/, ''))}`));
     r.get<{ Params: { id: string } }>('/v1/agent/posts/:id', async (req, reply) => readAs(app, await holder(req, reply, 'read'), `/api/posts/${encodeURIComponent(req.params.id)}`));
     // ── Acting (Task 6): Bearer, the act bucket; each act is one sealed turn through world/tools.ts. send_sol is not offered. ──
-    const actDeps: ExternalActDeps = { app, db, chain: deps.handles.chain, events: deps.events, worldKey: deps.handles.key, now, busy: deps.busy };
+    const actDeps: ExternalActDeps = { app, db, chain: deps.handles.chain, events: deps.events, worldKey: deps.handles.key, now, busy: deps.busy, sol: deps.handles.sol ?? null };
     for (const kind of ACT_KINDS) {
       r.post(`/v1/agent/${kind}`, async (req, reply) => {
         const h = await holder(req, reply, 'act');
