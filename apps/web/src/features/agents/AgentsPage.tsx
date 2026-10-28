@@ -12,7 +12,7 @@ import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { cx } from '../../lib/cx';
 import { spring } from '../../lib/motion';
-import { isNotFound, useLeaderboard, useOverview, useRealMode } from './agentsApi';
+import { isNotFound, useLeaderboard, useOverview, usePaperBook, useRealMoney } from './agentsApi';
 import { NoAgentWorld } from './NoAgentWorld';
 import { FactionKey, MoodGrid, MoodSpread, moodSummary, moodWord } from './MoodGrid';
 import { useHome } from '../home/homeApi';
@@ -60,9 +60,9 @@ function Movers({ id, title, icon, cards, scale, empty }: { id: string; title: s
   );
 }
 
-function Feuds({ feuds }: { feuds: AgentsOverview['feuds'] }) {
+function Feuds({ feuds, wide }: { feuds: AgentsOverview['feuds']; wide?: boolean }) {
   return (
-    <Panel id="agents-feuds" title="Feuds" icon={<Swords size={15} aria-hidden="true" />}>
+    <Panel id="agents-feuds" title="Feuds" icon={<Swords size={15} aria-hidden="true" />} wide={wide}>
       {feuds.length ? (
         <ul className={s.rows}>
           {feuds.map((f) => {
@@ -147,13 +147,15 @@ function Loading() {
 function Overview({ o }: { o: AgentsOverview }) {
   // One scale for both movers cards, so a bar's length compares across them.
   const scale = Math.max(1e-9, ...[...o.movers.up, ...o.movers.down].map((c) => Math.abs(c.pnlSol)));
+  // On mainnet the rugs and launches are the devnet test coins' (launching is closed there for now), so they are left out.
+  const money = useRealMoney();
   return (
     <div className={s.overview}>
-      <Movers id="agents-up" title="Up today" icon={<TrendingUp size={15} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
-      <Movers id="agents-down" title="Down today" icon={<TrendingDown size={15} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
-      <Feuds feuds={o.feuds} />
-      <Rugs rugs={o.rugs} />
-      <Launches coins={o.launches} />
+      <Movers id="agents-up" title={money ? 'Up' : 'Up today'} icon={<TrendingUp size={15} aria-hidden="true" />} cards={o.movers.up} scale={scale} empty="Nobody is up yet." />
+      <Movers id="agents-down" title={money ? 'Down' : 'Down today'} icon={<TrendingDown size={15} aria-hidden="true" />} cards={o.movers.down} scale={scale} empty="Nobody is down yet." />
+      <Feuds feuds={o.feuds} wide={money} />
+      {!money && <Rugs rugs={o.rugs} />}
+      {!money && <Launches coins={o.launches} />}
       <Panel id="agents-moods" title="Moods" icon={<Smile size={13} aria-hidden="true" />} wide
         aside={o.moods.length ? <span className={s.panelNote}>{moodSummary(o.moods)}</span> : undefined}>
         {o.moods.length ? (
@@ -170,7 +172,8 @@ function Overview({ o }: { o: AgentsOverview }) {
 
 type CastSort = 'rich' | 'up' | 'down' | 'az';
 const CAST_SORTS: { id: CastSort; label: string }[] = [{ id: 'rich', label: 'Richest' }, { id: 'up', label: 'Up today' }, { id: 'down', label: 'Down today' }, { id: 'az', label: 'A–Z' }];
-const REAL_LABELS: Partial<Record<CastSort, string>> = { rich: 'Biggest book', up: 'Best since start', down: 'Worst since start' };
+const PAPER_LABELS: Partial<Record<CastSort, string>> = { rich: 'Biggest book', up: 'Best since start', down: 'Worst since start' };
+const MONEY_LABELS: Partial<Record<CastSort, string>> = { rich: 'Most SOL', up: 'Best P&L', down: 'Worst P&L' };
 const CAST_FIRST = 24;
 
 /**
@@ -179,8 +182,10 @@ const CAST_FIRST = 24;
  */
 function Cast() {
   const all = useLeaderboard().data ?? [];
-  // In real-coin mode an agent's worth is its paper book in USD; its old SOL wallet no longer trades.
-  const real = useRealMode();
+  // Before real money, an agent's worth in real-coin mode was its paper book in USD. On mainnet it is its own SOL wallet
+  // (owner, 2026-10-28: the paper numbers read as fake P&L).
+  const real = usePaperBook();
+  const money = useRealMoney();
   const [sort, setSort] = useState<CastSort>('rich');
   const [open, setOpen] = useState(false);
   const live = all.filter((c) => c.status !== 'retired');
@@ -201,7 +206,7 @@ function Cast() {
       <div className={s.castHead}>
         <h2 id="agents-cast" className={s.castTitle}>The cast <span className={s.castCount}>{live.length}</span></h2>
         <div className={s.castSorts} role="group" aria-label="Sort the agents">
-          {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{real ? REAL_LABELS[x.id] ?? x.label : x.label}</button>)}
+          {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{(real ? PAPER_LABELS : money ? MONEY_LABELS : {})[x.id] ?? x.label}</button>)}
         </div>
       </div>
       <ul className={s.gallery}>
@@ -216,7 +221,7 @@ function Cast() {
                   {real ? <>
                     <span><b>{c.paper ? `$${Math.round(c.paper.valueUsd).toLocaleString('en')}` : '—'}</b></span>
                     {c.paper && <span className={c.paper.pnlPct >= 0.0005 ? s.up : c.paper.pnlPct <= -0.0005 ? s.down : s.muted}>{Math.abs(c.paper.pnlPct) < 0.0005 ? 'flat' : `${c.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(c.paper.pnlPct * 100).toFixed(1)}%`}</span>}
-                  </> : <>
+                  </> : money && c.totalSol === 0 && c.pnlSol === 0 ? <span className={s.muted}>Not funded yet</span> : <>
                     <span><b>{c.totalSol.toFixed(3)}</b> SOL</span>
                     <span className={c.pnlSol >= 0.0005 ? s.up : c.pnlSol <= -0.0005 ? s.down : s.muted}>{c.pnlSol >= 0 ? '+' : '−'}{Math.abs(c.pnlSol).toFixed(3)}</span>
                   </>}

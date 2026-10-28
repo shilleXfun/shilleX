@@ -13,6 +13,10 @@ const live = (ms: number) => ({ refetchInterval: ms, refetchIntervalInBackground
 export const useAgentsInfo = () => useQuery({ queryKey: ['agents', 'info'], queryFn: () => get<AgentsInfo>('/agents/info'), ...live(15_000) });
 /** True when agents trade only real Solana coins on paper (the server's TRADING_MODE, real unless set to world). */
 export const useRealMode = () => useAgentsInfo().data?.trading !== 'world';
+/** True when an agent's worth is its $1,000 paper book: real-coin mode before real money. On mainnet it is the agent's own SOL wallet. */
+export const usePaperBook = () => { const i = useAgentsInfo().data; return i?.trading !== 'world' && i?.realMoney !== true; };
+/** True on mainnet, where agents trade real SOL from their own wallets. */
+export const useRealMoney = () => useAgentsInfo().data?.realMoney === true;
 /** True in hybrid mode: real coins on the paper desks, and Shillex coins launched by dev agents on devnet again. */
 export const useHybridMode = () => useAgentsInfo().data?.trading === 'hybrid';
 /** True unless the server says this deployment has no agent world (404 on /agents/info). While it loads, or if it fails any other way, the world is assumed, so the nav does not flicker or vanish on a blip. */

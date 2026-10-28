@@ -32,7 +32,7 @@ import { TraitHistory } from './TraitHistory';
 import { TraitRadar, traitWords } from './TraitRadar';
 import { accountUrl, realAccountUrl } from './links';
 import { DevnetMark } from '../../components/ui/DevnetMark';
-import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo, useRealMode } from './agentsApi';
+import { useAgent, useAgentDepth, useAgentReceipts, useAgentTrades, useAgentsInfo, useRealMode, useRealMoney } from './agentsApi';
 import { useAgentTradeFlash, type Flash } from './pulses';
 import { speakerHue } from '../home/speaker';
 import s from './agents.module.css';
@@ -77,6 +77,8 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
   const rep = clamp(d.reputation);
   const debt = hasDebts(d.debts) ? debtFigure(d.debts) : null;
   const flash = useAgentTradeFlash(a.user.id);
+  // On mainnet its money is its real SOL wallet; the paper book and the paper desk's win rate would read as real results.
+  const money = useRealMoney();
   // Only link once the network is known to be devnet: the in-memory chain has no explorer.
   const net = useAgentsInfo().data?.network;
   // Mainnet: its real-SOL wallet, on mainnet's explorer.
@@ -130,10 +132,10 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         {a.status === 'paused' && <p className={s.warn}>Paused by an admin.</p>}
       </div>
       <dl className={p.strip}>
-        {a.paper && <Cell label="Paper book" value={<Tick value={a.paper.valueUsd} format={(n) => `$${Math.round(n).toLocaleString('en')}`} />} tone={a.paper.pnlPct >= 0.0005 ? 'up' : a.paper.pnlPct <= -0.0005 ? 'down' : undefined} note={`${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}% · ${a.paper.holding} open`} />}
+        {a.paper && !money && <Cell label="Paper book" value={<Tick value={a.paper.valueUsd} format={(n) => `$${Math.round(n).toLocaleString('en')}`} />} tone={a.paper.pnlPct >= 0.0005 ? 'up' : a.paper.pnlPct <= -0.0005 ? 'down' : undefined} note={`${a.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.paper.pnlPct * 100).toFixed(1)}% · ${a.paper.holding} open`} />}
         <Cell label="Net worth" value={<Tick value={a.totalSol} format={(n) => `${n.toFixed(3)} SOL`} />} flash={flash} />
         <Cell label="P&L" value={<Tick value={a.pnlSol} format={(n) => `${signed(n)} SOL`} />} tone={a.pnlSol >= 0.0005 ? 'up' : a.pnlSol <= -0.0005 ? 'down' : undefined} flash={flash} />
-        {a.record && a.record.closed > 0 && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}
+        {a.record && a.record.closed > 0 && !money && <Cell label="Win rate" value={`${Math.round((a.record.won / a.record.closed) * 100)}%`} tone={a.record.won * 2 >= a.record.closed ? 'up' : 'down'} note={`${a.record.closed} trades, average ${pctText(a.record.avgPnlPct)}`} />}
         <Cell label="Mood" value={moodWord(clamp(d.mood))} meter={d.mood} />
         <Cell label="Reputation" value={repWord(rep)} meter={rep} />
         <Cell label="Rugs" value={<Tick value={a.rugs} />} tone={a.rugs > 0 ? 'down' : undefined} note={a.coinsLaunched ? <>of {a.coinsLaunched} launched{a.money === 'real' && <DevnetMark what="its launches" />}</> : 'no launches yet'} />
@@ -547,6 +549,7 @@ export function AgentProfilePage() {
   const realOn = Boolean(useSol(username).data?.on);
   const me = useMe();
   const realMode = useRealMode();
+  const money = useRealMoney();
   // Only a signed-in human asks; the panel shows when this page is their own agent's.
   const mine = useMyRaised(Boolean(me.data));
   const owned = mine.data?.agent && a.data && mine.data.agent.user.id === a.data.user.id ? mine.data.agent : null;
@@ -565,9 +568,10 @@ export function AgentProfilePage() {
           <>
             <Top a={a.data} d={dq.data} />
             {owned && <OwnerPanel agent={owned} detail={a.data} />}
-            <FlatSection id="agent-equity" title={realMode ? 'Paper book' : 'Net worth'} note={realMode ? (a.data.paper ? `${a.data.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.data.paper.pnlPct * 100).toFixed(1)}% since it started · real Solana coins, no money moves` : 'real Solana coins at live prices, no money moves') : a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
+            {/* Its chart is the paper book's, or devnet test SOL's: not shown on mainnet until a real history exists. */}
+            {!money && <FlatSection id="agent-equity" title={realMode ? 'Paper book' : 'Net worth'} note={realMode ? (a.data.paper ? `${a.data.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.data.paper.pnlPct * 100).toFixed(1)}% since it started · real Solana coins, no money moves` : 'real Solana coins at live prices, no money moves') : a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
               <EquityChart username={a.data.user.username} paper={realMode} />
-            </FlatSection>
+            </FlatSection>}
             <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={[...TABS]} /></div>
             <TabPanel value={tab} order={ORDER} id="agent-tab-panel" aria-labelledby={`agent-tab-${tab}`}>
               <div className={p.pane}>

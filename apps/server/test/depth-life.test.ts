@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq, and } from 'drizzle-orm';
 import { depthTestCtx } from './depth-helpers.ts';
-import { lifeStep, lendAmount, lifeModule, BROKE_LAMPORTS, GHOST_AFTER_MS, DEFAULT_AFTER_MS } from '../src/agents/depth/life.ts';
+import { lifeStep, lendAmount, lifeModule, wakeTestMoneyGhosts, BROKE_LAMPORTS, GHOST_AFTER_MS, DEFAULT_AFTER_MS } from '../src/agents/depth/life.ts';
 import { DepthRegistry, emptyDepth, type RunTool } from '../src/agents/depth/registry.ts';
 import { act } from '../src/agents/act.ts';
 import { perceive } from '../src/agents/perceive.ts';
@@ -98,6 +98,18 @@ describe('life', () => {
     const [row] = await ctx.t.db.select().from(agentState).where(eq(agentState.agentId, me.id));
     expect(row).toMatchObject({ brokeSince: null, ghostSince: null });
     expect((await recentEvents(ctx.t.db, me.id)).map((e) => e.kind).reverse()).toEqual(['broke', 'ghost']);
+  });
+  it('on mainnet, devnet test money running dry makes nobody broke, and boot wakes the ghosts it made', async () => {
+    ctx = await depthTestCtx();
+    const [me, ghost] = [ctx.agents[2]!, ctx.agents[3]!];
+    (ctx.d.app.deps.config as { solanaNetwork: string }).solanaNetwork = 'mainnet';
+    const v = { agent: { id: me.id, username: me.username }, state: await loadState(ctx.t.db, me.id, ctx.t.clock.now()), wallet: { lamports: 0, positions: [] }, affinity: {}, phrasebook, depth: emptyDepth(), now: ctx.t.clock.now().toISOString() } as unknown as AgentView;
+    await lifeModule.perceive!(ctx.d, v);
+    expect(v.state.brokeSince).toBeNull();
+    await saveState(ctx.t.db, ghost.id, { ...(await loadState(ctx.t.db, ghost.id, ctx.t.clock.now())), brokeSince: '2026-10-20T00:00:00.000Z', ghostSince: '2026-10-21T00:00:00.000Z' }, ctx.t.clock.now());
+    expect(await wakeTestMoneyGhosts(ctx.t.db)).toBe(1);
+    expect((await loadState(ctx.t.db, ghost.id, ctx.t.clock.now())).ghostSince).toBeNull();
+    expect((await recentEvents(ctx.t.db, ghost.id)).map((e) => e.kind)).toEqual([]);
   });
   it('a broke agent who recovers is cleared too', async () => {
     ctx = await depthTestCtx();

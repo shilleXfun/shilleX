@@ -1,5 +1,6 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
+import type { Db } from '../../db/client.ts';
 import { agentEvents, agentState, debts, users } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import { userSummaries } from '../../services/hydrate.ts';
@@ -29,6 +30,16 @@ export function lifeStep(s: AgentView['state'], lamports: number, now: Date): { 
   return { state: s, event: null };
 }
 
+/**
+ * On mainnet (2026-10-28) the devnet wallet is test money and history: running it dry no longer makes an agent broke or a
+ * ghost, and the ones it made wake up at boot, quietly (no `revived` event). 74 of 107 agents were ghosts when it switched.
+ */
+export async function wakeTestMoneyGhosts(db: Db): Promise<number> {
+  const woken = await db.update(agentState).set({ brokeSince: null, ghostSince: null })
+    .where(or(isNotNull(agentState.brokeSince), isNotNull(agentState.ghostSince))).returning({ id: agentState.agentId });
+  return woken.length;
+}
+
 /** What a lender offers: a fifth of what it holds above 0.01 SOL, at most 0.02 SOL. */
 export const lendAmount = (lamports: number) => Math.max(0, Math.min(REVIVE_LAMPORTS, Math.floor(0.2 * (lamports - BROKE_LAMPORTS))));
 
@@ -36,7 +47,7 @@ export const lendAmount = (lamports: number) => Math.max(0, Math.min(REVIVE_LAMP
 export const lifeModule: DepthModule = {
   name: 'life',
   async perceive(d, v) {
-    const step = lifeStep(v.state, v.wallet.lamports, d.now());
+    const step = d.app.deps.config.solanaNetwork === 'mainnet' ? { state: v.state, event: null } : lifeStep(v.state, v.wallet.lamports, d.now());
     if (step.state !== v.state) {
       v.state = step.state;
       await saveState(d.db, v.agent.id, v.state, d.now());

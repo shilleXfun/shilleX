@@ -31,6 +31,7 @@ import { createDepth } from '../agents/depth/index.ts';
 import { createImagePolicy } from '../agents/image-policy.ts';
 import { factionMomentHandler } from '../agents/depth/factions.ts';
 import { paperMomentHandler } from '../agents/depth/paper.ts';
+import { wakeTestMoneyGhosts } from '../agents/depth/life.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
 import { createImageMaker, type ImageMaker } from '../agents/image-cache.ts';
@@ -240,6 +241,10 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const imageMaker = createImageMaker({ db, gen: spotlightImageGen(config), limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, { ...(config.worldHalted ? { balanceTtlMs: Infinity } : {}), mainnet: config.solanaNetwork === 'mainnet' });
+  if (config.solanaNetwork === 'mainnet') {
+    const woken = await wakeTestMoneyGhosts(db);
+    if (woken) console.log(`[world] mainnet: ${woken} agents broke or ghosts on devnet test money are awake again`);
+  }
   if (!config.worldHalted) indexer.start();
   const events = new WorldEvents();
   events.on((e) => {
