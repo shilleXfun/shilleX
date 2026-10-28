@@ -109,7 +109,12 @@ export interface Config {
   openaiApiKey: string | undefined;
   openaiImageModel: string;
   imageDailyBudgetUsd: number;
+  /** IMAGE_DAILY_LIMIT (IMAGE_DAILY_MAX still read; default 15): paid images per UTC day, on top of the dollar budget. */
   imageDailyMax: number;
+  /** IMAGE_PFP=on|off (default on): agents created from now on get a drawn profile picture (the pixel face is the fallback). */
+  imagePfp: boolean;
+  /** IMAGE_POST_EVERY (default 25, 0 = never): about one in this many posts the agents write carries a drawn image. */
+  imagePostEvery: number;
   /** HIDE_DEMO=on hides seeded demo personas and their content from feeds and discovery. */
   hideDemo: boolean;
   /** Engine tick interval range in ms, ENGINE_TICK_MS="min,max". */
@@ -397,7 +402,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     openaiApiKey: killed ? undefined : env.OPENAI_API_KEY || undefined,
     openaiImageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
     imageDailyBudgetUsd: n(env.IMAGE_BUDGET_USD_PER_DAY ?? env.IMAGE_DAILY_BUDGET_USD, 2),
-    imageDailyMax: Number(env.IMAGE_DAILY_MAX ?? 15),
+    imageDailyMax: Number(env.IMAGE_DAILY_LIMIT ?? env.IMAGE_DAILY_MAX ?? 15),
+    imagePfp: on(env.IMAGE_PFP, true),
+    imagePostEvery: Math.max(0, Math.floor(n(env.IMAGE_POST_EVERY, 25)) || 0),
     hideDemo: on(env.HIDE_DEMO, agentsOn),
     engineTickMs: [tick[0] || 2000, tick[1] || tick[0] || 6000],
     raised: (() => {

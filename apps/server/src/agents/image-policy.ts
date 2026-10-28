@@ -7,6 +7,7 @@ import { renderCard, type CardData, type CardKind } from './cards.ts';
 import { recordLineage } from './depth/lineage.ts';
 import { captionMeme } from './memes.ts';
 import { blobUpload, storeBlob, type ImagePolicy } from './images.ts';
+import { postImagePrompt, type ImageMaker } from './image-cache.ts';
 import { fillLine } from './phrasebook.ts';
 import type { AgentView, Candidate, Situation } from './types.ts';
 
@@ -85,7 +86,7 @@ function shuffled<T>(xs: readonly T[], rng: () => number): T[] {
   return out;
 }
 
-export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => number }): ImagePolicy {
+export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => number; drawn?: { maker: ImageMaker; every: number } }): ImagePolicy {
   const { db } = d;
 
   async function attach(v: AgentView, card: Card): Promise<Attached> {
@@ -131,11 +132,22 @@ export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => numbe
     return null;
   }
 
-  async function choose(v: AgentView, c: Candidate): Promise<Attached | null> {
+  /** About one post in IMAGE_POST_EVERY gets a drawn picture of what it says (2026-10-28 brief §5); null when none is drawn. */
+  async function tryDrawn(v: AgentView, c: Candidate, text: string): Promise<Attached | null> {
+    const dr = d.drawn;
+    if (!dr || dr.every <= 0 || c.kind !== 'post' || text.trim().length < 20 || d.rng() >= 1 / dr.every) return null;
+    const img = await dr.maker.make(postImagePrompt(text), { kind: 'post' });
+    if (!img) return null;
+    return { uploadId: await blobUpload(db, v.agent.id, { id: img.blobId, url: img.url, width: img.width, height: img.height }, 'image/png', d.now()), alt: text.slice(0, MAX_ALT) };
+  }
+
+  async function choose(v: AgentView, c: Candidate, text: string): Promise<Attached | null> {
     if (!IMAGE_KINDS.has(c.kind)) return null;
     // Launches and rugs are rare: they always get their card, but only with the real numbers.
     if (c.kind === 'launch') { const card = launchCard(v, c); return card ? attach(v, card) : null; }
     if (c.kind === 'rug') { const card = rugCard(v, c); return card ? attach(v, card) : null; }
+    const drawn = await tryDrawn(v, c, text).catch((e) => { console.error('[agents] a drawn post image failed', (e as Error).message); return null; });
+    if (drawn) return drawn;
     if (!imageWanted(v, c, await recentImageShare(db), d.rng)) return null;
     // The drawn price and P&L cards were retired on 2026-10-13 (stale, and they said nothing a coin's own page doesn't):
     // a post gets a real picture when one can be made, and otherwise goes out as text.
@@ -145,8 +157,8 @@ export function createImagePolicy(d: { db: Db; now: () => Date; rng: () => numbe
 
   return {
     // Never throws: any failure (render, storage, database) means the post goes out without a picture.
-    async maybeAttach(v, c, _text) {
-      try { return await choose(v, c); } catch (e) { console.error('[agents] image not attached', (e as Error).message); return null; }
+    async maybeAttach(v, c, text) {
+      try { return await choose(v, c, text); } catch (e) { console.error('[agents] image not attached', (e as Error).message); return null; }
     },
   };
 }

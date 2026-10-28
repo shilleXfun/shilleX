@@ -28,6 +28,7 @@ import { factionMomentHandler } from '../agents/depth/factions.ts';
 import { paperMomentHandler } from '../agents/depth/paper.ts';
 import { reputation } from '../agents/depth/reputation.ts';
 import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts';
+import { createImageMaker, type ImageMaker } from '../agents/image-cache.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { brainFromConfig, modelBudget } from '../agents/haiku.ts';
 import { createMoments } from '../agents/moments.ts';
@@ -95,6 +96,8 @@ export interface WorldHandles {
   mainnet?: MainnetHandles | null;
   /** Real SOL: the bank (trades, withdrawals, escrow) and the marketplace; null without SOL_WALLET_KEY (world/sol-world.ts). */
   sol?: SolHandles | null;
+  /** Drawn images, cached by prompt (agents/image-cache.ts); answers null without OPENAI_API_KEY or past the day's budget. */
+  images?: ImageMaker | null;
   /** Starts the agents if AGENTS=on and the world is ready; says why not otherwise. */
   startAgents(): string;
 }
@@ -226,6 +229,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Coin logos (agents/coin-launch.ts): drawn once into the bucket, or a local folder without one; no OPENAI_API_KEY, no logos.
   const store = config.bucket ? s3Store(config.bucket) : localStore(join(config.uploadsDir, 'objects'));
   const logos = createLogoMaker({ db, store, gen: spotlightImageGen(config), model: config.openaiImageModel, limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
+  // Drawn images (2026-10-28 brief §5): new agents' faces, the odd post image, Times lead images; cached by prompt, within the day's budget.
+  const imageMaker = createImageMaker({ db, gen: spotlightImageGen(config), limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, config.worldHalted ? { balanceTtlMs: Infinity } : {});
   if (!config.worldHalted) indexer.start();
@@ -239,7 +244,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Routes first: the engine acts through app.inject, which boots Fastify and closes registration.
   const handles: WorldHandles = {
-    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, sol, halt, quiet, ceiling, store, brain: null, scenes: null,
+    indexer, budget, chain, key, engine: null, moments: null, network: chain.network, mainnet, sol, halt, quiet, ceiling, store, brain: null, scenes: null, images: imageMaker,
     startAgents() {
       if (handles.engine) return 'running';
       if (config.worldHalted) return 'halted (WORLD_HALTED is on)';
@@ -264,7 +269,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const voice = brain && config.voicePerHour > 0 ? createVoice({ db, brain, budget, now, halt, perHour: config.voicePerHour, homes: config.llm.mode === 'openai' ? config.llm.providers.map((p) => p.name) : [] }) : undefined;
       // The director wakes agents and they decide for themselves (agents/director.ts); the engine keeps the free moves for them.
       const directed = Boolean(brain && config.director.on);
-      const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng }), director: directed };
+      const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng, drawn: { maker: imageMaker, every: config.imagePostEvery } }), director: directed };
       handles.engine = startEngine({ ...engineDeps, tickMs: config.engineTickMs, population: () => population.value() });
       if (directed && brain) {
         const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(1, config.voicePerHour), wake: config.director.wake, sol, raised: config.raised });
@@ -303,7 +308,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerSolRoutes(app, handles);
   await registerOwnerRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
-  const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
+  const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate, faces: config.imagePfp ? imageMaker : null });
   const pump = createHatchPump({
     db, now, config, moments: () => handles.moments,
     hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => { await retireReported({ db, chain, key, now, gate }); },

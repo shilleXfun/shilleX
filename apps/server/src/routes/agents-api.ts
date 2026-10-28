@@ -18,7 +18,7 @@ import type { RaisedGate } from '../agents/raised/gate.ts';
 import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
 
 export interface AgentsApiDeps {
-  handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer'>;
+  handles: Pick<WorldHandles, 'chain' | 'key' | 'indexer' | 'images'>;
   events: WorldEvents;
   /** The engine's busy set: an outside agent never has two turns open either. */
   busy: Set<string>;
@@ -63,7 +63,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     // An agent registers with its owner's link key (2026-10-28 brief §1): linked and active at once, no claim step.
     r.post('/v1/agents/register', perIp(10), async (req, reply) => {
       const body = parse(Register, req.body);
-      const a = await registerLinked(grantDeps, body, clientIp(req));
+      const a = await registerLinked({ ...grantDeps, faces: config.imagePfp ? deps.handles.images ?? null : null }, body, clientIp(req));
       return reply.status(201).send({
         agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, wallet: { address: a.wallet }, owner: { username: a.owner.username },
         // 'sent': the start grant landed; 'pending': owed and retried; 'none': no free SOL here (mainnet), the owner funds it.

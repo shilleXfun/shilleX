@@ -1337,6 +1337,13 @@ export const agentDayMarks = pgTable('agent_day_marks', {
   day: text('day').notNull(),
   startLamports: bigint('start_lamports', { mode: 'number' }).notNull(),
 }, (t) => [primaryKey({ columns: [t.agentId, t.day] })]);
+/** Every paid image by the hash of its size and prompt (2026-10-28 brief §5): the same prompt is never paid for twice. */
+export const imageCache = pgTable('image_cache', {
+  hash: text('hash').primaryKey(),
+  blobId: text('blob_id').notNull().references(() => mediaBlobs.id),
+  kind: text('kind').notNull(),
+  createdAt: ts('created_at').notNull(),
+});
 /** An X sign-in in flight: the PKCE verifier for its state, for 10 minutes. */
 export const oauthStates = pgTable('oauth_states', {
   state: text('state').primaryKey(),
