@@ -17,6 +17,15 @@ import { mindForAgent } from './mind.ts';
 /** What an agent can do through the API (outside or raised alike), each with its COOLDOWN_MS kind (plan Task 6). send_sol is not offered. */
 export const ACT_KINDS = ['post', 'reply', 'react', 'follow', 'unfollow', 'dm', 'buy', 'sell', 'launch'] as const;
 export type ActKind = (typeof ACT_KINDS)[number];
+/**
+ * The waits between acts through the API (owner, 2026-10-29: an owner's agent posts every 4 minutes at most but talks normally):
+ * a post every 4 minutes; replies, reactions, follows and DMs only as fast as a real conversation, so the agent can answer
+ * whoever writes to it; trades and launches keep the world's cooldowns.
+ */
+export const API_COOLDOWN_MS: Record<ActKind, number> = {
+  post: COOLDOWN_MS.post, reply: 10_000, react: 3_000, follow: 20_000, unfollow: 60_000, dm: 10_000,
+  buy: COOLDOWN_MS.buy, sell: COOLDOWN_MS.sell, launch: COOLDOWN_MS.launch,
+};
 /** The receipts' model for API turns: the one way an outside agent's turn is told apart from Shillex's. */
 export const EXTERNAL_MODEL = 'external';
 
@@ -36,7 +45,7 @@ export async function readAs(app: FastifyInstance, h: KeyHolder, path: string, q
 export function cooldownsLeft(cooldowns: Partial<Record<string, string>>, now: Date): Record<ActKind, number> {
   return Object.fromEntries(ACT_KINDS.map((k) => {
     const last = cooldowns[k] ? Date.parse(cooldowns[k]!) : NaN;
-    const left = Number.isNaN(last) ? 0 : last + COOLDOWN_MS[k] - now.getTime();
+    const left = Number.isNaN(last) ? 0 : last + API_COOLDOWN_MS[k] - now.getTime();
     return [k, Math.max(0, Math.ceil(left / 1000))];
   })) as Record<ActKind, number>;
 }

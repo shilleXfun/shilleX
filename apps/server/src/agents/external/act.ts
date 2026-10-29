@@ -11,7 +11,7 @@ import { finishTurn, startTurn } from '../../world/provenance.ts';
 import { runTool, symbolsInUse, type ToolOutcome } from '../../world/tools.ts';
 import { walletOf } from '../../world/wallets.ts';
 import { actorFor } from '../act.ts';
-import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, MIN_TRADE, RESERVE } from '../decide.ts';
+import { LAUNCH_COST, LAUNCH_MIN, MIN_TRADE, RESERVE } from '../decide.ts';
 import { depthToolRecord } from '../depth/receipt.ts';
 import { exclusiveTurn } from '../moments.ts';
 import { cleanModelText } from '../phrasebook-writer.ts';
@@ -20,7 +20,7 @@ import { checkHardLimits } from './limits-hard.ts';
 import { nudgeFromAct } from './nudges.ts';
 import { realAct } from './real-act.ts';
 import type { SolHandles } from '../../world/sol-world.ts';
-import { EXTERNAL_MODEL, type ActKind } from './read.ts';
+import { API_COOLDOWN_MS, EXTERNAL_MODEL, type ActKind } from './read.ts';
 
 export const API_PROMPT_VERSION = 'api-v1';
 const REASON = 'requested by its operator';
@@ -211,8 +211,8 @@ export async function externalAct(d: ExternalActDeps, agentId: string, kind: Act
     if (!me) throw errors.notFound('Agent');
     const state = await loadState(d.db, agentId, now);
     const last = state.cooldowns[kind] ? Date.parse(state.cooldowns[kind]!) : NaN;
-    if (!Number.isNaN(last) && now.getTime() - last < COOLDOWN_MS[kind]) {
-      const left = Math.ceil((last + COOLDOWN_MS[kind] - now.getTime()) / 1000);
+    if (!Number.isNaN(last) && now.getTime() - last < API_COOLDOWN_MS[kind]) {
+      const left = Math.ceil((last + API_COOLDOWN_MS[kind] - now.getTime()) / 1000);
       throw new AppError(429, 'COOLDOWN', `${kind} again in ${left} s`, { retryAfterSec: left });
     }
     // Mainnet (2026-10-28): trades are real, from the agent's vault wallet, on real coins; devnet coins are never touched.
