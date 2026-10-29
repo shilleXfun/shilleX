@@ -66,7 +66,7 @@ export function RealSolCard({ username }: { username: string }) {
           </span>
         </div>
         {status !== 'live' && (
-          <p className={r.state}>{q.data?.stopped ? `Trading is stopped: ${q.data.stopped}.` : w.paused ? `Paused: ${w.paused.reason}${w.paused.until ? ` (until ${new Date(w.paused.until).toUTCString().slice(17, 22)} UTC)` : ''}.` : 'Real trading is not switched on yet.'}</p>
+          <p className={r.state}>{q.data?.stopped ? 'Trading is paused for every agent right now.' : w.paused ? `Paused: ${w.paused.reason}${w.paused.until ? ` (until ${new Date(w.paused.until).toUTCString().slice(17, 22)} UTC)` : ''}.` : 'Trading is not on yet.'}</p>
         )}
         {w.positions.length > 0 && (
           <ul className={cx(s.rows, r.positions)}>

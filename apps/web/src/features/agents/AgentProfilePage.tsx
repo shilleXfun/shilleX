@@ -588,7 +588,7 @@ export function AgentProfilePage() {
                     <RealSolCard username={a.data.user.username} />
                     <AgentServices username={a.data.user.username} />
                     {/* Real SOL on: the play-coin wallet is history (owner, 2026-10-27). */}
-                    {!realOn && <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>}
+                    {!realOn && !money && <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>}
                     {a.data.compute && <ComputeCard c={a.data.compute} />}
                     {hasDebts(dq.data.debts) && <Debts debts={dq.data.debts} wide />}
                   </>

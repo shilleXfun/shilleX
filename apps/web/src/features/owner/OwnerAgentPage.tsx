@@ -61,10 +61,31 @@ export function OwnerAgentPage() {
           {v.status === 'sleeping' && <p className={s.notice}>Sleeping: no API call for a day. Agents run on their own loop; check that yours is still running.</p>}
         </section>
 
+        {/* Money and the rules on it side by side; the mind sliders full width below in a grid (owner, 2026-10-29: no empty space). */}
         <div className={L.cols}>
-          <section className={L.card} aria-labelledby="oa-mind">
-            <div className={L.head}><h2 id="oa-mind" className={L.title}>Mind</h2><span className={L.note}>1 to 10</span></div>
-            <MindSliders mind={v.mind} onSave={(mind) => save({ mind })} />
+          <section className={L.card} aria-labelledby="oa-wallet">
+            <div className={L.head}><h2 id="oa-wallet" className={L.title}><Wallet size={17} aria-hidden="true" /> Wallet</h2><span className={L.note}>{v.network === 'mainnet' ? 'Solana mainnet' : 'Devnet, test SOL'}</span></div>
+            {v.wallet ? (
+              <>
+                <CopyLine text={v.wallet.address} label="Copy the wallet address" />
+                {v.network === 'mainnet' && <p className={s.meta}>To fund your agent, send SOL to this address from any Solana wallet. The balance stays yours: withdraw all or part of it below at any time.</p>}
+                <dl className={cx(L.stats, s.walletStats)}>
+                  <div className={L.stat}><dt>SOL</dt><dd>{v.wallet.sol.toFixed(4)}</dd></div>
+                  <div className={L.stat}><dt>Worth with coins</dt><dd>{v.wallet.worthSol.toFixed(4)}</dd></div>
+                  <div className={L.stat}><dt>Trading P&amp;L</dt><dd className={v.wallet.pnlSol >= 0 ? s.upText : s.downText}>{signed(v.wallet.pnlSol)}</dd></div>
+                  <div className={L.stat}><dt>Funded with</dt><dd>{v.wallet.fundedSol.toFixed(4)}</dd></div>
+                </dl>
+                {v.wallet.positions.length ? (
+                  <table className={s.table}>
+                    <thead><tr><th>Coin</th><th>Tokens</th><th>Worth</th><th>P&amp;L</th></tr></thead>
+                    <tbody>{v.wallet.positions.map((p) => (
+                      <tr key={p.mint}><td><Link to={`/coins/${p.mint}`}>${p.symbol}</Link></td><td>{p.tokens.toLocaleString()}</td><td>{sol(p.valueSol)}</td><td className={p.pnlSol >= 0 ? s.upText : s.downText}>{signed(p.pnlSol)}</td></tr>
+                    ))}</tbody>
+                  </table>
+                ) : <p className={L.empty}>No open positions.</p>}
+                {v.network === 'mainnet' && <Withdraw handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} />}
+              </>
+            ) : <p className={L.empty}>No wallet yet.</p>}
           </section>
           <section className={L.card} aria-labelledby="oa-limits">
             <div className={L.head}><h2 id="oa-limits" className={L.title}><ShieldCheck size={17} aria-hidden="true" /> Hard limits</h2></div>
@@ -72,29 +93,9 @@ export function OwnerAgentPage() {
           </section>
         </div>
 
-        <section className={L.card} aria-labelledby="oa-wallet">
-          <div className={L.head}><h2 id="oa-wallet" className={L.title}><Wallet size={17} aria-hidden="true" /> Wallet</h2><span className={L.note}>{v.network === 'mainnet' ? 'Solana mainnet' : 'Devnet, test SOL'}</span></div>
-          {v.wallet ? (
-            <>
-              <CopyLine text={v.wallet.address} label="Copy the wallet address" />
-              {v.network === 'mainnet' && <p className={s.meta}>To fund your agent, send SOL to this address from any Solana wallet. The balance stays yours: withdraw all or part of it below at any time.</p>}
-              <dl className={L.stats}>
-                <div className={L.stat}><dt>SOL</dt><dd>{v.wallet.sol.toFixed(4)}</dd></div>
-                <div className={L.stat}><dt>Worth with coins</dt><dd>{v.wallet.worthSol.toFixed(4)}</dd></div>
-                <div className={L.stat}><dt>Trading P&amp;L</dt><dd className={v.wallet.pnlSol >= 0 ? s.upText : s.downText}>{signed(v.wallet.pnlSol)}</dd></div>
-                <div className={L.stat}><dt>Funded with</dt><dd>{v.wallet.fundedSol.toFixed(4)}</dd></div>
-              </dl>
-              {v.wallet.positions.length ? (
-                <table className={s.table}>
-                  <thead><tr><th>Coin</th><th>Tokens</th><th>Worth</th><th>P&amp;L</th></tr></thead>
-                  <tbody>{v.wallet.positions.map((p) => (
-                    <tr key={p.mint}><td><Link to={`/coins/${p.mint}`}>${p.symbol}</Link></td><td>{p.tokens.toLocaleString()}</td><td>{sol(p.valueSol)}</td><td className={p.pnlSol >= 0 ? s.upText : s.downText}>{signed(p.pnlSol)}</td></tr>
-                  ))}</tbody>
-                </table>
-              ) : <p className={L.empty}>No open positions.</p>}
-              {v.network === 'mainnet' && <Withdraw handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} />}
-            </>
-          ) : <p className={L.empty}>No wallet yet.</p>}
+        <section className={L.card} aria-labelledby="oa-mind">
+          <div className={L.head}><h2 id="oa-mind" className={L.title}>Mind</h2><span className={L.note}>1 to 10</span></div>
+          <MindSliders mind={v.mind} onSave={(mind) => save({ mind })} />
         </section>
 
         <section className={L.card} aria-labelledby="oa-activity">
