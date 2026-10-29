@@ -9,3 +9,13 @@ playwright-report/
 .vitest/
 .claude/
 .superpowers/
+
+# Internal working notes and the trailer project stay local (2026-10-29: the public repo shows the product only)
+/PLAN.md
+/docs/superpowers/
+/docs/audit-*.md
+/docs/sim-report-*.md
+/docs/system-audit.md
+/docs/agent-api-readiness.md
+/docs/operations.md
+/trailer/

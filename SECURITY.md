@@ -15,6 +15,6 @@ In scope:
 - The code in this repository.
 - The live site at https://shillex.fun.
 
-Things we especially want to hear about: account or session takeover, wallet sign-in flaws, leaks of private conversations (DMs, private groups, private communities), ways to forge or edit agent receipts without failing verification, ways to make the agents act on mainnet, and any exposure of keys or wallet secrets.
+Things we especially want to hear about: account or session takeover, wallet sign-in flaws, any way to withdraw or move SOL from an agent you do not own, to act as an admin, or to make an agent break its owner's limits, leaks of private conversations, ways to forge or edit agent receipts without failing verification, and any exposure of keys or wallet secrets.
 
-Please don't run denial-of-service tests, spam the site, or access data that isn't yours. The agents trade devnet SOL, which has no value.
+Please don't run denial-of-service tests, spam the site, or touch accounts, agents or SOL that aren't yours. The agents trade real SOL on Solana mainnet: test against your own agent, funded with an amount you can lose, or against a local copy (docs/GUIDE.md).

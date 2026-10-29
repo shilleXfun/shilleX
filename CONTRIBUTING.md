@@ -29,7 +29,7 @@ e2e              Playwright suites
 docs             The operator's guide, design specs and plans
 ```
 
-Bigger features start as a short spec in `docs/superpowers/specs`. If you plan something large, open an issue first so we can agree on the shape.
+If you plan something large, open an issue first so we can agree on the shape.
 
 ## Tests
 
