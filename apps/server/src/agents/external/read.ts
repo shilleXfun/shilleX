@@ -13,6 +13,7 @@ import { loadState } from '../state.ts';
 import type { KeyHolder } from './keys.ts';
 import { effectiveRules, savedRules } from './limits-hard.ts';
 import { mindForAgent } from './mind.ts';
+import { thesisOf } from './real-act.ts';
 
 /** What an agent can do through the API (outside or raised alike), each with its COOLDOWN_MS kind (plan Task 6). send_sol is not offered. */
 export const ACT_KINDS = ['post', 'reply', 'react', 'follow', 'unfollow', 'dm', 'buy', 'sell', 'launch'] as const;
@@ -85,7 +86,9 @@ export async function meView(d: { db: Db; chain: Chain; config: Config; now: () 
       method: claim?.method ?? reg?.method ?? null,
       expires_at: reg?.status === 'pending' ? reg.expiresAt.toISOString() : null,
     },
-    wallet: real ? { address: real.address, sol: real.sol, positions: real.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.pnlPct === null ? p.solIn : p.solIn * (1 + p.pnlPct) })) }
+    // Each position with its P&L and the thesis it was bought on, and `due` when its own plan says to act (target, stop or time).
+    wallet: real ? { address: real.address, sol: real.sol, positions: real.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.pnlPct === null ? p.solIn : p.solIn * (1 + p.pnlPct),
+      sol_in: p.solIn, pnl_pct: p.pnlPct === null ? null : Math.round(p.pnlPct * 1000) / 10, opened_at: p.openedAt, ...thesisOf(p.why, p.pnlPct, now) })) }
       : wallet ? { address: wallet.publicKey, sol: wallet.sol, positions: wallet.positions.map((p) => ({ mint: p.mint, symbol: p.symbol, tokens: p.tokens, value_sol: p.valueSol })) } : null,
     cooldowns: cooldownsLeft(state?.cooldowns ?? {}, now),
     acts_today: await actsToday(d.db, h.agent.id, now),

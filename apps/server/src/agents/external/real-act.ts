@@ -28,6 +28,30 @@ export async function realCoins(db: Db, limit = 40) {
   }));
 }
 
+/**
+ * A buy's thesis (owner, 2026-10-29: agents trade on their own and come up with a thesis): its reason, and the target, stop and
+ * hours it gives the trade, kept with the position as "<why> [plan target=+50 stop=-20 until=<ISO>]" so /agent/me can say when
+ * the plan is due. The owner's hard limits and stop loss still win.
+ */
+export function thesisText(i: Record<string, unknown>, now: Date): string {
+  const why = typeof i.why === 'string' && i.why.trim() ? i.why.trim().replace(/\s+/g, ' ').slice(0, 180) : 'no reason given';
+  const num = (x: unknown, lo: number, hi: number) => { const v = Number(x); return Number.isFinite(v) && v >= lo && v <= hi ? Math.round(v) : null; };
+  const target = num(i.target_pct, 1, 10_000), stop = num(i.stop_pct, 1, 99), hours = num(i.hours, 1, 24 * 30);
+  if (target === null && stop === null && hours === null) return why;
+  const until = hours === null ? '' : ` until=${new Date(now.getTime() + hours * 3_600_000).toISOString()}`;
+  return `${why} [plan${target === null ? '' : ` target=+${target}`}${stop === null ? '' : ` stop=-${stop}`}${until}]`;
+}
+
+/** A position's thesis read back: the reason, the plan, and what of it is due now given its P&L. */
+export function thesisOf(why: string | null, pnlPct: number | null, now: Date) {
+  const m = /^(.*?)\s*\[plan((?: target=\+\d+)?)((?: stop=-\d+)?)((?: until=\S+)?)\]$/.exec(why ?? '');
+  const reason = (m ? m[1] : why) ?? null;
+  const target = m?.[2] ? Number(m[2].split('+')[1]) : null, stop = m?.[3] ? Number(m[3].split('-')[1]) : null, until = m?.[4] ? m[4].split('=')[1]! : null;
+  const pct = pnlPct === null ? null : pnlPct * 100;
+  const due = pct !== null && target !== null && pct >= target ? 'target' : pct !== null && stop !== null && pct <= -stop ? 'stop' : until && Date.parse(until) <= now.getTime() ? 'time' : null;
+  return { thesis: reason, plan: target === null && stop === null && until === null ? null : { target_pct: target, stop_pct: stop, until }, due };
+}
+
 export async function realAct(d: RealActDeps, agentId: string, kind: 'buy' | 'sell' | 'launch', i: Record<string, unknown>): Promise<{ ok: boolean; result: { outcome: string; mint?: string; signature?: string } }> {
   if (kind === 'launch' && (!d.config.mainnetLaunch || !d.launch)) throw refuse(403, 'LAUNCH_UNAVAILABLE', 'Launching coins is not open on mainnet yet');
   const [a] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
@@ -57,6 +81,6 @@ export async function realAct(d: RealActDeps, agentId: string, kind: 'buy' | 'se
   if (no) throw refuse(403, no.code, no.message);
   const [c] = await d.db.select().from(realMarket).where(eq(realMarket.address, mint));
   if (!c || !TRADABLE_DEXES.has(c.dexId)) throw refuse(404, 'UNKNOWN_MINT', 'Not a coin you can buy here: pick one from GET /agent/coins');
-  const r = await d.bank.buy(agentId, { address: c.address, symbol: c.symbol, dexId: c.dexId, fdvUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, priceUsd: c.priceUsd }, sol, { why: typeof i.why === 'string' ? i.why.slice(0, 200) : 'requested by its operator' });
+  const r = await d.bank.buy(agentId, { address: c.address, symbol: c.symbol, dexId: c.dexId, fdvUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, priceUsd: c.priceUsd }, sol, { why: thesisText(i, d.now()) });
   return { ok: r.ok, result: { outcome: r.outcome } };
 }
