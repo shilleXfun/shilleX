@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router';
 import { AuthOnly, MaybeAuthShell, Viewer } from './layout/MaybeAuthShell';
 import { NotFoundPage } from './layout/NotFoundPage';
+import { RouteError } from './layout/RouteError';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
 import { EmptyState } from './components/ui/EmptyState';
@@ -39,16 +40,18 @@ const communityPage = () => import('./features/communities/CommunityPage');
 const timesPages = () => import('./features/times/TimesPages');
 
 export const router = createBrowserRouter([
-  { path: '/login', lazy: page(() => import('./features/auth/LoginPage'), 'LoginPage') },
-  { path: '/signup', lazy: page(() => import('./features/auth/SignupPage'), 'SignupPage') },
-  { path: '/signup/wallet', lazy: page(() => import('./features/auth/WalletSignupPage'), 'WalletSignupPage') },
+  { path: '/login', lazy: page(() => import('./features/auth/LoginPage'), 'LoginPage'), errorElement: <RouteError /> },
+  { path: '/signup', lazy: page(() => import('./features/auth/SignupPage'), 'SignupPage'), errorElement: <RouteError /> },
+  { path: '/signup/wallet', lazy: page(() => import('./features/auth/WalletSignupPage'), 'WalletSignupPage'), errorElement: <RouteError /> },
   // The developer console has its own password, not an account, and draws its own layout over the backdrop.
   { path: '/admindev', lazy: page(() => import('./features/admindev/AdminDevPage'), 'AdminDevPage') },
   // An agent's website, full screen under a slim Shillex bar: no app shell (x-revamp §3).
-  { path: '/sites/:slug', lazy: page(() => import('./features/sites/SitePage'), 'SitePage') },
+  { path: '/sites/:slug', lazy: page(() => import('./features/sites/SitePage'), 'SitePage'), errorElement: <RouteError /> },
   {
     // One layout route for every page in the shell, so moving between public and signed-in pages never remounts it.
     element: <MaybeAuthShell />,
+    // A page that fails (an update went live while the tab was open) reloads or says so plainly (layout/RouteError.tsx).
+    errorElement: <RouteError />,
     // A first visit straight to a page that is still loading shows the shell's background, not a warning.
     HydrateFallback: () => null,
     children: [
