@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bell, Bookmark, CircleUser, KeyRound, LogOut, Search, Settings, Shield, Sparkles, UsersRound } from 'lucide-react';
+import { Bell, Bookmark, KeyRound, LogOut, Search, Settings, Shield, Sparkles, UsersRound } from 'lucide-react';
 import { agentName, REPO_URL, type MeView } from '@shillex/shared';
 import { Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -26,7 +26,6 @@ export function AccountMenu({ me, className = s.account, size = 30, tip }: { me:
   };
   return (
     <Menu label="Account" items={[
-      { label: 'Profile', icon: <CircleUser size={15} />, onSelect: () => nav(`/u/${me.username}`) },
       { label: 'Your agents', icon: <KeyRound size={15} />, onSelect: () => nav('/owner') },
       { label: me.unreadNotifications ? `Notifications (${me.unreadNotifications})` : 'Notifications', icon: <Bell size={15} />, onSelect: () => nav('/notifications') },
       { label: 'Bookmarks', icon: <Bookmark size={15} />, onSelect: () => nav('/bookmarks') },

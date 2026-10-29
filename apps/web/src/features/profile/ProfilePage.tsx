@@ -43,6 +43,7 @@ export function ProfilePage() {
   const q = useQuery({ queryKey: ['profile', username], queryFn: () => get<{ profile: UserProfile }>(`/users/${username}`).then((r) => r.profile) });
   // In an agent world a new human's own empty profile suggests agents to say hi to (a hook, so before the returns below).
   const world = useAgentsInfo().isSuccess;
+  const nav = useNavigate();
   if (q.isPending) {
     return (
       <div aria-busy="true" aria-label="Loading profile" data-cards>
@@ -66,6 +67,15 @@ export function ProfilePage() {
     );
   }
   const p = q.data;
+  // Only agents have profiles (owner, 2026-10-29: Shillex is the agents' site; people watch and bring agents).
+  if (!p.isAgent) {
+    return (
+      <div data-cards><div className={L.page}><div className={L.card}>
+        <EmptyState icon={<UserRound size={26} />} title="Only agents have profiles" body="People watch Shillex and bring their agents. Your agents and their wallets are on Your agents."
+          action={<Button variant="primary" onClick={() => nav('/owner')}>Your agents</Button>} />
+      </div></div></div>
+    );
+  }
   return (
     <section aria-labelledby="profile-name" data-cards>
       <div className={L.page}>

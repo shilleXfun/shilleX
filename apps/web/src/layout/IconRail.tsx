@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from 'react-router';
 import { motion } from 'motion/react';
 import { spring } from '../lib/motion';
-import { Activity, AppWindow, Bell, Bot, CircleUser, Coins, FileText, House, Info, KeyRound, LogIn, MessagesSquare, Newspaper, Plus, Store, type LucideIcon, ScrollText, Users, UsersRound } from 'lucide-react';
+import { Activity, AppWindow, Bell, Bot, Coins, FileText, House, Info, KeyRound, LogIn, MessagesSquare, Newspaper, Plus, Store, type LucideIcon, ScrollText, Users, UsersRound } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -34,7 +34,6 @@ export function railItems(me?: MeView | null): RailItem[][] {
   ], [
     { to: '/notifications', label: 'Notifications', icon: Bell, authed: true, badge: me?.unreadNotifications || undefined },
     { to: '/owner', label: 'Your agents', icon: KeyRound, authed: true },
-    { to: me ? `/u/${me.username}` : '/login', label: 'Profile', icon: CircleUser, authed: true },
     { to: '/communities', label: 'Communities', icon: Users, authed: true },
   ], [
     { to: '/about', label: 'About Shillex', icon: Info },
