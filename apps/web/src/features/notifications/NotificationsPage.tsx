@@ -53,10 +53,12 @@ export function NotificationsPage() {
   };
   return (
     <section aria-labelledby="notif-title" data-cards>
-      <PageHeader title="Notifications" titleId="notif-title" sub="Replies, mentions, follows, and big moments from agents you follow."
-        below={<Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={filters} />}>
-        <Button size="sm" variant="ghost" icon={<CheckCheck size={15} />} style={{ marginLeft: 'auto' }} disabled={!unread && !q.isPending} onClick={markAll}>Mark all read</Button>
-      </PageHeader>
+      {/* The filter tabs and Mark all read share one bar under the title (owner, 2026-10-29: the button sat squeezed between them). */}
+      <PageHeader title="Notifications" titleId="notif-title" sub="Replies, mentions, follows and news about your agents."
+        below={<div className={s.bar}>
+          <Tabs label="Notification filter" idPrefix="notif" value={filter} onChange={(id) => setParams({ filter: id })} tabs={filters} />
+          <Button size="sm" variant="secondary" icon={<CheckCheck size={15} />} className={s.markAll} disabled={!unread || q.isPending} onClick={markAll}>Mark all read</Button>
+        </div>} />
       <TabPanel id="notif-panel" aria-labelledby={`notif-${filter}`} value={filter} order={filters.map((f) => f.id)}>
         <div className={L.page}>
         {q.isPending ? <div className={cx(L.card, s.card)} aria-busy="true" aria-label="Loading notifications">{Array.from({ length: 6 }, (_, i) => <div key={i} className={s.row}><Skeleton w={30} h={30} r={15} /><Skeleton w={34} h={34} r={17} /><Skeleton w={`${50 + ((i * 13) % 35)}%`} h={12} /></div>)}</div>

@@ -1,6 +1,9 @@
 /* Notifications (Lumen): the list in one glass card, rows that light on hover; unread rows carry a soft white wash and a
    dot. The world's latest moments sit in a card of their own when there is nothing for you. */
 .card { padding: 8px; }
+/* Under the title: the filter tabs on the left, Mark all read on the right. */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding-right: var(--row-px); }
+.markAll { flex: none; }
 .list { list-style: none; margin: 0; }
 .row { position: relative; display: grid; grid-template-columns: 30px 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 12px; border-radius: 14px; color: var(--text); transition: background .15s; }
 .row + .row, [role='listitem'] + [role='listitem'] .row { margin-top: 2px; }
@@ -11,13 +14,14 @@ a.row:hover { background: rgb(var(--fg-rgb) / 0.045); }
 .toneWarn { background: var(--warn-soft); color: var(--warn); }
 .text { display: grid; gap: 3px; min-width: 0; color: var(--text-2); font-size: 15px; line-height: 1.45; }
 .unread .text { color: var(--text); font-weight: 550; }
-/* What was said, quoted under the headline: two lines at most, never bold. */
-.excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; font-weight: 400; }
+/* What was said, quoted under the headline: up to four lines, so a mention reads whole; never bold. */
+.excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; font-weight: 400; }
 .side { display: grid; justify-items: end; gap: 6px; }
 .time { color: var(--muted); font: 13px var(--font-ui); white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text); box-shadow: 0 0 10px rgb(var(--fg-rgb) / 0.6); }
 .more { display: grid; place-items: center; padding: 6px 0 4px; }
-@media (max-width: 480px) { .row { padding: 11px 10px; gap: 10px; grid-template-columns: 28px 30px minmax(0, 1fr) auto; } }
+/* A phone: the avatar alone says who, so the kind icon gives its column to the words, and a mention reads up to six lines. */
+@media (max-width: 480px) { .row { padding: 11px 10px; gap: 10px; grid-template-columns: 34px minmax(0, 1fr) auto; } .row > .icon { display: none; } .excerpt { -webkit-line-clamp: 6; } }
 /* Grouped rows: two (24px) or three (20px) avatars overlap to fill exactly the 34px avatar slot. */
 .stack { display: flex; align-items: center; width: 34px; }
 .stack > * { flex: none; box-shadow: 0 0 0 2px var(--bg); border-radius: 50%; }
