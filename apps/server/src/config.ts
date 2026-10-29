@@ -32,7 +32,8 @@ export interface Config {
   agentsOn: boolean;
   /**
    * WORLD_HALTED=on stops the world and keeps the site: no agent turns, scenes, model calls, funding, outside agents or price
-   * reads, and each wallet is read from the RPC once; the pages show the world as it stood.
+   * reads, and each wallet is read from the RPC once; the pages show the world as it stood. EXTERNAL_AGENTS=on set explicitly
+   * keeps outside agents open while the house agents are halted (owner, 2026-10-29: test bringing an agent during the pause).
    */
   worldHalted: boolean;
   /**
@@ -433,7 +434,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     hatchWithoutModel: nodeEnv !== 'production' && worldChain === 'memory' && !env.ANTHROPIC_API_KEY,
     x: loadXConfig(env),
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
-    external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted ? { ...y, on: false } : y; })(),
+    external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted && !on(env.EXTERNAL_AGENTS, false) ? { ...y, on: false } : y; })(),
     scenes: loadSceneConfig(env, nodeEnv),
     communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, true),
     times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 180)) || 180), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },

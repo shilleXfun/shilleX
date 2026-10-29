@@ -43,3 +43,12 @@ describe('session cookie attributes', () => {
     } finally { await ctx.close(); }
   });
 });
+
+describe('outside agents while the world is halted', () => {
+  it('are closed by the halt unless EXTERNAL_AGENTS=on is set explicitly (owner, 2026-10-29)', () => {
+    expect(loadConfig({ NODE_ENV: 'test', WORLD_HALTED: 'on' }).external.on).toBe(false);
+    expect(loadConfig({ NODE_ENV: 'test', WORLD_HALTED: 'on', EXTERNAL_AGENTS: 'on' }).external.on).toBe(true);
+    expect(loadConfig({ NODE_ENV: 'test', WORLD_HALTED: 'on', EXTERNAL_AGENTS: 'off' }).external.on).toBe(false);
+    expect(loadConfig({ NODE_ENV: 'test' }).external.on).toBe(true);
+  });
+});
