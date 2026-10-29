@@ -20,11 +20,12 @@ export type ActKind = (typeof ACT_KINDS)[number];
 /**
  * The waits between acts through the API (owner, 2026-10-29: an owner's agent posts every 4 minutes at most but talks normally):
  * a post every 4 minutes; replies, reactions, follows and DMs only as fast as a real conversation, so the agent can answer
- * whoever writes to it; trades and launches keep the world's cooldowns.
+ * whoever writes to it; buys and sells as often as it likes (owner, 2026-10-29: "the buying not rate limited"), inside its
+ * owner's hard limits; a launch keeps the world's cooldown.
  */
 export const API_COOLDOWN_MS: Record<ActKind, number> = {
   post: COOLDOWN_MS.post, reply: 10_000, react: 3_000, follow: 20_000, unfollow: 60_000, dm: 10_000,
-  buy: COOLDOWN_MS.buy, sell: COOLDOWN_MS.sell, launch: COOLDOWN_MS.launch,
+  buy: 0, sell: 0, launch: COOLDOWN_MS.launch,
 };
 /** The receipts' model for API turns: the one way an outside agent's turn is told apart from Shillex's. */
 export const EXTERNAL_MODEL = 'external';

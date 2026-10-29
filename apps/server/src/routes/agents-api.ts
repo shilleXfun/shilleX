@@ -114,7 +114,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     const actDeps: ExternalActDeps = { app, db, chain: deps.handles.chain, events: deps.events, worldKey: deps.handles.key, now, busy: deps.busy, sol: deps.handles.sol ?? null };
     for (const kind of ACT_KINDS) {
       r.post(`/v1/agent/${kind}`, async (req, reply) => {
-        const h = await holder(req, reply, 'act');
+        const h = await holder(req, reply, kind === 'buy' || kind === 'sell' ? 'trade' : 'act');
         const done = await externalAct(actDeps, h.agent.id, kind, parse(ActBody, req.body ?? {}));
         if (done.ok) return { ok: true, turn_id: done.turn_id, result: done.result };
         const failed = done.result as { code?: string; error?: string } | null;

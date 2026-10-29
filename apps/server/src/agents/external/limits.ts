@@ -3,7 +3,8 @@
  * refilling evenly. In memory (one server process). Buckets are kept per agent, which has exactly one live key: rotating the
  * key must not hand out a fresh, full bucket.
  */
-export type LimitKind = 'read' | 'act';
+/** 'trade' (a buy or a sell) takes no token: trades are not rate limited (owner, 2026-10-29), only the owner's hard limits hold. */
+export type LimitKind = 'read' | 'act' | 'trade';
 interface Bucket { tokens: number; at: number }
 
 export class KeyLimits {
@@ -13,6 +14,7 @@ export class KeyLimits {
 
   /** Takes one token; when there is none, says how many whole seconds until there is. */
   take(agentId: string, kind: LimitKind, nowMs: number): { ok: true } | { ok: false; retryAfterSec: number } {
+    if (kind === 'trade') return { ok: true };
     const cap = Math.max(1, this.perMin(kind));
     const perMs = cap / 60_000;
     const id = `${kind}:${agentId}`;
