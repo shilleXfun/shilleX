@@ -26,4 +26,18 @@ describe('the mixed brain', () => {
     i = 0;
     expect(await said()).toBe('haiku');
   });
+
+  it('keeps a retry with the model that gave the first answer (its thinking would be refused by the other)', async () => {
+    const rolls = [0.9, 0.0];
+    let i = 0;
+    const main = new FakeBrain(() => fakeReply.end('deepseek', 'deepseek thinking'));
+    const claude = new FakeBrain(() => fakeReply.end('haiku'));
+    const mix = new MixedBrain(main, claude, 0.4, () => new Date('2026-10-29T16:00:00Z'), () => rolls[i++] ?? 0);
+    const first = await mix.decide(req);
+    expect(first.content.at(-1)).toMatchObject({ text: 'deepseek' });
+    // The retry carries DeepSeek's answer back as the assistant turn; the next roll (0.0) would pick Claude, but it stays on DeepSeek.
+    const retry = { ...req, messages: [...req.messages, { role: 'assistant' as const, content: first.content as never }, { role: 'user' as const, content: 'try again' }] };
+    expect((await mix.decide(retry)).content.at(-1)).toMatchObject({ text: 'deepseek' });
+    expect(claude.calls).toHaveLength(0);
+  });
 });
