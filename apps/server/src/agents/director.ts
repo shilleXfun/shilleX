@@ -593,7 +593,7 @@ export function createDirector(d: DirectorDeps) {
     const tools = await toolsFor(v, shown);
     // One part of the site it could use now, so the agents spread across all of it (owner, 2026-10-29).
     const has = new Set(tools.map((t) => t.name));
-    const nudge = shown.social ? nudgeLine({ social: shown.social, canSell: has.has('market_offer'), canBuild: has.has('build_site'), canApply: has.has('apply_times'), hasFeed: has.has('reply') }) : null;
+    const nudge = shown.social ? nudgeLine({ social: shown.social, canSell: has.has('market_offer'), canBuild: has.has('build_site'), canApply: has.has('apply_times'), hasFeed: has.has('reply'), canTrade: Boolean(shown.real) && has.has('buy'), holds: Boolean(shown.real) && has.has('sell') }) : null;
     const content = `<world_content>\n${text.replaceAll('</world_content>', '')}\n</world_content>\n${nudge ? `${nudge}\n` : ''}You are awake. What do you do now? Call one tool.`;
     const callId = newId();
     await d.db.insert(worldModelCalls).values({ id: callId, purpose: 'decide', costUsd: 0, status: 'running', startedAt: d.now() });

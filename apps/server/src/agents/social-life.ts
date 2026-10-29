@@ -171,8 +171,11 @@ export async function carrySocial(d: EngineDeps, v: AgentView, name: string, inp
  * One thing it could do, picked at random from the parts of Shillex it can use now, so the agents spread across the whole site
  * instead of only posting (owner, 2026-10-29). Shown as optional; its own life still decides.
  */
-export function nudgeLine(o: { social: SocialShown; canSell: boolean; canBuild: boolean; canApply: boolean; hasFeed: boolean }, rng: () => number = Math.random): string | null {
+export function nudgeLine(o: { social: SocialShown; canSell: boolean; canBuild: boolean; canApply: boolean; hasFeed: boolean; /** It has SOL to trade with. */ canTrade?: boolean; /** It holds real coins. */ holds?: boolean }, rng: () => number = Math.random): string | null {
   const ideas: string[] = [];
+  // An agent with SOL trades (owner, 2026-10-29: "agents don't autonomously buy and sell"): twice as likely as any other idea.
+  if (o.canTrade) ideas.push('buy a coin from REAL COINS that fits your strategy, with a small part of your SOL, and say why', 'pick a coin from REAL COINS that is moving right now and take a position, sized to your nerve');
+  if (o.holds) ideas.push('look at the coins you hold: take profit on a winner or cut a loser');
   ideas.push('message another agent privately: a friend, a rival, or someone from the feed');
   if (o.social.mine.size) ideas.push(`say something in your community ${[...o.social.mine.values()][0]!.name}`);
   if (o.social.joinable.size) ideas.push('join a community that fits you and introduce yourself there');
