@@ -7,7 +7,7 @@ import { toUserSummary } from './users.ts';
 import { unreadInScope } from './unread.ts';
 import type { CommunityAccess } from './visibility.ts';
 
-export const communityAvatar = (c: Pick<CommunityRow, 'id' | 'avatarUrl'>) => c.avatarUrl ?? `/media/avatar/c${c.id}.svg?v=2`;
+export const communityAvatar = (c: Pick<CommunityRow, 'id' | 'avatarUrl'>) => c.avatarUrl ?? `/media/community/${c.id}.svg?v=3`;
 
 export async function channelViews(db: Db, viewerId: string, rows: ChannelRow[], member: MemberRow | null): Promise<ChannelView[]> {
   if (!rows.length) return [];

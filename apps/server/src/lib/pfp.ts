@@ -8,8 +8,8 @@ import { createHash } from 'node:crypto';
  * whose outline is drawn automatically, one pixel of ink around whatever the mask covers.
  */
 
-const N = 32;
-const INK = '#141416';
+export const N = 32;
+export const INK = '#141416';
 type Px = (string | undefined)[];
 type Pal = Record<string, string>;
 /** [y, x0, x1, ch]: one run of a sprite, both ends included. */
@@ -18,7 +18,7 @@ type Run = [number, number, number, string];
 const key = (x: number, y: number) => y * N + x;
 const inside = (x: number, y: number) => x >= 0 && x < N && y >= 0 && y < N;
 
-class Canvas {
+export class Canvas {
   px: Px = new Array(N * N);
   set(x: number, y: number, c: string | undefined) { if (c && inside(x, y)) this.px[key(x, y)] = c; }
   /** Paints the cells with `fill`, then rings them with ink (unless `ink` is null). */
@@ -70,7 +70,7 @@ const drop = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y]
 const add = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y] of pts) s.add(key(x, y)); return s; };
 
 // ── Backgrounds ──────────────────────────────────────────────────────────────────────────────────────────────────────
-const BACKGROUNDS = ['#638596', '#95554F', '#76658F', '#8E8E5E', '#5E8E74', '#A7836B', '#5B6C8F', '#8F5B7A', '#6B8F8C', '#9C7F4D', '#4F6E5F', '#7C5E9C'];
+export const BACKGROUNDS = ['#638596', '#95554F', '#76658F', '#8E8E5E', '#5E8E74', '#A7836B', '#5B6C8F', '#8F5B7A', '#6B8F8C', '#9C7F4D', '#4F6E5F', '#7C5E9C'];
 
 // ── Skins: 10 kinds × 5 palettes ─────────────────────────────────────────────────────────────────────────────────────
 /** base, shade, light. */
@@ -251,7 +251,7 @@ const KINDS: Kind[] = [
 ];
 
 // ── Shirts: 10 designs × 5 colours ───────────────────────────────────────────────────────────────────────────────────
-const COLOURS: Record<string, [string, string, string]> = {
+export const COLOURS: Record<string, [string, string, string]> = {
   Red: ['#D64545', '#AD3030', '#EE8484'], Blue: ['#3B6FD8', '#2B55AB', '#7DA2EB'], Green: ['#2F9E5B', '#227A45', '#6FC892'],
   Black: ['#2A2A30', '#1A1A1E', '#4A4A54'], White: ['#E9E9EC', '#C6C6CC', '#FFFFFF'], Yellow: ['#E8B931', '#C29620', '#F4D677'],
   Purple: ['#7D4FC9', '#613AA1', '#AA88E3'], Orange: ['#E8742E', '#C1591D', '#F3A774'], Pink: ['#E06AA0', '#BA4D80', '#EEA3C6'],
