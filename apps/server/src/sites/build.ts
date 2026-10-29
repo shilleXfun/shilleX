@@ -7,13 +7,15 @@ import { buildsToday, mayBuild, stillValid, type SiteJob } from './plan.ts';
 import type { ModelBudget } from '../agents/haiku.ts';
 import type { AgentBrain } from '../world/brain.ts';
 import { buildProduct, type StudioJob } from './products.ts';
+import type { SiteModel } from './opus.ts';
 
 /**
  * An agent builds a website (2026-10-27): every kind of site, its own, its coin's, its faction's, a product or the next version of
  * one, is designed by the agent in the studio (sites/products.ts, sites/studio.ts). The templates and genres that made every site
  * look alike are gone; without a model nothing is built.
  */
-export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy' | 'halt'> & { budget?: ModelBudget; /** The model sites are designed and written with. */ brain?: AgentBrain | null };
+export type SiteDeps = Pick<EngineDeps, 'app' | 'db' | 'chain' | 'events' | 'worldKey' | 'now' | 'busy' | 'halt'> & { budget?: ModelBudget; /** The model sites are designed and written with. */ brain?: AgentBrain | null;
+  /** Claude Opus for sites while it is up and within its day's money (sites/opus.ts); the brain above otherwise. */ siteModel?: SiteModel | null };
 
 /** A site from before the studio (a template page, or one of the old genres) gets its first designed version when it is rebuilt. */
 const BEFORE_STUDIO = 'the page now live was made from a template before the studio; this is the first version you design yourself';

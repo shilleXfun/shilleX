@@ -37,6 +37,7 @@ import { spotlightImageGen, startSpotlight } from '../agents/depth/spotlight.ts'
 import { createImageMaker, type ImageMaker } from '../agents/image-cache.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { brainFromConfig, modelBudget } from '../agents/haiku.ts';
+import { createSiteModel, siteModelSpent } from '../sites/opus.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
@@ -277,7 +278,14 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
       handles.moments = md ? createMoments({ ...md, raised: gate, handlers: { faction: factionMomentHandler(md), paper: paperMomentHandler(md), hatch: hatchMomentHandler({ ...md, gate }), x_digest: xDigestHandler(md), desk: deskMomentHandler(md) } }) : null;
       // Websites are built straight away by the free local builder, never through the model queue (docs/system-audit.md §3).
-      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain, halt });
+      // Websites on Claude Opus while it is up (sites/opus.ts); the everyday brain otherwise and whenever Opus fails.
+      const sm = config.siteModel;
+      const siteModel = brain && sm && config.anthropicApiKey ? createSiteModel({ model: sm.model, usdPerDay: sm.usdPerDay, fallback: brain, now, apiKey: config.anthropicApiKey, ceiling }) : null;
+      if (siteModel) {
+        void siteModelSpent(db, siteModel.model, now()).then((usd) => { if (usd > 0) siteModel.budget.add(usd); }).catch(() => undefined);
+        console.log(`[sites] websites are written with ${siteModel.model}, up to $${sm!.usdPerDay} a day`);
+      }
+      const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain, halt, siteModel });
       // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
@@ -306,7 +314,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       sol?.setSay((id, text) => systemAct(engineDeps, id, 'post', { body: text }, 'its real SOL'));
       // The daily remaster: checked every 10 minutes, it runs once a UTC day after 00:30 (sites/remaster.ts).
       if (brain && config.remastersPerDay > 0) {
-        const remasterDeps = { app, db, chain, events, worldKey: key, now, busy, budget, brain, halt };
+        const remasterDeps = { app, db, chain, events, worldKey: key, now, busy, budget, brain, halt, siteModel };
         remasterTimer = setInterval(() => void runJob(db, 'remaster', { now, leaseMs: 90 * 60_000 }, async () => {
           const done = await remasterPass(remasterDeps, config.remastersPerDay);
           return done.length ? { status: 'ok', note: `remastered ${done.join(', ')}` } : { status: 'skipped' };

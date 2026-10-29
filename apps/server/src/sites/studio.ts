@@ -148,8 +148,10 @@ export interface StudioDeps {
   render?: (html: string) => Promise<StudioRender | null>;
   /** 2: the stronger model (a daily remaster); 1, the everyday one, by default. */
   tier?: 1 | 2;
-  /** The house pays, not the agent's compute (a remaster). */
+  /** The house pays, not the agent's compute (a remaster, or a build on Opus). */
   house?: boolean;
+  /** The model the calls' worst cases are priced as (Opus for a build on it, sites/opus.ts); Haiku by default. */
+  priceAs?: string;
   /** Another agent's site this one forks or parodies: its brief and how it looks, shown with the brief step. */
   reference?: { text: string; jpeg: Buffer | null };
 }
@@ -175,7 +177,7 @@ export function repeats(b: Pick<StudioBrief, 'aesthetic' | 'concept'>, recent: S
 
 export async function studioBuild(d: StudioDeps): Promise<StudioResult> {
   const call = (job: string, req: Omit<BrainRequest, 'tools'>, maxTokens: number, input: number) =>
-    billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
+    billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(d.priceAs ?? HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
       // The page and its review are written by the strong model (owner, 2026-10-29: sites must not look like 2009); the brief by the everyday one.
       () => d.brain.decide({ ...req, tools: [], maxTokens, tier: job === 'site:brief' ? d.tier ?? 1 : 2 }));
 

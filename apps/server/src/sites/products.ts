@@ -146,9 +146,12 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
     purpose = job.site === 'faction' ? { kind: 'faction', name: faction!.name, facts: faction!.text } : job.site === 'coin' ? { kind: 'coin', symbol: coinRow!.symbol } : job.site === 'personal' ? { kind: 'personal' }
       : { kind: 'product', ...(forked ? { collab: `as your fork or parody of @${forked.author}'s "${forked.title}"` } : partner && job.site === 'product' && job.collab ? { collab: `together with @${partner}, the idea you both agreed on: ${plain(job.collab.idea).slice(0, 300)}` } : {}) };
   }
-  const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: job.site === 'coin' ? 'launch' : 'heartbeat', note: `website (${purpose.kind})` }], model: modelName(), effort: 'medium', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
+  // Opus while it is up and within its day's money, paid by the house (owner, 2026-10-29); the everyday model otherwise.
+  const pro = d.siteModel?.usable() ? d.siteModel : null;
+  const label = pro?.model ?? modelName();
+  const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: job.site === 'coin' ? 'launch' : 'heartbeat', note: `website (${purpose.kind})` }], model: label, effort: 'medium', promptVersion: SITE_PROMPT_VERSION, snapshotId: null, now });
   const buildId = newId();
-  await d.db.insert(siteBuilds).values({ id: buildId, agentId, siteId: site?.id ?? null, briefId: null, kind: site ? 'improve' : 'new', status: 'building', model: modelName(), startedAt: now });
+  await d.db.insert(siteBuilds).values({ id: buildId, agentId, siteId: site?.id ?? null, briefId: null, kind: site ? 'improve' : 'new', status: 'building', model: label, startedAt: now });
   const spent = { usd: 0 };
   const toolCalls: ToolCallRecord[] = [];
   let outcome: { status: 'ok' | 'skipped'; note: string } = { status: 'skipped', note: '' }, thrown: unknown = null, turnStatus: 'acted' | 'failed' | 'quiet' = 'failed';
@@ -162,12 +165,12 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
     const recent = (await d.db.select({ brief: productBriefs.brief }).from(productBriefs).where(inArray(productBriefs.status, ['published', 'building'])).orderBy(desc(productBriefs.createdAt)).limit(30))
       .map((r) => ({ aesthetic: r.brief.design?.aesthetic ?? r.brief.genre ?? '', concept: r.brief.design?.concept ?? r.brief.problem ?? '' }));
     const made = await studioBuild({
-      db: d.db, brain: d.brain, budget: d.budget, now: d.now, turnId, spent, username: facts.username, facts: facts.text, kit: kitFor(facts.avatar, coinRow ?? facts.coin), purpose,
+      db: d.db, brain: pro?.brain ?? d.brain, budget: pro?.budget ?? d.budget, now: d.now, turnId, spent, username: facts.username, facts: facts.text, kit: kitFor(facts.avatar, coinRow ?? facts.coin), purpose,
       recent, current, origin: originOf(publicUrl), csp: siteCsp(originOf(publicUrl)), data, ...(d.render ? { render: d.render } : {}),
-      ...(opts.remaster ? { tier: 2 as const, house: true } : {}), ...(forked ? { reference: forked.reference } : {}),
+      ...(opts.remaster ? { tier: 2 as const, house: true } : {}), ...(pro ? { house: true, priceAs: pro.model } : {}), ...(forked ? { reference: forked.reference } : {}),
     });
     const brief = asProductBrief(made.brief);
-    [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, siteId: site?.id ?? null, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: made.html ? 'building' : 'failed', note: made.html ? null : made.problems.join('; ').slice(0, 500), model: modelName(), createdAt: now, updatedAt: now }).returning();
+    [briefRow] = await d.db.insert(productBriefs).values({ id: newId(), agentId, siteId: site?.id ?? null, name: plain(brief.name).slice(0, 60), genre: brief.genre, brief, status: made.html ? 'building' : 'failed', note: made.html ? null : made.problems.join('; ').slice(0, 500), model: label, createdAt: now, updatedAt: now }).returning();
     await d.db.update(siteBuilds).set({ briefId: briefRow!.id }).where(eq(siteBuilds.id, buildId));
     if (!made.html) {
       // Two tries and still not good enough: dropped, never shipped half-broken (the live version, if any, stays).
@@ -176,7 +179,7 @@ export async function buildProduct(d: ProductDeps, agentId: string, job: StudioJ
       turnStatus = 'quiet';
     } else {
       const title = plain(brief.name).slice(0, 60), blurb = plain(brief.tagline).slice(0, 200);
-      const build = { title, blurb, html: made.html, turnId, model: modelName(), now: d.now() };
+      const build = { title, blurb, html: made.html, turnId, model: label, now: d.now() };
       const published = site ? await rebuildSite(d.db, site.id, build)
         : await insertSite(d.db, await freeSlug(d.db, brief.name), { ...build, authorId: agentId, kind: kindOf(job, null), coinMint, factionId: faction?.id ?? null, coAuthorId: job.site === 'product' ? job.collab?.withId ?? null : null, forkOfId: forked?.id ?? null });
       await d.db.update(siteVersions).set({ notes: made.notes ? plain(made.notes).slice(0, 300) : null }).where(and(eq(siteVersions.siteId, published.id), eq(siteVersions.version, published.version)));

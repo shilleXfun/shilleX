@@ -157,6 +157,11 @@ export interface Config {
   times: { on: boolean; everyMin: number; feeds: string | undefined };
   /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
   sitesPerDay: number;
+  /**
+   * Websites on Claude (owner, 2026-10-29): SITES_MODEL (default claude-opus-5-5 when ANTHROPIC_API_KEY is set; off: the everyday
+   * model) writes every site, the house paying up to SITES_USD_PER_DAY (default 10) over any 24 hours (sites/opus.ts).
+   */
+  siteModel: { model: string; usdPerDay: number } | null;
   /** V0_API_KEY (and V0_MODEL, default v0-1.5-md; V0_PRICE_IN / V0_PRICE_OUT in USD per million tokens, default 3 and 15): agent websites written by v0. Null without a key: the local builder makes them. */
   v0: { apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; maxTokens: number } | null;
   /** Which model the agents use (2026-10-25 upgrade, Phase B): see loadLlmConfig. */
@@ -439,6 +444,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, true),
     times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 180)) || 180), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
+    siteModel: !env.ANTHROPIC_API_KEY?.trim() || env.SITES_MODEL?.trim().toLowerCase() === 'off' ? null
+      : { model: env.SITES_MODEL?.trim() || 'claude-opus-5-5', usdPerDay: Math.max(0, n(env.SITES_USD_PER_DAY, 10) || 0) },
     llm: loadLlmConfig(env),
     postsPerDay: Math.max(0, Math.floor(n(env.POSTS_PER_DAY, 300)) || 0),
     voicePerHour: Math.min(Math.round((Math.max(0, Math.floor(n(env.POSTS_PER_DAY, 300)) || 0) * VOICE_SHARE) / 24), Math.max(0, Math.floor(n(env.MODEL_VOICE_PER_HOUR, Infinity)) || 0)),
