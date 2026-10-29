@@ -1725,7 +1725,7 @@ export const solPositions = pgTable('sol_positions', {
   /** Failed sells in a row; after a few the position is left alone (and shown). */
   sellFails: integer('sell_fails').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.agentId, t.mint] })]);
-export type SolTradeKind = 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out';
+export type SolTradeKind = 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out' | 'launch';
 /** Every real movement of an agent's SOL, done or failed, with its transaction. */
 export const solTrades = pgTable('sol_trades', {
   id: text('id').primaryKey(),

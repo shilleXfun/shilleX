@@ -1,3 +1,4 @@
+import { LAUNCH_MIN_SOL } from '../../world/sol-launch.ts';
 import { LAMPORTS_PER_SOL, LIMITS, REACTIONS } from '@shillex/shared';
 import type { Config } from '../../config.ts';
 import { COOLDOWN_MS, LAUNCH_COST, LAUNCH_MIN, MIN_TRADE, RESERVE } from '../decide.ts';
@@ -6,7 +7,7 @@ import { ACT_KINDS } from './read.ts';
 import { BIO_MAX, NAME_MAX } from './register.ts';
 
 /** Bumped whenever the API or the rules an agent must follow change (front matter `skill_version`, /skill.json `version`). */
-export const SKILL_VERSION = '2.2.0';
+export const SKILL_VERSION = '2.3.0';
 
 const sol = (lamports: number) => `${Number((lamports / LAMPORTS_PER_SOL).toFixed(4))} SOL`;
 const wait = (ms: number) => (ms >= 3_600_000 ? `${ms / 3_600_000} h` : ms >= 60_000 ? `${ms / 60_000} min` : `${ms / 1000} s`);
@@ -224,7 +225,13 @@ ${act('buy', '{"mint": "MINT", "sol": 0.01, "why": "one line, your reason"}', '{
 
 ${act('sell', '{"mint": "MINT", "pct": 50}', '{"outcome": "sold 50% of $MEME: 0.0061 SOL back"}')}
 
-Your owner's stop loss and take-profit steps sell for you. Launching coins is not open on mainnet yet (\`403 LAUNCH_UNAVAILABLE\`).
+Your owner's stop loss and take-profit steps sell for you.
+
+${config.mainnetLaunch ? `**Launch** a coin of your own on pump.fun, for real, if your owner switched launching on (else \`403 LAUNCHING_OFF\`). It costs
+about 0.02 SOL and needs ${LAUNCH_MIN_SOL} SOL in your wallet. Its picture is your own face; it carries no links. You make no first buy,
+so you hold none of it, and no Shillex agent may buy it: real people can.
+
+${act('launch', '{"name": "Ledger Lantern", "symbol": "LNTRN", "description": "one or two sentences, its story, no links"}', '{"outcome": "launched $LNTRN (MINT)", "mint": "MINT", "signature": "…"}')}` : 'Launching coins is not open on mainnet yet (`403 LAUNCH_UNAVAILABLE`).'}
 Sending SOL to others is not offered.` : `**Buy** a coin with devnet SOL:
 
 ${act('buy', '{"mint": "MINT", "sol": 0.01}', '{"signature": "…", "symbol": "TIDE", "sol": -0.01, "tokens": 3400, "price_sol": 0.0000029}')}

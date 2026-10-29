@@ -4,15 +4,17 @@ import type { Db } from '../../db/client.ts';
 import { agents, realMarket } from '../../db/schema.ts';
 import { AppError, errors } from '../../lib/errors.ts';
 import type { SolBank } from '../../world/sol-trade.ts';
+import type { SolHandles } from '../../world/sol-world.ts';
 import { TRADABLE_DEXES } from '../../world/sol-net.ts';
 import { effectiveRules, hardLimitRefusal, savedRules } from './limits-hard.ts';
 
 /**
  * An outside agent's trades on mainnet (2026-10-28): buy and sell are real trades from its own vault wallet through the real-SOL
  * bank (PumpPortal), on the real coins Shillex follows (real_market), inside its owner's limits (the mainnet defaults until the
- * owner sets their own). Launching is not open on mainnet. Devnet coins are never touched.
+ * owner sets their own). A launch (2026-10-29) is a real pump.fun coin from its own wallet, when MAINNET_LAUNCH is on and its owner
+ * switched launching on (world/sol-launch.ts). Devnet coins are never touched.
  */
-export interface RealActDeps { db: Db; config: Config; now: () => Date; bank: Pick<SolBank, 'buy' | 'sell'> }
+export interface RealActDeps { db: Db; config: Config; now: () => Date; bank: Pick<SolBank, 'buy' | 'sell'>; launch?: SolHandles['launch'] }
 export const MIN_REAL_TRADE_SOL = 0.002;
 
 const refuse = (status: number, code: string, message: string) => new AppError(status, code, message);
@@ -26,13 +28,20 @@ export async function realCoins(db: Db, limit = 40) {
   }));
 }
 
-export async function realAct(d: RealActDeps, agentId: string, kind: 'buy' | 'sell' | 'launch', i: Record<string, unknown>): Promise<{ ok: boolean; result: { outcome: string } }> {
-  if (kind === 'launch') throw refuse(403, 'LAUNCH_UNAVAILABLE', 'Launching coins is not open on mainnet yet');
-  const mint = typeof i.mint === 'string' ? i.mint.trim() : '';
-  if (!mint) throw errors.badRequest('VALIDATION', 'mint is required');
+export async function realAct(d: RealActDeps, agentId: string, kind: 'buy' | 'sell' | 'launch', i: Record<string, unknown>): Promise<{ ok: boolean; result: { outcome: string; mint?: string; signature?: string } }> {
+  if (kind === 'launch' && (!d.config.mainnetLaunch || !d.launch)) throw refuse(403, 'LAUNCH_UNAVAILABLE', 'Launching coins is not open on mainnet yet');
   const [a] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
   const saved = await savedRules(d.db, agentId);
   const rules = effectiveRules(saved.rules, { origin: a?.origin ?? 'external', network: 'mainnet' });
+  if (kind === 'launch') {
+    const no = hardLimitRefusal(rules, { kind: 'launch' }, { pausedUntil: saved.pausedUntil, pausedReason: saved.pausedReason, now: d.now() });
+    if (no) throw refuse(403, no.code, no.message);
+    const text = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+    const r = await d.launch!(agentId, { name: text(i.name, 32), symbol: text(i.symbol, 12).replace(/^\$/, '').toUpperCase(), description: text(i.description, 240) || text(i.name, 32) });
+    return { ok: r.ok, result: { outcome: r.outcome, ...(r.mint ? { mint: r.mint, signature: r.sig } : {}) } };
+  }
+  const mint = typeof i.mint === 'string' ? i.mint.trim() : '';
+  if (!mint) throw errors.badRequest('VALIDATION', 'mint is required');
   if (kind === 'sell') {
     const pct = Number(i.pct ?? 100);
     if (!(pct > 0 && pct <= 100)) throw errors.badRequest('BAD_AMOUNT', 'pct is more than 0 and at most 100');

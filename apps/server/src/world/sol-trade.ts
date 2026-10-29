@@ -32,6 +32,11 @@ const utcDay = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTC
 const errText = (e: unknown) => ((e as Error)?.message ?? String(e)).slice(0, 300);
 const sigOf = (e: unknown) => (e as { sig?: string })?.sig ?? null;
 
+/** True when a Shillex agent launched this coin: no Shillex agent may buy it (that would be fake volume sold to real people). */
+export async function shillexCoin(db: Db, mint: string): Promise<boolean> {
+  return (await db.select({ id: solTrades.id }).from(solTrades).where(and(eq(solTrades.kind, 'launch'), eq(solTrades.mint, mint), eq(solTrades.ok, true))).limit(1)).length > 0;
+}
+
 /** Why every trade is stopped right now, or null: the env switch, then the admin's. */
 export async function killedReason(db: Db, envOn: boolean): Promise<string | null> {
   if (!envOn) return 'real SOL trading is switched off (SOL_TRADING)';
@@ -112,7 +117,8 @@ export function createSolBank(d: SolBankDeps) {
   async function buy(agentId: string, coin: CoinFacts & { priceUsd: number }, solAmount: number, o: { why: string; say?: string }): Promise<Outcome> {
     const kill = await killedReason(db, d.on);
     if (kill) return { ok: false, outcome: `refused: ${kill}` };
-    if (!TRADABLE_DEXES.has(coin.dexId)) return { ok: false, outcome: `refused: $${coin.symbol} trades on ${coin.dexId}, which I cannot reach` };
+    if (!TRADABLE_DEXES.has(coin.dexId)) return { ok: false, outcome: `refused: ${coin.symbol} trades on ${coin.dexId}, which I cannot reach` };
+    if (await shillexCoin(db, coin.address)) return { ok: false, outcome: `refused: a Shillex agent launched ${coin.symbol}, and no Shillex agent buys one` };
     return withLock(agentId, async () => {
       const now = d.now();
       const w = await walletFor(db, d.master, agentId, now);

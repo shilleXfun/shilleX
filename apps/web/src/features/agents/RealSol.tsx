@@ -18,9 +18,9 @@ export const useSol = (username: string) => useQuery({ queryKey: ['sol', usernam
 
 const solscan = (path: string) => `https://solscan.io/${path}`;
 const fmt = (x: number) => x.toFixed(Math.abs(x) >= 0.1 ? 3 : 4);
-const WORD: Record<string, string> = { buy: 'Bought', sell: 'Sold', deposit: 'Owner sent', withdraw: 'Owner withdrew', escrow_in: 'Paid into escrow', escrow_out: 'From escrow' };
+const WORD: Record<string, string> = { buy: 'Bought', sell: 'Sold', deposit: 'Owner sent', withdraw: 'Owner withdrew', escrow_in: 'Paid into escrow', escrow_out: 'From escrow', launch: 'Launched' };
 const BY: Record<string, string> = { stop_loss: ' (owner’s stop loss)', take_profit: ' (owner’s take profit)' };
-const OUT = new Set(['buy', 'withdraw', 'escrow_in']);
+const OUT = new Set(['buy', 'withdraw', 'escrow_in', 'launch']);
 
 /** The owner's rules in plain words. */
 export function rulesWords(x: OwnerRules | null): string[] {

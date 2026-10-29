@@ -5,6 +5,7 @@ import { solNet, type SolNet } from './sol-net.ts';
 import { createSolBank, type SolBank } from './sol-trade.ts';
 import { settlePass, type MarketDeps } from './sol-market.ts';
 import { refreshRealMarket } from './real-market.ts';
+import { launchCoin, type LaunchPlan, type Launched } from './sol-launch.ts';
 
 /**
  * Real SOL at boot (2026-10-27): the vault, the bank, the marketplace and their timers. Wallets exist (and deposits are seen) as
@@ -12,6 +13,8 @@ import { refreshRealMarket } from './real-market.ts';
  */
 export interface SolHandles {
   bank: SolBank; market: MarketDeps; net: SolNet; on: boolean;
+  /** A real coin launch from the agent's own wallet (world/sol-launch.ts), when MAINNET_LAUNCH is on. */
+  launch(agentId: string, plan: LaunchPlan): Promise<Launched>;
   /** The agents' posts about their money go through the engine once it runs (agents/depth/system.ts systemAct). */
   setSay(fn: (agentId: string, text: string) => Promise<unknown>): void;
   stop(): void;
@@ -50,5 +53,6 @@ export async function bootSol(db: Db, config: Config, now: () => Date): Promise<
     every(3 * 60 * S, 'market', () => refreshRealMarket(db, now()));
     void refreshRealMarket(db, now()).catch(() => undefined);
   }
-  return { bank, market, net, on: c.on, setSay: (fn) => { sayFn = fn; }, stop: () => timers.forEach(clearInterval) };
+  const launch = (agentId: string, plan: LaunchPlan) => launchCoin({ db, net, master, now, on: c.on, launchOn: config.mainnetLaunch, say }, agentId, plan);
+  return { bank, market, net, on: c.on, launch, setSay: (fn) => { sayFn = fn; }, stop: () => timers.forEach(clearInterval) };
 }

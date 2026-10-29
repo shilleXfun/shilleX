@@ -27,6 +27,7 @@ import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
 import { TRADABLE_DEXES } from '../world/sol-net.ts';
 import { CATEGORIES, accept, cancel, confirm, counter, createOffer, deliver, dispute, propose, type MarketDeps } from '../world/market/deals.ts';
 import { marketLimit } from '../world/market/limits.ts';
+import { LAUNCH_MIN_SOL, houseLaunchFree } from '../world/sol-launch.ts';
 
 /**
  * The director (2026-10-27, owner: "make Shillex agents fully autonomous"). Every tick it wakes a few agents, the ones something just
@@ -88,6 +89,8 @@ const SAY = s('optional: your post about it, in your voice, under 200 characters
 export const REAL_TOOLS: Record<string, Anthropic.Tool> = {
   buy: tool('buy', 'Buy a coin from REAL COINS with real SOL from your own wallet. Real money: you can lose it.', { coin: s('$TICKER from REAL COINS'), sol: { type: 'number', description: 'how much SOL to spend' }, say: SAY }, ['coin', 'sol']),
   sell: tool('sell', 'Sell some or all of a coin your wallet holds, for real SOL.', { coin: s('$TICKER you hold'), percent: { type: 'number', description: '1 to 100: how much of it to sell' }, say: SAY }, ['coin', 'percent']),
+  launch_real: tool('launch_real', 'Launch a coin of your own on pump.fun, for real, on Solana mainnet. The whole house pack gets ONE launch, ever: use it only for a coin that truly comes out of who you are. You make no first buy and hold none of it; no Shillex agent may buy it, real people can.',
+    { name: s('the coin\'s name, 2 to 32 characters'), ticker: s('2 to 8 capital letters or digits, not a famous coin'), story: s('its story in your voice, one or two sentences, under 240 characters; no price promises, no links') }, ['name', 'ticker', 'story']),
   market_offer: tool('market_offer', 'Put something you can deliver up for sale on THE MARKETPLACE, for SOL. Buyers pay into escrow; you are paid once you deliver and they confirm (or after a day without a dispute).',
     { title: s('what you sell, under 80 characters'), category: { type: 'string', enum: [...CATEGORIES] }, description: s('what the buyer gets, one or two lines'), deliverables: s('exactly what you hand over, under 240 characters'),
       price_sol: { type: 'number', description: 'your price in SOL' }, deadline_hours: { type: 'number', description: 'hours you need to deliver, 1 to 72' } }, ['title', 'category', 'description', 'deliverables', 'price_sol', 'deadline_hours']),
@@ -147,6 +150,8 @@ interface Shown {
   /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
   real?: { market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
     /** The marketplace: offers it may buy, deals waiting on its answer, deals it owes, deliveries it may confirm. */
+    /** The house pack's one real launch is still unused and this agent may take it. */
+    canLaunch: boolean;
     offers: Map<string, { priceSol: number }>; answer: Map<string, { side: 'buyer' | 'seller'; priceSol: number }>; deliver: Map<string, { buyer: string }>; settle: Set<string> };
 }
 
@@ -208,7 +213,10 @@ async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: 
   const freeSol = Math.max(0, mine.sol - RESERVE_SOL);
   const canTrade = on && !paused && rules.tradingOn !== false;
   const real: NonNullable<Shown['real']> = { market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
-    canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, offers: new Map(), answer: new Map(), deliver: new Map(), settle: new Set() };
+    canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, canLaunch: false, offers: new Map(), answer: new Map(), deliver: new Map(), settle: new Set() };
+  const [ag] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, me));
+  real.canLaunch = on && d.app.deps.config.mainnetLaunch && ag?.origin === 'wild' && !paused && rules.launchingOn !== false && mine.sol >= LAUNCH_MIN_SOL && await houseLaunchFree(d.db);
+  if (real.canLaunch) out.push('THE HOUSE LAUNCH: the whole house pack may launch ONE real coin on pump.fun, ever, and it is still unused. Take it only for a coin that truly comes out of who you are. You would hold none of it.');
   if (canTrade && freeSol >= MIN_TRADE_SOL) {
     const rows = (await d.db.select().from(realMarket).orderBy(desc(realMarket.volumeH1)).limit(60))
       .filter((c) => TRADABLE_DEXES.has(c.dexId) && !real.held.has(c.symbol.toUpperCase()) && !buyRefusal(rules, c, { sol: 0, buysToday: 0, paused: null }));
@@ -298,6 +306,7 @@ export function createDirector(d: DirectorDeps) {
       // Real SOL: its own wallet, inside its owner's rules; no play coins, no launches.
       if (real.canTrade && real.freeSol >= MIN_TRADE_SOL && real.market.size) out.push(REAL_TOOLS.buy!);
       if (d.sol?.on && real.held.size) out.push(REAL_TOOLS.sell!);
+      if (real.canLaunch) out.push(REAL_TOOLS.launch_real!);
       if (real.canSellServices) out.push(REAL_TOOLS.market_offer!);
       if (real.canBuyServices && [...real.offers.values()].some((o) => o.priceSol <= real.freeSol)) out.push(REAL_TOOLS.market_propose!);
       if (real.answer.size) out.push(REAL_TOOLS.market_answer!);
@@ -354,6 +363,11 @@ export function createDirector(d: DirectorDeps) {
           const pct = Math.min(100, Math.max(1, Number(input.percent) || 100)) / 100;
           const own = await said(input.say, sym);
           return tried(await sol.bank.sell(v.agent.id, mint, pct, 'agent', { say: (r) => own ?? `Sold ${Math.round(pct * 100)}% of my $${r.symbol} for ${r.out.toFixed(4)} SOL (${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(4)} SOL on it). Real money.` }));
+        }
+        case 'launch_real': {
+          if (!real.canLaunch) return { ok: false, outcome: 'refused: the house launch is not yours to take', retry: 'do something else' };
+          const r = await sol.launch(v.agent.id, { name: plain(String(input.name ?? '')), symbol: String(input.ticker ?? '').replace(/^\$/, '').toUpperCase(), description: plain(String(input.story ?? '')) });
+          return tried(r);
         }
         case 'market_offer': case 'market_propose': case 'market_answer': case 'market_deliver': case 'market_settle': {
           const md: MarketDeps = { db: d.db, chain: d.chain, key: d.worldKey, config: d.app.deps.config, now: d.now, bank: sol.bank };

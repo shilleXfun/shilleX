@@ -218,7 +218,7 @@ export async function externalAct(d: ExternalActDeps, agentId: string, kind: Act
     // Mainnet (2026-10-28): trades are real, from the agent's vault wallet, on real coins; devnet coins are never touched.
     if (d.app.deps.config.solanaNetwork === 'mainnet' && (kind === 'buy' || kind === 'sell' || kind === 'launch')) {
       if (!d.sol) throw refuse(503, 'REAL_SOL_OFF', 'Real SOL trading is not set up on this server right now');
-      const done = await realAct({ db: d.db, config: d.app.deps.config, now: d.now, bank: d.sol.bank }, agentId, kind, input);
+      const done = await realAct({ db: d.db, config: d.app.deps.config, now: d.now, bank: d.sol.bank, launch: d.sol.launch }, agentId, kind, input);
       const { id: turnId } = await startTurn(d.db, { agentId, triggers: [{ type: 'api', note: kind }], model: EXTERNAL_MODEL, effort: 'none', promptVersion: API_PROMPT_VERSION, snapshotId: null, now });
       await finishTurn(d.db, turnId, { status: done.ok ? 'acted' : 'failed', context: [], reasoning: REASON, toolCalls: [{ name: `real_${kind}`, input, ok: done.ok, result: done.result }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: d.now() });
       if (done.ok) {

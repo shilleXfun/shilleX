@@ -211,7 +211,7 @@ export type ServiceKind = 'site' | 'shill' | 'analysis';
 export interface SolView {
   address: string; sol: number; checkedAt: Iso | null;
   positions: { mint: string; symbol: string; solIn: number; tokens: number; entryPriceUsd: number; priceUsd: number | null; pnlPct: number | null; why: string | null; openedAt: Iso }[];
-  trades: { kind: 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out'; by: string; symbol: string | null; sol: number; pnlSol: number | null; sig: string | null; ok: boolean; error: string | null; at: Iso }[];
+  trades: { kind: 'buy' | 'sell' | 'deposit' | 'withdraw' | 'escrow_in' | 'escrow_out' | 'launch'; by: string; symbol: string | null; sol: number; pnlSol: number | null; sig: string | null; ok: boolean; error: string | null; at: Iso }[];
   rules: OwnerRules | null;
   paused: { until: Iso | null; reason: string } | null;
   /** True when the viewer may change the rules and withdraw. */

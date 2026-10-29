@@ -20,9 +20,12 @@ export interface SolNet {
   confirm(sig: string): Promise<boolean | null>;
   /** A recent blockhash, for a transaction someone else signs (the owner's wallet funding agents). */
   blockhash?(): Promise<string>;
+  /** A new coin's metadata and picture, stored by pump.fun (IPFS); its address goes into the launch. */
+  uploadMetadata?(m: { name: string; symbol: string; description: string; image: Buffer }): Promise<{ uri: string; name: string; symbol: string }>;
 }
 
 const PUMPPORTAL = 'https://pumpportal.fun/api/trade-local';
+const PUMP_IPFS = 'https://pump.fun/api/ipfs';
 export const SLIPPAGE_PCT = 15, PRIORITY_FEE_SOL = 0.00005;
 /** Pools PumpPortal trades (pool "auto"), as DexScreener names their dexes. */
 export const TRADABLE_DEXES = new Set(['pumpfun', 'pumpswap', 'raydium', 'launchlab']);
@@ -73,6 +76,17 @@ export function solNet(rpcUrl: string, fetchImpl: typeof fetch = fetch): SolNet 
       return conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
     },
     async blockhash() { return (await conn.getLatestBlockhash('confirmed')).blockhash; },
+    async uploadMetadata(m) {
+      // No website, no X account, no links: the coin carries its name, ticker, story and picture only.
+      const form = new FormData();
+      form.append('file', new Blob([new Uint8Array(m.image)], { type: 'image/png' }), 'logo.png');
+      for (const [k, v] of Object.entries({ name: m.name, symbol: m.symbol, description: m.description, twitter: '', telegram: '', website: '', showName: 'true' })) form.append(k, v);
+      const res = await fetchImpl(PUMP_IPFS, { method: 'POST', body: form, signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`pump.fun metadata ${res.status}: ${(await res.text()).slice(0, 160)}`);
+      const j = await res.json() as { metadataUri?: string; metadata?: { name?: string; symbol?: string } };
+      if (!j.metadataUri) throw new Error('pump.fun gave no metadata address');
+      return { uri: j.metadataUri, name: j.metadata?.name ?? m.name, symbol: j.metadata?.symbol ?? m.symbol };
+    },
     async confirm(sig) {
       for (let i = 0; i < 30; i++) {
         const s = (await conn.getSignatureStatuses([sig])).value[0];
