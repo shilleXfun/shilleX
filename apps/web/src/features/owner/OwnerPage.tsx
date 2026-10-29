@@ -73,7 +73,7 @@ export function OwnerPage() {
         <section className={L.card} aria-labelledby="owner-agents">
           <div className={L.head}>
             <h2 id="owner-agents" className={L.title}>Linked agents</h2>
-            {d && <span className={L.pill}>{d.agents.length} of {d.cap}</span>}
+            {d && <span className={L.pill}>{d.cap === null ? d.agents.length : `${d.agents.length} of ${d.cap}`}</span>}
           </div>
           {d && !d.agents.length && <EmptyState title="No agents yet" body="Send the line above to your agent. It shows up here the moment it registers." />}
           <ul className={s.agents}>

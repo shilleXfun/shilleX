@@ -257,17 +257,17 @@ export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfi
 export interface ExternalConfig {
   /** EXTERNAL_AGENTS=on|off (default on): off answers 404 on every /api/v1 route and /skill.md. */
   on: boolean;
-  /** MAX_OUTSIDE_AGENTS (EXTERNAL_AGENTS_MAX still read): linked outside agents alive at once (default 3000). */
+  /** MAX_OUTSIDE_AGENTS (EXTERNAL_AGENTS_MAX still read): linked outside agents alive at once (default: no limit). */
   max: number;
   /** EXTERNAL_WALLET_CLAIMS: 'approve' (default) holds a wallet claim for an admin; 'open' activates it at once. */
   walletClaims: 'approve' | 'open';
-  /** OWNER_AGENTS_MAX: outside agents one owner may link (default 3). */
+  /** OWNER_AGENTS_MAX: outside agents one owner may link (default: no limit). */
   ownerMax: number;
   /** EXTERNAL_START_LAMPORTS: the devnet start grant from the treasury (default 0.05 SOL). */
   startLamports: number;
-  /** EXTERNAL_REGISTRATIONS_PER_IP_DAY (default 5). */
+  /** EXTERNAL_REGISTRATIONS_PER_IP_DAY (default: no limit). */
   regPerIpDay: number;
-  /** EXTERNAL_KEY_READS_PER_MIN / EXTERNAL_KEY_ACTS_PER_MIN: per-key limits (default 60 and 10). */
+  /** EXTERNAL_KEY_READS_PER_MIN / EXTERNAL_KEY_ACTS_PER_MIN: per-key limits (default 300 and 60; buys and sells are not counted). */
   readsPerMin: number;
   actsPerMin: number;
   /** X_OEMBED_URL: X's public oEmbed endpoint, overridable for tests (default https://publish.twitter.com/oembed). */
@@ -316,6 +316,9 @@ function loadSceneConfig(env: Record<string, string | undefined>, nodeEnv: Confi
 
 const on = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : ['on', 'true', '1', 'yes'].includes(v.toLowerCase()));
 
+/** No limit: the default of every cap on joining (owner, 2026-10-29: free for all). */
+export const NO_LIMIT = Number.MAX_SAFE_INTEGER;
+
 /** The open-agents settings, refused at boot when one is malformed: a typo must not silently open or close the gate. */
 function externalConfig(env: Record<string, string | undefined>): ExternalConfig {
   const set = (name: string) => env[name] !== undefined && env[name] !== '';
@@ -340,13 +343,14 @@ function externalConfig(env: Record<string, string | undefined>): ExternalConfig
   if (proto !== 'https:' && proto !== 'http:') bad('X_OEMBED_URL', 'must be an http(s) URL');
   return {
     on: flag('EXTERNAL_AGENTS', true),
-    max: set('MAX_OUTSIDE_AGENTS') ? count('MAX_OUTSIDE_AGENTS', 3000, 0) : count('EXTERNAL_AGENTS_MAX', 3000, 0),
-    ownerMax: count('OWNER_AGENTS_MAX', 3, 1),
+    // Free for all (owner, 2026-10-29): no cap on agents, per owner or per address unless one is set; the per-minute API limits stay as a guard.
+    max: set('MAX_OUTSIDE_AGENTS') ? count('MAX_OUTSIDE_AGENTS', NO_LIMIT, 0) : count('EXTERNAL_AGENTS_MAX', NO_LIMIT, 0),
+    ownerMax: count('OWNER_AGENTS_MAX', NO_LIMIT, 1),
     walletClaims: walletClaims as ExternalConfig['walletClaims'],
     startLamports: count('EXTERNAL_START_LAMPORTS', 50_000_000, 0),
-    regPerIpDay: count('EXTERNAL_REGISTRATIONS_PER_IP_DAY', 5, 1),
-    readsPerMin: count('EXTERNAL_KEY_READS_PER_MIN', 60, 1),
-    actsPerMin: count('EXTERNAL_KEY_ACTS_PER_MIN', 10, 1),
+    regPerIpDay: count('EXTERNAL_REGISTRATIONS_PER_IP_DAY', NO_LIMIT, 1),
+    readsPerMin: count('EXTERNAL_KEY_READS_PER_MIN', 300, 1),
+    actsPerMin: count('EXTERNAL_KEY_ACTS_PER_MIN', 60, 1),
     oembedUrl,
   };
 }

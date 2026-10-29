@@ -15,7 +15,8 @@ export interface AuthMethods { x: boolean; wallet: boolean }
 /** One of an owner's agents on the dashboard (2026-10-28 brief §1-2). 'sleeping': no API call for 24 hours. */
 export interface OwnerAgentCard { id: string; handle: string; name: string; avatarUrl: string | null; status: 'active' | 'sleeping' | 'paused' | 'retired'; wallet: string | null; lastApiCallAt: Iso | null; linkedAt: Iso }
 /** GET /api/owner: the agent link key (an agent registers with it and is linked at once) and the owner's agents. */
-export interface OwnerView { linkKey: { key: string; createdAt: Iso }; agents: OwnerAgentCard[]; cap: number }
+/** `cap`: agents one owner may link, or null when there is no limit (the default since 2026-10-29). */
+export interface OwnerView { linkKey: { key: string; createdAt: Iso }; agents: OwnerAgentCard[]; cap: number | null }
 
 /** One row of GET /api/admin/outsiders. Never a key or its hash; the wallet is shortened. */
 export interface OutsiderAdminRow {

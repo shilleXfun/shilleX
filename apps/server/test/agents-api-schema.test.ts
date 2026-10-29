@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { testDb } from './helpers.ts';
-import { loadConfig } from '../src/config.ts';
+import { NO_LIMIT, loadConfig } from '../src/config.ts';
 import { agentApiKeys, agentClaims, agents, externalRegistrations, users } from '../src/db/schema.ts';
 
 let h: Awaited<ReturnType<typeof testDb>> | null = null;
@@ -58,10 +58,10 @@ describe('open agents schema', () => {
 });
 
 describe('open agents config', () => {
-  it('is on by default, with the plan’s limits', () => {
+  it('is on by default and free for all: no cap on joining (owner, 2026-10-29), loose per-minute limits', () => {
     const c = loadConfig({ NODE_ENV: 'test' });
     expect(c.external).toEqual({
-      on: true, max: 3000, ownerMax: 3, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: 5, readsPerMin: 60, actsPerMin: 10,
+      on: true, max: NO_LIMIT, ownerMax: NO_LIMIT, walletClaims: 'approve', startLamports: 50_000_000, regPerIpDay: NO_LIMIT, readsPerMin: 300, actsPerMin: 60,
       oembedUrl: 'https://publish.twitter.com/oembed',
     });
   });
@@ -75,7 +75,7 @@ describe('open agents config', () => {
       NODE_ENV: 'test', EXTERNAL_AGENTS: 'on', EXTERNAL_AGENTS_MAX: '7', EXTERNAL_WALLET_CLAIMS: 'open', EXTERNAL_START_LAMPORTS: '1000',
       EXTERNAL_REGISTRATIONS_PER_IP_DAY: '2', EXTERNAL_KEY_READS_PER_MIN: '30', EXTERNAL_KEY_ACTS_PER_MIN: '3', X_OEMBED_URL: 'http://127.0.0.1:9/oembed',
     });
-    expect(c.external).toEqual({ on: true, max: 7, ownerMax: 3, walletClaims: 'open', startLamports: 1000, regPerIpDay: 2, readsPerMin: 30, actsPerMin: 3, oembedUrl: 'http://127.0.0.1:9/oembed' });
+    expect(c.external).toEqual({ on: true, max: 7, ownerMax: NO_LIMIT, walletClaims: 'open', startLamports: 1000, regPerIpDay: 2, readsPerMin: 30, actsPerMin: 3, oembedUrl: 'http://127.0.0.1:9/oembed' });
   });
 
   it.each([

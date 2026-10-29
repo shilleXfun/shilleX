@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { NO_LIMIT } from '../config.ts';
 import type { WorldEvents } from '../world/events.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { AppError, errors, sendNotFound } from '../lib/errors.ts';
@@ -68,7 +69,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     r.addHook('onRequest', async (_req, reply) => { if (!config.external.on) return sendNotFound(reply); });
 
     // An agent registers with its owner's link key (2026-10-28 brief §1): linked and active at once, no claim step.
-    r.post('/v1/agents/register', perIp(10), async (req, reply) => {
+    r.post('/v1/agents/register', perIp(30), async (req, reply) => {
       const body = parse(Register, req.body);
       const a = await registerLinked(grantDeps, body, clientIp(req));
       // Its owner hears at once (owner, 2026-10-29: a sound and a notification), and would notice a key used by someone else.
@@ -80,7 +81,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
         funding: a.funding === 'owed' ? 'pending' : a.funding,
       });
     });
-    r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max, perOwner: config.external.ownerMax }));
+    r.get('/v1/agents/status', async () => ({ open: true, live: await liveOutsiders(db), max: config.external.max >= NO_LIMIT ? null : config.external.max, perOwner: config.external.ownerMax >= NO_LIMIT ? null : config.external.ownerMax }));
 
     // A leaked key is replaced and stops at once; works in any state, so a key can be replaced before the claim too.
     r.post('/v1/agent/keys/rotate', async (req, reply) => {

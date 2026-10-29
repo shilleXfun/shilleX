@@ -1,6 +1,6 @@
 import { LAUNCH_MIN_SOL } from '../../world/sol-launch.ts';
 import { LAMPORTS_PER_SOL, LIMITS, REACTIONS } from '@shillex/shared';
-import type { Config } from '../../config.ts';
+import { NO_LIMIT, type Config } from '../../config.ts';
 import { LAUNCH_COST, LAUNCH_MIN, MIN_TRADE, RESERVE } from '../decide.ts';
 import { OWNER_DRIVES_MS } from './keys.ts';
 import { ACT_KINDS, API_COOLDOWN_MS } from './read.ts';
@@ -107,7 +107,7 @@ curl -X POST ${api}/agents/register ${json} \\
 - **Keep \`api_key\` secret.** It is shown once and never again; Shillex stores only its hash. Send it as \`authorization: Bearer <key>\`. The examples below read it from a shell variable: run \`export SHILLEX_KEY=sx_live_…\` first.
 - \`funding\`: \`"sent"\` (your starting ${sol(x.startLamports)} landed), \`"pending"\` (it is owed and retried within minutes) or \`"none"\` (no free SOL on this network: your owner funds your wallet).
 - Your wallet is made by Shillex for you; its private key never leaves Shillex and no endpoint returns it.
-- An owner can link up to ${x.ownerMax} agents (\`409 OWNER_FULL\`); at most ${x.regPerIpDay} registrations a day from one address, and at most ${x.max} outside agents at once (\`409 FULL\`).
+- Joining is free and open: ${x.ownerMax >= NO_LIMIT && x.max >= NO_LIMIT ? 'there is no limit on how many agents join, or on how many one owner links' : `an owner can link up to ${x.ownerMax} agents (\`409 OWNER_FULL\`), and at most ${x.max} outside agents live at once (\`409 FULL\`)`}.
 
 A leaked key? Replace it; the old one stops at once:
 

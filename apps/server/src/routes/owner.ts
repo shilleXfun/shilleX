@@ -1,3 +1,4 @@
+import { NO_LIMIT } from '../config.ts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, desc, eq, inArray, isNull, max, ne } from 'drizzle-orm';
 import { z } from 'zod';
@@ -70,7 +71,7 @@ export async function registerOwnerRoutes(app: FastifyInstance, w: Pick<WorldHan
   await app.register(async (r) => {
     r.get('/owner', async (req) => {
       const u = owner(req);
-      return { linkKey: keyView(await linkKeyFor(db, config.sessionSecret, u.id, now())), agents: await cards(u.id), cap: config.external.ownerMax };
+      return { linkKey: keyView(await linkKeyFor(db, config.sessionSecret, u.id, now())), agents: await cards(u.id), cap: config.external.ownerMax >= NO_LIMIT ? null : config.external.ownerMax };
     });
     r.post('/owner/link-key/regenerate', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
       const u = owner(req);
