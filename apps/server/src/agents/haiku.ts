@@ -6,6 +6,7 @@ import { ClaudeBrain, InputTooLarge, PRICE_OF_HAIKU, knownPrice, priceOf, regist
 import { costMeter } from '../world/cost-meter.ts';
 import { chargeCompute, computeGate, computeOn } from './compute.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
+import { MixedBrain } from '../world/brain-mixed.ts';
 import type { Config } from '../config.ts';
 import { Budget, type BudgetWindow } from '../world/budget.ts';
 import { anthropicClient } from '../lib/anthropic.ts';
@@ -24,7 +25,7 @@ let modelLabel = HAIKU, worstScale = 1;
 export const modelName = () => modelLabel;
 
 /** The brain the configuration asks for (config.llm): the routed providers, Claude Haiku, or none (the free engine only; always with BRAIN_KILL_SWITCH). */
-export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong' | 'brainKillSwitch' | 'deepseek'>>, now: () => Date): AgentBrain | null {
+export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> & Partial<Pick<Config, 'anthropicModelStrong' | 'brainKillSwitch' | 'deepseek' | 'feedClaude'>>, now: () => Date): AgentBrain | null {
   let brain: AgentBrain | null = null;
   if (config.brainKillSwitch) { modelLabel = HAIKU; return null; }
   // DeepSeek through its Anthropic-compatible endpoint (2026-10-28): the same brain as Claude's, in its compatible mode.
@@ -36,6 +37,12 @@ export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> 
     const b = new ClaudeBrain(ds.apiKey, ds.model, anthropicClient(ds.apiKey, 0, ds.baseUrl), ds.modelStrong);
     b.useCompat();
     modelLabel = ds.model;
+    // A share of the feed on Claude (owner, 2026-10-29: 40% Haiku 5.5, 60% DeepSeek); Claude failing hands its calls back to DeepSeek.
+    const fc = config.feedClaude;
+    if (fc && config.anthropicApiKey) {
+      console.log(`[brain] ${Math.round(fc.share * 100)}% of everyday calls on ${fc.model}, the rest on ${ds.model}`);
+      return new MixedBrain(b, new ClaudeBrain(config.anthropicApiKey, fc.model, anthropicClient(config.anthropicApiKey, 0), fc.model), fc.share, now);
+    }
     return b;
   }
   if (config.llm.mode === 'openai' && config.llm.providers.length) {

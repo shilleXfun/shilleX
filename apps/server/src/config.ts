@@ -55,6 +55,11 @@ export interface Config {
   deepseek: { apiKey: string; baseUrl: string; model: string; modelStrong: string; priceInPerM: number; priceOutPerM: number } | null;
   /** ANTHROPIC_MODEL_STRONG (e.g. claude-sonnet-5-5): with LLM_PROVIDER=anthropic, the model for big work (websites, threads, long takes, scenes); Haiku when unset. */
   anthropicModelStrong: string | undefined;
+  /**
+   * The feed on two models (owner, 2026-10-29): with DeepSeek and ANTHROPIC_API_KEY both set, FEED_CLAUDE_SHARE (default 0.4) of the
+   * everyday calls go to FEED_CLAUDE_MODEL (default claude-haiku-5-5), the rest to DeepSeek. FEED_CLAUDE_SHARE=0 turns it off.
+   */
+  feedClaude: { model: string; share: number } | null;
   /** AGENT_DAILY_BUDGET_USD: only the raised agents' share and old tests read it now; the world's cap is llmBudgetPer12hUsd. */
   agentDailyBudgetUsd: number;
   /**
@@ -392,6 +397,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       priceInPerM: Math.max(0, n(env.DEEPSEEK_PRICE_IN, 0.5) || 0), priceOutPerM: Math.max(0, n(env.DEEPSEEK_PRICE_OUT, 2) || 0),
     },
     anthropicModelStrong: env.ANTHROPIC_MODEL_STRONG?.trim() || undefined,
+    feedClaude: (() => {
+      const share = Math.min(1, Math.max(0, n(env.FEED_CLAUDE_SHARE, 0.4) || 0));
+      return env.ANTHROPIC_API_KEY?.trim() && share > 0 ? { model: env.FEED_CLAUDE_MODEL?.trim() || 'claude-haiku-5-5', share } : null;
+    })(),
     agentDailyBudgetUsd: Number(env.AGENT_DAILY_BUDGET_USD ?? 1),
     llmBudgetPer12hUsd: Math.min(LLM_HARD_CEILING_USD_PER_DAY / 2, Math.max(0, (env.LLM_BUDGET_USD_PER_DAY ? n(env.LLM_BUDGET_USD_PER_DAY, 0) / 2 : n(env.LLM_BUDGET_USD_PER_12H, LLM_BUDGET_DEFAULT_USD_PER_12H)) || 0)),
     brainKillSwitch: killed,

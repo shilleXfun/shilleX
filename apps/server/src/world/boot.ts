@@ -68,6 +68,7 @@ import { bootMainnet } from '../ledger/boot.ts';
 import type { MainnetHandles } from '../ledger/routes.ts';
 import { TREASURY, parseWorldKey, signerFor, walletOf } from './wallets.ts';
 import { RoutedBrain } from './brain-openai.ts';
+import { MixedBrain } from './brain-mixed.ts';
 import { dbBrainCache } from './brain-cache.ts';
 import { personaPass } from '../agents/personas.ts';
 import { arcPass } from '../agents/arcs.ts';
@@ -278,7 +279,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const brain = opts.brain ?? brainFromConfig(config, now);
       // Answers to identical requests outlive a restart (llm_cache, world/brain-cache.ts).
       if (brain instanceof RoutedBrain) brain.useStore(dbBrainCache(db, now));
-      if (brain instanceof ClaudeBrain) brain.useCeiling(ceiling);
+      if (brain instanceof ClaudeBrain || brain instanceof MixedBrain) brain.useCeiling(ceiling);
       handles.brain = brain;
       // The same busy set as the engine: moment handlers, systemAct and the engine share one turn per agent.
       const md = brain ? { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, brain, budget, halt } : null;
