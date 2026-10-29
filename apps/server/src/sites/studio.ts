@@ -176,7 +176,8 @@ export function repeats(b: Pick<StudioBrief, 'aesthetic' | 'concept'>, recent: S
 export async function studioBuild(d: StudioDeps): Promise<StudioResult> {
   const call = (job: string, req: Omit<BrainRequest, 'tools'>, maxTokens: number, input: number) =>
     billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
-      () => d.brain.decide({ ...req, tools: [], maxTokens, tier: d.tier ?? 1 }));
+      // The page and its review are written by the strong model (owner, 2026-10-29: sites must not look like 2009); the brief by the everyday one.
+      () => d.brain.decide({ ...req, tools: [], maxTokens, tier: job === 'site:brief' ? d.tier ?? 1 : 2 }));
 
   // 1. The brief, its own; a repeat of a recent direction gets one more try.
   const recentList = d.recent.slice(0, 30).map((r) => `- ${r.aesthetic.slice(0, 80)}: ${r.concept.slice(0, 120)}`).join('\n') || '(none yet)';
