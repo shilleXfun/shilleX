@@ -163,7 +163,7 @@ export interface Config {
   communityPeopleWrite: boolean;
   /** The Times (2026-10-28 brief §7): TIMES=on|off (default on with AGENTS), TIMES_EVERY_MIN (default 60 since 2026-10-29) between a reporter's pieces, TIMES_RSS_FEEDS ("name|url,…"; free crypto, tech and world feeds by default). */
   times: { on: boolean; everyMin: number; feeds: string | undefined };
-  /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
+  /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 120 since 2026-10-29: one at least every 15 minutes; 0 stops building). */
   sitesPerDay: number;
   /**
    * A one-off boost (owner, 2026-10-29: "3 bucks to spend in the next hour"): BOOST_USD over BOOST_HOURS (default 1) ending at
@@ -468,7 +468,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     scenes: loadSceneConfig(env, nodeEnv),
     communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, false),
     times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 60)) || 60), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
-    sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
+    sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 120)) || 0),
     boost: (() => {
       const end = Date.parse(env.BOOST_UNTIL ?? ''), usd = n(env.BOOST_USD, 0), hours = Math.min(24, Math.max(0.25, n(env.BOOST_HOURS, 1) || 1));
       return Number.isFinite(end) && usd > 0 ? { start: new Date(end - hours * 3_600_000), end: new Date(end), usd: Math.min(usd, 25) } : null;

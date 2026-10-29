@@ -38,6 +38,7 @@ import { createImageMaker, type ImageMaker } from '../agents/image-cache.ts';
 import { startEngine, type Engine } from '../agents/engine.ts';
 import { brainFromConfig, modelBudget } from '../agents/haiku.ts';
 import { createSiteModel, siteModelSpent } from '../sites/opus.ts';
+import { siteCadence } from '../sites/cadence.ts';
 import { createMoments } from '../agents/moments.ts';
 import type { Moments } from '../agents/types.ts';
 import { mulberry32 } from '../seed/rng.ts';
@@ -231,7 +232,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   // Scenes' and long takes' share of the daily cap, rebuilt from today's world calls.
   const share = new SceneShare({ db, now, dailyUsd: config.llmBudgetPer12hUsd, share: config.scenes.budgetShare, period: () => budget.period() });
   await share.load();
-  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined, timesTimer: NodeJS.Timeout | undefined;
+  let scenesH: Scenes | null = null, storiesH: Stories | null = null, directorTimer: NodeJS.Timeout | undefined, remasterTimer: NodeJS.Timeout | undefined, timesTimer: NodeJS.Timeout | undefined, siteTimer: NodeJS.Timeout | undefined;
   const population = new Population(db, now);
   await population.refresh();
   // One set for the engine, the moment queue and hatching: an agent never has two turns open at once.
@@ -293,6 +294,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
         console.log(`[sites] websites are written with ${siteModel.model}, up to $${sm!.usdPerDay} a day`);
       }
       const buildSite = siteBuilder({ app, db, chain, events, worldKey: key, now, busy, budget, brain, halt, siteModel });
+      // A website at least every 15 minutes (sites/cadence.ts): checked every 5, it fills the gaps the agents leave.
+      siteTimer = setInterval(() => { if (!halt.reason()) void siteCadence({ db, now, buildSite }).then((id) => { if (id) console.log(`[sites] the 15-minute site: @${id} builds one`); }).catch((e) => console.error('[sites] cadence failed', (e as Error)?.message)); }, 5 * 60_000);
+      siteTimer.unref?.();
       // Real screenshots for sites that have none (sites/shots.ts), a few minutes after boot, one at a time.
       setTimeout(() => { void backfillShots(app).then((n) => { if (n) console.log(`[shots] captured ${n} sites`); }).catch((e) => console.error('[shots] backfill failed', e)); }, 120_000).unref?.();
       // Everyday posts and replies in the agents' own words, written by the model from their real state (agents/voice.ts).
@@ -421,7 +425,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   });
   // Public agent activity (launches, trades, transfers, rugs) for the live ticker and the swarm backdrop.
   const offPulses = bridgePulses(events, app.deps.bus, now);
-  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); market.stop(); clearInterval(timesTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
+  return Object.assign(handles, { async stop() { clearInterval(directorTimer); clearInterval(remasterTimer); clearInterval(siteTimer); sol?.stop(); clearInterval(pumpTimer); clearInterval(personaTimer); clearInterval(arcTimer); outside.stop(); market.stop(); clearInterval(timesTimer); await mainnet?.stop(); offPulses(); await stopSpotlight(); await x.stop(); await scenesH?.stop(); await storiesH?.stop(); await handles.moments?.stop(); await handles.engine?.stop(); indexer.stop(); } });
 }
 
 /**
