@@ -34,13 +34,16 @@ const view = (a: Row, by: Map<string, TimesReporter>): ArticleView => ({ ...card
  */
 export async function registerTimesRoutes(app: FastifyInstance, desk: () => TimesDesk | null) {
   const { db, config } = app.deps;
+  // Stories about Shillex only (owner, 2026-10-29): the older real-world reports and satire of real headlines carried a source
+  // link; they are no longer shown anywhere.
+  const onSite = sql`jsonb_array_length(${timesArticles.sources}) = 0`;
   await app.register(async (r) => {
     r.get('/times', async (): Promise<TimesFront> => {
-      const latest = await db.select().from(timesArticles).orderBy(desc(timesArticles.breaking), desc(timesArticles.publishedAt)).limit(5);
+      const latest = await db.select().from(timesArticles).where(onSite).orderBy(desc(timesArticles.breaking), desc(timesArticles.publishedAt)).limit(5);
       const recentLead = latest.find((a) => a.breaking && Date.now() - a.publishedAt.getTime() < 6 * 3_600_000) ?? latest.find((a) => a.imageUrl) ?? latest[0];
       // The newest 150 are plenty to fill every section column.
-      const bySection = await db.select().from(timesArticles).orderBy(desc(timesArticles.publishedAt)).limit(150);
-      const most = await db.select().from(timesArticles).where(sql`${timesArticles.publishedAt} > now() - interval '7 days'`).orderBy(desc(timesArticles.reads)).limit(5);
+      const bySection = await db.select().from(timesArticles).where(onSite).orderBy(desc(timesArticles.publishedAt)).limit(150);
+      const most = await db.select().from(timesArticles).where(and(onSite, sql`${timesArticles.publishedAt} > now() - interval '7 days'`)).orderBy(desc(timesArticles.reads)).limit(5);
       const all = [...latest, ...bySection, ...most];
       const by = await reportersOf(db, all.map((a) => a.authorId));
       const reporters = await db.select({ id: users.id }).from(users).where(inArray(users.username, REPORTERS.map((x) => x.handle)));
@@ -55,14 +58,14 @@ export async function registerTimesRoutes(app: FastifyInstance, desk: () => Time
     r.get<{ Params: { section: string } }>('/times/sections/:section', async (req) => {
       const s = req.params.section as TimesSection;
       if (!SECTIONS.includes(s)) throw errors.notFound('Section');
-      const rows = await db.select().from(timesArticles).where(eq(timesArticles.section, s)).orderBy(desc(timesArticles.publishedAt)).limit(40);
+      const rows = await db.select().from(timesArticles).where(and(onSite, eq(timesArticles.section, s))).orderBy(desc(timesArticles.publishedAt)).limit(40);
       const by = await reportersOf(db, rows.map((a) => a.authorId));
       return { section: s, articles: rows.map((a) => card(a, by)) };
     });
     r.get<{ Params: { slug: string } }>('/times/a/:slug', async (req) => {
-      const [a] = await db.update(timesArticles).set({ reads: sql`${timesArticles.reads} + 1` }).where(eq(timesArticles.slug, req.params.slug)).returning();
+      const [a] = await db.update(timesArticles).set({ reads: sql`${timesArticles.reads} + 1` }).where(and(onSite, eq(timesArticles.slug, req.params.slug))).returning();
       if (!a) throw errors.notFound('Article');
-      const related = await db.select().from(timesArticles).where(and(eq(timesArticles.section, a.section), ne(timesArticles.id, a.id))).orderBy(desc(timesArticles.publishedAt)).limit(4);
+      const related = await db.select().from(timesArticles).where(and(onSite, eq(timesArticles.section, a.section), ne(timesArticles.id, a.id))).orderBy(desc(timesArticles.publishedAt)).limit(4);
       const by = await reportersOf(db, [a.authorId, ...related.map((x) => x.authorId)]);
       return { article: view(a, by), related: related.map((x) => card(x, by)) };
     });

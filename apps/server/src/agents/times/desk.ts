@@ -1,22 +1,28 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { chainTxs, marketDeals, marketOffers, posts, timesArticles, users, worldCoins } from '../../db/schema.ts';
+import { chainTxs, marketDeals, marketOffers, posts, sites, solTrades, timesArticles, timesStaff, users, worldCoins } from '../../db/schema.ts';
 import { newId } from '../../lib/ids.ts';
 import type { AgentBrain } from '../../world/brain.ts';
 import { paperFacts } from '../depth/paper.ts';
 import type { ModelBudget } from '../haiku.ts';
 import { articleImagePrompt, type ImageMaker } from '../image-cache.ts';
 import { REPORTERS, ensureReporters, type Beat, type Reporter } from './reporters.ts';
-import { fetchFeeds, type FeedItem } from './rss.ts';
+import { reviewApplications } from './staff.ts';
 import { writeArticle, type Material, type Source } from './write.ts';
 
 /**
  * The Times' desk (2026-10-28 brief §7): every 10 minutes the reporter whose turn has come (TIMES_EVERY_MIN since their last
  * piece) writes one article on their beat from real material, never the same story twice; a rug, a graduation or a deal of a SOL
  * or more is breaking news at once (30 minutes apart at most). Each article gets a lead image when the day's budget allows.
+ * Since 2026-10-29 (owner: the paper covers the site, not real-life events) every beat writes about Shillex only, each story is
+ * posted to the feed by its reporter, and the editor hires guest columnists from the agents who apply (agents/times/staff.ts).
  */
-export interface TimesDeskDeps { db: Db; brain: AgentBrain | null; budget: ModelBudget; now: () => Date; images: ImageMaker | null; feeds: { name: string; url: string }[]; everyMs: number; fetchImpl?: typeof fetch }
+export interface TimesDeskDeps {
+  db: Db; brain: AgentBrain | null; budget: ModelBudget; now: () => Date; images: ImageMaker | null; everyMs: number;
+  /** Posts to the feed as an agent: each reporter's story, and the editor's welcome to a new columnist. */
+  post?: (authorId: string, body: string) => Promise<unknown>;
+}
 const DAY = 86_400_000, BREAKING_GAP_MS = 30 * 60_000;
 const BEAT_KINDS: Record<'markets' | 'coins' | 'drama', string[]> = {
   markets: ['win', 'desk_win', 'desk_loss', 'desk_crowd', 'desk_board', 'hot_coin'],
@@ -28,30 +34,50 @@ const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').repla
 const sol = (l: number) => `${(Math.abs(l) / 1e9).toFixed(3)} SOL`;
 
 export function createTimesDesk(d: TimesDeskDeps) {
-  let feedCache: { at: number; items: FeedItem[] } | null = null;
   let lastBreaking = 0;
-  const feed = async () => {
-    if (feedCache && d.now().getTime() - feedCache.at < 30 * 60_000) return feedCache.items;
-    feedCache = { at: d.now().getTime(), items: await fetchFeeds(d.feeds, d.fetchImpl) };
-    return feedCache.items;
-  };
+  const since = (ms: number) => new Date(d.now().getTime() - ms);
+  /** Around Shillex: who arrived, what got built, what went up for sale, who launched a coin, who joined the paper. */
+  async function aroundShillex(): Promise<string[]> {
+    const day = since(DAY), reporters = REPORTERS.map((r) => r.handle);
+    const [joined, built, offers, launches, hires] = await Promise.all([
+      d.db.select({ u: users.username }).from(users).where(and(eq(users.kind, 'agent'), gte(users.createdAt, day))).orderBy(desc(users.createdAt)).limit(6),
+      d.db.select({ who: users.username, title: sites.title, kind: sites.kind }).from(sites).innerJoin(users, eq(users.id, sites.authorId)).where(and(gte(sites.createdAt, day), isNull(sites.removedAt))).orderBy(desc(sites.createdAt)).limit(4),
+      d.db.select({ who: users.username, title: marketOffers.title, price: marketOffers.priceAmount, cur: marketOffers.currencySymbol }).from(marketOffers).innerJoin(users, eq(users.id, marketOffers.sellerId)).where(gte(marketOffers.createdAt, day)).orderBy(desc(marketOffers.createdAt)).limit(3),
+      d.db.select({ who: users.username, sym: solTrades.symbol }).from(solTrades).innerJoin(users, eq(users.id, solTrades.agentId)).where(and(eq(solTrades.kind, 'launch'), eq(solTrades.ok, true), gte(solTrades.at, day))).limit(3),
+      d.db.select({ who: users.username, beat: timesStaff.beat }).from(timesStaff).innerJoin(users, eq(users.id, timesStaff.agentId)).where(and(eq(timesStaff.status, 'hired'), gte(timesStaff.decidedAt, day))).limit(3),
+    ]);
+    return [
+      ...joined.filter((j) => !reporters.includes(j.u)).map((j) => `@${j.u} joined Shillex`),
+      ...built.map((b) => `@${b.who} built a website, "${b.title}" (${b.kind})`),
+      ...offers.map((o) => `@${o.who} put "${o.title}" up for sale on the marketplace for ${o.price} ${o.cur}`),
+      ...launches.map((l) => `@${l.who} launched $${l.sym} on pump.fun`),
+      ...hires.map((h) => `@${h.who} joined The Shillex Times as a guest columnist on the ${h.beat} beat`),
+    ];
+  }
+  /** The day's biggest real-SOL trades. */
+  async function realTrades(): Promise<string[]> {
+    const rows = await d.db.select({ who: users.username, kind: solTrades.kind, sym: solTrades.symbol, sol: solTrades.sol, pnl: solTrades.pnlSol }).from(solTrades).innerJoin(users, eq(users.id, solTrades.agentId))
+      .where(and(inArray(solTrades.kind, ['buy', 'sell']), eq(solTrades.ok, true), gte(solTrades.at, since(DAY)))).orderBy(sql`abs(${solTrades.sol}) desc`).limit(4);
+    return rows.map((t) => `@${t.who} ${t.kind === 'buy' ? 'bought' : 'sold'} $${t.sym} for ${Math.abs(t.sol).toFixed(3)} SOL${t.kind === 'sell' && t.pnl !== null ? ` (${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(3)} SOL on it)` : ''}`);
+  }
   const covered = async (key: string) => (await d.db.select({ id: timesArticles.id }).from(timesArticles).where(eq(timesArticles.topicKey, key))).length > 0;
 
   /** What a beat has to write about now, and the key that says it was covered; null when nothing new happened. */
   async function material(r: Reporter): Promise<{ m: Material; key: string } | null> {
     const now = d.now(), day = now.toISOString().slice(0, 10);
+    // Around Shillex and satire: what happened on the site today, never the outside world.
     if (r.beat === 'world' || r.beat === 'satire') {
-      const items = (await feed()).filter((i) => !i.published || now.getTime() - i.published.getTime() < 2 * DAY);
-      for (const it of items) {
-        const key = `${r.beat}:${it.link}`;
-        if (await covered(key)) continue;
-        const source: Source = { title: it.title, url: it.link, publisher: it.source, text: it.summary };
-        return { key, m: { kind: r.beat === 'world' ? 'real_news' : 'satire', section: r.section, facts: [], sources: [source], quotes: [] } };
-      }
-      return null;
+      const around = await aroundShillex();
+      const all = r.beat === 'world' ? around : [...(await paperFacts(d.db, day)).items.sort((a, b) => b.weight - a.weight).slice(0, 4).map((f) => f.text), ...around.slice(0, 3)];
+      if (all.length < 2) return null;
+      const key = `${r.beat}:${day}:${hash(all.slice(0, 3).join('|'))}`;
+      if (await covered(key)) return null;
+      return { key, m: { kind: r.beat === 'world' ? 'world_news' : 'satire', section: r.section, facts: all, sources: [], quotes: [] } };
     }
     const facts = (await paperFacts(d.db, day)).items.filter((i) => BEAT_KINDS[r.beat as 'markets' | 'coins' | 'drama'].includes(i.kind)).sort((a, b) => b.weight - a.weight).slice(0, 5);
     const extra: string[] = [];
+    if (r.beat === 'markets') extra.push(...(await realTrades()));
+    if (r.beat === 'coins') extra.push(...(await aroundShillex()).filter((f) => f.includes(' launched $')));
     if (r.beat === 'markets') {
       const big = await d.db.select({ who: users.username, kind: chainTxs.kind, delta: chainTxs.lamportsDelta, sym: worldCoins.symbol }).from(chainTxs)
         .innerJoin(users, eq(users.id, chainTxs.agentId)).innerJoin(worldCoins, eq(worldCoins.mint, chainTxs.mint))
@@ -93,7 +119,12 @@ export function createTimesDesk(d: TimesDeskDeps) {
       id, slug: `${slugify(a.headline)}-${id.slice(-6).toLowerCase()}`, section: a.section, kind: a.kind, label: a.label, headline: a.headline, dek: a.dek, body: a.body, pullQuote: a.pullQuote,
       authorId, imageUrl: image?.url ?? null, sources: got.m.sources.map((s) => ({ title: s.title, url: s.url, publisher: s.publisher })), topicKey: got.key, breaking: Boolean(opts.breaking), publishedAt: d.now(),
     }).onConflictDoNothing().returning();
-    if (row) console.log(`[times] @${r.handle} published "${row.headline}" (${row.section}${row.breaking ? ', breaking' : ''})`);
+    if (row) {
+      console.log(`[times] @${r.handle} published "${row.headline}" (${row.section}${row.breaking ? ', breaking' : ''})`);
+      // The reporter posts the story to the feed (owner, 2026-10-29: the Times' people post about what happens on the site).
+      const line = `${row.breaking ? 'Breaking: ' : ''}${row.headline}. ${row.dek}`;
+      await d.post?.(authorId, line.length > 270 ? `${line.slice(0, 267).trimEnd()}…` : line).catch((e) => console.warn('[times] the story could not be posted', (e as Error)?.message));
+    }
     return row ?? null;
   }
 
@@ -124,8 +155,10 @@ export function createTimesDesk(d: TimesDeskDeps) {
   return {
     publish: (beat: Beat) => publish(REPORTERS.find((r) => r.beat === beat)!),
     breaking,
-    /** Breaking news first; otherwise the one reporter longest past their turn writes. */
+    /** The editor reviews applications, then breaking news; otherwise the one reporter longest past their turn writes. */
     async tick() {
+      const editor = (await ensureReporters(d.db, d.now())).get(REPORTERS.find((r) => r.beat === 'drama')!.handle);
+      await reviewApplications(d.db, d.now(), editor && d.post ? (text) => d.post!(editor, text) : undefined).catch((e) => console.warn('[times] applications could not be reviewed', (e as Error)?.message));
       if (await breaking()) return;
       const last = await d.db.select({ author: users.username, at: sql<string>`max(${timesArticles.publishedAt})` }).from(timesArticles).innerJoin(users, eq(users.id, timesArticles.authorId)).groupBy(users.username);
       const when = new Map(last.map((l) => [l.author, Date.parse(l.at)]));

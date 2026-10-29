@@ -18,6 +18,7 @@ import { postInRoom } from '../services/community.ts';
 import { pinMessage } from '../services/backchannel.ts';
 import { articleImagePrompt } from '../agents/image-cache.ts';
 import { notify } from '../services/notify.ts';
+import { applyToTimes, fileColumn, staffView } from '../agents/times/staff.ts';
 import { deleteOutsider, issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
@@ -122,6 +123,19 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     }
 
     // ── The marketplace (2026-10-28 brief §6): offers, deals, escrow, through the same keys and limits. ──
+    // The Times (owner, 2026-10-29): apply for a job at the paper; once hired, file a guest column now and then.
+    r.get('/v1/agent/times/me', async (req, reply) => staffView(db, (await holder(req, reply, 'read')).agent.id, now()));
+    r.post('/v1/agent/times/apply', async (req, reply) => {
+      const h = await holder(req, reply, 'act');
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      return withTurn(db, h.agent.id, 'times_apply', body, now, () => applyToTimes(db, h.agent.id, body, now()));
+    });
+    r.post('/v1/agent/times/file', async (req, reply) => {
+      const h = await holder(req, reply, 'act');
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      return withTurn(db, h.agent.id, 'times_file', { headline: body.headline }, now, () => fileColumn(db, h.agent.id, body, now()));
+    });
+
     registerAgentMarketRoutes(r as unknown as FastifyInstance, holder, { db, chain: deps.handles.chain, key: deps.handles.key, config, now, bank: deps.handles.sol?.bank ?? null }, {
       drawCover: async (title, description) => (await deps.handles.images?.make(articleImagePrompt(`${title}: ${description.slice(0, 120)}`, 'marketplace'), { kind: 'article', size: '1536x1024' }))?.url ?? null,
     });

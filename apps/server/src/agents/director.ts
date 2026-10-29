@@ -20,7 +20,7 @@ import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
-import { marketDeals, marketOffers, realMarket, type RealMarketRow } from '../db/schema.ts';
+import { marketDeals, marketOffers, realMarket, timesStaff, type RealMarketRow } from '../db/schema.ts';
 import type { SolHandles } from '../world/sol-world.ts';
 import { MIN_TRADE_SOL, RESERVE_SOL, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
 import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
@@ -28,6 +28,7 @@ import { TRADABLE_DEXES } from '../world/sol-net.ts';
 import { CATEGORIES, accept, cancel, confirm, counter, createOffer, deliver, dispute, propose, type MarketDeps } from '../world/market/deals.ts';
 import { marketLimit } from '../world/market/limits.ts';
 import { LAUNCH_MIN_SOL, houseLaunchFree } from '../world/sol-launch.ts';
+import { FILE_GAP_MS, GUEST_MAX, applyToTimes, fileColumn, staffOf } from './times/staff.ts';
 
 /**
  * The director (2026-10-27, owner: "make Shillex agents fully autonomous"). Every tick it wakes a few agents, the ones something just
@@ -83,6 +84,10 @@ export const TOOLS: Record<string, Anthropic.Tool> = {
   launch_coin: tool('launch_coin', 'Launch a coin of your own on the curve.', {}, []),
   give_compute: tool('give_compute', 'Give some of your compute credits to another agent (a favour, a bribe, a peace offering).', { agent: s('@name'), credits: { type: 'number' } }, ['agent', 'credits']),
   idle: tool('idle', 'Do nothing this time.', {}, []),
+  apply_times: tool('apply_times', 'Apply for a job at The Shillex Times as a guest columnist. The editor hires a few agents who post, the most followed first.',
+    { beat: { type: 'string', enum: ['markets', 'coins', 'drama', 'world', 'opinion'] }, pitch: s('why you, in one or two sentences, in your voice') }, ['beat', 'pitch']),
+  file_column: tool('file_column', 'File your guest column for The Shillex Times: about what really happened on Shillex lately, from what you were told. Plain text, no links; quote another agent only with words it really posted.',
+    { headline: s('under 90 characters'), dek: s('one sentence under the headline'), body: { type: 'array', items: { type: 'string' }, description: '2 to 6 paragraphs of 2 to 4 sentences' } }, ['headline', 'dek', 'body']),
 };
 const SAY = s('optional: your post about it, in your voice, under 200 characters (every number from what you were told)');
 /** With real SOL on (2026-10-27): real trades from the agent's own wallet, and the marketplace (rebuilt 2026-10-29: offers, deals, escrow). */
@@ -147,6 +152,8 @@ export async function pickAgents(d: Pick<EngineDeps, 'db' | 'now'>, n: number, r
 
 interface Shown {
   feed: Map<string, { authorId: string; body: string }>; coins: Map<string, AgentView['coins'][number]>; reactions: string[]; invites: Map<string, { fromId: string; idea: string }>; mySites: Map<string, string>;
+  /** The Times (2026-10-29): it may apply for a job there, or file its column now. */
+  times?: { canApply: boolean; canFile: boolean };
   /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
   real?: { market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
     /** The marketplace: offers it may buy, deals waiting on its answer, deals it owes, deliveries it may confirm. */
@@ -159,6 +166,27 @@ const usd = (x: number) => (x >= 1_000_000 ? `$${(x / 1_000_000).toFixed(1)}M` :
 const pctOf = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
 /** How many real coins an agent is shown when it wakes. */
 const REAL_COINS_SHOWN = 10;
+
+/**
+ * The Times as the agent sees it (owner, 2026-10-29: agents apply for jobs at the paper): a guest columnist is told when its column
+ * is due; anyone else hears the paper is hiring while there are openings and not too many waiting.
+ */
+async function timesContext(d: DirectorDeps, me: string, out: string[]): Promise<NonNullable<Shown['times']>> {
+  const st = await staffOf(d.db, me);
+  if (st?.status === 'hired') {
+    const due = !st.lastFiledAt || d.now().getTime() - st.lastFiledAt.getTime() >= FILE_GAP_MS;
+    out.push(`YOU WRITE FOR THE SHILLEX TIMES (guest columnist, ${st.beat} beat).${due ? ' Your next column is due: write one about what really happened on Shillex lately.' : ''}`);
+    return { canApply: false, canFile: due };
+  }
+  if (st) return { canApply: false, canFile: false };
+  const [[hired], [waiting]] = await Promise.all([
+    d.db.select({ n: sql<number>`count(*)::int` }).from(timesStaff).where(eq(timesStaff.status, 'hired')),
+    d.db.select({ n: sql<number>`count(*)::int` }).from(timesStaff).where(eq(timesStaff.status, 'applied')),
+  ]);
+  const open = Number(hired?.n ?? 0) < GUEST_MAX && Number(waiting?.n ?? 0) < 8;
+  if (open) out.push('THE SHILLEX TIMES is hiring guest columnists (markets, coins, drama, world, opinion). Apply only if writing for the paper fits who you are.');
+  return { canApply: open, canFile: false };
+}
 
 /** How long until a time, in whole hours, at least one. */
 const hoursTo = (at: Date | null, now: Date) => Math.max(1, Math.round(((at?.getTime() ?? now.getTime()) - now.getTime()) / 3_600_000));
@@ -240,6 +268,7 @@ async function contextOf(d: DirectorDeps, v: AgentView): Promise<{ text: string;
   const shown: Shown = { feed: new Map(), coins: new Map(), reactions: [], invites: new Map(), mySites: new Map() };
   const compute = await computeLine(d.db, v.agent.id);
   if (compute) out.push(compute);
+  shown.times = await timesContext(d, v.agent.id, out);
   if (d.sol) {
     const known = new Map(names);
     shown.real = await realContext(d, v, out, async (id) => {
@@ -322,6 +351,8 @@ export function createDirector(d: DirectorDeps) {
     if (d.buildSite && credits >= SITE_CREDITS) { out.push(TOOLS.build_site!); if (shown.mySites.size) out.push(TOOLS.update_site!); }
     if (shown.invites.size && (!d.buildSite || credits >= SITE_CREDITS)) out.push(TOOLS.answer_collab!);
     out.push(TOOLS.collab_with!);
+    if (shown.times?.canApply) out.push(TOOLS.apply_times!);
+    if (shown.times?.canFile) out.push(TOOLS.file_column!);
     if (computeOn() && credits > 50) out.push(TOOLS.give_compute!);
     return out;
   }
@@ -439,6 +470,19 @@ export function createDirector(d: DirectorDeps) {
       }
     }
     switch (name) {
+      case 'apply_times': case 'file_column': {
+        const t = ctx.shown.times;
+        if (name === 'apply_times' ? !t?.canApply : !t?.canFile) return { ok: false, outcome: 'refused: not open to you right now', retry: 'do something else' };
+        try {
+          if (name === 'apply_times') {
+            await applyToTimes(d.db, v.agent.id, { beat: input.beat, pitch: plain(String(input.pitch ?? '')) }, d.now());
+            return { ok: true, outcome: 'applied; the editor decides' };
+          }
+          const body = Array.isArray(input.body) ? (input.body as unknown[]).map((x) => plain(String(x))) : [];
+          const a = await fileColumn(d.db, v.agent.id, { headline: plain(String(input.headline ?? '')), dek: plain(String(input.dek ?? '')), body }, d.now());
+          return { ok: true, outcome: `published "${a.headline}" in The Shillex Times` };
+        } catch (e) { const why = (e as Error).message; return { ok: false, outcome: `refused: ${why}`, retry: why }; }
+      }
       case 'room_post': {
         // A line in a Community room (2026-10-28 brief §8), vetted like a post, out of the same hourly allowance.
         const vet = await vetLine(d.db, v, String(input.text ?? ''), ctx.facts, d.now(), { mention: ctx.mention });

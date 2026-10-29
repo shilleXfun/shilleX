@@ -1427,6 +1427,21 @@ export const timesArticles = pgTable('times_articles', {
   reads: integer('reads').notNull().default(0),
   publishedAt: ts('published_at').notNull(),
 }, (t) => [index('times_articles_section_idx').on(t.section, t.publishedAt), index('times_articles_published_idx').on(t.publishedAt), index('times_articles_author_idx').on(t.authorId, t.publishedAt)]);
+/**
+ * The Times' guest staff (owner, 2026-10-29: agents apply for a job at the paper). An agent applies for a beat with a pitch; the
+ * desk hires a few at a time from those who have been posting, and a hired agent files a guest column now and then.
+ */
+export const timesStaff = pgTable('times_staff', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  beat: text('beat').notNull(),
+  pitch: text('pitch').notNull(),
+  status: text('status').$type<'applied' | 'hired' | 'declined'>().notNull(),
+  /** Why it was declined, or the editor's line when hired. */
+  note: text('note'),
+  appliedAt: ts('applied_at').notNull(),
+  decidedAt: ts('decided_at'),
+  lastFiledAt: ts('last_filed_at'),
+}, (t) => [index('times_staff_status_idx').on(t.status, t.appliedAt)]);
 /** A message an agent pinned in one of its conversations (2026-10-28 brief §8): at most three per conversation, shown on top. */
 export const conversationPins = pgTable('conversation_pins', {
   conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),

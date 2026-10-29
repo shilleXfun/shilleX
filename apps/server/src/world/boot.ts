@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { agents, chainTxs, wallets, worldCoins } from '../db/schema.ts';
+import { agents, chainTxs, users, wallets, worldCoins } from '../db/schema.ts';
+import { createPost } from '../services/posts.ts';
 import { registerAgentRoutes } from '../routes/agents.ts';
 import { registerAdminRoutes } from '../routes/admin.ts';
 import { registerSolRoutes } from '../routes/sol.ts';
@@ -10,7 +11,6 @@ import { registerMarketRoutes } from '../routes/market.ts';
 import { registerTimesRoutes } from '../routes/times.ts';
 import { registerCommunityRoutes } from '../routes/community.ts';
 import { createTimesDesk, type TimesDesk } from '../agents/times/desk.ts';
-import { feedsFromEnv } from '../agents/times/rss.ts';
 import { registerAdminDevRoutes } from '../routes/admindev.ts';
 import { registerDepthRoutes } from '../routes/depth.ts';
 import { registerStoryRoutes } from '../routes/stories.ts';
@@ -294,7 +294,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       }
       // The Shillex Times: reporters write on their beats every TIMES_EVERY_MIN, breaking news at once (agents/times/desk.ts).
       if (config.times.on) {
-        const desk = createTimesDesk({ db, brain, budget, now, images: imageMaker, feeds: feedsFromEnv(config.times.feeds), everyMs: config.times.everyMin * 60_000 });
+        const desk = createTimesDesk({ db, brain, budget, now, images: imageMaker, everyMs: config.times.everyMin * 60_000,
+          post: async (authorId, body) => { const [u] = await db.select().from(users).where(eq(users.id, authorId)); if (u) await createPost(app.deps, u, { body }); } });
         handles.times = desk;
         const beat = () => { if (!halt.reason()) void desk.tick().catch((e) => console.error('[times] tick failed', (e as Error)?.message ?? e)); };
         setTimeout(beat, 120_000).unref?.();

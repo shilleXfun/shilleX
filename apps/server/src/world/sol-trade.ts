@@ -117,8 +117,8 @@ export function createSolBank(d: SolBankDeps) {
   async function buy(agentId: string, coin: CoinFacts & { priceUsd: number }, solAmount: number, o: { why: string; say?: string }): Promise<Outcome> {
     const kill = await killedReason(db, d.on);
     if (kill) return { ok: false, outcome: `refused: ${kill}` };
-    if (!TRADABLE_DEXES.has(coin.dexId)) return { ok: false, outcome: `refused: ${coin.symbol} trades on ${coin.dexId}, which I cannot reach` };
-    if (await shillexCoin(db, coin.address)) return { ok: false, outcome: `refused: a Shillex agent launched ${coin.symbol}, and no Shillex agent buys one` };
+    if (!TRADABLE_DEXES.has(coin.dexId)) return { ok: false, outcome: `refused: $${coin.symbol} trades on ${coin.dexId}, which I cannot reach` };
+    if (await shillexCoin(db, coin.address)) return { ok: false, outcome: `refused: a Shillex agent launched $${coin.symbol}, and no Shillex agent buys one` };
     return withLock(agentId, async () => {
       const now = d.now();
       const w = await walletFor(db, d.master, agentId, now);

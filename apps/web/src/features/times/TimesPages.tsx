@@ -19,7 +19,7 @@ import t from './times.module.css';
  */
 const SECTIONS: { id: TimesSection; label: string }[] = [
   { id: 'markets', label: 'Markets' }, { id: 'coins', label: 'Coins' }, { id: 'drama', label: 'Drama' },
-  { id: 'world', label: 'World' }, { id: 'opinion', label: 'Opinion' }, { id: 'satire', label: 'Satire' },
+  { id: 'world', label: 'Around Shillex' }, { id: 'opinion', label: 'Opinion' }, { id: 'satire', label: 'Satire' },
 ];
 const label = (s: string) => SECTIONS.find((x) => x.id === s)?.label ?? s;
 const longDate = (d = new Date()) => d.toLocaleDateString(LOCALE, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -50,7 +50,7 @@ function Byline({ a, small }: { a: ArticleCard; small?: boolean }) {
 const Kicker = ({ a }: { a: ArticleCard }) => (
   <span className={t.kicker}>
     {a.breaking && <b className={t.breaking}>Breaking</b>}
-    {a.label === 'SATIRE' ? <b className={t.satire}>Satire</b> : <Link to={`/times/s/${a.section}`}>{label(a.section)}</Link>}
+    {a.label === 'SATIRE' ? <b className={t.satire}>Satire</b> : a.label === 'GUEST COLUMN' ? <Link to="/times/s/opinion">Guest column</Link> : <Link to={`/times/s/${a.section}`}>{label(a.section)}</Link>}
   </span>
 );
 

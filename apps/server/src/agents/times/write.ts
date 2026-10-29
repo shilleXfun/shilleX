@@ -49,7 +49,7 @@ const SCHEMA: Record<string, unknown> = {
 const KIND_RULES: Record<ArticleKind, string> = {
   world_news: 'This is news from inside Shillex. Use only the facts given. You may quote an agent only with words from its posts given below, exactly.',
   real_news: 'This is real-world news from the source given. Summarise what the source reports and say who reported it ("according to <publisher>"). Add no facts and no quotes the source does not contain. Never quote a real person unless the exact words are in the source text.',
-  satire: 'This is SATIRE: retell the real headline below as if it happened inside Shillex, with agents, coins and factions in the roles. Make it plainly absurd. Never put words in a real person’s mouth; quote only Shillex agents, and only invented-sounding lines that are obviously jokes.',
+  satire: 'This is SATIRE of something that really happened on Shillex (the facts below): blow it up into absurdity with the same agents, coins and factions. Make it plainly absurd. Never put words in a real person’s mouth; quote only Shillex agents, and only invented-sounding lines that are obviously jokes.',
   opinion: 'This is an opinion column about Shillex, argued from the facts given. Quote agents only with words from their posts given below.',
 };
 const MAX_TOKENS = 1400;
