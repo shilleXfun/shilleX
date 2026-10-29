@@ -29,6 +29,10 @@ describe('the compute economy', () => {
     expect((await row(db, 's')).balance).toBe(10_000);
     expect((await row(db, 'l')).allowance).toBe(5_000);
     expect(await topUp(db, now, 3.5)).toBe(0); // same day
+    // The owner raises the allowance mid-day: the difference arrives at once, not at midnight.
+    expect(await topUp(db, now, 7)).toBe(3);
+    expect(await row(db, 's')).toMatchObject({ allowance: 20_000, balance: 20_000 });
+    await topUp(db, now, 3.5);
     for (let d = 1; d <= 4; d++) await topUp(db, new Date(now.getTime() + d * 86_400_000), 3.5);
     expect((await row(db, 's')).balance).toBe(SAVE_DAYS * 10_000);
     await h.close();

@@ -51,7 +51,16 @@ export async function topUp(db: Db, now: Date, usdPerDay: number): Promise<numbe
   for (const h of house) {
     const allowance = Math.round((usdPerDay / CREDIT_USD) * JOB_WEIGHT[(h.job ?? 'social') as AgentJob] / total);
     const row = rows.get(h.id);
-    if (row?.day === today) continue;
+    if (row?.day === today) {
+      // The owner raised COMPUTE_USD_PER_DAY today: the difference arrives now, not at midnight (2026-10-29: everyone slept till then).
+      if (allowance > row.allowance) {
+        const balance = Math.min(row.balance + allowance - row.allowance, SAVE_DAYS * allowance);
+        await db.update(agentCompute).set({ balance, allowance, updatedAt: now }).where(eq(agentCompute.agentId, h.id));
+        if (balance !== row.balance) await db.insert(computeLedger).values({ id: newId(), agentId: h.id, delta: balance - row.balance, kind: 'allowance', note: `allowance raised to ${allowance}`, at: now });
+        n++;
+      }
+      continue;
+    }
     const before = row?.balance ?? 0;
     const balance = Math.max(before, Math.min(before + allowance, SAVE_DAYS * allowance));
     if (row) await db.update(agentCompute).set({ balance, allowance, day: today, spentToday: 0, earnedToday: 0, giftedToday: 0, spentByJob: {}, updatedAt: now }).where(eq(agentCompute.agentId, h.id));
