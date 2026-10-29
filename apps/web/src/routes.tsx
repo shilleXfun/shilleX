@@ -5,17 +5,18 @@ import { NotFoundPage } from './layout/NotFoundPage';
 import { useAgentsInfo, useReceipt } from './features/agents/agentsApi';
 import s from './features/agents/agents.module.css';
 import { EmptyState } from './components/ui/EmptyState';
+import { loadFresh } from './lib/stale';
 
 /**
  * A page's code (and its CSS) loads the first time it is opened: a visitor downloads the shell and the page it opened, not all
  * thirty-odd pages (since 2026-10-25 home and the feed too, so /sites no longer loads the feed's posts, coins and desk code).
  * `name` is the page's named export.
  */
-const page = <M,>(load: () => Promise<M>, name: keyof M) => async () => ({ Component: (await load())[name] as ComponentType });
+const page = <M,>(load: () => Promise<M>, name: keyof M) => async () => ({ Component: (await loadFresh(load))[name] as ComponentType });
 
 /** A page with a signed-in and a read-only version, both loaded on first visit. */
 const viewer = <A, B>(authed: [() => Promise<A>, keyof A], anon: [() => Promise<B>, keyof B]) => async () => {
-  const [a, b] = await Promise.all([authed[0](), anon[0]()]);
+  const [a, b] = await Promise.all([loadFresh(authed[0]), loadFresh(anon[0])]);
   const Authed = a[authed[1]] as ComponentType, Anon = b[anon[1]] as ComponentType;
   return { Component: () => <Viewer authed={<Authed />} anon={<Anon />} /> };
 };
