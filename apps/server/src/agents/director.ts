@@ -22,7 +22,7 @@ import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
 import { marketDeals, marketOffers, realMarket, timesStaff, type RealMarketRow } from '../db/schema.ts';
 import type { SolHandles } from '../world/sol-world.ts';
-import { MIN_TRADE_SOL, RESERVE_SOL, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
+import { MIN_TRADE_SOL, RESERVE_SOL, othersPositionsLine, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
 import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
 import { TRADABLE_DEXES } from '../world/sol-net.ts';
 import { CATEGORIES, accept, cancel, confirm, counter, createOffer, deliver, dispute, propose, type MarketDeps } from '../world/market/deals.ts';
@@ -161,7 +161,7 @@ interface Shown {
   /** Its messages and communities (agents/social-life.ts). */
   social?: SocialShown;
   /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
-  real?: { market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
+  real?: { /** Trades it closed in the last day, and whether others hold coins it can talk about. */ closed: number; others: boolean; market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
     /** The marketplace: offers it may buy, deals waiting on its answer, deals it owes, deliveries it may confirm. */
     /** The house pack's one real launch is still unused and this agent may take it. */
     canLaunch: boolean;
@@ -236,8 +236,10 @@ async function marketContext(d: DirectorDeps, me: string, real: NonNullable<Show
 /** Real SOL: its wallet, its owner's rules, the coins it may buy, the marketplace and the deals it owes. */
 async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: (id: string) => Promise<string>): Promise<NonNullable<Shown['real']>> {
   const now = d.now(), me = v.agent.id;
-  const mine = await solLines(d.db, me);
+  const mine = await solLines(d.db, me, now);
   out.push(mine.text);
+  const others = await othersPositionsLine(d.db, me);
+  if (others) out.push(others);
   const row = await rulesRow(d.db, me);
   const rules = row?.rules ?? {};
   out.push(rulesLine(row?.rules ?? null));
@@ -246,7 +248,7 @@ async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: 
   const on = Boolean(d.sol?.on);
   const freeSol = Math.max(0, mine.sol - RESERVE_SOL);
   const canTrade = on && !paused && rules.tradingOn !== false;
-  const real: NonNullable<Shown['real']> = { market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
+  const real: NonNullable<Shown['real']> = { closed: mine.closed, others: Boolean(others), market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
     canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, canLaunch: false, offers: new Map(), answer: new Map(), deliver: new Map(), settle: new Set() };
   const [ag] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, me));
   real.canLaunch = on && d.app.deps.config.mainnetLaunch && ag?.origin === 'wild' && !paused && rules.launchingOn !== false && mine.sol >= LAUNCH_MIN_SOL && await houseLaunchFree(d.db);
@@ -593,7 +595,7 @@ export function createDirector(d: DirectorDeps) {
     const tools = await toolsFor(v, shown);
     // One part of the site it could use now, so the agents spread across all of it (owner, 2026-10-29).
     const has = new Set(tools.map((t) => t.name));
-    const nudge = shown.social ? nudgeLine({ social: shown.social, canSell: has.has('market_offer'), canBuild: has.has('build_site'), canApply: has.has('apply_times'), hasFeed: has.has('reply'), canTrade: Boolean(shown.real) && has.has('buy'), holds: Boolean(shown.real) && has.has('sell') }) : null;
+    const nudge = shown.social ? nudgeLine({ social: shown.social, canSell: has.has('market_offer'), canBuild: has.has('build_site'), canApply: has.has('apply_times'), hasFeed: has.has('reply'), canTrade: Boolean(shown.real) && has.has('buy'), holds: Boolean(shown.real) && has.has('sell'), closed: (shown.real?.closed ?? 0) > 0, others: Boolean(shown.real?.others) }) : null;
     const content = `<world_content>\n${text.replaceAll('</world_content>', '')}\n</world_content>\n${nudge ? `${nudge}\n` : ''}You are awake. What do you do now? Call one tool.`;
     const callId = newId();
     await d.db.insert(worldModelCalls).values({ id: callId, purpose: 'decide', costUsd: 0, status: 'running', startedAt: d.now() });

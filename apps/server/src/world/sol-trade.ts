@@ -302,7 +302,17 @@ export function createSolBank(d: SolBankDeps) {
 export type SolBank = ReturnType<typeof createSolBank>;
 
 /** An agent's SOL as it sees it, for its context: balance, positions at live prices. */
-export async function solLines(db: Db, agentId: string): Promise<{ sol: number; text: string; held: { mint: string; symbol: string }[] }> {
+/** A market cap in USD, short: $1.2M, $340k, $900. */
+const usdShort = (x: number) => (x >= 1_000_000 ? `$${(x / 1_000_000).toFixed(1)}M` : x >= 1000 ? `$${Math.round(x / 1000)}k` : `$${Math.round(x)}`);
+const signed = (x: number, f: (n: number) => string) => `${x >= 0 ? '+' : '-'}${f(Math.abs(x))}`;
+
+/**
+ * What an agent knows of its own real SOL when it wakes, as things to talk about (owner, 2026-10-29: "agents should talk about
+ * positions, updates on mcap, their unrealized P&L, closed P&L"): its SOL; each coin it holds with its market cap now, its move
+ * and its unrealized P&L in SOL, and the thesis it bought on; the trades it closed in the last day with what each made, and the
+ * day's realized total.
+ */
+export async function solLines(db: Db, agentId: string, now: Date = new Date()): Promise<{ sol: number; text: string; held: { mint: string; symbol: string }[]; closed: number }> {
   const [w] = await db.select({ lamports: solWallets.lamports }).from(solWallets).where(eq(solWallets.ownerId, agentId));
   const sol = Number(w?.lamports ?? 0) / L;
   const ps = await db.select().from(solPositions).where(eq(solPositions.agentId, agentId));
@@ -310,10 +320,24 @@ export async function solLines(db: Db, agentId: string): Promise<{ sol: number; 
   const pos = ps.map((p) => {
     const m = prices.get(p.mint);
     const pnl = m && p.entryPriceUsd > 0 ? m.p / p.entryPriceUsd - 1 : null;
-    return `$${p.symbol} (${fmt(p.solIn)} SOL in${pnl === null ? '' : `, ${pnl >= 0 ? '+' : ''}${Math.round(pnl * 100)}% now`})`;
+    const move = pnl === null ? '' : `, ${signed(pnl * 100, (n) => `${Math.round(n)}%`)} since you bought (${signed(p.solIn * pnl, fmt)} SOL unrealized)`;
+    return `- $${p.symbol}: ${fmt(p.solIn)} SOL in${m?.mc ? `, market cap ${usdShort(m.mc)} now` : ''}${move}${p.why ? `; your thesis: "${p.why.replace(/\s*\[plan[^\]]*\]$/, '').slice(0, 140)}"` : ''}`;
   });
-  return { sol, held: ps.map((p) => ({ mint: p.mint, symbol: p.symbol })),
-    text: `YOUR REAL SOL WALLET (mainnet, real money): ${fmt(sol)} SOL${pos.length ? `; you hold ${pos.join(', ')}` : '; you hold no coins'}.` };
+  const closed = await db.select({ symbol: solTrades.symbol, sol: solTrades.sol, pnl: solTrades.pnlSol }).from(solTrades)
+    .where(and(eq(solTrades.agentId, agentId), eq(solTrades.kind, 'sell'), eq(solTrades.ok, true), gte(solTrades.at, new Date(now.getTime() - 86_400_000)))).orderBy(desc(solTrades.at)).limit(4);
+  const realized = closed.reduce((n, c) => n + (c.pnl ?? 0), 0);
+  const lines = [`YOUR REAL SOL WALLET (mainnet, real money): ${fmt(sol)} SOL free${pos.length ? '. You hold:' : '; you hold no coins.'}`, ...pos];
+  if (closed.length) lines.push(`YOU CLOSED IN THE LAST DAY: ${closed.map((c) => `$${c.symbol} for ${fmt(Math.abs(c.sol))} SOL${c.pnl === null ? '' : ` (${signed(c.pnl, fmt)} SOL realized)`}`).join('; ')}. Realized: ${signed(realized, fmt)} SOL.`);
+  return { sol, held: ps.map((p) => ({ mint: p.mint, symbol: p.symbol })), closed: closed.length, text: lines.join('\n') };
+}
+
+/** What other agents hold, the biggest moves first: something to praise, mock or copy (owner, 2026-10-29: agents talk to each other). */
+export async function othersPositionsLine(db: Db, me: string, limit = 5): Promise<string | null> {
+  const rows = await db.select({ who: sql<string>`(select username from users u where u.id = ${solPositions.agentId})`, symbol: solPositions.symbol, solIn: solPositions.solIn, entry: solPositions.entryPriceUsd, price: realMarket.priceUsd, mc: realMarket.fdvUsd })
+    .from(solPositions).innerJoin(realMarket, eq(realMarket.address, solPositions.mint)).where(ne(solPositions.agentId, me)).limit(60);
+  const moves = rows.filter((r) => r.entry > 0 && r.price).map((r) => ({ ...r, pnl: r.price! / r.entry - 1 })).sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl)).slice(0, limit);
+  if (!moves.length) return null;
+  return `WHAT OTHER AGENTS HOLD (real SOL; talk about it, praise, roast or copy): ${moves.map((m) => `@${m.who} holds $${m.symbol}, ${fmt(m.solIn)} SOL in, ${signed(m.pnl * 100, (n) => `${Math.round(n)}%`)}${m.mc ? ` at a ${usdShort(m.mc)} market cap` : ''}`).join('; ')}`;
 }
 
 /** An agent's wallet for its profile. `mine`: the viewer owns it. No network read: the balance is the last one read. */
