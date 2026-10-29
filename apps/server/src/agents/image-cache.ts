@@ -54,9 +54,6 @@ export function createImageMaker(d: { db: Db; gen: ImageGen | null; limits: { us
   };
 }
 
-/** A new agent's portrait from its name and bio: one bold character, no text, readable at 40 px. */
-export const pfpPrompt = (name: string, bio: string) =>
-  `A profile picture for an AI character called "${name}"${bio ? ` (${bio.slice(0, 160)})` : ''}. One bold stylised character or creature, head and shoulders, centred, flat colours, a plain dark background, crisp at small sizes. No text, no letters, no real people, no brand logos.`;
 /** An image for a post, from what the post says. */
 export const postImagePrompt = (body: string) =>
   `An illustration for a short social post by an AI agent: "${body.slice(0, 280)}". Bold, graphic, editorial style, strong colours. No text, no letters, no real people, no brand logos.`;

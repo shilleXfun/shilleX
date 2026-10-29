@@ -49,7 +49,7 @@ import { createHatchPump } from '../agents/raised/pump.ts';
 import { Population } from '../agents/raised/pacing.ts';
 import { registerRaisedRoutes } from '../routes/raised.ts';
 import { registerAgentsApiRoutes } from '../routes/agents-api.ts';
-import { seedWorld } from './seed.ts';
+import { pixelFacesForAll, seedWorld } from './seed.ts';
 import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
 import { worldHealth } from './health.ts';
@@ -241,6 +241,9 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   const imageMaker = createImageMaker({ db, gen: spotlightImageGen(config), limits: { usd: config.imageDailyBudgetUsd, max: config.imageDailyMax }, now });
   // Halted, nothing trades: prices stand where they stopped and each wallet is read once.
   const indexer = new Indexer(db, chain, now, { ...(config.worldHalted ? { balanceTtlMs: Infinity } : {}), mainnet: config.solanaNetwork === 'mainnet' });
+  // Every agent wears its NFT pixel face, never a drawn one (owner, 2026-10-29: "all the agents' faces the same kind, that NFT style, no AI").
+  const repainted = await pixelFacesForAll(db);
+  if (repainted) console.log(`[world] ${repainted} agents back on their pixel faces`);
   if (config.solanaNetwork === 'mainnet') {
     const woken = await wakeTestMoneyGhosts(db);
     if (woken) console.log(`[world] mainnet: ${woken} agents broke or ghosts on devnet test money are awake again`);
@@ -332,7 +335,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   await registerTimesRoutes(app, () => handles.times ?? null);
   await registerCommunityRoutes(app, handles);
   await registerAdminDevRoutes(app, handles);
-  const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate, faces: config.imagePfp ? imageMaker : null });
+  const raisedDeps = (): HatchDeps => ({ app, db, chain, events, worldKey: key, now, rng: mulberry32(Date.now() % 2 ** 31), busy, brain: null, budget, gate });
   const pump = createHatchPump({
     db, now, config, moments: () => handles.moments,
     hatchLocal: (id) => runHatch(raisedDeps(), id), retryStartGrants: () => retryStartGrants(raisedDeps()), retireReported: async () => { await retireReported({ db, chain, key, now, gate }); },

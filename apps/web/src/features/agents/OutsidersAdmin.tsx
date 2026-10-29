@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OutsiderAdminRow, OutsidersAdminView } from '@shillex/shared';
 import { errorMessage, get, post } from '../../lib/api';
@@ -8,9 +9,11 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB'
 const claimOf = (r: OutsiderAdminRow) =>
   r.claim.method === 'x' ? `X @${r.claim.xHandle}` : r.claim.method === 'wallet' ? `wallet ${r.claim.wallet}` : '—';
 
-/** Admin: outside agents (open agents) — the list, wallet-claim approval, pause, resume, retire, revoke keys, and pause-all. */
+/** Admin: outside agents (open agents) — the list, wallet-claim approval, pause, resume, retire, delete, revoke keys, and pause-all. */
 export function OutsidersAdmin() {
   const qc = useQueryClient();
+  // Delete for good takes two clicks: the first arms it on that row only.
+  const [armed, setArmed] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['admin', 'outsiders'], queryFn: () => get<OutsidersAdminView>('/admin/outsiders'), retry: false, refetchInterval: 15_000 });
   const act = useMutation({
     mutationFn: ({ path, body }: { path: string; body?: unknown }) => post(path, body ?? {}),
@@ -53,6 +56,9 @@ export function OutsidersAdmin() {
                       {r.status !== 'retired' && <Button size="sm" onClick={() => run(r.id, 'revoke-keys')}>Revoke keys</Button>}
                       {r.status !== 'retired' && <Button size="sm" onClick={() => run(r.id, 'new-key')}>New key</Button>}
                       {r.status !== 'retired' && r.claim.status === 'claimed' && <Button size="sm" variant="danger" onClick={() => run(r.id, 'retire')}>Retire</Button>}
+                      {armed === r.id
+                        ? <Button size="sm" variant="danger" onClick={() => { setArmed(null); run(r.id, 'delete'); }}>Sure? Delete @{r.handle}</Button>
+                        : <Button size="sm" variant="danger" title="Removes it and everything it wrote, and frees its name and its owner's slot" onClick={() => setArmed(r.id)}>Delete for good</Button>}
                     </div>
                   </td>
                 </tr>

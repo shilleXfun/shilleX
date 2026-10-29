@@ -72,6 +72,23 @@ describe('linking an agent with the owner’s key', () => {
     expect(await t.db.select().from(users).where(eq(users.username, 'secondbot'))).toHaveLength(0);
     await world.stop();
   }, 60_000);
+
+  it('lets an admin delete an outside agent for good, so its owner registers the same handle again', async () => {
+    const { t, world, call, cookie } = await setup({ ADMIN_USERNAMES: 'boss' });
+    const linkKey = (await call('GET', '/api/owner', { cookie })).body.linkKey.key as string;
+    const reg = await call('POST', '/api/v1/agents/register', { body: { handle: 'tinkerbot', name: 'Tinker', bio: 'Builds small things.', link_key: linkKey } });
+    expect((await call('POST', '/api/v1/agent/post', { key: reg.body.api_key, body: { body: 'First day here. Reading the room before I say much.' } })).body).toMatchObject({ ok: true });
+    const boss = await t.createUser('boss');
+    expect((await call('POST', `/api/admin/outsiders/${reg.body.agent.id}/delete`, { cookie })).status).toBe(403);
+    const del = await call('POST', `/api/admin/outsiders/${reg.body.agent.id}/delete`, { cookie: boss.cookie });
+    expect(del.body).toEqual({ deleted: 'tinkerbot' });
+    expect((await call('GET', '/api/owner', { cookie })).body.agents).toEqual([]);
+    expect((await call('GET', '/api/v1/agent/me', { key: reg.body.api_key })).status).toBe(401);
+    const again = await call('POST', '/api/v1/agents/register', { body: { handle: 'tinkerbot', name: 'Tinker', bio: 'Builds small things.', link_key: linkKey } });
+    expect(again.status).toBe(201);
+    expect(again.body.agent.id).not.toBe(reg.body.agent.id);
+    await world.stop();
+  }, 60_000);
 });
 
 describe('the link key after SESSION_SECRET changes', () => {

@@ -25,10 +25,8 @@ import { HATCH_PROMPT_VERSION, HATCH_WORST, type RaisedGate } from './gate.ts';
 import { GrantRefused, canGrant, grantDepsOf, sendGrant } from './grants.ts';
 import { checkHandle, clampTraits } from './rules.ts';
 import { scrubBook, scrubProfile } from './scrub.ts';
-import { drawFace } from '../external/faces.ts';
-import type { ImageMaker } from '../image-cache.ts';
 
-export type HatchDeps = EngineDeps & { brain: AgentBrain | null; budget: ModelBudget; gate: RaisedGate; /** Draws the new agent's face (IMAGE_PFP); null keeps the pixel face. */ faces?: ImageMaker | null };
+export type HatchDeps = EngineDeps & { brain: AgentBrain | null; budget: ModelBudget; gate: RaisedGate };
 export type HatchOutcome = 'done' | 'refused' | 'failed' | 'waiting';
 
 export const HATCH_SCHEMA: Record<string, unknown> = {
@@ -115,7 +113,6 @@ export async function runHatch(d: HatchDeps, requestId: string): Promise<HatchOu
   try {
     const agentId = await completeHatch(d, req, book, profile);
     await setRequest(d, req.id, { status: 'done', agentId, attempted: Boolean(d.brain), finishedAt: d.now() });
-    if (d.faces) void drawFace(d.db, d.faces, agentId);
     return 'done';
   } catch (e) {
     if (isUniqueViolation(e)) return fail('That handle was taken meanwhile; pick another.', Boolean(d.brain));

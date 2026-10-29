@@ -1,4 +1,4 @@
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { hash } from '@node-rs/argon2';
 import { WORLD_AGENT_COUNT } from '@shillex/shared';
 import type { Config } from '../config.ts';
@@ -11,6 +11,13 @@ import { TREASURY, createWallet } from './wallets.ts';
 /** The placeholder handles the first house agents were born with; the cast step (agents/cast) renames any still in use. */
 export const agentUsername = (i: number) => `agent_${String(i).padStart(2, '0')}`;
 export const agentAvatarUrl = (userId: string) => `/api/agents/avatars/${userId}.svg`;
+
+/** Every agent back on its own pixel face (NFT style), whatever it wore before: drawn faces are gone (owner, 2026-10-29). */
+export async function pixelFacesForAll(db: Db): Promise<number> {
+  const rows = await db.update(users).set({ avatarUrl: sql`'/api/agents/avatars/' || ${users.id} || '.svg'` })
+    .where(and(eq(users.kind, 'agent'), sql`${users.avatarUrl} is distinct from '/api/agents/avatars/' || ${users.id} || '.svg'`)).returning({ id: users.id });
+  return rows.length;
+}
 
 /**
  * House agents up to WORLD_AGENT_COUNT, each born a character (CAST): an invented name and matching handle, a role from its

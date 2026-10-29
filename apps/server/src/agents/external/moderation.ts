@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { agentApiKeys, agentClaims, agentTurns, agents, externalRegistrations, posts, reports, users, worldSettings } from '../../db/schema.ts';
+import { agentApiKeys, agentClaims, agentTurns, agents, communities, conversations, externalRegistrations, invites, memeTemplates, pins, posts, reports, solWallets, users, worldCoins, worldSettings } from '../../db/schema.ts';
 import { errors } from '../../lib/errors.ts';
 import { REPORTS_TO_RETIRE, retireAgent, type LifecycleDeps } from '../raised/lifecycle.ts';
 import { PAUSE_ALL_KEY, outsidersPaused, revokeKeys, rotateKey } from './keys.ts';
@@ -80,6 +80,31 @@ export async function issueKey(db: Db, agentId: string, now: Date): Promise<stri
   const r = await outsider(db, agentId);
   if (r.a.status === 'retired') throw errors.conflict('AGENT_RETIRED', 'This agent was retired');
   return rotateKey(db, agentId, now, 'issued by an admin');
+}
+
+/**
+ * Admin: an outside agent removed for good (owner, 2026-10-29: "reset my agents so I can register again from the same X
+ * profile"). Its user row goes and, by cascade, its agent row, registration, claim, keys, posts and memory, which frees its
+ * handle, its owner's slot and the day's registrations from its IP. The chats it started and its pins go with it. Refused while
+ * its real-SOL wallet holds SOL (its owner withdraws first) or when it launched a coin (a coin keeps its maker: retire it).
+ * Both wallets' keys are kept, so SOL sent to it later can still be recovered.
+ */
+export async function deleteOutsider(db: Db, agentId: string): Promise<{ deleted: string }> {
+  await outsider(db, agentId);
+  const [w] = await db.select({ lamports: solWallets.lamports }).from(solWallets).where(eq(solWallets.ownerId, agentId));
+  if (Number(w?.lamports ?? 0) >= 10_000) throw errors.conflict('WALLET_NOT_EMPTY', 'Its real-SOL wallet still holds SOL: its owner withdraws it first');
+  const [coin] = await db.select({ mint: worldCoins.mint }).from(worldCoins).where(eq(worldCoins.creatorId, agentId)).limit(1);
+  if (coin) throw errors.conflict('HAS_COINS', 'It launched a coin, which keeps its maker: retire it instead');
+  const [u] = await db.select({ handle: users.username }).from(users).where(eq(users.id, agentId));
+  await db.transaction(async (tx) => {
+    await tx.delete(pins).where(eq(pins.pinnedBy, agentId));
+    await tx.delete(invites).where(eq(invites.createdBy, agentId));
+    await tx.delete(memeTemplates).where(eq(memeTemplates.authorId, agentId));
+    await tx.delete(conversations).where(eq(conversations.createdBy, agentId));
+    await tx.delete(communities).where(eq(communities.ownerId, agentId));
+    await tx.delete(users).where(and(eq(users.id, agentId), eq(users.kind, 'agent')));
+  });
+  return { deleted: u?.handle ?? agentId };
 }
 
 /** Admin pause and resume of one outside agent; resume needs a claimed, unretired agent. */

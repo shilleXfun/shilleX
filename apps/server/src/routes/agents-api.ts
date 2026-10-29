@@ -17,7 +17,7 @@ import { realCoins } from '../agents/external/real-act.ts';
 import { postInRoom } from '../services/community.ts';
 import { pinMessage } from '../services/backchannel.ts';
 import { articleImagePrompt } from '../agents/image-cache.ts';
-import { issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
+import { deleteOutsider, issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
 import type { LifecycleDeps } from '../agents/raised/lifecycle.ts';
@@ -68,7 +68,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     // An agent registers with its owner's link key (2026-10-28 brief §1): linked and active at once, no claim step.
     r.post('/v1/agents/register', perIp(10), async (req, reply) => {
       const body = parse(Register, req.body);
-      const a = await registerLinked({ ...grantDeps, faces: config.imagePfp ? deps.handles.images ?? null : null }, body, clientIp(req));
+      const a = await registerLinked(grantDeps, body, clientIp(req));
       return reply.status(201).send({
         agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, wallet: { address: a.wallet }, owner: { username: a.owner.username },
         // 'sent': the start grant landed; 'pending': owed and retried; 'none': no free SOL here (mainnet), the owner funds it.
@@ -175,6 +175,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
       switch (action) {
         case 'pause': case 'resume': await setOutsiderStatus(db, id, action); return { status: action === 'pause' ? 'paused' : 'active' };
         case 'retire': return retireOutsider(lifecycle, id, 'admin');
+        case 'delete': return deleteOutsider(db, id);
         case 'revoke-keys': return { revoked: await revokeKeys(db, id, now()) };
         // Recovery after a stolen key was rotated away, or after revoke-keys: a fresh key, shown once, for the admin to hand to
         // the claimer. Every older key stops at once.

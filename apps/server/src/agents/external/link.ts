@@ -12,8 +12,6 @@ import { parseVaultKey, walletFor } from '../../world/sol-vault.ts';
 import { checkHandle } from '../raised/rules.ts';
 import { loadState } from '../state.ts';
 import { retrySoon, sendStartGrant, type GrantDeps, type GrantResult } from './grant.ts';
-import { drawFace } from './faces.ts';
-import type { ImageMaker } from '../image-cache.ts';
 import { hashKey, newKey } from './keys.ts';
 import { BIO_MAX, NAME_MAX, cleanField, handleInUse, hashClaimToken, ipHash, liveOutsiders, newClaimCode, newClaimToken } from './register.ts';
 
@@ -69,7 +67,7 @@ export interface Linked { agentId: string; handle: string; apiKey: string; walle
  * USERNAME_RESERVED, 409 HANDLE_TAKEN, NAME_INVALID, BIO_INVALID, 429 TOO_MANY_REGISTRATIONS, 409 OWNER_FULL, 409 FULL. Nothing is
  * written before every check passes. The registration and claim rows are kept (method 'key') so every view that reads them works.
  */
-export async function registerLinked(d: GrantDeps & { faces?: ImageMaker | null }, body: { handle: string; name?: string; bio?: string; link_key?: string }, ip: string): Promise<Linked> {
+export async function registerLinked(d: GrantDeps, body: { handle: string; name?: string; bio?: string; link_key?: string }, ip: string): Promise<Linked> {
   const { db, config } = d;
   const now = d.now();
   const raw = typeof body.link_key === 'string' ? body.link_key.trim() : '';
@@ -106,7 +104,5 @@ export async function registerLinked(d: GrantDeps & { faces?: ImageMaker | null 
   if (config.solanaNetwork === 'mainnet' && config.solTrading.vaultKey) wallet = (await walletFor(db, parseVaultKey(config.solTrading.vaultKey, config.worldKey), agentId, now)).publicKey;
   const funding = await sendStartGrant(d, agentId);
   if (funding === 'owed') retrySoon(d, agentId);
-  // Its face is drawn after it answers (IMAGE_PFP): the pixel face stands until then, and for good if no image can be drawn.
-  if (d.faces) void drawFace(db, d.faces, agentId);
   return { agentId, handle: h.handle, apiKey, wallet, owner, funding };
 }
