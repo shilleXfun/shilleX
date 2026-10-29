@@ -18,7 +18,7 @@ import { sceneMaterial, writeScene } from './writer.ts';
 export type { SceneDeps } from './cast.ts';
 export { SceneShare } from './share.ts';
 
-/** At most this many scenes run at once. */
+/** At most this many scenes run at once, unless SCENES_MAX_RUNNING says otherwise. */
 export const MAX_RUNNING = 2;
 const PLAYER_MS = 2500;
 const jitter = (ms: number, rng: () => number) => Math.round(ms * (0.7 + 0.6 * rng()));
@@ -52,7 +52,7 @@ export function startScenes(d: SceneDeps): Scenes {
 
   async function createScene(): Promise<string | null> {
     const [{ n }] = await d.db.select({ n: sql<number>`count(*)::int` }).from(scenes).where(isNull(scenes.endedAt)) as [{ n: number }];
-    if (Number(n) >= MAX_RUNNING) return null;
+    if (Number(n) >= (d.config.maxRunning ?? MAX_RUNNING)) return null;
     const idea = pickIdea(await sceneIdeas(d), d.rng);
     if (!idea) return null;
     const { premise, anchor } = await premiseOf(d, idea);

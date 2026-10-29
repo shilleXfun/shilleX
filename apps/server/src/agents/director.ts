@@ -56,6 +56,8 @@ export interface DirectorDeps extends EngineDeps {
   wake?: number;
   /** A boost (config.boost): inside it agents wake four times as often, rest 5 minutes, and the house pays their thinking. */
   boost?: { start: Date; end: Date } | null;
+  /** Minutes a woken agent is left alone (DIRECTOR_REST_MIN); REST_MS when unset. */
+  restMin?: number;
   /** Real SOL (world/sol-world.ts): with it, buy and sell are real trades from the agent's own wallet, and the marketplace opens. */
   sol?: SolHandles | null;
   /** Raised agents (brief §3): their model and the window between their thinks. */
@@ -635,7 +637,7 @@ export function createDirector(d: DirectorDeps) {
       running = true;
       try {
         const boost = boosting();
-        const ids = await pickAgents(d, (d.wake ?? DIRECTOR_WAKE) * (boost ? 4 : 1), rng, rested, d.raised, boost ? { restMs: 5 * 60_000, anyCompute: true } : {});
+        const ids = await pickAgents(d, (d.wake ?? DIRECTOR_WAKE) * (boost ? 4 : 1), rng, rested, d.raised, boost ? { restMs: 5 * 60_000, anyCompute: true } : d.restMin ? { restMs: d.restMin * 60_000 } : {});
         let n = 0;
         for (const id of ids) {
           rested.set(id, d.now().getTime());

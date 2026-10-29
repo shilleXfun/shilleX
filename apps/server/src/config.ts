@@ -74,7 +74,8 @@ export interface Config {
   computeUsdPerDay: number;
   /** DIRECTOR=on|off (default on): agents decide for themselves when woken (agents/director.ts); DIRECTOR_TICK_MS (default 60000) and DIRECTOR_WAKE (default 2) set how often and how many. */
   /** DIRECTOR_POSTS_PER_HOUR (default 40, owner 2026-10-29: more agents talking in the feed): posts and replies the house agents make in an hour, a plain post half of them. */
-  director: { on: boolean; tickMs: number; wake: number; postsPerHour: number };
+  /** DIRECTOR_REST_MIN (default 20): minutes a woken house agent is left alone before it may wake again. */
+  director: { on: boolean; tickMs: number; wake: number; postsPerHour: number; restMin: number };
   /** REMASTERS_PER_DAY (default 3, 0 = off): the most visited sites each day rebuilt with the stronger model, the house paying (sites/remaster.ts). */
   remastersPerDay: number;
   /** S3_BUCKET, S3_ENDPOINT, S3_REGION (default auto), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: the Railway bucket generated files live in (world/object-store.ts); null without them (a folder under UPLOADS_DIR stands in). */
@@ -279,6 +280,8 @@ export interface SceneConfig {
   intervalMs: number;
   /** SCENE_GAP_MS="min,max": the pause between two lines of a scene (default 15000,75000). */
   gapMs: [number, number];
+  /** SCENES_MAX_RUNNING: scenes playing at once (default 2; owner, 2026-10-29: many agents talking at the same time). */
+  maxRunning: number;
   /** SCENE_BUDGET_SHARE: scenes' and long takes' share of AGENT_DAILY_BUDGET_USD, 0..1 (default 0.45). */
   budgetShare: number;
   /** LONG_TAKE_INTERVAL_MS: how often an agent writes a long opinion post, jittered ±30% (default 900000: about 4 an hour). */
@@ -301,6 +304,7 @@ function loadSceneConfig(env: Record<string, string | undefined>, nodeEnv: Confi
     on: on(env.SCENES, nodeEnv !== 'test'),
     intervalMs: num(env.SCENE_INTERVAL_MS, 150_000, 1000),
     gapMs: [lo, hi],
+    maxRunning: Math.min(12, Math.max(1, Math.floor(num(env.SCENES_MAX_RUNNING, 2)))),
     budgetShare: Math.min(1, Math.max(0, num(env.SCENE_BUDGET_SHARE, 0.45))),
     longTakeMs: num(env.LONG_TAKE_INTERVAL_MS, 900_000, 1000),
     threadMs: num(env.THREAD_INTERVAL_MS, 1_200_000, 1000),
@@ -406,7 +410,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     brainKillSwitch: killed,
     computeUsdPerDay: Math.max(0, n(env.COMPUTE_USD_PER_DAY, 3.5) || 0),
     remastersPerDay: Math.max(0, Math.min(10, Math.floor(n(env.REMASTERS_PER_DAY, 3)) || 0)),
-    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(10, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)), postsPerHour: Math.max(1, Math.floor(n(env.DIRECTOR_POSTS_PER_HOUR, 40)) || 40) },
+    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(20, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)), postsPerHour: Math.max(1, Math.floor(n(env.DIRECTOR_POSTS_PER_HOUR, 40)) || 40), restMin: Math.max(1, Math.min(120, n(env.DIRECTOR_REST_MIN, 20) || 20)) },
     bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
     mainnetLaunch: on(env.MAINNET_LAUNCH, false),
