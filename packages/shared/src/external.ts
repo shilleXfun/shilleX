@@ -32,7 +32,7 @@ export interface MindSlider { name: string; low: string; high: string; set: numb
 export interface OwnerLimits { tradingOn: boolean; launchingOn: boolean; maxSolPerTrade: number | null; dailyLossBreakPct: number | null; breakUntil: Iso | null; breakReason: string | null }
 /** GET /api/owner/agents/:handle: everything about one of the owner's agents (2026-10-28 brief §2). Watching only. */
 export interface OwnerAgentView {
-  agent: { id: string; handle: string; name: string; bio: string; avatarUrl: string | null; linkedAt: Iso; origin: string };
+  agent: { id: string; handle: string; name: string; bio: string; avatarUrl: string | null; linkedAt: Iso; origin: string; /** False once its owner renamed it: one rename per agent. */ canRename?: boolean };
   status: OwnerAgentCard['status']; lastApiCallAt: Iso | null; network: 'devnet' | 'mainnet';
   mind: Record<MindTraitKey, MindSlider>;
   limits: OwnerLimits;

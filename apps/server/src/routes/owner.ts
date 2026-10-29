@@ -1,17 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, desc, eq, inArray, isNotNull, isNull, max, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, max, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import type { OwnerAgentCard } from '@shillex/shared';
-import { agentApiKeys, agentRules, agents, userWallets, users, wallets, type UserRow } from '../db/schema.ts';
+import { agentApiKeys, agentRules, agents, users, wallets, worldSettings, type UserRow } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { errors } from '../lib/errors.ts';
 import { parse } from '../lib/validate.ts';
-import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
+import { WalletProofBody } from '../services/wallet-auth.ts';
 import { linkKeyFor, regenerateLinkKey } from '../agents/external/link.ts';
 import { NAME_MAX, cleanField } from '../agents/external/register.ts';
 import { savedRules } from '../agents/external/limits-hard.ts';
 import { mindView, setMind } from '../agents/external/mind.ts';
-import { ownerAgentView, ownerLimits } from '../agents/external/owner-view.ts';
+import { ownerAgentView, ownerLimits, renameKey } from '../agents/external/owner-view.ts';
 import { liveStatus } from '../agents/external/sleeping.ts';
 import { TRAITS } from '../agents/state.ts';
 import type { Trait } from '../agents/types.ts';
@@ -27,7 +27,7 @@ const Settings = z.object({
     tradingOn: z.boolean().optional(), launchingOn: z.boolean().optional(),
     maxSolPerTrade: z.number().min(0.001).max(1000).nullable().optional(), dailyLossBreakPct: z.number().min(0.01).max(0.99).nullable().optional(),
   }).optional(),
-  /** On mainnet, changing the limits takes a fresh signature from a wallet linked to the owner's account, as withdrawals do. */
+  /** Ignored since 2026-10-29: the signed-in owner changes limits; only a withdrawal is signed by a wallet. */
   wallet: WalletProofBody.optional(),
 });
 
@@ -87,15 +87,15 @@ export async function registerOwnerRoutes(app: FastifyInstance, w: Pick<WorldHan
       const a = await ownedAgent(u, req.params.handle);
       const body = parse(Settings, req.body);
       const at = now();
-      let signedBy = `session:${u.id}`;
-      if (body.limits && config.solanaNetwork === 'mainnet') {
-        if (!body.wallet) throw errors.forbidden('WALLET_PROOF_REQUIRED', 'On mainnet, sign with a wallet linked to your account to change the limits');
-        const { address } = await verifyProof(app.deps, body.wallet, 'confirm', u.id);
-        const [linked] = await db.select({ a: userWallets.address }).from(userWallets).where(and(eq(userWallets.address, address), eq(userWallets.userId, u.id), isNotNull(userWallets.verifiedAt)));
-        if (!linked) throw errors.forbidden('WALLET_NOT_LINKED', 'Sign with a wallet linked to your account (Settings → Wallets)');
-        signedBy = address;
+      // Limits only narrow what the agent may do with its own wallet, so the signed-in owner sets them (owner, 2026-10-29: no
+      // wallet signature to change limits). Money leaving the wallet is still signed by the wallet it goes to (routes/sol.ts).
+      const signedBy = `session:${u.id}`;
+      if (body.name !== undefined) {
+        // An agent is renamed once (owner, 2026-10-29): the first rename is claimed before the name changes.
+        const name = cleanField('NAME_INVALID', body.name, NAME_MAX, true);
+        if (!(await db.insert(worldSettings).values({ key: renameKey(a.id), value: at.toISOString() }).onConflictDoNothing().returning()).length) throw errors.conflict('RENAMED_ALREADY', 'An agent can be renamed only once, and this one already was');
+        await db.update(users).set({ displayName: name }).where(eq(users.id, a.id));
       }
-      if (body.name !== undefined) await db.update(users).set({ displayName: cleanField('NAME_INVALID', body.name, NAME_MAX, true) }).where(eq(users.id, a.id));
       if (body.mind) await setMind(db, a.id, body.mind, at);
       if (body.limits) {
         const merged: Record<string, unknown> = { ...((await savedRules(db, a.id)).rules ?? {}) };

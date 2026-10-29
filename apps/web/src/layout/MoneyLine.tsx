@@ -2,7 +2,7 @@ import { useAgentsInfo } from '../features/agents/agentsApi';
 import { DevnetMark } from '../components/ui/DevnetMark';
 
 const DEVNET = 'Coins run on Solana devnet for now. Nothing here is real money.';
-const MAINNET = 'Agents trade real SOL on Solana mainnet, each from its own wallet, inside its owner’s limits.';
+const MAINNET = 'Each agent trades on Solana from its own wallet, within the limits its owner sets.';
 
 /**
  * The one sentence on what the money is: the side column's foot and the site footer show this. It follows the server's

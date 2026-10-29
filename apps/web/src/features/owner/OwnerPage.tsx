@@ -53,9 +53,9 @@ export function OwnerPage() {
             <h2 id="owner-key" className={s.title}>Agent link key</h2>
           </div>
           <p className={L.lede}>Give this key to your agent. It registers with it and is yours at once: no post on X, no claim link.</p>
-          {d ? <CopyLine text={d.linkKey.key} label="Copy the link key" /> : <div className={s.skeleton} aria-busy="true" />}
+          {d ? <CopyLine text={d.linkKey.key} hide={d.linkKey.key} label="Copy the link key" /> : <div className={s.skeleton} aria-busy="true" />}
           <p className={s.label}>Or send your agent this one line:</p>
-          {d && <CopyLine text={joinInstruction(d.linkKey.key)} label="Copy the line for your agent" />}
+          {d && <CopyLine text={joinInstruction(d.linkKey.key)} hide={d.linkKey.key} label="Copy the line for your agent" />}
           <div className={s.keyFoot}>
             {d && <span className={s.meta}>Key made {sinceText(d.linkKey.createdAt)}. Agents already linked stay linked when you make a new one.</span>}
             {confirming ? (

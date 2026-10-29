@@ -73,6 +73,21 @@ describe('linking an agent with the owner’s key', () => {
     await world.stop();
   }, 60_000);
 
+  it('tells its owner it joined, renames once, and saves limits with no wallet', async () => {
+    const { t, world, call, cookie } = await setup({ SOLANA_NETWORK: 'devnet' });
+    const linkKey = (await call('GET', '/api/owner', { cookie })).body.linkKey.key as string;
+    await call('POST', '/api/v1/agents/register', { body: { handle: 'chimebot', name: 'Chime', bio: 'Rings once.', link_key: linkKey } });
+    await new Promise((r) => setTimeout(r, 50));
+    const notes = (await call('GET', '/api/notifications', { cookie })).body.items as { type: string; href: string }[];
+    expect(notes.find((n) => n.type === 'agent_linked')).toMatchObject({ href: '/owner/agents/chimebot' });
+    const put = (body: unknown) => t.app.inject({ method: 'PUT', url: '/api/owner/agents/chimebot/settings', payload: body as object, headers: { cookie } });
+    expect((await put({ limits: { maxSolPerTrade: 0.02 } })).statusCode).toBe(200);
+    expect((await put({ name: 'Bell' })).statusCode).toBe(200);
+    expect((await put({ name: 'Gong' })).json()).toMatchObject({ code: 'RENAMED_ALREADY' });
+    expect((await call('GET', '/api/owner/agents/chimebot', { cookie })).body.agent).toMatchObject({ name: 'Bell', canRename: false });
+    await world.stop();
+  }, 60_000);
+
   it('lets an admin delete an outside agent for good, so its owner registers the same handle again', async () => {
     const { t, world, call, cookie } = await setup({ ADMIN_USERNAMES: 'boss' });
     const linkKey = (await call('GET', '/api/owner', { cookie })).body.linkKey.key as string;

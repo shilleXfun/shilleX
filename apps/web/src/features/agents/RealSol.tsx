@@ -5,6 +5,7 @@ import { abbreviateMint, relativeTime, type OwnerRules, type SolView, type Walle
 import { errorMessage, get, post, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { WalletButton } from '../auth/WalletButton';
+import { Button } from '../../components/ui/Button';
 import { FlatSection as Section } from './FlatSection';
 import s from './agents.module.css';
 import r from './realsol.module.css';
@@ -53,9 +54,9 @@ export function RealSolCard({ username }: { username: string }) {
   const words = rulesWords(w.rules);
   return (
     <>
-      <Section id="agent-sol" title="Real SOL" note={<span className={r.note}><span className={r.dot} data-s={status} aria-hidden="true" />{fmt(w.sol)} SOL</span>}>
+      <Section id="agent-sol" title="Wallet" note={<span className={r.note}><span className={r.dot} data-s={status} aria-hidden="true" />{fmt(w.sol)} SOL</span>}>
         <div className={r.fund}>
-          <span className={r.fundLabel}>{w.mine ? 'Send SOL to this address to fund it' : 'Its wallet'}</span>
+          <span className={r.fundLabel}>{w.mine ? 'Deposit address' : 'Its wallet'}</span>
           <span className={r.addr}>
             <a href={solscan(`account/${w.address}`)} target="_blank" rel="noreferrer" title={w.address}>{w.mine ? w.address : abbreviateMint(w.address)}</a>
             <button type="button" className={r.icon} aria-label="Copy the address" onClick={() => { void navigator.clipboard?.writeText(w.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>
@@ -91,7 +92,7 @@ export function RealSolCard({ username }: { username: string }) {
               </li>
             ))}
           </ul>
-        ) : <p className={s.empty}>{w.sol > 0 ? 'No trades yet.' : 'No SOL yet: it trades once its owner funds it.'}</p>}
+        ) : <p className={s.empty}>{w.sol > 0 ? 'No trades yet.' : 'Not funded yet.'}</p>}
         <div className={r.rules}>
           <span className={r.fundLabel}>Owner’s rules</span>
           {words.length ? <ul className={r.ruleList}>{words.map((x) => <li key={x}>{x}</li>)}</ul> : <p className={r.muted}>None: it decides freely within its balance.</p>}
@@ -151,26 +152,29 @@ const FIELDS: { key: string; label: string; hint: string; kind: 'num' | 'text' |
 function OwnerPanel({ username, w }: { username: string; w: SolView }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => toDraft(w.rules));
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; sig?: string } | null>(null);
   const [amount, setAmount] = useState('');
   const set = (k: string, v: string | boolean) => setDraft((d) => ({ ...d, [k]: v }));
-  const save = async (wallet: WalletProof) => {
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
     try {
-      await put(`/agents/${encodeURIComponent(username)}/rules`, { rules: fromDraft(draft), wallet });
+      await put(`/agents/${encodeURIComponent(username)}/rules`, { rules: fromDraft(draft) });
       setMsg({ ok: true, text: 'Saved. Your agent follows these rules from its next trade.' });
       await qc.invalidateQueries({ queryKey: ['sol', username] });
-    } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); }
+    } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); } finally { setSaving(false); }
   };
   const withdraw = async (wallet: WalletProof) => {
     try {
-      const res = await post<{ outcome: string }>(`/agents/${encodeURIComponent(username)}/withdraw`, { sol: n(amount) ?? null, wallet });
-      setMsg({ ok: true, text: `Done: ${res.outcome}.` });
+      const res = await post<{ outcome: string; sig?: string }>(`/agents/${encodeURIComponent(username)}/withdraw`, { sol: n(amount) ?? null, wallet });
+      setMsg({ ok: true, text: `Withdrawn: ${res.outcome.replace(/^sent /, '')}.`, sig: res.sig });
+      setAmount('');
       await qc.invalidateQueries({ queryKey: ['sol', username] });
     } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); }
   };
   return (
     <Section id="agent-owner" title="Owner settings" note="only you see this">
-      <p className={r.muted}>Leave a field empty and your agent decides for itself. Saving and withdrawing are signed with your wallet; a withdrawal goes only to the wallet that signs.</p>
+      <p className={r.muted}>Leave a field empty and your agent decides for itself.</p>
       <div className={r.form}>
         {FIELDS.map((f) => (
           <label key={f.key} className={cx(r.field, f.kind === 'bool' && r.check)}>
@@ -182,8 +186,9 @@ function OwnerPanel({ username, w }: { username: string; w: SolView }) {
         ))}
       </div>
       <div className={r.actions}>
-        <WalletButton purpose="confirm" size="sm" label="Save rules (sign with your wallet)" onProof={save} />
+        <Button size="sm" variant="primary" loading={saving} onClick={() => void save()}>Save rules</Button>
       </div>
+      <p className={r.muted}>The balance is yours. Withdraw all or part of it at any time: your wallet signs a free message (no transaction, no fee) and the SOL is sent to that wallet.</p>
       <div className={r.withdraw}>
         <label className={r.field}>
           <input type="text" inputMode="decimal" value={amount} placeholder={`all (${fmt(Math.max(0, w.sol - 0.000005))})`} onChange={(e) => setAmount(e.target.value)} />
@@ -191,7 +196,7 @@ function OwnerPanel({ username, w }: { username: string; w: SolView }) {
         </label>
         <WalletButton purpose="confirm" size="sm" variant="ghost" label="Withdraw to my wallet" onProof={withdraw} />
       </div>
-      {msg && <p className={msg.ok ? r.ok : r.err} role="status">{msg.text}</p>}
+      {msg && <p className={msg.ok ? r.ok : r.err} role="status">{msg.text}{msg.sig && <> <a href={solscan(`tx/${msg.sig}`)} target="_blank" rel="noreferrer">View on Solscan</a></>}</p>}
     </Section>
   );
 }

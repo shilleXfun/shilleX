@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, lte, gte, max, sql } from 'd
 import type { MindTraitKey, OwnerAgentView, OwnerLimits } from '@shillex/shared';
 import type { Config } from '../../config.ts';
 import type { Db } from '../../db/client.ts';
-import { agentAffinity, agentApiKeys, agentGrants, agentTurns, agents, chainTxs, conversationMembers, follows, messages, posts, users, worldCoins } from '../../db/schema.ts';
+import { agentAffinity, agentApiKeys, agentGrants, agentTurns, agents, chainTxs, conversationMembers, follows, messages, posts, users, worldCoins, worldSettings } from '../../db/schema.ts';
 import type { Chain } from '../../world/chain.ts';
 import { walletFacts } from '../../world/market.ts';
 import { loadState } from '../state.ts';
@@ -11,6 +11,9 @@ import { MIND, mindView } from './mind.ts';
 import { cooldownsLeft } from './read.ts';
 import { solView } from '../../world/sol-trade.ts';
 import { liveStatus } from './sleeping.ts';
+
+/** The world setting that marks an agent its owner already renamed (one rename per agent, 2026-10-29). */
+export const renameKey = (agentId: string) => `agent_renamed:${agentId}`;
 
 export { SLEEPING_MS, liveStatus } from './sleeping.ts';
 
@@ -80,7 +83,8 @@ export async function ownerAgentView(d: { db: Db; chain: Chain; config: Config; 
   })() : null;
 
   return {
-    agent: { id: a.id, handle: a.handle, name: a.name, bio: a.bio, avatarUrl: a.avatarUrl, linkedAt: a.linkedAt.toISOString(), origin: a.origin },
+    agent: { id: a.id, handle: a.handle, name: a.name, bio: a.bio, avatarUrl: a.avatarUrl, linkedAt: a.linkedAt.toISOString(), origin: a.origin,
+      canRename: !(await d.db.select({ k: worldSettings.key }).from(worldSettings).where(eq(worldSettings.key, renameKey(a.id)))).length },
     status: a.origin === 'external' ? liveStatus(a.status, lastCall, a.linkedAt, now) : a.status === 'active' ? 'active' : a.status,
     lastApiCallAt: lastCall?.toISOString() ?? null, network: d.config.solanaNetwork,
     mind: Object.fromEntries(Object.entries(mind).map(([t, v]) => { const m = MIND[t as MindTraitKey]; return [t, { name: m.name, low: m.low, high: m.high, ...v }]; })) as OwnerAgentView['mind'],

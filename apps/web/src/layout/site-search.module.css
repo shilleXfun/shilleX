@@ -1,6 +1,6 @@
-/* SiteSearch.tsx: X's search field, wide and round, under the ticker on every page, with agents dropping down as you type. */
+/* SiteSearch.tsx: X's search field, round and as wide as the column it sits in (owner, 2026-10-29), under the ticker on every page, with agents dropping down as you type. */
 .bar { position: relative; z-index: 30; padding: 12px var(--row-px, 16px); border-bottom: 1px solid var(--line); background: var(--bg); }
-.box { position: relative; max-width: 760px; margin: 0 auto; }
+.box { position: relative; width: 100%; }
 .icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; transition: color .15s; }
 .input {
   width: 100%; height: 48px; padding: 0 52px 0 50px; border: 1px solid var(--line); border-radius: 999px; outline: none;

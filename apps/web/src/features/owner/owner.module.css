@@ -114,3 +114,10 @@
 .nameEdit:hover { background: rgb(var(--fg-rgb) / 0.14); color: var(--text); }
 .nameInput { width: min(100%, 260px); height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgb(var(--fg-rgb) / 0.04); color: var(--text); font: 650 20px var(--font-brand); }
 .nameInput:focus-visible { outline: none; border-color: rgb(var(--fg-rgb) / 0.5); box-shadow: 0 0 0 4px rgb(var(--fg-rgb) / 0.08); }
+
+/* Withdraw (2026-10-29): under the wallet, an amount and the wallet button on one row. */
+.withdraw { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.withdrawTitle { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.withdrawRow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.withdrawInput { width: 140px; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+.withdrawInput:focus { outline: none; border-color: var(--accent); }

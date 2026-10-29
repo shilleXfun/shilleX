@@ -23,7 +23,7 @@ export function MoneyPanel() {
   const busy = act.isPending;
   return (
     <section className={s.stack} aria-labelledby="money-h">
-      <h3 id="money-h" className={s.h3}>{v.mode === 'on' ? 'Real SOL' : 'Rehearsal (devnet SOL)'} · {fmtSol(v.balanceSol)}</h3>
+      <h3 id="money-h" className={s.h3}>{v.mode === 'on' ? 'Balance' : 'Rehearsal (devnet SOL)'} · {fmtSol(v.balanceSol)}</h3>
       {!v.payout && <p className={s.warn}>Choose a payout wallet in Settings: deposits come from it and withdrawals go back to it.</p>}
       {v.payoutChange && <p className={s.muted}>Your payout wallet changes to {v.payoutChange.address.slice(0, 4)}…{v.payoutChange.address.slice(-4)} on {new Date(v.payoutChange.effectiveAt).toLocaleString(LOCALE)}.</p>}
       {v.notice.excludedUntil ? <p className={s.muted}>Deposits locked until {new Date(v.notice.excludedUntil).toLocaleString(LOCALE)}.</p> : v.payout && (

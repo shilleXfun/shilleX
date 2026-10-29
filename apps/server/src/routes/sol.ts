@@ -7,6 +7,7 @@ import { agentRules, agents, serviceOrders, solPositions, solWallets, userWallet
 import { errors } from '../lib/errors.ts';
 import { requireUser } from '../lib/auth.ts';
 import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
+import { WALLET_IN_USE, notifySignInChange } from '../services/wallets.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { normalizeRules } from '../world/sol-rules.ts';
 import { ESCROW, killedReason, setKilled, solView } from '../world/sol-trade.ts';
@@ -18,7 +19,7 @@ import { fundingTransactions } from '../world/sol-net.ts';
  * change the rules or withdraw, and each time with a fresh wallet signature (`confirm`) by a wallet linked to the owner's
  * account; a withdrawal goes only to that signing wallet. The owner of a house agent is an admin; of a raised one, who raised it.
  */
-const RulesBody = z.object({ rules: z.record(z.string(), z.unknown()), wallet: WalletProofBody });
+const RulesBody = z.object({ rules: z.record(z.string(), z.unknown()), wallet: WalletProofBody.optional() });
 const WithdrawBody = z.object({ sol: z.number().positive().max(1e6).nullish(), wallet: WalletProofBody });
 const KillBody = z.object({ stopped: z.boolean() });
 const FundBody = z.object({ from: z.string(), sol: z.number().min(0.001).max(10), agents: z.array(z.string().min(1).max(40)).min(1).max(200) });
@@ -33,13 +34,27 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
     return a;
   };
   const owns = (u: UserRow | null | undefined, a: { origin: string; ownerId: string | null }) => Boolean(u && (a.ownerId ? a.ownerId === u.id : a.origin === 'wild' && isAdmin(u)));
-  /** The owner, proven again by a signature from one of its linked wallets; returns that wallet. */
-  const signedOwner = async (req: FastifyRequest, a: { origin: string; ownerId: string | null }, proof: z.infer<typeof WalletProofBody>) => {
+  const ownerOf = (req: FastifyRequest, a: { origin: string; ownerId: string | null }) => {
     const u = requireUser(req);
     if (!owns(u, a)) throw errors.forbidden('NOT_OWNER', 'Only this agent\'s owner can do that');
-    const { address } = await verifyProof(app.deps, proof, 'confirm', u.id);
-    const [linked] = await db.select({ a: userWallets.address }).from(userWallets).where(and(eq(userWallets.address, address), eq(userWallets.userId, u.id), isNotNull(userWallets.verifiedAt)));
-    if (!linked) throw errors.forbidden('WALLET_NOT_LINKED', 'Sign with a wallet linked to your account (Settings → Wallets)');
+    return u;
+  };
+  /**
+   * The wallet a withdrawal goes to: the one that signs it, so SOL only ever leaves for a wallet its owner proved they hold.
+   * A wallet not linked to the account yet is linked by that same signature (with the security notice linking always sends);
+   * one linked to another account is refused.
+   */
+  const payoutTo = async (req: FastifyRequest, a: { origin: string; ownerId: string | null }, proof: z.infer<typeof WalletProofBody>) => {
+    const u = ownerOf(req, a);
+    const { address, walletName } = await verifyProof(app.deps, proof, 'confirm', u.id);
+    const [held] = await db.select().from(userWallets).where(eq(userWallets.address, address));
+    if (held && held.userId !== u.id) throw errors.conflict('WALLET_IN_USE', WALLET_IN_USE);
+    if (!held?.verifiedAt) {
+      const at = app.deps.now();
+      await db.insert(userWallets).values({ address, userId: u.id, walletName, verifiedAt: at, createdAt: at })
+        .onConflictDoUpdate({ target: userWallets.address, set: { verifiedAt: at, walletName } });
+      await notifySignInChange(app.deps, u.id, 'linked', address);
+    }
     return address;
   };
 
@@ -52,7 +67,8 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
     r.put<{ Params: { username: string } }>('/agents/:username/rules', async (req) => {
       const a = await agentOf(req.params.username);
       const body = RulesBody.parse(req.body);
-      const signer = await signedOwner(req, a, body.wallet);
+      const u = ownerOf(req, a);
+      const signer = `session:${u.id}`;
       const rules = normalizeRules(body.rules);
       const now = app.deps.now();
       // Saving the rules again also lifts a pause a loss limit set (its count starts over from now).
@@ -65,7 +81,7 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
       if (!w.sol) throw errors.badRequest('SOL_OFF', 'Real SOL wallets are not set up on this server');
       const a = await agentOf(req.params.username);
       const body = WithdrawBody.parse(req.body);
-      const to = await signedOwner(req, a, body.wallet);
+      const to = await payoutTo(req, a, body.wallet);
       const res = await w.sol.bank.withdraw(a.id, to, body.sol ? Math.floor(body.sol * 1e9) : null);
       if (!res.ok) throw errors.badRequest('WITHDRAW_FAILED', res.outcome);
       return res;

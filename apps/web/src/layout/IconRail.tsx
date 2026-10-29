@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from 'react-router';
 import { motion } from 'motion/react';
 import { spring } from '../lib/motion';
-import { Activity, AppWindow, Bot, Coins, FileText, House, Info, LogIn, MessagesSquare, Newspaper, Plus, Store, type LucideIcon, ScrollText, UsersRound } from 'lucide-react';
+import { Activity, AppWindow, Bell, Bot, CircleUser, Coins, FileText, House, Info, KeyRound, LogIn, MessagesSquare, Newspaper, Plus, Store, type LucideIcon, ScrollText, Users, UsersRound } from 'lucide-react';
 import { REPO_URL, type MeView } from '@shillex/shared';
 import { LogoMark, Wordmark } from '../components/brand/Wordmark';
 import { GitHubMark } from '../components/brand/GitHubMark';
@@ -16,11 +16,11 @@ type IconType = LucideIcon | typeof GitHubMark;
 export interface RailItem { to: string; label: string; icon: IconType; end?: boolean; badge?: number; dot?: boolean; authed?: boolean; world?: boolean; search?: true; href?: string }
 
 /**
- * What a spectator needs, in rail order (X's rail, cut to Shillex): the world's sections, then a hairline and the small
- * print. Personal pages (notifications, bookmarks, communities, discover, settings) live in the account menu. `world`
- * ones need an agent world; `href` leaves the app.
+ * What a spectator needs, in rail order (X's rail, cut to Shillex): the world's sections; for a signed-in person their own
+ * pages (owner, 2026-10-29: not hidden behind the profile picture); then the small print. Bookmarks, discover and settings stay
+ * in the account menu. `world` ones need an agent world; `href` leaves the app.
  */
-export function railItems(): RailItem[][] {
+export function railItems(me?: MeView | null): RailItem[][] {
   return [[
     { to: '/', label: 'Home', icon: House, end: true },
     { to: '/feed', label: 'Feed', icon: Activity },
@@ -31,6 +31,11 @@ export function railItems(): RailItem[][] {
     { to: '/times', label: 'The Shillex Times', icon: Newspaper, world: true },
     { to: '/messages', label: 'Chats', icon: MessagesSquare, world: true },
     { to: '/community', label: 'Community', icon: UsersRound, world: true },
+  ], [
+    { to: '/notifications', label: 'Notifications', icon: Bell, authed: true, badge: me?.unreadNotifications || undefined },
+    { to: '/owner', label: 'Your agents', icon: KeyRound, authed: true },
+    { to: me ? `/u/${me.username}` : '/login', label: 'Profile', icon: CircleUser, authed: true },
+    { to: '/communities', label: 'Communities', icon: Users, authed: true },
   ], [
     { to: '/about', label: 'About Shillex', icon: Info },
     { to: '/whitepaper', label: 'Whitepaper', icon: ScrollText },
@@ -51,15 +56,17 @@ export function IconRail({ me }: { me: MeView | null }) {
   const { pathname, search } = useLocation();
   const world = useAgentWorld();
   const demo = useAgentsInfo().isError;
-  const groups = railItems().map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
+  const groups = railItems(me).map((g) => g.filter((i) => (me || !i.authed) && (world || !i.world)));
+  // The sections' headings on the wide rail: the world, then your own pages, then the small print.
+  const groupClass = [undefined, s.railYou, s.railMinor];
   // A visitor who logs in comes back to the page they were on (Home needs no hint).
   const here = pathname + search, back = here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   return (
     <nav className={s.rail} aria-label="Main">
       <Link to="/" className={s.railLogo} aria-label="Shillex home"><span className={s.markSmall}><LogoMark size={30} enter /></span><span className={s.markWide}><Wordmark size={28} enter /></span></Link>
       {demo && <span className={s.railDemo} title="Seeded people, communities and tokens are fictional.">Demo</span>}
-      {groups.map((g, gi) => (
-        <div key={gi} className={cx(s.railItems, gi > 0 && s.railMinor)}>
+      {groups.map((g, gi) => g.length > 0 && (
+        <div key={gi} className={cx(s.railItems, groupClass[gi])}>
           {g.map((i) => <Item key={i.label} item={i} />)}
         </div>
       ))}

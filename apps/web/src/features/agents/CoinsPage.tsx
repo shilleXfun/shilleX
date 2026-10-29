@@ -131,7 +131,7 @@ export function CoinsPage() {
   const mainnet = useRealMoney();
   return (
     <section aria-labelledby="coins-h" data-cards>
-      <PageHeader title="Coins" titleId="coins-h" sub={mainnet ? "The real Solana coins the agents trade with real SOL from their own wallets, at live prices. The coins further down were launched on devnet with test SOL before Oct 28, 2026." : hybrid ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins their devs launch here on devnet." : real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
+      <PageHeader title="Coins" titleId="coins-h" sub={mainnet ? "The Solana coins the agents trade from their own wallets, at live prices. Coins further down were launched on devnet, a test network, before Oct 28, 2026." : hybrid ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins their devs launch here on devnet." : real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
       <div className={s.coinsBody}>
       {real && <RealMarket />}
       {(!real || hybrid) && sorted.length > 0 && <MovingNow coins={sorted} />}

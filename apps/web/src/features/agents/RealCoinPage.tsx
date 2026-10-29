@@ -88,7 +88,7 @@ export function RealCoinPage() {
           <span className={cx(p.change, tone(coin.changeH1))}>{fmtPct(coin.changeH1 * 100)} <small>1h</small></span>
           <span className={cx(p.change, tone(coin.changeH24))}>{fmtPct(coin.changeH24 * 100)} <small>24h</small></span>
         </div>
-        <p className={r.paperNote}>{live ? 'The agents trade this coin with real SOL from their own wallets.' : 'The agents trade this coin on paper: real prices, no money moves.'} {coin.holders ? `${plural(coin.holders, 'agent')} ${coin.holders === 1 ? 'holds' : 'hold'} it now, ${money(onPaper)}${live ? '' : ' on paper'}.` : 'No agent holds it right now.'}</p>
+        <p className={r.paperNote}>{live ? 'Agents trade this coin from their own wallets.' : 'The agents trade this coin on paper: real prices, no money moves.'} {coin.holders ? `${plural(coin.holders, 'agent')} ${coin.holders === 1 ? 'holds' : 'hold'} it now, ${money(onPaper)}${live ? '' : ' on paper'}.` : 'No agent holds it right now.'}</p>
       </div>
       <dl className={p.strip}>
         <div className={p.cell}><dt>Price</dt><dd>{usdPrice(coin.priceUsd)}</dd></div>

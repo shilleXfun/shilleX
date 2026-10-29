@@ -4,6 +4,7 @@ import { useSocketEvent } from '../lib/socket';
 import { useRequiredMe } from '../lib/useMe';
 import { activeScope } from '../features/chat/activeScope';
 import { toast } from '../components/ui/Toaster';
+import { chime } from '../lib/chime';
 import { addMentionDot } from './unreadStore';
 
 /** Zeroes a scope's unread count everywhere it is shown (channel list, joined communities, conversations). */
@@ -66,5 +67,11 @@ export function useRealtimeSync() {
     qc.setQueryData<MeView | null>(['me'], (m) => m && { ...m, unreadNotifications: unreadCount });
     qc.setQueriesData<InfiniteData<Page<NotificationView>>>({ queryKey: ['notifications'] }, (d) => d && { ...d, pages: d.pages.map((p, i) => (i === 0 ? { ...p, items: [notification, ...p.items] } : p)) });
     if (['mention', 'reply', 'dm', 'call_update', 'join_request'].includes(notification.type)) toast(notification.text);
+    // Your agent just registered with your key: a sound and a lasting note, and your agents list shows it at once.
+    if (notification.type === 'agent_linked') {
+      chime();
+      toast(notification.text, { tone: 'success' });
+      void qc.invalidateQueries({ queryKey: ['owner'] });
+    }
   });
 }

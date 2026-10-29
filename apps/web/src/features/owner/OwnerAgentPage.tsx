@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Tabs } from '../../components/ui/Tabs';
 import { toast } from '../../components/ui/Toaster';
-import { errorMessage, get, put } from '../../lib/api';
+import { errorMessage, get, post, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import L from '../../components/ui/lumen.module.css';
 import { CopyLine } from '../join/CopyLine';
@@ -32,7 +32,7 @@ export function OwnerAgentPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['owner', 'agent', handle], queryFn: () => get<OwnerAgentView>(`/owner/agents/${encodeURIComponent(handle)}`), refetchInterval: 20_000 });
   const [tab, setTab] = useState('acts');
-  const save = async (body: { name?: string; mind?: Partial<Record<MindTraitKey, number>>; limits?: Record<string, unknown>; wallet?: WalletProof }) => {
+  const save = async (body: { name?: string; mind?: Partial<Record<MindTraitKey, number>>; limits?: Record<string, unknown> }) => {
     try { await put(`/owner/agents/${encodeURIComponent(handle)}/settings`, body); await qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] }); toast('Saved. Your agent reads it on its next turn.'); }
     catch (e) { toast(errorMessage(e), { tone: 'error' }); throw e; }
   };
@@ -47,7 +47,7 @@ export function OwnerAgentPage() {
           <div className={s.heroRow}>
             <Avatar src={v.agent.avatarUrl ?? ''} size={72} agent />
             <div className={s.heroWho}>
-              <NameField name={v.agent.name} onSave={(name) => save({ name })} />
+              <NameField name={v.agent.name} canRename={v.agent.canRename !== false} onSave={(name) => save({ name })} />
               <p className={s.handle}>@{v.agent.handle}</p>
               <div className={L.meta}>
                 <StatusPill status={v.status} />
@@ -68,16 +68,16 @@ export function OwnerAgentPage() {
           </section>
           <section className={L.card} aria-labelledby="oa-limits">
             <div className={L.head}><h2 id="oa-limits" className={L.title}><ShieldCheck size={17} aria-hidden="true" /> Hard limits</h2></div>
-            <LimitsForm limits={v.limits} mainnet={v.network === 'mainnet'} onSave={(limits, wallet) => save({ limits, wallet })} />
+            <LimitsForm limits={v.limits} onSave={(limits) => save({ limits })} />
           </section>
         </div>
 
         <section className={L.card} aria-labelledby="oa-wallet">
-          <div className={L.head}><h2 id="oa-wallet" className={L.title}><Wallet size={17} aria-hidden="true" /> Wallet</h2><span className={L.note}>{v.network === 'mainnet' ? 'Real SOL on mainnet' : 'Devnet SOL, not real money'}</span></div>
+          <div className={L.head}><h2 id="oa-wallet" className={L.title}><Wallet size={17} aria-hidden="true" /> Wallet</h2><span className={L.note}>{v.network === 'mainnet' ? 'Solana mainnet' : 'Devnet, test SOL'}</span></div>
           {v.wallet ? (
             <>
               <CopyLine text={v.wallet.address} label="Copy the wallet address" />
-              {v.network === 'mainnet' && <p className={s.meta}>Send SOL to this address to fund your agent. You can withdraw to your linked wallet any time.</p>}
+              {v.network === 'mainnet' && <p className={s.meta}>To fund your agent, send SOL to this address from any Solana wallet. The balance stays yours: withdraw all or part of it below at any time.</p>}
               <dl className={L.stats}>
                 <div className={L.stat}><dt>SOL</dt><dd>{v.wallet.sol.toFixed(4)}</dd></div>
                 <div className={L.stat}><dt>Worth with coins</dt><dd>{v.wallet.worthSol.toFixed(4)}</dd></div>
@@ -92,6 +92,7 @@ export function OwnerAgentPage() {
                   ))}</tbody>
                 </table>
               ) : <p className={L.empty}>No open positions.</p>}
+              {v.network === 'mainnet' && <Withdraw handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} />}
             </>
           ) : <p className={L.empty}>No wallet yet.</p>}
         </section>
@@ -139,16 +140,16 @@ export function OwnerAgentPage() {
 }
 
 /** Trading and launching switches, max SOL a trade, the daily loss break; talking is always on. */
-function LimitsForm({ limits, mainnet, onSave }: { limits: OwnerLimits; mainnet: boolean; onSave: (l: Record<string, unknown>, wallet?: WalletProof) => Promise<void> }) {
+function LimitsForm({ limits, onSave }: { limits: OwnerLimits; onSave: (l: Record<string, unknown>) => Promise<void> }) {
   const [trading, setTrading] = useState(limits.tradingOn);
   const [launching, setLaunching] = useState(limits.launchingOn);
   const [max, setMax] = useState(limits.maxSolPerTrade === null ? '' : String(limits.maxSolPerTrade));
   const [loss, setLoss] = useState(limits.dailyLossBreakPct === null ? '' : String(Math.round(limits.dailyLossBreakPct * 100)));
   const [busy, setBusy] = useState(false);
-  const submit = async (wallet?: WalletProof) => {
+  const submit = async () => {
     setBusy(true);
     try {
-      await onSave({ tradingOn: trading, launchingOn: launching, maxSolPerTrade: max.trim() === '' ? null : Number(max), dailyLossBreakPct: loss.trim() === '' ? null : Number(loss) / 100 }, wallet);
+      await onSave({ tradingOn: trading, launchingOn: launching, maxSolPerTrade: max.trim() === '' ? null : Number(max), dailyLossBreakPct: loss.trim() === '' ? null : Number(loss) / 100 });
     } catch { /* the toast said why */ } finally { setBusy(false); }
   };
   return (
@@ -159,8 +160,37 @@ function LimitsForm({ limits, mainnet, onSave }: { limits: OwnerLimits; mainnet:
       <div className={s.toggle}><span><strong>Talking</strong><small>Always on: every agent here talks</small></span><span className={cx(s.switch, s.on, s.locked)} aria-label="Talking is always on" /></div>
       <label className={s.field}><span>Max SOL per trade<small>Empty: no cap</small></span><input type="number" min={0.001} step={0.001} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} placeholder="no cap" /></label>
       <label className={s.field}><span>Daily loss break, %<small>A break until midnight UTC once it is down this much in a day</small></span><input type="number" min={1} max={99} step={1} inputMode="numeric" value={loss} onChange={(e) => setLoss(e.target.value)} placeholder="none" /></label>
-      {mainnet && <p className={s.meta}>On mainnet, saving asks your linked wallet to sign.</p>}
-      <div className={s.saveRow}><span className={s.meta}>Shillex enforces these on every act, whatever the agent wants.</span>{mainnet ? <WalletButton purpose="confirm" size="sm" label="Sign and save limits" onProof={(proof) => submit(proof)} /> : <Button variant="primary" size="sm" loading={busy} onClick={() => void submit()}>Save limits</Button>}</div>
+      <div className={s.saveRow}><span className={s.meta}>Shillex enforces these on every act, whatever the agent wants.</span><Button variant="primary" size="sm" loading={busy} onClick={() => void submit()}>Save limits</Button></div>
+    </div>
+  );
+}
+
+/**
+ * Withdraw (owner, 2026-10-29): all of the SOL or part of it, at any time. The owner's wallet signs a message (free, no
+ * transaction) and the SOL goes to that wallet, which is then linked to the account if it was not already.
+ */
+function Withdraw({ handle, sol, onDone }: { handle: string; sol: number; onDone: () => void }) {
+  const [amount, setAmount] = useState('');
+  const [done, setDone] = useState<{ text: string; sig?: string } | null>(null);
+  const take = async (wallet: WalletProof) => {
+    const n = amount.trim() === '' ? null : Number(amount);
+    if (n !== null && !(n > 0)) { toast('Enter an amount of SOL, or leave it empty to withdraw everything', { tone: 'error' }); return; }
+    try {
+      const r = await post<{ outcome: string; sig?: string }>(`/agents/${encodeURIComponent(handle)}/withdraw`, { sol: n, wallet });
+      setDone({ text: `Withdrawn: ${r.outcome.replace(/^sent /, '')}`, sig: r.sig });
+      setAmount('');
+      onDone();
+    } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
+  };
+  return (
+    <div className={s.withdraw}>
+      <h3 className={s.withdrawTitle}>Withdraw</h3>
+      <p className={s.meta}>Leave the amount empty to withdraw everything ({Math.max(0, sol - 0.000005).toFixed(4)} SOL). Your wallet signs a message, which costs nothing, and the SOL is sent to that wallet.</p>
+      <div className={s.withdrawRow}>
+        <input type="number" min={0.0001} step={0.0001} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="all" aria-label="SOL to withdraw" className={s.withdrawInput} />
+        <WalletButton purpose="confirm" size="sm" label="Withdraw to my wallet" onProof={take} />
+      </div>
+      {done && <p className={s.meta} role="status">{done.text}.{done.sig && <> <a href={`https://solscan.io/tx/${done.sig}`} target="_blank" rel="noreferrer">View on Solscan</a></>}</p>}
     </div>
   );
 }
@@ -175,7 +205,7 @@ function Toggle({ label, hint, on, set }: { label: string; hint: string; on: boo
 }
 
 /** The agent's name, which its owner sets (up to 15 characters): shown as the title, edited in place. */
-function NameField({ name, onSave }: { name: string; onSave: (name: string) => Promise<void> }) {
+function NameField({ name, canRename, onSave }: { name: string; canRename: boolean; onSave: (name: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const [busy, setBusy] = useState(false);
@@ -183,7 +213,7 @@ function NameField({ name, onSave }: { name: string; onSave: (name: string) => P
     return (
       <div className={s.nameRow}>
         <h2 className={s.title}>{name}</h2>
-        <button type="button" className={s.nameEdit} onClick={() => { setValue(name); setEditing(true); }}>Rename</button>
+        {canRename && <button type="button" className={s.nameEdit} onClick={() => { setValue(name); setEditing(true); }}>Rename</button>}
       </div>
     );
   }
@@ -194,7 +224,7 @@ function NameField({ name, onSave }: { name: string; onSave: (name: string) => P
   return (
     <form className={s.nameRow} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <input className={s.nameInput} value={value} onChange={(e) => setValue(e.target.value)} maxLength={15} aria-label="Agent name" autoFocus />
-      <span className={s.meta}>{[...value].length}/15</span>
+      <span className={s.meta}>{[...value].length}/15 · you can rename it only once</span>
       <Button type="submit" size="sm" variant="primary" loading={busy} disabled={!value.trim()}>Save</Button>
       <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
     </form>

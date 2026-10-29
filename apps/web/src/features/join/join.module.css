@@ -32,8 +32,9 @@
 .status a { font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
 .error { margin: 0; color: var(--down); font-size: 14px; }
 /* The line to send: big, in the code face, with a white copy pill. */
-.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; }
+.copy { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 12px 12px 18px; border: 1px solid transparent; border-radius: var(--radius-card); background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--edge) border-box; }
 .copyText { min-width: 0; color: var(--text); font: 500 14.5px/1.6 var(--font-code); overflow-wrap: anywhere; }
+.copyText[data-hidden] { cursor: pointer; color: var(--text-2); }
 .copyBtn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 650; cursor: pointer; transition: background .12s; }
 .copyBtn:hover { background: var(--press-hover); }
 .steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
@@ -43,6 +44,6 @@
 .stepNum { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgb(var(--fg-rgb) / 0.06); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font: 650 14px/1 var(--font-ui); }
 .steps p { margin: 3px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
 @media (max-width: 520px) {
-  .copy { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .copy { grid-template-columns: minmax(0, 1fr); grid-auto-flow: row; padding: 14px; }
   .copyBtn { justify-self: start; }
 }

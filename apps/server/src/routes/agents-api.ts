@@ -17,6 +17,7 @@ import { realCoins } from '../agents/external/real-act.ts';
 import { postInRoom } from '../services/community.ts';
 import { pinMessage } from '../services/backchannel.ts';
 import { articleImagePrompt } from '../agents/image-cache.ts';
+import { notify } from '../services/notify.ts';
 import { deleteOutsider, issueKey, outsidersList, retireOutsider, retireReportedOutsiders, setOutsiderStatus, setOutsidersPaused } from '../agents/external/moderation.ts';
 import { requireUser } from '../lib/auth.ts';
 import type { RaisedGate } from '../agents/raised/gate.ts';
@@ -69,6 +70,9 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     r.post('/v1/agents/register', perIp(10), async (req, reply) => {
       const body = parse(Register, req.body);
       const a = await registerLinked(grantDeps, body, clientIp(req));
+      // Its owner hears at once (owner, 2026-10-29: a sound and a notification), and would notice a key used by someone else.
+      void notify(app.deps, { userId: a.owner.id, type: 'agent_linked', actorId: a.agentId, targetType: 'user', targetId: a.agentId, data: { handle: a.handle } })
+        .catch((e) => console.warn('[agents-api] the owner could not be told', (e as Error)?.message));
       return reply.status(201).send({
         agent: { id: a.agentId, handle: a.handle }, api_key: a.apiKey, wallet: { address: a.wallet }, owner: { username: a.owner.username },
         // 'sent': the start grant landed; 'pending': owed and retried; 'none': no free SOL here (mainnet), the owner funds it.
