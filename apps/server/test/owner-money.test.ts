@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeTestApp, type TestCtx } from './helpers.ts';
 import { signInProof, testWallet } from './wallet-helpers.ts';
-import { agents, notifications, userWallets, users } from '../src/db/schema.ts';
+import { agents, notifications, solWallets, userWallets, users } from '../src/db/schema.ts';
 import { registerSolRoutes } from '../src/routes/sol.ts';
 import type { WorldHandles } from '../src/world/boot.ts';
 
@@ -46,6 +46,23 @@ describe('the owner\'s money', () => {
     // A stranger, even signing with their own wallet, takes nothing.
     const theirs = testWallet();
     expect((await t.as(stranger).post('/api/agents/tinkerbot/withdraw', { sol: 0.1, wallet: await signInProof(t, theirs, 'confirm', stranger) })).status).toBe(403);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('withdraws to a typed address for the signed-in owner, with a notice, and refuses strangers and bad addresses', async () => {
+    const { owner, stranger, sent } = await setup();
+    const vault = testWallet().address;
+    await t.db.insert(solWallets).values({ ownerId: 'ag1', publicKey: vault, secret: 'x', lamports: 0, createdAt: new Date() });
+    expect((await t.as(owner).post('/api/agents/tinkerbot/withdraw', { sol: 0.25, to: vault })).body.code).toBe('BAD_ADDRESS');
+    const to = testWallet().address;
+    const r = await t.as(owner).post('/api/agents/tinkerbot/withdraw', { sol: 0.25, to });
+    expect(r.status).toBe(200);
+    expect(sent).toEqual([{ agentId: 'ag1', to, lamports: 250_000_000 }]);
+    const [notice] = await t.db.select().from(notifications).where(eq(notifications.type, 'sol_withdrawn'));
+    expect(notice).toMatchObject({ userId: owner.id });
+    expect((await t.as(stranger).post('/api/agents/tinkerbot/withdraw', { sol: 0.25, to })).status).toBe(403);
+    expect((await t.as(owner).post('/api/agents/tinkerbot/withdraw', { sol: 0.25, to: 'not-an-address-at-all-but-long-enough-x' })).body.code).toBe('BAD_ADDRESS');
+    expect((await t.as(owner).post('/api/agents/tinkerbot/withdraw', { sol: 0.0001, to })).body.code).toBe('TOO_LITTLE');
     expect(sent).toHaveLength(1);
   });
 

@@ -21,9 +21,9 @@ import { Meanwhile } from './Meanwhile';
 import L from '../../components/ui/lumen.module.css';
 import s from './notifications.module.css';
 
-const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag, agent_moment: Sparkles, sign_in_change: ShieldAlert, agent_linked: Bot };
+const ICON: Record<NotificationType, typeof Bell> = { reply: MessageCircle, mention: AtSign, follow: UserPlus, reaction: Heart, quote: Quote, repost: Repeat2, dm: MessageCircle, call_update: TrendingUp, token_discussion: TrendingUp, invite: Users, join_request: Users, report_resolved: Flag, agent_moment: Sparkles, sign_in_change: ShieldAlert, agent_linked: Bot, sol_withdrawn: ShieldAlert };
 /** Icon tint by kind: token/call activity is teal, everything social is violet. */
-const TONE: Partial<Record<NotificationType, string>> = { call_update: s.toneToken, token_discussion: s.toneToken, report_resolved: s.toneWarn, agent_moment: s.toneToken, sign_in_change: s.toneWarn, agent_linked: s.toneToken };
+const TONE: Partial<Record<NotificationType, string>> = { call_update: s.toneToken, token_discussion: s.toneToken, report_resolved: s.toneWarn, agent_moment: s.toneToken, sign_in_change: s.toneWarn, agent_linked: s.toneToken, sol_withdrawn: s.toneWarn };
 const FILTERS = [{ id: 'all', label: 'All' }, { id: 'mentions', label: 'Mentions' }, { id: 'calls', label: 'Calls and tokens' }] as const;
 type Filter = (typeof FILTERS)[number]['id'];
 

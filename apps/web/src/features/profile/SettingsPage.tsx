@@ -20,7 +20,7 @@ const PREF_LABELS: Record<NotificationType, string> = {
   invite: 'Community invites', join_request: 'Join requests (communities you moderate)', report_resolved: 'Updates on your reports',
   agent_moment: 'Big moments from agents you follow',
   // Never offered as a toggle: the server leaves security notices out of the preferences.
-  sign_in_change: 'Sign-in changes (always on)', agent_linked: 'An agent joined with your link key (always on)',
+  sign_in_change: 'Sign-in changes (always on)', agent_linked: 'An agent joined with your link key (always on)', sol_withdrawn: 'SOL withdrawn from your agents (always on)',
 };
 
 export function SettingsPage() {

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, count, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
-import { isValidSolanaAddress } from '@shillex/shared';
+import { abbreviateMint, isValidSolanaAddress } from '@shillex/shared';
 import { z } from 'zod';
 import type { UserRow } from '../db/schema.ts';
 import { agentRules, agents, serviceOrders, solPositions, solWallets, userWallets, users } from '../db/schema.ts';
@@ -8,6 +8,7 @@ import { errors } from '../lib/errors.ts';
 import { requireUser } from '../lib/auth.ts';
 import { WalletProofBody, verifyProof } from '../services/wallet-auth.ts';
 import { WALLET_IN_USE, notifySignInChange } from '../services/wallets.ts';
+import { notify } from '../services/notify.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { normalizeRules } from '../world/sol-rules.ts';
 import { ESCROW, killedReason, setKilled, solView } from '../world/sol-trade.ts';
@@ -15,12 +16,16 @@ import { listingsView, ordersView } from '../world/sol-market.ts';
 import { fundingTransactions } from '../world/sol-net.ts';
 
 /**
- * Real SOL routes (2026-10-27). Anyone may see an agent's wallet, positions, trades and its owner's rules. Only its owner may
- * change the rules or withdraw, and each time with a fresh wallet signature (`confirm`) by a wallet linked to the owner's
- * account; a withdrawal goes only to that signing wallet. The owner of a house agent is an admin; of a raised one, who raised it.
+ * Real SOL routes (2026-10-27). Anyone may see an agent's wallet, positions, trades and its owner's rules. Only its signed-in
+ * owner may change the rules or withdraw. A withdrawal goes to the wallet that signs it, or (owner, 2026-10-29: "withdrawal to
+ * an address, with no need to log in with a wallet") to any Solana address the owner types; either way the owner gets an
+ * always-on notice of it. The owner of a house agent is an admin; of a raised one, who raised it.
  */
 const RulesBody = z.object({ rules: z.record(z.string(), z.unknown()), wallet: WalletProofBody.optional() });
-const WithdrawBody = z.object({ sol: z.number().positive().max(1e6).nullish(), wallet: WalletProofBody });
+const WithdrawBody = z.object({ sol: z.number().positive().max(1e6).nullish(), wallet: WalletProofBody.optional(), to: z.string().trim().min(32).max(44).optional() })
+  .refine((b) => Boolean(b.wallet) !== Boolean(b.to), { message: 'Give either a wallet signature or an address' });
+/** A new address on Solana must be left at least its rent (about 0.00089 SOL), so less is refused before anything is sent. */
+export const MIN_TO_ADDRESS_SOL = 0.001;
 const KillBody = z.object({ stopped: z.boolean() });
 const FundBody = z.object({ from: z.string(), sol: z.number().min(0.001).max(10), agents: z.array(z.string().min(1).max(40)).min(1).max(200) });
 
@@ -77,13 +82,25 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
       return { rules };
     });
 
-    r.post<{ Params: { username: string } }>('/agents/:username/withdraw', async (req) => {
+    r.post<{ Params: { username: string } }>('/agents/:username/withdraw', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
       if (!w.sol) throw errors.badRequest('SOL_OFF', 'Real SOL wallets are not set up on this server');
       const a = await agentOf(req.params.username);
       const body = WithdrawBody.parse(req.body);
-      const to = await payoutTo(req, a, body.wallet);
+      const u = ownerOf(req, a);
+      let to: string;
+      if (body.wallet) to = await payoutTo(req, a, body.wallet);
+      else {
+        to = body.to!;
+        if (!isValidSolanaAddress(to)) throw errors.badRequest('BAD_ADDRESS', 'That is not a Solana address');
+        const [own] = await db.select({ k: solWallets.publicKey }).from(solWallets).where(eq(solWallets.ownerId, a.id));
+        if (own?.k === to) throw errors.badRequest('BAD_ADDRESS', "That is this agent's own wallet");
+        if (body.sol && body.sol < MIN_TO_ADDRESS_SOL) throw errors.badRequest('TOO_LITTLE', `Send at least ${MIN_TO_ADDRESS_SOL} SOL to an address`);
+      }
       const res = await w.sol.bank.withdraw(a.id, to, body.sol ? Math.floor(body.sol * 1e9) : null);
       if (!res.ok) throw errors.badRequest('WITHDRAW_FAILED', res.outcome);
+      const [ag] = await db.select({ handle: users.username }).from(users).where(eq(users.id, a.id));
+      await notify(app.deps, { userId: u.id, type: 'sol_withdrawn', actorId: a.id, targetType: 'user', targetId: a.id, data: { handle: ag?.handle ?? '', sol: Number((res.sol ?? 0).toFixed(6)), to: abbreviateMint(to, 4, 4) } })
+        .catch((e) => console.error('[sol] withdrawal notice failed', (e as Error)?.message));
       return res;
     });
 

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, ExternalLink } from 'lucide-react';
-import { abbreviateMint, relativeTime, type OwnerRules, type SolView, type WalletProof } from '@shillex/shared';
-import { errorMessage, get, post, put } from '../../lib/api';
+import { abbreviateMint, relativeTime, type OwnerRules, type SolView } from '@shillex/shared';
+import { errorMessage, get, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
-import { WalletButton } from '../auth/WalletButton';
+import { WithdrawForm } from './WithdrawForm';
 import { Button } from '../../components/ui/Button';
 import { FlatSection as Section } from './FlatSection';
 import s from './agents.module.css';
@@ -12,7 +12,7 @@ import r from './realsol.module.css';
 
 /**
  * An agent's real SOL (2026-10-27): its own mainnet wallet, what it holds at live prices, every movement with its transaction,
- * and its owner's rules. Its owner also sees the rules form and the withdraw form; both are signed with the owner's wallet.
+ * and its owner's rules. Its owner also sees the rules form and the withdraw form.
  */
 export interface SolAnswer { sol: SolView | null; on: boolean; stopped: string | null }
 export const useSol = (username: string) => useQuery({ queryKey: ['sol', username], queryFn: ({ signal }) => get<SolAnswer>(`/agents/${encodeURIComponent(username)}/sol`, signal), refetchInterval: 30_000 });
@@ -148,12 +148,11 @@ const FIELDS: { key: string; label: string; hint: string; kind: 'num' | 'text' |
   { key: 'maxServiceSpendPerDaySol', label: 'Max spend on services per day (SOL)', hint: '', kind: 'num' },
 ];
 
-/** The owner's controls: its rules (empty = the agent decides) and a withdrawal to the signing wallet. */
+/** The owner's controls: its rules (empty = the agent decides) and a withdrawal (WithdrawForm). */
 function OwnerPanel({ username, w }: { username: string; w: SolView }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => toDraft(w.rules));
   const [msg, setMsg] = useState<{ ok: boolean; text: string; sig?: string } | null>(null);
-  const [amount, setAmount] = useState('');
   const set = (k: string, v: string | boolean) => setDraft((d) => ({ ...d, [k]: v }));
   const [saving, setSaving] = useState(false);
   const save = async () => {
@@ -163,14 +162,6 @@ function OwnerPanel({ username, w }: { username: string; w: SolView }) {
       setMsg({ ok: true, text: 'Saved. Your agent follows these rules from its next trade.' });
       await qc.invalidateQueries({ queryKey: ['sol', username] });
     } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); } finally { setSaving(false); }
-  };
-  const withdraw = async (wallet: WalletProof) => {
-    try {
-      const res = await post<{ outcome: string; sig?: string }>(`/agents/${encodeURIComponent(username)}/withdraw`, { sol: n(amount) ?? null, wallet });
-      setMsg({ ok: true, text: `Withdrawn: ${res.outcome.replace(/^sent /, '')}.`, sig: res.sig });
-      setAmount('');
-      await qc.invalidateQueries({ queryKey: ['sol', username] });
-    } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); }
   };
   return (
     <Section id="agent-owner" title="Owner settings" note="only you see this">
@@ -188,14 +179,7 @@ function OwnerPanel({ username, w }: { username: string; w: SolView }) {
       <div className={r.actions}>
         <Button size="sm" variant="primary" loading={saving} onClick={() => void save()}>Save rules</Button>
       </div>
-      <p className={r.muted}>The balance is yours. Withdraw all or part of it at any time: your wallet signs a free message (no transaction, no fee) and the SOL is sent to that wallet.</p>
-      <div className={r.withdraw}>
-        <label className={r.field}>
-          <input type="text" inputMode="decimal" value={amount} placeholder={`all (${fmt(Math.max(0, w.sol - 0.000005))})`} onChange={(e) => setAmount(e.target.value)} />
-          <span>Withdraw SOL</span>
-        </label>
-        <WalletButton purpose="confirm" size="sm" variant="ghost" label="Withdraw to my wallet" onProof={withdraw} />
-      </div>
+      <WithdrawForm handle={username} sol={w.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['sol', username] })} />
       {msg && <p className={msg.ok ? r.ok : r.err} role="status">{msg.text}{msg.sig && <> <a href={solscan(`tx/${msg.sig}`)} target="_blank" rel="noreferrer">View on Solscan</a></>}</p>}
     </Section>
   );

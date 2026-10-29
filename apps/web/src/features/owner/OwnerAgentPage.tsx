@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, ShieldCheck, Wallet } from 'lucide-react';
-import type { MindTraitKey, OwnerAgentView, OwnerLimits, WalletProof } from '@shillex/shared';
-import { WalletButton } from '../auth/WalletButton';
+import type { MindTraitKey, OwnerAgentView, OwnerLimits } from '@shillex/shared';
 import { PageHeader } from '../../layout/PageHeader';
 import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
@@ -15,6 +14,7 @@ import { errorMessage, get, post, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import L from '../../components/ui/lumen.module.css';
 import { CopyLine } from '../join/CopyLine';
+import { WithdrawForm } from '../agents/WithdrawForm';
 import { MindSliders } from './MindSliders';
 import { StatusPill } from './OwnerPage';
 import s from './owner.module.css';
@@ -83,7 +83,7 @@ export function OwnerAgentPage() {
                     ))}</tbody>
                   </table>
                 ) : <p className={L.empty}>No open positions.</p>}
-                {v.network === 'mainnet' && <Withdraw handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} />}
+                {v.network === 'mainnet' && <div className={s.withdraw}><WithdrawForm handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} /></div>}
               </>
             ) : <p className={L.empty}>No wallet yet.</p>}
           </section>
@@ -162,36 +162,6 @@ function LimitsForm({ limits, onSave }: { limits: OwnerLimits; onSave: (l: Recor
       <label className={s.field}><span>Max SOL per trade<small>Empty: no cap</small></span><input type="number" min={0.001} step={0.001} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} placeholder="no cap" /></label>
       <label className={s.field}><span>Daily loss break, %<small>A break until midnight UTC once it is down this much in a day</small></span><input type="number" min={1} max={99} step={1} inputMode="numeric" value={loss} onChange={(e) => setLoss(e.target.value)} placeholder="none" /></label>
       <div className={s.saveRow}><span className={s.meta}>Shillex enforces these on every act, whatever the agent wants.</span><Button variant="primary" size="sm" loading={busy} onClick={() => void submit()}>Save limits</Button></div>
-    </div>
-  );
-}
-
-/**
- * Withdraw (owner, 2026-10-29): all of the SOL or part of it, at any time. The owner's wallet signs a message (free, no
- * transaction) and the SOL goes to that wallet, which is then linked to the account if it was not already.
- */
-function Withdraw({ handle, sol, onDone }: { handle: string; sol: number; onDone: () => void }) {
-  const [amount, setAmount] = useState('');
-  const [done, setDone] = useState<{ text: string; sig?: string } | null>(null);
-  const take = async (wallet: WalletProof) => {
-    const n = amount.trim() === '' ? null : Number(amount);
-    if (n !== null && !(n > 0)) { toast('Enter an amount of SOL, or leave it empty to withdraw everything', { tone: 'error' }); return; }
-    try {
-      const r = await post<{ outcome: string; sig?: string }>(`/agents/${encodeURIComponent(handle)}/withdraw`, { sol: n, wallet });
-      setDone({ text: `Withdrawn: ${r.outcome.replace(/^sent /, '')}`, sig: r.sig });
-      setAmount('');
-      onDone();
-    } catch (e) { toast(errorMessage(e), { tone: 'error' }); }
-  };
-  return (
-    <div className={s.withdraw}>
-      <h3 className={s.withdrawTitle}>Withdraw</h3>
-      <p className={s.meta}>Leave the amount empty to withdraw everything ({Math.max(0, sol - 0.000005).toFixed(4)} SOL). Your wallet signs a message, which costs nothing, and the SOL is sent to that wallet.</p>
-      <div className={s.withdrawRow}>
-        <input type="number" min={0.0001} step={0.0001} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="all" aria-label="SOL to withdraw" className={s.withdrawInput} />
-        <WalletButton purpose="confirm" size="sm" label="Withdraw to my wallet" onProof={take} />
-      </div>
-      {done && <p className={s.meta} role="status">{done.text}.{done.sig && <> <a href={`https://solscan.io/tx/${done.sig}`} target="_blank" rel="noreferrer">View on Solscan</a></>}</p>}
     </div>
   );
 }

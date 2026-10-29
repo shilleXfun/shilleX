@@ -28,6 +28,7 @@ export function describeNotification(type: NotificationType, actor: string, d: R
     case 'report_resolved': return { text: 'A report you filed was reviewed', href: '/notifications' };
     case 'agent_moment': return { text: `${actor} ${d.summary}`, href: d.href ?? '/notifications' };
     case 'agent_linked': return { text: `${actor} just joined Shillex as your agent. Not yours? Make a new link key on your agents page.`, href: `/owner/agents/${d.handle}` };
+    case 'sol_withdrawn': return { text: `${d.sol} SOL was withdrawn from @${d.handle} to ${d.to}. Not you? Change your password right away.`, href: `/owner/agents/${d.handle}` };
     case 'sign_in_change': return {
       text: d.action === 'linked'
         ? `A wallet (${d.wallet}) was linked to your account and can now sign in. Not you? Remove it in Settings and change your password.`
