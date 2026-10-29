@@ -5,18 +5,25 @@ import { AppError } from '../../lib/errors.ts';
 import { ChainError, RAW_PER_TOKEN, type Chain } from '../chain.ts';
 import { recordTx } from '../ledger.ts';
 import { createWallet, signerFor, walletOf } from '../wallets.ts';
+import type { SolBank } from '../sol-trade.ts';
+import { and, eq } from 'drizzle-orm';
+import { solTrades } from '../../db/schema.ts';
 
 /**
  * The marketplace's escrow (2026-10-28 brief §6): one Shillex wallet on the world chain that holds each accepted deal's price
  * until the deal settles. SOL moves by a plain transfer, a Shillex coin by a token transfer. The escrow pays its own network
  * fees; when it runs low the devnet treasury tops it up. Nobody can take money out but the deal code.
+ *
+ * On mainnet (owner, 2026-10-29) the price is real SOL: it moves from the buyer's vault wallet to the vault's escrow wallet and
+ * out again through the real-SOL bank (world/sol-trade.ts escrowIn/escrowOut), each move in the agents' SOL history. Only SOL:
+ * Shillex coins are devnet test coins there.
  */
 export const ESCROW_ID = 'market_escrow';
 const L = 1e9;
 /** Below this the escrow asks the treasury for FEE_TOP_UP, so it can always pay out. */
 const FEE_FLOOR = 10_000_000, FEE_TOP_UP = 20_000_000;
 
-export interface EscrowDeps { db: Db; chain: Chain; key: Buffer; config: Config; now: () => Date }
+export interface EscrowDeps { db: Db; chain: Chain; key: Buffer; config: Config; now: () => Date; /** Mainnet: the real-SOL bank; null when its wallets are not set up. */ bank?: SolBank | null }
 export interface Amount { currency: string; amount: number }
 
 export const isSol = (currency: string) => currency === 'SOL';
@@ -69,5 +76,28 @@ async function move(d: EscrowDeps, fromId: string, toId: string, a: Amount, kind
   }
 }
 
-export const hold = (d: EscrowDeps, buyerId: string, a: Amount) => move(d, buyerId, ESCROW_ID, a, 'escrow_in');
-export const payOut = (d: EscrowDeps, toId: string, a: Amount) => move(d, ESCROW_ID, toId, a, 'escrow_out');
+export const onMainnet = (d: Pick<EscrowDeps, 'config'>) => d.config.solanaNetwork === 'mainnet';
+
+/** Mainnet: real SOL between the agent's vault wallet and the vault's escrow wallet. `dealId` is kept with each move. */
+async function realMove(d: EscrowDeps, agentId: string, a: Amount, way: 'in' | 'out', dealId: string): Promise<string> {
+  if (!isSol(a.currency)) throw new AppError(400, 'SOL_ONLY', 'On mainnet the marketplace takes SOL only');
+  if (!d.bank) throw new AppError(503, 'SOL_OFF', 'Real SOL wallets are not set up on this server');
+  const lamports = Math.round(a.amount * L);
+  if (way === 'out') {
+    // Only what this deal put into the real escrow comes out of it, once: a deal held in devnet test SOL before mainnet has
+    // nothing real behind it, and must never be paid from other deals' SOL.
+    const moved = await d.db.select({ kind: solTrades.kind, sol: solTrades.sol }).from(solTrades).where(and(eq(solTrades.orderId, dealId), eq(solTrades.ok, true)));
+    const held = moved.find((m) => m.kind === 'escrow_in');
+    if (!held) throw new AppError(409, 'NOT_HELD_ON_MAINNET', 'This deal was paid in devnet test SOL before mainnet: there is no real SOL to move');
+    if (moved.some((m) => m.kind === 'escrow_out')) throw new AppError(409, 'ALREADY_PAID', 'This deal was already paid out');
+    if (Math.abs(Math.round(held.sol * L) - lamports) > 1) throw new AppError(409, 'AMOUNT_MISMATCH', 'The payout does not match what was held');
+  }
+  const r = way === 'in' ? await d.bank.escrowIn(agentId, lamports, dealId) : await d.bank.escrowOut(agentId, lamports, dealId);
+  if (r.ok && r.sig) return r.sig;
+  const why = r.outcome.replace(/^(refused|failed): /, '');
+  if (/^refused: I have/.test(r.outcome)) throw insufficient(`The wallet holds too little: ${why}`);
+  throw new AppError(r.outcome.startsWith('refused') ? 409 : 502, 'ESCROW_FAILED', `The transfer did not go through: ${why}`);
+}
+
+export const hold = (d: EscrowDeps, buyerId: string, a: Amount, dealId = '') => (onMainnet(d) ? realMove(d, buyerId, a, 'in', dealId) : move(d, buyerId, ESCROW_ID, a, 'escrow_in'));
+export const payOut = (d: EscrowDeps, toId: string, a: Amount, dealId = '') => (onMainnet(d) ? realMove(d, toId, a, 'out', dealId) : move(d, ESCROW_ID, toId, a, 'escrow_out'));

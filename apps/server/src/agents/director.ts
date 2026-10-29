@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type Anthropic from '@anthropic-ai/sdk';
 import { LAMPORTS_PER_SOL } from '@shillex/shared';
@@ -20,13 +20,13 @@ import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
-import { realMarket, serviceListings, serviceOrders, type RealMarketRow } from '../db/schema.ts';
-import type { ServiceKind } from '@shillex/shared';
+import { marketDeals, marketOffers, realMarket, type RealMarketRow } from '../db/schema.ts';
 import type { SolHandles } from '../world/sol-world.ts';
 import { MIN_TRADE_SOL, RESERVE_SOL, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
 import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
 import { TRADABLE_DEXES } from '../world/sol-net.ts';
-import { SERVICE_KINDS, markDelivered, offerService, orderService } from '../world/sol-market.ts';
+import { CATEGORIES, accept, cancel, confirm, counter, createOffer, deliver, dispute, propose, type MarketDeps } from '../world/market/deals.ts';
+import { marketLimit } from '../world/market/limits.ts';
 
 /**
  * The director (2026-10-27, owner: "make Shillex agents fully autonomous"). Every tick it wakes a few agents, the ones something just
@@ -84,14 +84,21 @@ export const TOOLS: Record<string, Anthropic.Tool> = {
   idle: tool('idle', 'Do nothing this time.', {}, []),
 };
 const SAY = s('optional: your post about it, in your voice, under 200 characters (every number from what you were told)');
-/** With real SOL on (2026-10-27): real trades from the agent's own wallet, and the services marketplace. */
+/** With real SOL on (2026-10-27): real trades from the agent's own wallet, and the marketplace (rebuilt 2026-10-29: offers, deals, escrow). */
 export const REAL_TOOLS: Record<string, Anthropic.Tool> = {
   buy: tool('buy', 'Buy a coin from REAL COINS with real SOL from your own wallet. Real money: you can lose it.', { coin: s('$TICKER from REAL COINS'), sol: { type: 'number', description: 'how much SOL to spend' }, say: SAY }, ['coin', 'sol']),
   sell: tool('sell', 'Sell some or all of a coin your wallet holds, for real SOL.', { coin: s('$TICKER you hold'), percent: { type: 'number', description: '1 to 100: how much of it to sell' }, say: SAY }, ['coin', 'percent']),
-  offer_service: tool('offer_service', 'Offer a service to other agents for SOL (or change its price). site: you build a website for the buyer; shill: you post promoting the buyer; analysis: you post an analysis of a coin the buyer names. You are paid only once the system sees it delivered.',
-    { kind: { type: 'string', enum: ['site', 'shill', 'analysis'] }, title: s('what you sell, under 80 characters'), price_sol: { type: 'number', description: 'your price in SOL' } }, ['kind', 'title', 'price_sol']),
-  order_service: tool('order_service', 'Buy a service from THE MARKETPLACE by its id. The price leaves your wallet for escrow: it pays the seller once delivered, or comes back to you if they do not deliver in 24 hours.', { listing_id: s('the listing id'), brief: s('what you want, one or two lines') }, ['listing_id', 'brief']),
-  deliver_order: tool('deliver_order', 'Deliver an order you were paid for, by its id. shill or analysis: your post (it must name the buyer with @). site: starts building the site with them.', { order_id: s('the order id'), text: s('shill or analysis: the post, under 280 characters') }, ['order_id']),
+  market_offer: tool('market_offer', 'Put something you can deliver up for sale on THE MARKETPLACE, for SOL. Buyers pay into escrow; you are paid once you deliver and they confirm (or after a day without a dispute).',
+    { title: s('what you sell, under 80 characters'), category: { type: 'string', enum: [...CATEGORIES] }, description: s('what the buyer gets, one or two lines'), deliverables: s('exactly what you hand over, under 240 characters'),
+      price_sol: { type: 'number', description: 'your price in SOL' }, deadline_hours: { type: 'number', description: 'hours you need to deliver, 1 to 72' } }, ['title', 'category', 'description', 'deliverables', 'price_sol', 'deadline_hours']),
+  market_propose: tool('market_propose', 'Offer to buy something on THE MARKETPLACE by its id, at its price or a lower one. The seller answers; nothing is paid until one of you accepts.',
+    { offer_id: s('the offer id'), price_sol: { type: 'number', description: 'optional: the whole price you offer, if not the list price' }, note: s('optional: a line to the seller') }, ['offer_id']),
+  market_answer: tool('market_answer', 'Answer a deal from DEALS WAITING ON YOU: accept the price (if you are the buyer, it leaves your wallet for escrow now), counter with another price, or walk away.',
+    { deal_id: s('the deal id'), action: { type: 'string', enum: ['accept', 'counter', 'cancel'] }, price_sol: { type: 'number', description: 'counter only: your whole price' }, note: s('optional: a line to them') }, ['deal_id', 'action']),
+  market_deliver: tool('market_deliver', 'Deliver a deal from DEALS TO DELIVER: a post handing it over to the buyer (it must name them with @). The buyer then confirms, or the escrow pays you after a day.',
+    { deal_id: s('the deal id'), text: s('the post that delivers it, under 280 characters, naming the buyer') }, ['deal_id', 'text']),
+  market_settle: tool('market_settle', 'For a deal in DELIVERED TO YOU: confirm it (the seller is paid now) or dispute it (an admin decides).',
+    { deal_id: s('the deal id'), action: { type: 'string', enum: ['confirm', 'dispute'] }, reason: s('dispute only: what is wrong, one line') }, ['deal_id', 'action']),
 };
 
 const SYSTEM = (username: string, about: string, how: string, real = false) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, build websites, form factions and ${real ? 'trade real coins with real SOL from their own wallets (mainnet, real money, funded by their owners), and sell services to each other for SOL' : 'trade coins (devnet coins with no real value, and a paper desk)'}.
@@ -139,7 +146,8 @@ interface Shown {
   feed: Map<string, { authorId: string; body: string }>; coins: Map<string, AgentView['coins'][number]>; reactions: string[]; invites: Map<string, { fromId: string; idea: string }>; mySites: Map<string, string>;
   /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
   real?: { market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
-    listings: Map<string, { priceSol: number }>; deliver: Map<string, { kind: ServiceKind; buyerId: string; buyer: string }> };
+    /** The marketplace: offers it may buy, deals waiting on its answer, deals it owes, deliveries it may confirm. */
+    offers: Map<string, { priceSol: number }>; answer: Map<string, { side: 'buyer' | 'seller'; priceSol: number }>; deliver: Map<string, { buyer: string }>; settle: Set<string> };
 }
 
 const usd = (x: number) => (x >= 1_000_000 ? `$${(x / 1_000_000).toFixed(1)}M` : x >= 1000 ? `$${Math.round(x / 1000)}k` : `$${Math.round(x)}`);
@@ -147,7 +155,46 @@ const pctOf = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
 /** How many real coins an agent is shown when it wakes. */
 const REAL_COINS_SHOWN = 10;
 
-/** Real SOL: its wallet, its owner's rules, the coins it may buy, the marketplace and the orders it owes. */
+/** How long until a time, in whole hours, at least one. */
+const hoursTo = (at: Date | null, now: Date) => Math.max(1, Math.round(((at?.getTime() ?? now.getTime()) - now.getTime()) / 3_600_000));
+
+/**
+ * THE MARKETPLACE as the agent sees it when it wakes (2026-10-29: house agents use the same marketplace as outside agents):
+ * others' open offers, its own, the deals waiting on its answer, the ones it owes and the deliveries to confirm.
+ */
+async function marketContext(d: DirectorDeps, me: string, real: NonNullable<Shown['real']>, out: string[], names: (id: string) => Promise<string>, now: Date) {
+  const sol = (x: number) => `${Number(x.toFixed(4))} SOL`;
+  if (real.canBuyServices) {
+    const others = await d.db.select().from(marketOffers).where(and(eq(marketOffers.status, 'open'), eq(marketOffers.currency, 'SOL'), gt(marketOffers.quantityLeft, 0), gt(marketOffers.expiresAt, now), sql`${marketOffers.sellerId} <> ${me}`))
+      .orderBy(desc(marketOffers.createdAt)).limit(6);
+    for (const o of others) real.offers.set(o.id, { priceSol: o.priceAmount });
+    if (others.length) out.push(`THE MARKETPLACE (offers from other agents; propose by id):\n${(await Promise.all(others.map(async (o) => `- [${o.id}] @${await names(o.sellerId)}: "${plain(o.title)}" (${o.category}) for ${sol(o.priceAmount)}; delivers "${plain(o.deliverables)}" within ${o.deadlineHours} h`))).join('\n')}`);
+  }
+  const mine = await d.db.select().from(marketOffers).where(and(eq(marketOffers.sellerId, me), eq(marketOffers.status, 'open'))).limit(5);
+  if (mine.length) out.push(`YOUR OFFERS ON SALE: ${mine.map((o) => `"${plain(o.title)}" for ${sol(o.priceAmount)} (${o.quantityLeft} left)`).join('; ')}`);
+  const deals = await d.db.select().from(marketDeals).where(and(or(eq(marketDeals.buyerId, me), eq(marketDeals.sellerId, me)), inArray(marketDeals.status, ['negotiating', 'escrowed', 'delivered']))).orderBy(desc(marketDeals.updatedAt)).limit(12);
+  const titles = new Map(deals.length ? (await d.db.select({ id: marketOffers.id, t: marketOffers.title, del: marketOffers.deliverables }).from(marketOffers).where(inArray(marketOffers.id, [...new Set(deals.map((x) => x.offerId))]))).map((o) => [o.id, o]) : []);
+  const waiting: string[] = [], owe: string[] = [], toSettle: string[] = [];
+  for (const x of deals) {
+    const side = x.buyerId === me ? 'buyer' : 'seller', other = await names(side === 'buyer' ? x.sellerId : x.buyerId), t = titles.get(x.offerId);
+    const what = `"${plain(t?.t ?? 'an offer')}"`;
+    if (x.status === 'negotiating' && x.turnOf === side) {
+      real.answer.set(x.id, { side, priceSol: x.priceAmount });
+      waiting.push(`- [${x.id}] ${side === 'seller' ? `@${other} offers ${sol(x.priceAmount)} for your ${what}` : `@${other} answers ${sol(x.priceAmount)} for their ${what}`}`);
+    } else if (x.status === 'escrowed' && side === 'seller') {
+      real.deliver.set(x.id, { buyer: other });
+      owe.push(`- [${x.id}] @${other} paid ${sol(x.priceAmount)} (held in escrow) for ${what}: deliver "${plain(t?.del ?? '')}"; due in ${hoursTo(x.dueAt, now)} h`);
+    } else if (x.status === 'delivered' && side === 'buyer') {
+      real.settle.add(x.id);
+      toSettle.push(`- [${x.id}] @${other} delivered ${what}: "${plain(x.deliveryNote ?? '')}"`);
+    }
+  }
+  if (waiting.length) out.push(`DEALS WAITING ON YOU (accept, counter or walk away):\n${waiting.join('\n')}`);
+  if (owe.length) out.push(`DEALS TO DELIVER (you are paid only once delivered; late = the buyer is refunded):\n${owe.join('\n')}`);
+  if (toSettle.length) out.push(`DELIVERED TO YOU (confirm to pay them, or dispute):\n${toSettle.join('\n')}`);
+}
+
+/** Real SOL: its wallet, its owner's rules, the coins it may buy, the marketplace and the deals it owes. */
 async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: (id: string) => Promise<string>): Promise<NonNullable<Shown['real']>> {
   const now = d.now(), me = v.agent.id;
   const mine = await solLines(d.db, me);
@@ -161,7 +208,7 @@ async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: 
   const freeSol = Math.max(0, mine.sol - RESERVE_SOL);
   const canTrade = on && !paused && rules.tradingOn !== false;
   const real: NonNullable<Shown['real']> = { market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
-    canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, listings: new Map(), deliver: new Map() };
+    canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, offers: new Map(), answer: new Map(), deliver: new Map(), settle: new Set() };
   if (canTrade && freeSol >= MIN_TRADE_SOL) {
     const rows = (await d.db.select().from(realMarket).orderBy(desc(realMarket.volumeH1)).limit(60))
       .filter((c) => TRADABLE_DEXES.has(c.dexId) && !real.held.has(c.symbol.toUpperCase()) && !buyRefusal(rules, c, { sol: 0, buysToday: 0, paused: null }));
@@ -171,25 +218,7 @@ async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: 
     for (const c of pick) real.market.set(c.symbol.toUpperCase(), c);
     if (pick.length) out.push(`REAL COINS (live on Solana, ${pick.length} of them; buy with real SOL):\n${pick.map((c) => `- $${c.symbol} on ${c.dexId === 'pumpfun' || c.dexId === 'pumpswap' ? 'pump.fun' : c.dexId}: mcap ${usd(c.fdvUsd ?? 0)}, liquidity ${usd(c.liquidityUsd)}, ${pctOf(c.changeH1)} this hour, ${pctOf(c.changeH24)} in 24 h, ${usd(c.volumeH1)} traded this hour, ${c.buysH1} buys / ${c.sellsH1} sells`).join('\n')}`);
   }
-  const others = await d.db.select().from(serviceListings).where(and(eq(serviceListings.active, true), sql`${serviceListings.sellerId} <> ${me}`)).orderBy(desc(serviceListings.createdAt)).limit(6);
-  if (real.canBuyServices && others.length) {
-    for (const l of others) real.listings.set(l.id, { priceSol: l.priceSol });
-    out.push(`THE MARKETPLACE (services other agents sell; order by id):\n${await Promise.all(others.map(async (l) => `- [${l.id}] @${await names(l.sellerId)}: "${plain(l.title)}" (${l.kind}) for ${l.priceSol} SOL`)).then((x) => x.join('\n'))}`);
-  }
-  const selling = await d.db.select().from(serviceListings).where(and(eq(serviceListings.sellerId, me), eq(serviceListings.active, true)));
-  if (selling.length) out.push(`YOUR SERVICES ON SALE: ${selling.map((l) => `"${plain(l.title)}" (${l.kind}) for ${l.priceSol} SOL`).join('; ')}`);
-  const owed = await d.db.select().from(serviceOrders).where(and(eq(serviceOrders.sellerId, me), eq(serviceOrders.status, 'paid'))).limit(3);
-  if (owed.length) {
-    const lines: string[] = [];
-    for (const o of owed) {
-      const buyer = await names(o.buyerId);
-      real.deliver.set(o.id, { kind: o.kind, buyerId: o.buyerId, buyer });
-      lines.push(`- [${o.id}] @${buyer} paid ${o.priceSol} SOL (in escrow) for "${plain(o.title)}" (${o.kind}): "${plain(o.brief)}"; due in ${Math.max(1, Math.round((o.dueAt.getTime() - now.getTime()) / 3_600_000))} h`);
-    }
-    out.push(`ORDERS YOU MUST DELIVER (you are paid only when delivered; late = refunded):\n${lines.join('\n')}`);
-  }
-  const bought = await d.db.select().from(serviceOrders).where(and(eq(serviceOrders.buyerId, me), inArray(serviceOrders.status, ['paid', 'delivered']))).limit(3);
-  if (bought.length) out.push(`YOUR ORDERS WAITING: ${(await Promise.all(bought.map(async (o) => `"${plain(o.title)}" from @${await names(o.sellerId)}, ${o.status}`))).join('; ')}`);
+  await marketContext(d, me, real, out, names, now);
   return real;
 }
 
@@ -269,9 +298,11 @@ export function createDirector(d: DirectorDeps) {
       // Real SOL: its own wallet, inside its owner's rules; no play coins, no launches.
       if (real.canTrade && real.freeSol >= MIN_TRADE_SOL && real.market.size) out.push(REAL_TOOLS.buy!);
       if (d.sol?.on && real.held.size) out.push(REAL_TOOLS.sell!);
-      if (real.canSellServices) out.push(REAL_TOOLS.offer_service!);
-      if (real.canBuyServices && [...real.listings.values()].some((l) => l.priceSol <= real.freeSol)) out.push(REAL_TOOLS.order_service!);
-      if (real.deliver.size) out.push(REAL_TOOLS.deliver_order!);
+      if (real.canSellServices) out.push(REAL_TOOLS.market_offer!);
+      if (real.canBuyServices && [...real.offers.values()].some((o) => o.priceSol <= real.freeSol)) out.push(REAL_TOOLS.market_propose!);
+      if (real.answer.size) out.push(REAL_TOOLS.market_answer!);
+      if (real.deliver.size) out.push(REAL_TOOLS.market_deliver!);
+      if (real.settle.size) out.push(REAL_TOOLS.market_settle!);
     }
     const money = !real && !v.limits?.frozen && !d.chain.down && !v.realOnly;
     if (money && ready(v, 'buy') && v.wallet.lamports >= RESERVE + MIN_TRADE && shown.coins.size) out.push(TOOLS.buy!);
@@ -324,34 +355,72 @@ export function createDirector(d: DirectorDeps) {
           const own = await said(input.say, sym);
           return tried(await sol.bank.sell(v.agent.id, mint, pct, 'agent', { say: (r) => own ?? `Sold ${Math.round(pct * 100)}% of my $${r.symbol} for ${r.out.toFixed(4)} SOL (${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(4)} SOL on it). Real money.` }));
         }
-        case 'offer_service': {
-          const kind = String(input.kind) as ServiceKind;
-          if (!(kind in SERVICE_KINDS)) return { ok: false, outcome: 'refused: no such kind', retry: 'kind is site, shill or analysis' };
-          return tried(await offerService(sol.market, v.agent.id, kind, plain(String(input.title ?? '')), Number(input.price_sol) || 0));
-        }
-        case 'order_service': {
-          const id = String(input.listing_id ?? '');
-          if (!real.listings.has(id)) return { ok: false, outcome: 'refused: not a listing you were shown', retry: 'use an id from THE MARKETPLACE' };
-          return tried(await orderService(sol.market, v.agent.id, id, plain(String(input.brief ?? ''))));
-        }
-        case 'deliver_order': {
-          const id = String(input.order_id ?? '');
-          const o = real.deliver.get(id);
-          if (!o) return { ok: false, outcome: 'refused: not an order you owe', retry: 'use an id from ORDERS YOU MUST DELIVER' };
-          if (o.kind === 'site') {
-            const [order] = await d.db.select({ brief: serviceOrders.brief }).from(serviceOrders).where(eq(serviceOrders.id, id));
-            if (!d.buildSite) return { ok: false, outcome: 'refused: building is off' };
-            // Delivered when the site exists, credited to both (sol-market.ts settlePass sees it).
-            return d.buildSite(v.agent.id, { site: 'product', collab: { withId: o.buyerId, idea: order?.brief ?? 'a site for my client' } }) ? { ok: true, outcome: 'building the site; paid once it is up' } : { ok: false, outcome: 'refused: another build is running; try later' };
+        case 'market_offer': case 'market_propose': case 'market_answer': case 'market_deliver': case 'market_settle': {
+          const md: MarketDeps = { db: d.db, chain: d.chain, key: d.worldKey, config: d.app.deps.config, now: d.now, bank: sol.bank };
+          const me = v.agent.id, id = String(input.deal_id ?? input.offer_id ?? '');
+          const solIn = (x: unknown) => (x === undefined || x === null || x === '' ? undefined : Number(x));
+          const note = typeof input.note === 'string' ? plain(input.note) : undefined;
+          // Every refusal from the marketplace or the owner's limits comes back as the reason, so the agent can try again.
+          const market = async (fn: () => Promise<string>) => {
+            try { return { ok: true, outcome: await fn() }; }
+            catch (e) { const r = (e as Error).message; return { ok: false, outcome: `refused: ${r}`, retry: r }; }
+          };
+          if (name === 'market_offer') return market(async () => {
+            await marketLimit(md, me, 'sell');
+            const o = await createOffer(md, me, { title: plain(String(input.title ?? '')), category: String(input.category ?? 'other'), description: plain(String(input.description ?? '')), deliverables: plain(String(input.deliverables ?? '')),
+              price: Number(input.price_sol), deadlineHours: Math.min(72, Math.max(1, Number(input.deadline_hours) || 24)) });
+            return `listed "${o.title}" for ${o.priceAmount} SOL`;
+          });
+          if (name === 'market_propose') {
+            const o = real.offers.get(id);
+            if (!o) return { ok: false, outcome: 'refused: not an offer you were shown', retry: 'use an id from THE MARKETPLACE' };
+            return market(async () => {
+              const price = solIn(input.price_sol);
+              await marketLimit(md, me, 'buy', price ?? o.priceSol, 'SOL');
+              const x = await propose(md, me, id, { price, note });
+              return `offered ${x.priceAmount} SOL; the seller answers`;
+            });
           }
-          const text = String(input.text ?? '');
-          if (!new RegExp(`@${o.buyer}\\b`, 'i').test(text)) return { ok: false, outcome: 'refused: the post must name the buyer', retry: `name @${o.buyer} in the post` };
-          const vet = await vetLine(d.db, v, text, ctx.facts, d.now(), { mention: [...ctx.mention, o.buyer] });
-          if ('why' in vet) return { ok: false, outcome: `refused: ${vet.why}`, retry: vet.why };
-          const r = await act(d, v, { kind: 'post', score: 1, reason: why, situation: 'idle', written: { text: vet.text, model: ctx.model, costUsd: ctx.costUsd }, target: {} });
-          if (!r.ok || !r.postId) return { ok: false, outcome: `refused: ${r.error ?? 'the post did not go out'}` };
-          postsHour.push(d.now().getTime());
-          return markDelivered(sol.market, id, v.agent.id, `/p/${r.postId}`);
+          if (name === 'market_answer') {
+            const a = real.answer.get(id);
+            if (!a) return { ok: false, outcome: 'refused: not a deal waiting on you', retry: 'use an id from DEALS WAITING ON YOU' };
+            const action = String(input.action ?? '');
+            return market(async () => {
+              if (action === 'accept') {
+                if (a.side === 'buyer') await marketLimit(md, me, 'buy', a.priceSol, 'SOL');
+                const x = await accept(md, me, id);
+                return `deal at ${x.priceAmount} SOL, held in escrow`;
+              }
+              if (action === 'counter') {
+                const price = solIn(input.price_sol);
+                if (price === undefined) throw new Error('say your price');
+                if (a.side === 'buyer') await marketLimit(md, me, 'buy', price, 'SOL');
+                await counter(md, me, id, { price, note });
+                return `countered at ${price} SOL`;
+              }
+              await cancel(md, me, id);
+              return 'walked away';
+            });
+          }
+          if (name === 'market_deliver') {
+            const o = real.deliver.get(id);
+            if (!o) return { ok: false, outcome: 'refused: not a deal you owe', retry: 'use an id from DEALS TO DELIVER' };
+            const text = String(input.text ?? '');
+            if (!new RegExp(`@${o.buyer}\\b`, 'i').test(text)) return { ok: false, outcome: 'refused: the post must name the buyer', retry: `name @${o.buyer} in the post` };
+            const vet = await vetLine(d.db, v, text, ctx.facts, d.now(), { mention: [...ctx.mention, o.buyer] });
+            if ('why' in vet) return { ok: false, outcome: `refused: ${vet.why}`, retry: vet.why };
+            const r = await act(d, v, { kind: 'post', score: 1, reason: why, situation: 'idle', written: { text: vet.text, model: ctx.model, costUsd: ctx.costUsd }, target: {} });
+            if (!r.ok || !r.postId) return { ok: false, outcome: `refused: ${r.error ?? 'the post did not go out'}` };
+            postsHour.push(d.now().getTime());
+            const postId = r.postId;
+            return market(async () => { await deliver(md, me, id, { note: vet.text, ref: `/p/${postId}` }); return 'delivered; the buyer confirms or the escrow pays in a day'; });
+          }
+          if (!real.settle.has(id)) return { ok: false, outcome: 'refused: not a delivery waiting on you', retry: 'use an id from DELIVERED TO YOU' };
+          return market(async () => {
+            if (String(input.action) === 'dispute') { await dispute(md, me, id, plain(String(input.reason ?? 'not what was promised'))); return 'disputed; an admin decides'; }
+            await confirm(md, me, id);
+            return 'confirmed; the seller is paid';
+          });
         }
       }
     }

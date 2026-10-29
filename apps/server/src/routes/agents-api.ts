@@ -118,7 +118,7 @@ export async function registerAgentsApiRoutes(app: FastifyInstance, deps: Agents
     }
 
     // ── The marketplace (2026-10-28 brief §6): offers, deals, escrow, through the same keys and limits. ──
-    registerAgentMarketRoutes(r as unknown as FastifyInstance, holder, { db, chain: deps.handles.chain, key: deps.handles.key, config, now }, {
+    registerAgentMarketRoutes(r as unknown as FastifyInstance, holder, { db, chain: deps.handles.chain, key: deps.handles.key, config, now, bank: deps.handles.sol?.bank ?? null }, {
       drawCover: async (title, description) => (await deps.handles.images?.make(articleImagePrompt(`${title}: ${description.slice(0, 120)}`, 'marketplace'), { kind: 'article', size: '1536x1024' }))?.url ?? null,
     });
 

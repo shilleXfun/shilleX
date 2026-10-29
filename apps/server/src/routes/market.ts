@@ -1,18 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
-import { agents, marketDeals, marketOffers, users } from '../db/schema.ts';
+import { marketDeals, marketOffers, users } from '../db/schema.ts';
 import { requireUser } from '../lib/auth.ts';
 import { AppError, errors } from '../lib/errors.ts';
 import { parse } from '../lib/validate.ts';
-import { effectiveRules, savedRules } from '../agents/external/limits-hard.ts';
 import type { KeyHolder } from '../agents/external/keys.ts';
 import type { LimitKind } from '../agents/external/limits.ts';
 import { EXTERNAL_MODEL } from '../agents/external/read.ts';
 import { finishTurn, startTurn } from '../world/provenance.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { accept, cancel, closeOffer, confirm, counter, createOffer, deliver, dispute, propose, resolve, sweep, type DealRow, type MarketDeps } from '../world/market/deals.ts';
-import { isSol } from '../world/market/escrow.ts';
+import { marketLimit } from '../world/market/limits.ts';
 import { dealViews, listOffers, offerViews, reputations } from '../world/market/views.ts';
 import { userSummaries } from '../services/hydrate.ts';
 
@@ -35,19 +34,6 @@ export async function withTurn<T>(db: MarketDeps['db'], agentId: string, name: s
   finally {
     await finishTurn(db, id, { status: ok ? 'acted' : 'failed', context: [], reasoning: 'requested by its operator', toolCalls: [{ name, input, ok, result: ok ? { id: (result as { id?: string })?.id ?? null, status: (result as { status?: string })?.status ?? null } : result }],
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: 0, finishedAt: now() }).catch(() => undefined);
-  }
-}
-
-/** The owner's limits on the market: selling needs canSellServices, buying canBuyServices, no loss break, and a SOL price within the cap. */
-async function marketLimit(d: MarketDeps, agentId: string, side: 'buy' | 'sell', price?: number, currency?: string) {
-  const [a] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
-  const saved = await savedRules(d.db, agentId);
-  const r = effectiveRules(saved.rules, { origin: a?.origin ?? 'external', network: d.config.solanaNetwork });
-  if (side === 'sell' && r.canSellServices === false) throw errors.forbidden('SELLING_OFF', 'Your owner does not let you sell on the marketplace');
-  if (side === 'buy') {
-    if (r.canBuyServices === false) throw errors.forbidden('BUYING_OFF', 'Your owner does not let you buy on the marketplace');
-    if (saved.pausedUntil && saved.pausedUntil > d.now()) throw errors.forbidden('LOSS_BREAK', `You are on a loss break until ${saved.pausedUntil.toISOString()}`);
-    if (price !== undefined && currency && isSol(currency) && r.maxSolPerTrade !== undefined && price > r.maxSolPerTrade + 1e-12) throw errors.forbidden('OVER_TRADE_LIMIT', `Your owner caps you at ${r.maxSolPerTrade} SOL a trade`);
   }
 }
 
@@ -113,9 +99,9 @@ export function registerAgentMarketRoutes(r: FastifyInstance, holder: (req: Fast
 }
 
 /** Public reading for everyone (people browse everything), the admin's dispute switch, and the minute sweep. */
-export async function registerMarketRoutes(app: FastifyInstance, w: Pick<WorldHandles, 'chain' | 'key'>): Promise<{ stop(): void }> {
+export async function registerMarketRoutes(app: FastifyInstance, w: Pick<WorldHandles, 'chain' | 'key' | 'sol'>): Promise<{ stop(): void }> {
   const { db, config, now } = app.deps;
-  const d: MarketDeps = { db, chain: w.chain, key: w.key, config, now };
+  const d: MarketDeps = { db, chain: w.chain, key: w.key, config, now, bank: w.sol?.bank ?? null };
   await app.register(async (r) => {
     r.get('/market/offers', async (req) => ({ offers: await listOffers(db, parse(Query, req.query), now()) }));
     r.get<{ Params: { id: string } }>('/market/offers/:id', async (req) => {

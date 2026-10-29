@@ -3,7 +3,7 @@ import type { Db } from '../../db/client.ts';
 import { marketDeals, marketEvents, marketOffers, worldCoins, type MarketDealStatus } from '../../db/schema.ts';
 import { AppError, errors } from '../../lib/errors.ts';
 import { newId } from '../../lib/ids.ts';
-import { hold, isSol, payOut, type EscrowDeps } from './escrow.ts';
+import { hold, isSol, onMainnet, payOut, type EscrowDeps } from './escrow.ts';
 
 /**
  * Deals (2026-10-28 brief §6). A buyer proposes on an offer (at the list price or another); the two counter in turn; whoever's
@@ -54,6 +54,7 @@ export async function createOffer(d: MarketDeps, sellerId: string, i: OfferInput
   const category = CATEGORIES.includes(i.category as MarketCategory) ? i.category : null;
   if (!category) throw bad('BAD_CATEGORY', `category is one of ${CATEGORIES.join(', ')}`);
   const currency = !i.currency || i.currency.toUpperCase() === 'SOL' ? 'SOL' : i.currency.trim();
+  if (!isSol(currency) && onMainnet(d)) throw bad('SOL_ONLY', 'On mainnet the marketplace takes SOL only');
   let symbol = 'SOL';
   if (!isSol(currency)) {
     const [c] = await d.db.select({ symbol: worldCoins.symbol }).from(worldCoins).where(eq(worldCoins.mint, currency));
@@ -145,7 +146,7 @@ export async function accept(d: MarketDeps, actorId: string, dealId: string): Pr
   }
   let sig: string;
   try {
-    sig = await hold(d, deal.buyerId, { currency: deal.currency, amount: deal.priceAmount });
+    sig = await hold(d, deal.buyerId, { currency: deal.currency, amount: deal.priceAmount }, deal.id);
   } catch (e) {
     await d.db.update(marketOffers).set({ quantityLeft: sql`${marketOffers.quantityLeft} + ${deal.quantity}` }).where(eq(marketOffers.id, deal.offerId));
     await d.db.update(marketDeals).set({ status: 'negotiating', updatedAt: d.now() }).where(eq(marketDeals.id, dealId));
@@ -179,8 +180,17 @@ async function settle(d: MarketDeps, deal: DealRow, to: 'seller' | 'buyer', from
   const claimed = await move(d.db, deal.id, from, { status: 'escrowing', updatedAt: now });
   if (!claimed) return null;
   let sig: string;
-  try { sig = await payOut(d, to === 'seller' ? deal.sellerId : deal.buyerId, { currency: deal.currency, amount: deal.priceAmount }); }
-  catch (e) { await d.db.update(marketDeals).set({ status: deal.status, updatedAt: d.now() }).where(eq(marketDeals.id, deal.id)); throw e; }
+  try { sig = await payOut(d, to === 'seller' ? deal.sellerId : deal.buyerId, { currency: deal.currency, amount: deal.priceAmount }, deal.id); }
+  catch (e) {
+    // Held in devnet test SOL before mainnet: nothing real to move, so the deal simply ends.
+    if ((e as AppError).code === 'NOT_HELD_ON_MAINNET') {
+      const [r] = await d.db.update(marketDeals).set({ status: 'cancelled', turnOf: null, settledAt: now, updatedAt: now }).where(eq(marketDeals.id, deal.id)).returning();
+      await event(d.db, deal.id, null, 'cancelled', now, { note: 'held in devnet test SOL before mainnet; nothing real to pay' });
+      return r!;
+    }
+    await d.db.update(marketDeals).set({ status: deal.status, updatedAt: d.now() }).where(eq(marketDeals.id, deal.id));
+    throw e;
+  }
   const status: MarketDealStatus = to === 'seller' ? 'released' : 'refunded';
   const [r] = await d.db.update(marketDeals).set({ status, payoutSig: sig, settledAt: now, updatedAt: now }).where(eq(marketDeals.id, deal.id)).returning();
   await event(d.db, deal.id, actorId, kind, now, { price: deal.priceAmount, note: note ?? null, sig });
