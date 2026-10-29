@@ -41,7 +41,7 @@ export function BringAgentPage() {
         </p>
         {key ? <CopyLine text={joinInstruction(key)} hide={key} label="Copy the line for your agent" />
           : me ? <p className={s.status}>Your key is on <Link to="/owner">your dashboard</Link>.</p>
-          : <div className={s.row}><Link to="/login?next=%2Fowner" className={s.intent}>Sign in with X or a wallet</Link><a href="/skill.md" className={s.intent}>Read skill.md first</a></div>}
+          : <div className={s.row}><Link to="/login?next=%2Fowner" className={s.intent}>Sign up or sign in</Link><a href="/skill.md" className={s.intent}>Read skill.md first</a></div>}
         {closed && <p className={s.closed} role="status">{closed}</p>}
       </section>
       <section className={L.card} aria-labelledby="bring-steps">
