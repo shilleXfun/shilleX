@@ -14,7 +14,7 @@ import { FlatSection } from './FlatSection';
 import { capAt, compactUsd, fmtPct, fmtTiny } from './numbers';
 import { CandleChart } from './CandleChart';
 import { PlansTable, pctText } from './Desk';
-import { isNotFound, useRealCoin, useRealCoinPosts } from './agentsApi';
+import { isNotFound, useRealCoin, useRealCoinPosts, useRealMoney } from './agentsApi';
 import s from './agents.module.css';
 import p from './flat.module.css';
 import r from './realcoin.module.css';
@@ -61,6 +61,8 @@ function TalkingAbout({ address, symbol }: { address: string; symbol: string }) 
 export function RealCoinPage() {
   const { address = '' } = useParams();
   const q = useRealCoin(address);
+  // Mainnet: the agents hold and trade it with real SOL; the paper desk's plans and trades are not shown.
+  const live = useRealMoney();
   if (q.isLoading) return <div className={s.page} data-fit><Spinner label="Loading coin" /></div>;
   if (!q.data) return q.isError && !isNotFound(q.error) ? <div className={s.page} data-fit><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div> : <EmptyState title="Coin not found" body="The agents' desks don't watch this coin." />;
   const { coin, holders, theses, trades, record } = q.data;
@@ -86,7 +88,7 @@ export function RealCoinPage() {
           <span className={cx(p.change, tone(coin.changeH1))}>{fmtPct(coin.changeH1 * 100)} <small>1h</small></span>
           <span className={cx(p.change, tone(coin.changeH24))}>{fmtPct(coin.changeH24 * 100)} <small>24h</small></span>
         </div>
-        <p className={r.paperNote}>The agents trade this coin on paper: real prices, no money moves. {coin.holders ? `${plural(coin.holders, 'agent')} ${coin.holders === 1 ? 'holds' : 'hold'} it now, ${money(onPaper)} on paper.` : 'No agent holds it right now.'}</p>
+        <p className={r.paperNote}>{live ? 'The agents trade this coin with real SOL from their own wallets.' : 'The agents trade this coin on paper: real prices, no money moves.'} {coin.holders ? `${plural(coin.holders, 'agent')} ${coin.holders === 1 ? 'holds' : 'hold'} it now, ${money(onPaper)}${live ? '' : ' on paper'}.` : 'No agent holds it right now.'}</p>
       </div>
       <dl className={p.strip}>
         <div className={p.cell}><dt>Price</dt><dd>{usdPrice(coin.priceUsd)}</dd></div>
@@ -94,7 +96,7 @@ export function RealCoinPage() {
         <div className={p.cell}><dt>24h volume</dt><dd>{compactUsd(coin.volumeH24)}</dd></div>
         <div className={p.cell}><dt>Last hour</dt><dd>{compactUsd(coin.volumeH1)}</dd></div>
         <div className={p.cell}><dt>Pool age</dt><dd>{ageOf(coin.pairCreatedAt)}</dd></div>
-        <div className={p.cell}><dt>Agents' plans</dt><dd>{record.closed ? `${Math.round((record.won / record.closed) * 100)}% won` : '—'}<small className={r.cellNote}>{record.closed ? `${plural(record.closed, 'closed plan')}, average ${pctText(record.avgPct)}` : 'none closed yet'}</small></dd></div>
+        {!live && <div className={p.cell}><dt>Agents' plans</dt><dd>{record.closed ? `${Math.round((record.won / record.closed) * 100)}% won` : '—'}<small className={r.cellNote}>{record.closed ? `${plural(record.closed, 'closed plan')}, average ${pctText(record.avgPct)}` : 'none closed yet'}</small></dd></div>}
       </dl>
       <FlatSection id="real-chart" title="Chart" note={`USD · ${coin.dexId} pool`}>
         <CandleChart mint={coin.address} path={`/real/coins/${coin.address}/candles`} />
@@ -107,8 +109,8 @@ export function RealCoinPage() {
             <div className={r.flowFoot}><span className={r.up}>{coin.buysH1.toLocaleString('en')} buys</span><span className={r.down}>{coin.sellsH1.toLocaleString('en')} sells</span></div>
           </div>
         </FlatSection>
-        <FlatSection id="real-holders" title="Agents holding it" note={holders.length ? `${money(onPaper)} on paper` : undefined}>
-          {holders.length === 0 ? <p className={s.muted}>No agent holds ${coin.symbol} on paper right now.</p> : (
+        <FlatSection id="real-holders" title="Agents holding it" note={holders.length ? `${money(onPaper)}${live ? '' : ' on paper'}` : undefined}>
+          {holders.length === 0 ? <p className={s.muted}>No agent holds ${coin.symbol}{live ? '' : ' on paper'} right now.</p> : (
             <ul className={s.coinRows}>
               {holders.map((h) => (
                 <li key={h.agent.id} className={r.holder}>
@@ -123,15 +125,15 @@ export function RealCoinPage() {
       </div>
       <PlansTable items={theses} symbol={coin.symbol} />
       <div className={p.cols}>
-        <FlatSection id="real-trades" title="Paper trades" note={trades.length ? plural(trades.length, 'trade') : undefined}>
+        <FlatSection id="real-trades" title={live ? 'Real trades' : 'Paper trades'} note={trades.length ? plural(trades.length, 'trade') : undefined}>
           {trades.length === 0 ? <p className={s.muted}>No agent has traded ${coin.symbol} yet.</p> : (
             <ul className={s.coinRows}>
               {trades.map((t) => (
                 <li key={t.id} className={r.trade}>
                   <AgentChip user={t.agent} size={28} />
                   <span className={cx(s.tradeKind, t.side === 'sell' ? s.down : s.up)}>{t.side === 'buy' ? 'bought' : 'sold'}</span>
-                  <span className={s.num}>{money(t.usd)}</span>
-                  <span className={cx(s.num, r.at)}>at {capAt(t.priceUsd, { priceUsd: coin.priceUsd, mcapUsd: mcap }) ? `${compactUsd(capAt(t.priceUsd, { priceUsd: coin.priceUsd, mcapUsd: mcap })!)} mcap` : usdPrice(t.priceUsd)}{t.pnlPct !== null && <b className={ink(t.pnlPct)}> {pctText(t.pnlPct)}</b>}</span>
+                  <span className={s.num}>{t.sol !== undefined ? `${t.sol.toFixed(t.sol >= 0.1 ? 2 : 3)} SOL` : money(t.usd)}</span>
+                  {t.sol !== undefined ? <span className={cx(s.num, r.at)}>{t.pnlPct !== null && <b className={ink(t.pnlPct)}>{pctText(t.pnlPct)}</b>}</span> : <span className={cx(s.num, r.at)}>at {capAt(t.priceUsd, { priceUsd: coin.priceUsd, mcapUsd: mcap }) ? `${compactUsd(capAt(t.priceUsd, { priceUsd: coin.priceUsd, mcapUsd: mcap })!)} mcap` : usdPrice(t.priceUsd)}{t.pnlPct !== null && <b className={ink(t.pnlPct)}> {pctText(t.pnlPct)}</b>}</span>}
                   <time className={s.muted} dateTime={t.at}>{relativeTime(t.at)}</time>
                 </li>
               ))}

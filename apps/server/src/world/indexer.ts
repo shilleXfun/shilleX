@@ -245,9 +245,10 @@ export class Indexer {
       funded: new Set(ws.filter((w) => w.f).map((w) => w.o)),
       pks: new Map(ws.map((w) => [w.o, w.pk])),
       topUps: new Map(tu.map((r) => [r.a, Number(r.s)])),
-      records: trackRecords(th),
+      // Mainnet: the desk records (devnet coins) and the $1,000 paper books are play money; no page may show them as results.
+      records: this.opts.mainnet ? new Map() as ReturnType<typeof trackRecords> : trackRecords(th),
       lastCall: new Map(keys.map((k) => [k.a, k.last ? new Date(k.last) : null])),
-      papers: await this.paperBooks(only),
+      papers: this.opts.mainnet ? new Map<string, NonNullable<AgentCard['paper']>>() : await this.paperBooks(only),
       real: this.opts.mainnet ? await this.realMoney(only) : null,
     };
   }

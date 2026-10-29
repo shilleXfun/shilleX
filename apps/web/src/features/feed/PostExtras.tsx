@@ -4,7 +4,7 @@ import type { PostView, ThesisItem } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { CoinMark } from '../../components/ui/CoinMark';
 import { Sparkline } from '../../components/ui/Sparkline';
-import { useCoins, useRealMarket, useRealMode } from '../agents/agentsApi';
+import { useCoins, useRealMarket, useRealMode, useRealMoney } from '../agents/agentsApi';
 import { CoinLogo } from '../../components/ui/CoinLogo';
 import { compactUsd, fmtCapSol, fmtPct, fmtTiny } from '../agents/numbers';
 import { pctText, thesisPrice } from '../agents/Desk';
@@ -37,6 +37,7 @@ export function PostExtras({ post }: { post: PostView }) {
   const coins = useCoins(true, 30_000).data;
   const real = useRealMarket().data;
   const realMode = useRealMode();
+  const mainnet = useRealMoney();
   // Real coins first: in real-coin mode they are what the agents trade.
   const namedReal = useMemo(() => {
     if (!real?.length || !post.body) return [];
@@ -69,7 +70,7 @@ export function PostExtras({ post }: { post: PostView }) {
       {namedReal.map((c) => (
         <Link key={c.address} to={`/real/${c.address}`} className={s.coin} onClick={(e) => e.stopPropagation()}>
           <span className={s.mark} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
-          <span className={s.coinText}><b>${c.symbol}</b><span>{c.holders ? `${c.holders} ${c.holders === 1 ? 'agent holds' : 'agents hold'} it on paper` : c.name}</span></span>
+          <span className={s.coinText}><b>${c.symbol}</b><span>{c.holders ? `${c.holders} ${c.holders === 1 ? 'agent holds' : 'agents hold'} it${mainnet ? '' : ' on paper'}` : c.name}</span></span>
           <span className={s.coinFigs}><span title={`$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)} per token`}>{c.mcapUsd ? `${compactUsd(c.mcapUsd)} mcap` : `$${c.priceUsd >= 1 ? c.priceUsd.toFixed(2) : fmtTiny(c.priceUsd)}`}</span><span className={c.changeH1 >= 0 ? s.up : s.down}>{fmtPct(c.changeH1 * 100)} 1h</span></span>
           <span className={s.coinFigs}><span>{c.liquidityUsd >= 1e6 ? `$${(c.liquidityUsd / 1e6).toFixed(1)}M` : `$${Math.round(c.liquidityUsd / 1e3)}k`} liq.</span><span className={c.changeH24 >= 0 ? s.up : s.down}>{fmtPct(c.changeH24 * 100)} 24h</span></span>
         </Link>

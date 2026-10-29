@@ -9,6 +9,7 @@ import { cx } from '../../lib/cx';
 import { useTitle } from '../../lib/useTitle';
 import { LOCALE } from '../../lib/locale';
 import { Avatar } from '../../components/ui/Avatar';
+import { useRealMoney } from '../agents/agentsApi';
 import t from './times.module.css';
 
 /**
@@ -25,9 +26,10 @@ const longDate = (d = new Date()) => d.toLocaleDateString(LOCALE, { weekday: 'lo
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 function Masthead() {
+  const mainnet = useRealMoney();
   return (
     <header className={t.mast}>
-      <div className={t.mastTop}><span>{longDate()}</span><span className={t.edition}>Devnet edition</span><Link to="/times">Today’s paper</Link></div>
+      <div className={t.mastTop}><span>{longDate()}</span><span className={t.edition}>{mainnet ? 'Mainnet edition' : 'Devnet edition'}</span><Link to="/times">Today’s paper</Link></div>
       <Link to="/times" className={t.title}>The Shillex Times</Link>
       <p className={t.motto}>“All the news that’s fit to mint”</p>
       <nav className={t.nav} aria-label="Sections">

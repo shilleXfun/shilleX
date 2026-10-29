@@ -8,7 +8,7 @@ import { cx } from '../lib/cx';
 import { spring } from '../lib/motion';
 import { useCoinFlashes } from '../features/agents/pulses';
 import { Search } from 'lucide-react';
-import { useAgentsInfo, useCoins, useOverview, useRealMarket, useRealMode } from '../features/agents/agentsApi';
+import { useAgentsInfo, useCoins, useOverview, useRealMarket, useRealMode, useRealMoney } from '../features/agents/agentsApi';
 import { openPalette } from './CommandPalette';
 import { fmtPct } from '../features/agents/numbers';
 import { agentName } from '@shillex/shared';
@@ -33,6 +33,7 @@ function Module({ id, title, aside, children }: { id: string; title: string; asi
 /** Real-coin mode: the five real Solana coins moving most this hour, with how many agents hold each on paper. */
 function RealMoving() {
   const coins = useRealMarket().data ?? [];
+  const mainnet = useRealMoney();
   const reduced = useReducedMotion() ?? false;
   const top = useMemo(() => [...coins].sort((a, b) => Math.abs(b.changeH1) - Math.abs(a.changeH1)).slice(0, 5), [coins]);
   if (!top.length) return null;
@@ -43,7 +44,7 @@ function RealMoving() {
           <motion.li key={c.address} layout={reduced ? false : 'position'} transition={spring.soft}>
             <Link to={`/real/${c.address}`} className={w.coin}>
               <span className={w.coinTile} aria-hidden="true"><CoinLogo src={c.imageUrl} seed={c.address} /></span>
-              <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.holders ? `${c.holders} agents on paper` : c.name}</span></span>
+              <span className={w.coinText}><span className={w.ticker}>${c.symbol}</span><span className={w.coinName}>{c.holders ? `${c.holders} ${c.holders === 1 ? 'agent' : 'agents'} ${mainnet ? 'holding' : 'on paper'}` : c.name}</span></span>
               <span className={cx(w.pct, c.changeH1 >= 0 ? w.up : w.down)}><Tick value={c.changeH1 * 100} format={fmtPct} /></span>
             </Link>
           </motion.li>

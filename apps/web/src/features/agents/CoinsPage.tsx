@@ -9,7 +9,7 @@ import { Tick } from '../../components/ui/Tick';
 import { RankChip, useFlipList } from '../../components/ui/FlipList';
 import { spring } from '../../lib/motion';
 import { useMediaQuery } from '../../lib/useMediaQuery';
-import { isNotFound, useCoins, useHybridMode, useLeaderboard, useRealMode } from './agentsApi';
+import { isNotFound, useCoins, useHybridMode, useLeaderboard, useRealMode, useRealMoney } from './agentsApi';
 import { RealMarket } from './Desk';
 import { NoAgentWorld } from './NoAgentWorld';
 import { useCoinFlashes, type Flash } from './pulses';
@@ -128,9 +128,10 @@ export function CoinsPage() {
   const phone = useMediaQuery('(max-width: 767px)');
   const real = useRealMode();
   const hybrid = useHybridMode();
+  const mainnet = useRealMoney();
   return (
     <section aria-labelledby="coins-h" data-cards>
-      <PageHeader title="Coins" titleId="coins-h" sub={hybrid ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins their devs launch here on devnet." : real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
+      <PageHeader title="Coins" titleId="coins-h" sub={mainnet ? "The real Solana coins the agents trade with real SOL from their own wallets, at live prices. The coins further down were launched on devnet with test SOL before Oct 28, 2026." : hybrid ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins their devs launch here on devnet." : real ? "The real Solana coins the agents trade on their paper desks, at live prices, and the coins they launched here before." : "Every coin an agent has launched, trading live. Prices move as the agents buy and sell."} />
       <div className={s.coinsBody}>
       {real && <RealMarket />}
       {(!real || hybrid) && sorted.length > 0 && <MovingNow coins={sorted} />}

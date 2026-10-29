@@ -5,7 +5,7 @@ import { cx } from '../../lib/cx';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { CoinLogo } from '../../components/ui/CoinLogo';
 import { FlatSection } from './FlatSection';
-import { useAgentDesk, useCoinTheses, useRealMarket } from './agentsApi';
+import { useAgentDesk, useCoinTheses, useRealMarket, useRealMoney } from './agentsApi';
 import { AgentChip } from './AgentChip';
 import { compactUsd, fmtCapSol, fmtTiny } from './numbers';
 import s from './desk.module.css';
@@ -251,13 +251,17 @@ export function RealMarket() {
 /** The Desk tab: its record, today's plan, its theses and its real-market paper book. */
 export function DeskTab({ username, record }: { username: string; record?: TrackRecord }) {
   const q = useAgentDesk(username);
+  // Mainnet: its paper plans and book were play money (the server sends none); its real trades are on the Money tab.
+  const mainnet = useRealMoney();
   if (!q.data) return <div className={p.section}><Skeleton h={160} r={12} /></div>;
   const d = q.data;
   return (
     <>
       {record && <RecordStrip r={record} />}
       {d.plan && <Plan plan={d.plan} />}
-      <Theses theses={d.theses} />
+      {mainnet
+        ? <FlatSection id="desk-real" title="Trades"><p className={s.empty}>Its real-SOL trades, holdings and P&amp;L are on the <Link to={`/agents/${username}?tab=money`}>Money</Link> tab.</p></FlatSection>
+        : <Theses theses={d.theses} />}
       {d.realBook && <PaperBook book={d.realBook} />}
     </>
   );

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { LAMPORTS_PER_SOL, isValidSolanaAddress, type CandlesView, type RealCoinPageView, type AgentDepthView, type AgentDeskView, type CoinThesisView, type EquityView, type RealCoinView, type RealTradeView, type ThesisItem, type AgentGoalView, type AgentMindView, type AgentGraph, type DebtView, type FactionView, type LineageView, type PaperView, type TraitScores, type WeatherView } from '@shillex/shared';
-import { agentAffinity, agentCommitments, beliefChanges, agentGoals, agentMemories, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, relationshipEvents, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
+import { agentAffinity, agentCommitments, beliefChanges, agentGoals, agentMemories, agentDesks, agentTheses, realBooks, realMarket, realPositions, realTrades, solPositions, solTrades,relationshipEvents, type ThesisRow, agents as agentsTable, agentState, debts, factionMembers, factions, lineage, memeTemplates, papers, posts, saidVsDid, traitHistory, users, worldCoins } from '../db/schema.ts';
 import { plain } from '../agents/cards.ts';
 import { errors } from '../lib/errors.ts';
 import { findUserByHandle } from '../services/handles.ts';
@@ -26,6 +26,21 @@ const EDGE_MIN_ALL = 0.02, EDGES_MAX = 400, EDGES_MAX_ALL = 4000;
 /** Public, read-only views of the depth modules. Agents only: no human is a graph node, ally or enemy, and no private text is returned. */
 export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: Indexer }) {
   const { db, now } = app.deps;
+  // Mainnet (owner, 2026-10-28: "fake pnls"): the paper desk's books, trades and plans were play money, so the coin pages,
+  // the tape and the desks show the agents' real-SOL trades and holdings instead, and no paper plan or book.
+  const mainnet = app.deps.config.solanaNetwork === 'mainnet';
+  /** Mainnet: the newest real buys and sells that went through, across every coin or on one. */
+  const solTradeViews = async (limit: number, mint?: string): Promise<RealTradeView[]> => {
+    const rows = await db.select({ t: solTrades, img: realMarket.imageUrl }).from(solTrades).leftJoin(realMarket, eq(realMarket.address, solTrades.mint))
+      .where(and(eq(solTrades.ok, true), inArray(solTrades.kind, ['buy', 'sell']), mint ? eq(solTrades.mint, mint) : undefined)).orderBy(desc(solTrades.at)).limit(limit);
+    const people = await userSummaries(db, rows.map((r) => r.t.agentId));
+    return rows.flatMap(({ t, img }) => {
+      const agent = people.get(t.agentId);
+      if (!agent || !t.mint) return [];
+      const sol = Math.abs(t.sol), cost = sol - (t.pnlSol ?? 0);
+      return [{ id: t.id, agent, address: t.mint, symbol: t.symbol ?? '?', imageUrl: img, side: t.kind === 'sell' ? 'sell' as const : 'buy' as const, usd: 0, priceUsd: 0, sol, sig: t.sig, pnlPct: t.kind === 'sell' && t.pnlSol !== null && cost > 0 ? t.pnlSol / cost : null, at: t.at.toISOString() }];
+    });
+  };
   /** The logos of the real coins among these theses, by address. */
   const logosOf = async (rows: { market: string; asset: string }[]) => {
     const real = [...new Set(rows.filter((t) => t.market === 'real').map((t) => t.asset))];
@@ -258,6 +273,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
       const u = await findUserByHandle(db, req.params.username);
       if (!u || u.kind !== 'agent') throw errors.notFound('Agent');
       const [plan] = await db.select().from(agentDesks).where(eq(agentDesks.agentId, u.id));
+      if (mainnet) return { plan: plan ? { style: plan.style, risk: plan.risk, watch: plan.watch, lessons: plan.lessons, writtenAt: plan.writtenAt.toISOString(), tilt: 0 } : null, theses: [], realBook: null };
       const [open, closed] = await Promise.all([
         db.select().from(agentTheses).where(and(eq(agentTheses.agentId, u.id), eq(agentTheses.status, 'open'))).orderBy(desc(agentTheses.openedAt)),
         db.select().from(agentTheses).where(and(eq(agentTheses.agentId, u.id), ne(agentTheses.status, 'open'))).orderBy(desc(agentTheses.closedAt)).limit(20),
@@ -284,7 +300,9 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     // The real Solana coins the paper desks watch, live from DexScreener, with how many agents hold each on paper.
     r.get('/real/market', async (): Promise<{ coins: RealCoinView[] }> => {
       const rows = await realMarketNow(db, now());
-      const held = await db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address);
+      const held = mainnet
+        ? await db.select({ a: solPositions.mint, n: sql<number>`count(*)::int` }).from(solPositions).where(gt(solPositions.tokens, 0)).groupBy(solPositions.mint)
+        : await db.select({ a: realPositions.address, n: sql<number>`count(*)::int` }).from(realPositions).groupBy(realPositions.address);
       const n = new Map(held.map((h) => [h.a, Number(h.n)]));
       // Only what a desk would trade (enough liquidity) or still holds: the trending list is full of coins that already died.
       return { coins: rows.filter((c) => c.liquidityUsd >= MIN_LIQUIDITY_USD || n.has(c.address)).slice(0, 20).map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24, established: c.source === 'major', holders: n.get(c.address) ?? 0, imageUrl: c.imageUrl })) };
@@ -294,6 +312,21 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     r.get<{ Params: { address: string } }>('/real/coins/:address', async (req): Promise<RealCoinPageView> => {
       const [c] = isValidSolanaAddress(req.params.address) ? await db.select().from(realMarket).where(eq(realMarket.address, req.params.address)) : [];
       if (!c) throw errors.notFound('Coin');
+      const coinOf = (holders: number) => ({
+        address: c.address, symbol: c.symbol, name: c.name, url: c.url, imageUrl: c.imageUrl, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24,
+        established: c.source === 'major', holders, pairAddress: c.pairAddress, dexId: c.dexId, fdvUsd: c.fdvUsd, volumeH1: c.volumeH1, changeM5: c.changeM5, buysH1: c.buysH1, sellsH1: c.sellsH1,
+        pairCreatedAt: c.pairCreatedAt?.toISOString() ?? null, refreshedAt: c.refreshedAt.toISOString(),
+      });
+      if (mainnet) {
+        // Real holdings: the tokens as last read from the chain, valued at the coin's last price against the agent's own entry.
+        const [held, trades] = await Promise.all([db.select().from(solPositions).where(and(eq(solPositions.mint, c.address), gt(solPositions.tokens, 0))), solTradeViews(40, c.address)]);
+        const people = await userSummaries(db, held.map((p) => p.agentId));
+        return {
+          coin: coinOf(held.length),
+          holders: held.flatMap((p) => { const agent = people.get(p.agentId); return agent ? [{ agent, qty: p.tokens, costUsd: p.tokens * p.entryPriceUsd, valueUsd: p.tokens * c.priceUsd, pnlPct: p.entryPriceUsd > 0 ? c.priceUsd / p.entryPriceUsd - 1 : 0, openedAt: p.openedAt.toISOString() }] : []; }).sort((a, b) => b.valueUsd - a.valueUsd),
+          theses: [], trades, record: { closed: 0, won: 0, avgPct: 0 },
+        };
+      }
       const [pos, theses, trades] = await Promise.all([
         db.select().from(realPositions).where(eq(realPositions.address, c.address)),
         db.select().from(agentTheses).where(and(eq(agentTheses.market, 'real'), eq(agentTheses.asset, c.address))).orderBy(desc(agentTheses.openedAt)).limit(80),
@@ -307,11 +340,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
         invalidateIf: t.invalidateIf, sizing: t.sizing, closeReason: t.closeReason, process: t.process,
       });
       return {
-        coin: {
-          address: c.address, symbol: c.symbol, name: c.name, url: c.url, imageUrl: c.imageUrl, priceUsd: c.priceUsd, mcapUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, volumeH24: c.volumeH24, changeH1: c.changeH1, changeH24: c.changeH24,
-          established: c.source === 'major', holders: pos.length, pairAddress: c.pairAddress, dexId: c.dexId, fdvUsd: c.fdvUsd, volumeH1: c.volumeH1, changeM5: c.changeM5, buysH1: c.buysH1, sellsH1: c.sellsH1,
-          pairCreatedAt: c.pairCreatedAt?.toISOString() ?? null, refreshedAt: c.refreshedAt.toISOString(),
-        },
+        coin: coinOf(pos.length),
         holders: pos.flatMap((p) => { const agent = people.get(p.agentId); const valueUsd = p.qty * c.priceUsd; return agent ? [{ agent, qty: p.qty, costUsd: p.costUsd, valueUsd, pnlPct: p.costUsd > 0 ? valueUsd / p.costUsd - 1 : 0, openedAt: p.openedAt.toISOString() }] : []; }).sort((a, b) => b.valueUsd - a.valueUsd),
         theses: [...theses.filter((t) => t.status === 'open'), ...theses.filter((t) => t.status !== 'open').slice(0, 12)].flatMap((t) => { const agent = people.get(t.agentId); return agent ? [{ agent, thesis: thesis(t) }] : []; }),
         trades: trades.flatMap(({ t, pnl }) => { const agent = people.get(t.agentId); return agent ? [{ id: t.id, agent, address: t.address, symbol: t.symbol, imageUrl: c.imageUrl, side: t.side, usd: t.usd, priceUsd: t.priceUsd, pnlPct: t.side === 'sell' ? pnl : null, at: t.at.toISOString() }] : []; }),
@@ -353,6 +382,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     // The newest paper trades of real coins across every agent: the tape and the pop-ups in real-coin mode.
     r.get<{ Querystring: { limit?: string } }>('/real/trades', async (req): Promise<{ trades: RealTradeView[] }> => {
       const limit = Math.max(1, Math.min(Number(req.query.limit) || 24, 60));
+      if (mainnet) return { trades: await solTradeViews(limit) };
       const rows = await db.select({ t: realTrades, pnl: agentTheses.pnlPct, img: realMarket.imageUrl }).from(realTrades).leftJoin(agentTheses, eq(agentTheses.id, realTrades.thesisId)).leftJoin(realMarket, eq(realMarket.address, realTrades.address)).orderBy(desc(realTrades.at)).limit(limit);
       const people = await userSummaries(db, rows.map((r) => r.t.agentId));
       return { trades: rows.flatMap(({ t, pnl, img }) => { const agent = people.get(t.agentId); return agent ? [{ id: t.id, agent, address: t.address, symbol: t.symbol, imageUrl: img, side: t.side, usd: t.usd, priceUsd: t.priceUsd, pnlPct: t.side === 'sell' ? pnl : null, at: t.at.toISOString() }] : []; }) };
@@ -361,6 +391,7 @@ export async function registerDepthRoutes(app: FastifyInstance, h: { indexer: In
     // The newest written plans across every agent, with each one's coin and how it is going or how it ended (home's desk).
     r.get<{ Querystring: { limit?: string } }>('/theses/latest', async (req): Promise<{ items: CoinThesisView[] }> => {
       const limit = Math.max(1, Math.min(Number(req.query.limit) || 6, 24));
+      if (mainnet) return { items: [] };
       const rows = await db.select().from(agentTheses).orderBy(desc(sql`coalesce(${agentTheses.closedAt}, ${agentTheses.openedAt})`)).limit(limit);
       const people = await userSummaries(db, rows.map((t) => t.agentId));
       const logos = await logosOf(rows);

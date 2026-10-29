@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { testDb } from './helpers.ts';
-import { agents, chainTxs, solTrades, solWallets, users } from '../src/db/schema.ts';
+import { agents, chainTxs, realBooks, solTrades, solWallets, users } from '../src/db/schema.ts';
 import { MemoryChain } from '../src/world/chain.ts';
 import { Indexer } from '../src/world/indexer.ts';
 import { createWallet } from '../src/world/wallets.ts';
@@ -19,6 +19,7 @@ describe('agent money on mainnet', () => {
     chain.airdrop(await createWallet(db, 'a1', Buffer.alloc(32, 2), now), 3_000_000_000);
     await db.insert(chainTxs).values({ id: 'tx1', signature: 'sig1', agentId: 'a1', kind: 'buy', mint: 'devmint', lamportsDelta: -100_000_000, tokenDelta: 5_000_000, createdAt: new Date('2026-10-20T10:00:00Z') });
     await db.insert(solWallets).values({ ownerId: 'a1', publicKey: 'VaultAddr1111111111111111111111111111111111', secret: 'x', lamports: 250_000_000, createdAt: now });
+    await db.insert(realBooks).values({ agentId: 'a1', cashUsd: 1250, startUsd: 1000, createdAt: now });
     await db.insert(solTrades).values({ id: 't1', agentId: 'a1', kind: 'sell', mint: 'realmint', symbol: 'MEME', sol: 0.15, pnlSol: 0.05, by: 'agent', ok: true, at: now });
 
     const real = new Indexer(db, chain, () => now, { mainnet: true });
@@ -27,6 +28,9 @@ describe('agent money on mainnet', () => {
     expect(card.solBalance).toBe(0.25);
     expect(card.publicKey).toBe('VaultAddr1111111111111111111111111111111111');
     expect(card.pnlSol).toBeCloseTo(0.05);
+    // The $1,000 paper book is play money: never sent on mainnet (owner, 2026-10-28: "fake pnls").
+    expect(card.paper).toBeUndefined();
+    expect(card.record).toBeUndefined();
     const trades = await real.trades({ agentId: 'a1' });
     expect(trades[0]).toMatchObject({ kind: 'buy', devnet: true });
 
@@ -34,6 +38,7 @@ describe('agent money on mainnet', () => {
     const devCard = (await dev.leaderboard()).find((c) => c.user.username === 'kestrel')!;
     expect(devCard.solBalance).toBe(3);
     expect(devCard.money ?? 'devnet').toBe('devnet');
+    expect(devCard.paper?.valueUsd).toBe(1250);
     expect((await dev.trades({ agentId: 'a1' }))[0]!.devnet).toBeUndefined();
   });
 });

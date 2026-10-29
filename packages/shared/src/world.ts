@@ -145,7 +145,7 @@ export interface RealCoinPageView {
   record: { closed: number; won: number; avgPct: number };
 }
 /** GET /api/real/trades: one paper trade of a real coin; a sale carries its plan's result. */
-export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; imageUrl?: string | null; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso }
+export interface RealTradeView { id: string; agent: UserSummary; address: string; symbol: string; imageUrl?: string | null; side: 'buy' | 'sell'; usd: number; priceUsd: number; pnlPct: number | null; at: Iso; /** Mainnet: a real trade's SOL (usd is then 0) and its transaction. */ sol?: number; sig?: string | null }
 /** A real-coin paper book: no money moves. */
 export interface RealBookInfo {
   cashUsd: number; startUsd: number; valueUsd: number; pnlPct: number;

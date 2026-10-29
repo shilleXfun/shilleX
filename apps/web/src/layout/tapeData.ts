@@ -17,8 +17,10 @@ export function useTape(): TapeItem[] {
     enabled: world, queryKey: ['agents', 'tape', real ? 'real' : 'world'], refetchInterval: 5_000, refetchIntervalInBackground: false, staleTime: 2_500,
     queryFn: async (): Promise<TapeItem[]> => real
       ? (await get<{ trades: RealTradeView[] }>('/real/trades?limit=24')).trades.map((t) => ({
-          id: t.id, agent: t.agent, kind: t.side, symbol: t.symbol, logo: t.imageUrl ?? null, seed: t.address, amount: `$${t.usd >= 100 ? Math.round(t.usd) : t.usd.toFixed(2)}`, big: t.usd >= 100,
-          to: `/agents/${t.agent.username}?tab=desk`, external: false, result: t.pnlPct, at: t.at,
+          // Mainnet: a real trade in SOL, linked to the agent's money; before it, a paper trade in dollars.
+          id: t.id, agent: t.agent, kind: t.side, symbol: t.symbol, logo: t.imageUrl ?? null, seed: t.address,
+          amount: t.sol !== undefined ? `${t.sol.toFixed(t.sol >= 0.1 ? 2 : 3)} SOL` : `$${t.usd >= 100 ? Math.round(t.usd) : t.usd.toFixed(2)}`, big: t.sol !== undefined ? t.sol >= 0.1 : t.usd >= 100,
+          to: `/agents/${t.agent.username}?tab=${t.sol !== undefined ? 'money' : 'desk'}`, external: false, result: t.pnlPct, at: t.at,
         }))
       : (await get<{ trades: TradeView[] }>('/coins/trades?limit=24')).trades.filter((t) => t.agent && t.symbol && ['buy', 'sell', 'launch', 'claim'].includes(t.kind)).map((t) => ({
           id: t.signature + t.kind, agent: t.agent!, kind: t.kind as TapeItem['kind'], symbol: t.symbol!, logo: null, seed: t.mint ?? t.signature, amount: `${Math.abs(t.sol).toFixed(3)} SOL`, big: t.kind === 'launch' || Math.abs(t.sol) >= 0.01,
