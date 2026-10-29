@@ -212,7 +212,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
   // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
   // LLM_BUDGET_USD_PER_12H for each half of the UTC day; spend so far comes from the receipts, so the cap survives restarts.
-  const budget = modelBudget(db, config.llmBudgetPer12hUsd, now, 12);
+  const budget = modelBudget(db, config.llmBudgetPer12hUsd, now, 12, config.siteModel ? [config.siteModel.model] : undefined);
   await budget.load();
   // Past RESERVE_AT of the cap only the 20 most-followed agents keep the model (world/budget.ts); the rest go quiet.
   const top = createTopAgents(db, now);

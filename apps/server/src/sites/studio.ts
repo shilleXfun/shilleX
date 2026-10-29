@@ -177,7 +177,7 @@ export function repeats(b: Pick<StudioBrief, 'aesthetic' | 'concept'>, recent: S
 
 export async function studioBuild(d: StudioDeps): Promise<StudioResult> {
   const call = (job: string, req: Omit<BrainRequest, 'tools'>, maxTokens: number, input: number) =>
-    billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(d.priceAs ?? HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
+    billedCall({ job: d.tier === 2 ? `${job}:remaster` : job, house: d.house, ownPrice: Boolean(d.priceAs), db: d.db, budget: d.budget, turnId: d.turnId, worstUsd: priceOf(d.priceAs ?? HAIKU, { input, output: maxTokens, cacheRead: 0, cacheWrite: 0 }), spent: d.spent },
       // The page and its review are written by the strong model (owner, 2026-10-29: sites must not look like 2009); the brief by the everyday one.
       () => d.brain.decide({ ...req, tools: [], maxTokens, tier: job === 'site:brief' ? d.tier ?? 1 : 2 }));
 

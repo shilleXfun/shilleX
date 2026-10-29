@@ -44,5 +44,10 @@ describe('Budget', () => {
     const b = new Budget(h.db, 10, () => new Date('2026-10-10T12:00:00Z'));
     await b.load();
     expect(b.spentToday()).toBe(4);
+    // A website built on Opus is paid from its own cap (sites/opus.ts): the world's budget leaves it out.
+    await h.db.insert(agentTurns).values({ ...base, id: newId(), seq: 3, model: 'claude-opus-5-5', costUsd: 2.32, startedAt: new Date('2026-10-10T09:00:00Z') });
+    const split = new Budget(h.db, 10, () => new Date('2026-10-10T12:00:00Z'), { exclude: ['claude-opus-5-5'] });
+    await split.load();
+    expect(split.spentToday()).toBe(4);
   });
 });

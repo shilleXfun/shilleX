@@ -1,4 +1,4 @@
-import { gte, sql } from 'drizzle-orm';
+import { and, gte, notInArray, sql } from 'drizzle-orm';
 import type { BudgetLevel } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
 import { agentTurns, worldModelCalls } from '../db/schema.ts';
@@ -69,7 +69,9 @@ export class Budget {
   private spent = 0;
   private top: ((agentIds: string[]) => Promise<boolean>) | null = null;
   /** `periodHours`: 24 (a UTC day, the default) or 12 (the world's cap since 2026-10-27). */
-  constructor(private db: Db, private dailyUsd: number, private now: () => Date, private opts: { hardStop?: boolean; window?: BudgetWindow | null; periodHours?: number } = {}) { this.key = this.period().key; }
+  constructor(private db: Db, private dailyUsd: number, private now: () => Date, private opts: { hardStop?: boolean; window?: BudgetWindow | null; periodHours?: number;
+    /** Turns made with these models are another cap's (websites on Opus, sites/opus.ts): left out when the period's spend is rebuilt. */
+    exclude?: string[] } = {}) { this.key = this.period().key; }
 
   /** The span the cap covers now (the day, half of it, or the launch window). */
   period(): BudgetPeriod { return periodAt(this.dailyUsd, this.opts.window, this.now(), this.opts.periodHours); }
@@ -93,7 +95,11 @@ export class Budget {
   async load() {
     const p = this.period();
     this.key = p.key;
-    const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns).where(gte(agentTurns.startedAt, p.start));
+    // A website built on Opus has its own day's money; counting it here stopped every agent (2026-10-29: an interrupted Opus page left a
+    // $2.32 reservation on its receipt and the world's pace read as spent until evening).
+    const ex = this.opts.exclude?.length ? this.opts.exclude : null;
+    const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${agentTurns.costUsd}), 0)::float8` }).from(agentTurns)
+      .where(ex ? and(gte(agentTurns.startedAt, p.start), notInArray(agentTurns.model, ex)) : gte(agentTurns.startedAt, p.start));
     // World calls (the X digest) belong to no agent but spend the same cap (x-feed §4).
     const [w] = await this.db.select({ s: sql<number>`coalesce(sum(${worldModelCalls.costUsd}), 0)::float8` }).from(worldModelCalls).where(gte(worldModelCalls.startedAt, p.start));
     this.spent = Number(r?.s ?? 0) + Number(w?.s ?? 0);

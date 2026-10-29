@@ -57,7 +57,7 @@ export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> 
   return brain;
 }
 
-export const modelBudget = (db: Db, capUsd: number, now: () => Date, periodHours = 24) => new Budget(db, capUsd, now, { hardStop: true, periodHours });
+export const modelBudget = (db: Db, capUsd: number, now: () => Date, periodHours = 24, exclude?: string[]) => new Budget(db, capUsd, now, { hardStop: true, periodHours, ...(exclude ? { exclude } : {}) });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
 export type CostTarget = { turnId: string } | { worldCallId: string };
@@ -86,8 +86,9 @@ export class BudgetClosed extends Error { readonly category = 'budget' }
 export async function billedCall(x: { db: Db; budget: ModelBudget; worstUsd: number; spent: { usd: number }; /** Priced as this model when the answer names none it knows (default Haiku). */ model?: string;
   /** The job the call is for (scene, voice, site:page…), for the per-call cost log and the hourly [cost] summary (world/cost-meter.ts). */ job?: string;
   /** The house pays (a daily remaster): the agents' compute is neither checked nor charged; the world cap still is. */ house?: boolean;
-  /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[] } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
-  const worst = x.worstUsd * worstScale;
+  /** The agents a world call speaks for (a scene's cast, a thread's author): in reserve it goes out only for the most-followed. */ agentIds?: string[];
+  /** worstUsd is already in the answering model's own price (a website on Opus), not Haiku's: it is not scaled. */ ownPrice?: boolean } & CostTarget, call: () => Promise<BrainResponse>): Promise<BrainResponse> {
+  const worst = x.ownPrice ? x.worstUsd : x.worstUsd * worstScale;
   // The agents the call is for: a turn's agent, or a world call's cast (read at most once).
   let who: Promise<string[] | null> | null = null;
   const agentsOf = () => (who ??= x.agentIds ? Promise.resolve(x.agentIds) : 'turnId' in x ? x.db.select({ a: agentTurns.agentId }).from(agentTurns).where(eq(agentTurns.id, x.turnId)).then((r) => r.map((y) => y.a)) : Promise.resolve(null));
