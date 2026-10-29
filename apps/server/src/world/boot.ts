@@ -54,7 +54,7 @@ import { pixelFacesForAll, seedWorld } from './seed.ts';
 import { castWorld } from '../agents/cast/index.ts';
 import { bootX } from '../x/boot.ts';
 import { worldHealth } from './health.ts';
-import { runJob } from './jobs.ts';
+import { releaseOrphanLeases, runJob } from './jobs.ts';
 import { backfillMemories } from '../agents/minds.ts';
 import { xDigestHandler } from '../x/digest.ts';
 import { siteBuilder } from '../sites/build.ts';
@@ -207,6 +207,8 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
     await db.update(wallets).set({ fundedAt: now() });
   }
   const aborted = await abortRunningTurns(db, now());
+  const freed = await releaseOrphanLeases(db, now());
+  if (freed.length) console.log(`[world] let go of jobs a restart interrupted: ${freed.join(', ')}`);
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
   // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
   // LLM_BUDGET_USD_PER_12H for each half of the UTC day; spend so far comes from the receipts, so the cap survives restarts.

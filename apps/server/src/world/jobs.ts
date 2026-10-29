@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { worldJobs, type JobStatus, type WorldJobRow } from '../db/schema.ts';
 
@@ -108,4 +108,15 @@ export async function runJob(db: Db, name: string, o: JobOptions, fn: () => Prom
 /** Every job's record, for /api/health/world. */
 export async function jobStates(db: Db): Promise<WorldJobRow[]> {
   return db.select().from(worldJobs).orderBy(worldJobs.name);
+}
+
+/**
+ * A job a previous process was running when it stopped (a deploy restarts the server mid site-build) kept its lease for up to
+ * leaseMs, and nothing of that job ran meanwhile (2026-10-29: sites waited 25 minutes after every deploy). One server runs the
+ * world, so at boot those leases are let go.
+ */
+export async function releaseOrphanLeases(db: Db, now: Date): Promise<string[]> {
+  const rows = await db.update(worldJobs).set({ leaseOwner: null, leaseUntil: null, lastStatus: 'failed', lastNote: 'interrupted by a restart' })
+    .where(and(ne(worldJobs.leaseOwner, PROCESS_ID), gt(worldJobs.leaseUntil, now))).returning({ name: worldJobs.name });
+  return rows.map((r) => r.name);
 }
