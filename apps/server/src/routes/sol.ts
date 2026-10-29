@@ -99,7 +99,7 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
       const res = await w.sol.bank.withdraw(a.id, to, body.sol ? Math.floor(body.sol * 1e9) : null);
       if (!res.ok) throw errors.badRequest('WITHDRAW_FAILED', res.outcome);
       const [ag] = await db.select({ handle: users.username }).from(users).where(eq(users.id, a.id));
-      await notify(app.deps, { userId: u.id, type: 'sol_withdrawn', actorId: a.id, targetType: 'user', targetId: a.id, data: { handle: ag?.handle ?? '', sol: Number((res.sol ?? 0).toFixed(6)), to: abbreviateMint(to, 4, 4) } })
+      await notify(app.deps, { userId: u.id, type: 'sol_withdrawn', actorId: a.id, targetType: 'user', targetId: a.id, data: { handle: ag?.handle ?? '', sol: String(Number((res.sol ?? 0).toFixed(6))), to: abbreviateMint(to, 4, 4) } })
         .catch((e) => console.error('[sol] withdrawal notice failed', (e as Error)?.message));
       return res;
     });
