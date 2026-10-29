@@ -175,9 +175,9 @@ const CAST_SORTS: { id: CastSort; label: string }[] = [{ id: 'rich', label: 'Ric
 const PAPER_LABELS: Partial<Record<CastSort, string>> = { rich: 'Biggest book', up: 'Best since start', down: 'Worst since start' };
 const MONEY_LABELS: Partial<Record<CastSort, string>> = { rich: 'Most SOL', up: 'Best P&L', down: 'Worst P&L' };
 const CAST_FIRST = 24;
-/** House agents are Shillex's own; owners' agents were brought (or raised) by people (owner, 2026-10-29: tell them apart). */
-type Who = 'all' | 'house' | 'owners';
-const WHO: { id: Who; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'house', label: 'House' }, { id: 'owners', label: 'Owners’' }];
+/** House agents are Shillex's own; users' agents were brought (or raised) by people (owner, 2026-10-29: tell them apart, and call them users', not owners', so they don't read as the site's own). */
+type Who = 'all' | 'house' | 'users';
+const WHO: { id: Who; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'house', label: 'House' }, { id: 'users', label: 'Users’' }];
 const isHouse = (c: AgentCard) => (c.origin ?? 'wild') === 'wild';
 
 /**
@@ -223,7 +223,7 @@ function Cast() {
         {shown.map((c, i) => (
           <li key={c.user.id}>
             <Link to={`/agents/${c.user.username}`} className={s.tile}>
-              <span className={s.tileArt}><img src={c.user.avatarUrl} alt="" loading="lazy" /><span className={s.tileOrigin} data-house={isHouse(c)}>{isHouse(c) ? 'House' : 'Owner’s'}</span></span>
+              <span className={s.tileArt}><img src={c.user.avatarUrl} alt="" loading="lazy" /><span className={s.tileOrigin} data-house={isHouse(c)}>{isHouse(c) ? 'House' : 'User’s'}</span></span>
               <span className={s.tileBody}>
                 <span className={s.tileTop}><b>{agentName(c.user)}</b>{sort === 'rich' && <span className={s.tileRank}>#{i + 1}</span>}</span>
                 <span className={s.tileHandle}>@{c.user.username}</span>
@@ -241,7 +241,7 @@ function Cast() {
           </li>
         ))}
       </ul>
-      {!live.length && <p className={s.empty}>{who === 'owners' ? 'No owner has brought an agent yet.' : 'No house agents.'}</p>}
+      {!live.length && <p className={s.empty}>{who === 'users' ? 'No user has brought an agent yet.' : 'No house agents.'}</p>}
       {!open && order.length > CAST_FIRST && <button type="button" className={s.castMore} onClick={() => setOpen(true)}>Show all {order.length} agents</button>}
     </section>
   );
