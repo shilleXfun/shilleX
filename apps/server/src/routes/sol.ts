@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, count, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { isValidSolanaAddress } from '@shillex/shared';
 import { z } from 'zod';
 import type { UserRow } from '../db/schema.ts';
 import { agentRules, agents, serviceOrders, solPositions, solWallets, userWallets, users } from '../db/schema.ts';
@@ -10,6 +11,7 @@ import type { WorldHandles } from '../world/boot.ts';
 import { normalizeRules } from '../world/sol-rules.ts';
 import { ESCROW, killedReason, setKilled, solView } from '../world/sol-trade.ts';
 import { listingsView, ordersView } from '../world/sol-market.ts';
+import { fundingTransactions } from '../world/sol-net.ts';
 
 /**
  * Real SOL routes (2026-10-27). Anyone may see an agent's wallet, positions, trades and its owner's rules. Only its owner may
@@ -19,6 +21,7 @@ import { listingsView, ordersView } from '../world/sol-market.ts';
 const RulesBody = z.object({ rules: z.record(z.string(), z.unknown()), wallet: WalletProofBody });
 const WithdrawBody = z.object({ sol: z.number().positive().max(1e6).nullish(), wallet: WalletProofBody });
 const KillBody = z.object({ stopped: z.boolean() });
+const FundBody = z.object({ from: z.string(), sol: z.number().min(0.001).max(10), agents: z.array(z.string().min(1).max(40)).min(1).max(200) });
 
 export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
   const { db, config } = app.deps;
@@ -71,6 +74,21 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
     r.get<{ Querystring: { agent?: string } }>('/market', async (req) => {
       const agentId = req.query.agent ? (await agentOf(req.query.agent)).id : undefined;
       return { listings: await listingsView(db, agentId ? { sellerId: agentId } : {}), orders: await ordersView(db, agentId ? { agentId } : {}) };
+    });
+
+    // The admin funds house agents from its own wallet (owner, 2026-10-29): Shillex builds the transfers, the admin's wallet
+    // signs and sends them in the browser. Only house agents' vault wallets are paid; deposits are seen by the balance sweep.
+    r.post('/admin/sol/fund', async (req) => {
+      if (!isAdmin(requireUser(req))) throw errors.forbidden('ADMIN_ONLY', 'Admins only');
+      const net = w.sol?.net;
+      if (!net?.blockhash) throw errors.badRequest('SOL_OFF', 'Real SOL wallets are not set up on this server');
+      const body = FundBody.parse(req.body);
+      if (!isValidSolanaAddress(body.from)) throw errors.badRequest('BAD_WALLET', 'That is not a Solana address');
+      const rows = await db.select({ handle: users.username, address: solWallets.publicKey }).from(users).innerJoin(agents, eq(agents.userId, users.id)).innerJoin(solWallets, eq(solWallets.ownerId, users.id))
+        .where(and(inArray(users.username, body.agents.map((a) => a.toLowerCase())), eq(agents.origin, 'wild'), ne(agents.status, 'retired')));
+      if (!rows.length) throw errors.badRequest('NO_AGENTS', 'None of those is a house agent with a wallet');
+      const lamports = Math.round(body.sol * 1e9);
+      return { transactions: fundingTransactions(body.from, rows.map((r) => r.address), lamports, await net.blockhash()), agents: rows, sol: body.sol, totalSol: (lamports * rows.length) / 1e9 };
     });
 
     r.get('/admin/sol', async (req) => {

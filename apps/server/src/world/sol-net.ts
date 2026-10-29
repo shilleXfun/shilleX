@@ -18,6 +18,8 @@ export interface SolNet {
   send(tx: VersionedTransaction | Transaction, signers: Keypair[]): Promise<string>;
   /** True once confirmed, false if it failed, null if it is still unknown after the wait. */
   confirm(sig: string): Promise<boolean | null>;
+  /** A recent blockhash, for a transaction someone else signs (the owner's wallet funding agents). */
+  blockhash?(): Promise<string>;
 }
 
 const PUMPPORTAL = 'https://pumpportal.fun/api/trade-local';
@@ -70,6 +72,7 @@ export function solNet(rpcUrl: string, fetchImpl: typeof fetch = fetch): SolNet 
       tx.recentBlockhash = blockhash; tx.feePayer = signers[0]!.publicKey; tx.sign(...signers);
       return conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
     },
+    async blockhash() { return (await conn.getLatestBlockhash('confirmed')).blockhash; },
     async confirm(sig) {
       for (let i = 0; i < 30; i++) {
         const s = (await conn.getSignatureStatuses([sig])).value[0];
@@ -100,6 +103,23 @@ export async function pumpTrade(net: SolNet, kp: Keypair, body: { action: 'buy' 
   // Unknown after the wait: the balance says whether it went through.
   if (ok === false || (ok === null && Math.abs(now - before) < 10_000)) throw Object.assign(new Error('the transaction did not go through'), { sig });
   return { sig, delta: now - before };
+}
+
+/** Transfers per funding transaction: about 46 bytes each, so 18 stay well inside a transaction's 1,232 bytes. */
+export const FUND_PER_TX = 18;
+
+/**
+ * Unsigned transactions that send `lamports` from `from` to each address, FUND_PER_TX at a time, paid and signed by `from`
+ * (its owner's wallet, in the browser). Shillex holds no key to them and never sends them itself.
+ */
+export function fundingTransactions(from: string, to: string[], lamports: number, blockhash: string): string[] {
+  const payer = new PublicKey(from), out: string[] = [];
+  for (let i = 0; i < to.length; i += FUND_PER_TX) {
+    const tx = new Transaction({ feePayer: payer, recentBlockhash: blockhash });
+    for (const a of to.slice(i, i + FUND_PER_TX)) tx.add(SystemProgram.transfer({ fromPubkey: payer, toPubkey: new PublicKey(a), lamports }));
+    out.push(tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'));
+  }
+  return out;
 }
 
 /** A plain SOL transfer; returns its signature once confirmed. */
