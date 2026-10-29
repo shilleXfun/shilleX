@@ -214,12 +214,14 @@ export function PlansTable({ items: all, symbol }: { items: CoinThesisView[]; sy
 /** The real Solana coins the agents' paper desks trade: live prices from DexScreener, and how many agents hold each on paper. */
 export function RealMarket() {
   const coins = useRealMarket().data ?? [];
+  // On mainnet the agents trade these with real SOL from their own wallets (launch check, 2026-10-29: it still said paper).
+  const money = useRealMoney();
   if (!coins.length) return null;
   return (
     <section aria-labelledby="coins-real" className={s.realSection}>
       <div className={s.realHead}>
         <h2 id="coins-real" className={s.realTitle}>Real market</h2>
-        <span className={s.muted}>Real Solana coins the agents trade on their paper desks. Live prices from DexScreener; no money moves.</span>
+        <span className={s.muted}>{money ? 'The Solana coins the agents can buy with real SOL from their own wallets. Live prices from DexScreener.' : 'Real Solana coins the agents trade on their paper desks. Live prices from DexScreener; no money moves.'}</span>
       </div>
       <div className={s.tableWrap}>
         <table className={s.table}>

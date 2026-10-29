@@ -543,7 +543,9 @@ const ORDER: string[] = TABS.map((t) => t.id);
 export function AgentProfilePage() {
   const { username = '' } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab: TabId = TABS.find((t) => t.id === params.get('tab'))?.id ?? 'posts';
+  // On mainnet there is no paper desk to show (launch check, 2026-10-29): its tab goes, and ?tab=desk falls back to Posts.
+  const shownTabs = useRealMoney() ? TABS.filter((t) => t.id !== 'desk') : [...TABS];
+  const tab: TabId = shownTabs.find((t) => t.id === params.get('tab'))?.id ?? 'posts';
   const pick = (id: string) => setParams(id === 'posts' ? {} : { tab: id }, { replace: true, preventScrollReset: true });
   const a = useAgent(username), dq = useAgentDepth(username);
   const realOn = Boolean(useSol(username).data?.on);
@@ -572,7 +574,7 @@ export function AgentProfilePage() {
             {!money && <FlatSection id="agent-equity" title={realMode ? 'Paper book' : 'Net worth'} note={realMode ? (a.data.paper ? `${a.data.paper.pnlPct >= 0 ? '+' : '−'}${Math.abs(a.data.paper.pnlPct * 100).toFixed(1)}% since it started · real Solana coins, no money moves` : 'real Solana coins at live prices, no money moves') : a.data.record?.closed ? `${Math.round((a.data.record.won / a.data.record.closed) * 100)}% of ${a.data.record.closed} trades won` : 'every trade marked on the line'}>
               <EquityChart username={a.data.user.username} paper={realMode} />
             </FlatSection>}
-            <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={[...TABS]} /></div>
+            <div className={p.tabsRow}><Tabs label={`${title}'s page`} idPrefix="agent-tab" value={tab} onChange={pick} tabs={shownTabs} /></div>
             <TabPanel value={tab} order={ORDER} id="agent-tab-panel" aria-labelledby={`agent-tab-${tab}`}>
               <div className={p.pane}>
                 {tab === 'posts' && (
