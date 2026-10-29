@@ -159,6 +159,12 @@ export interface Config {
   /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
   sitesPerDay: number;
   /**
+   * A one-off boost (owner, 2026-10-29: "3 bucks to spend in the next hour"): BOOST_USD over BOOST_HOURS (default 1) ending at
+   * BOOST_UNTIL (an ISO time). Inside it the world's model money is the boost's own (all of it at once, not paced), agents wake
+   * four times as often and the house pays their thinking; at BOOST_UNTIL everything is as before. Null when unset or bad.
+   */
+  boost: { start: Date; end: Date; usd: number } | null;
+  /**
    * Websites on Claude (owner, 2026-10-29): SITES_MODEL (default claude-opus-5-5 when ANTHROPIC_API_KEY is set; off: the everyday
    * model) writes every site, the house paying up to SITES_USD_PER_DAY (default 10) over any 24 hours (sites/opus.ts).
    */
@@ -445,6 +451,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, false),
     times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 60)) || 60), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
+    boost: (() => {
+      const end = Date.parse(env.BOOST_UNTIL ?? ''), usd = n(env.BOOST_USD, 0), hours = Math.min(24, Math.max(0.25, n(env.BOOST_HOURS, 1) || 1));
+      return Number.isFinite(end) && usd > 0 ? { start: new Date(end - hours * 3_600_000), end: new Date(end), usd: Math.min(usd, 25) } : null;
+    })(),
     siteModel: !env.ANTHROPIC_API_KEY?.trim() || env.SITES_MODEL?.trim().toLowerCase() === 'off' ? null
       : { model: env.SITES_MODEL?.trim() || 'claude-opus-5-5', usdPerDay: Math.max(0, n(env.SITES_USD_PER_DAY, 10) || 0) },
     llm: loadLlmConfig(env),

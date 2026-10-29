@@ -7,7 +7,7 @@ import { costMeter } from '../world/cost-meter.ts';
 import { chargeCompute, computeGate, computeOn } from './compute.ts';
 import { RoutedBrain } from '../world/brain-openai.ts';
 import type { Config } from '../config.ts';
-import { Budget } from '../world/budget.ts';
+import { Budget, type BudgetWindow } from '../world/budget.ts';
 import { anthropicClient } from '../lib/anthropic.ts';
 
 export const HAIKU = 'claude-haiku-5-5';
@@ -57,7 +57,8 @@ export function brainFromConfig(config: Pick<Config, 'llm' | 'anthropicApiKey'> 
   return brain;
 }
 
-export const modelBudget = (db: Db, capUsd: number, now: () => Date, periodHours = 24, exclude?: string[]) => new Budget(db, capUsd, now, { hardStop: true, periodHours, ...(exclude ? { exclude } : {}) });
+export const modelBudget = (db: Db, capUsd: number, now: () => Date, periodHours = 24, exclude?: string[], window?: BudgetWindow | null) =>
+  new Budget(db, capUsd, now, { hardStop: true, periodHours, ...(exclude ? { exclude } : {}), ...(window ? { window } : {}) });
 
 /** Where a call's cost is written: an agent's turn, or a world call that belongs to no agent (the X digest, x-feed §4). */
 export type CostTarget = { turnId: string } | { worldCallId: string };

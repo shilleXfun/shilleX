@@ -212,7 +212,11 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
   if (aborted) console.log(`[world] finalized ${aborted} interrupted turns as aborted`);
   // Hard daily cap on model spend; today's spend so far comes from the receipts, so the cap survives restarts.
   // LLM_BUDGET_USD_PER_12H for each half of the UTC day; spend so far comes from the receipts, so the cap survives restarts.
-  const budget = modelBudget(db, config.llmBudgetPer12hUsd, now, 12, config.siteModel ? [config.siteModel.model] : undefined);
+  // A boost (BOOST_USD until BOOST_UNTIL) is a window of its own money for the world (world/budget.ts periodAt).
+  const boost = config.boost;
+  const budget = modelBudget(db, config.llmBudgetPer12hUsd, now, 12, config.siteModel ? [config.siteModel.model] : undefined,
+    boost ? { start: boost.start, hours: (boost.end.getTime() - boost.start.getTime()) / 3_600_000, usd: boost.usd } : null);
+  if (boost && now() < boost.end) console.log(`[world] boost: $${boost.usd} of model money from ${boost.start.toISOString()} to ${boost.end.toISOString()}`);
   await budget.load();
   // Past RESERVE_AT of the cap only the 20 most-followed agents keep the model (world/budget.ts); the rest go quiet.
   const top = createTopAgents(db, now);
@@ -297,7 +301,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng, drawn: { maker: imageMaker, every: config.imagePostEvery } }), director: directed };
       handles.engine = startEngine({ ...engineDeps, tickMs: config.engineTickMs, population: () => population.value() });
       if (directed && brain) {
-        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(config.director.postsPerHour, config.voicePerHour), wake: config.director.wake, sol, raised: config.raised });
+        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(config.director.postsPerHour, config.voicePerHour), wake: config.director.wake, sol, raised: config.raised, boost });
         handles.director = director;
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
