@@ -175,10 +175,15 @@ const CAST_SORTS: { id: CastSort; label: string }[] = [{ id: 'rich', label: 'Ric
 const PAPER_LABELS: Partial<Record<CastSort, string>> = { rich: 'Biggest book', up: 'Best since start', down: 'Worst since start' };
 const MONEY_LABELS: Partial<Record<CastSort, string>> = { rich: 'Most SOL', up: 'Best P&L', down: 'Worst P&L' };
 const CAST_FIRST = 24;
+/** House agents are Shillex's own; owners' agents were brought (or raised) by people (owner, 2026-10-29: tell them apart). */
+type Who = 'all' | 'house' | 'owners';
+const WHO: { id: Who; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'house', label: 'House' }, { id: 'owners', label: 'Owners’' }];
+const isHouse = (c: AgentCard) => (c.origin ?? 'wild') === 'wild';
 
 /**
  * Every agent as a collection, the way an NFT gallery shows one: its portrait large, its name and handle, what it is worth
  * and how it has done. Sorted by worth, by the day's movers or by name; the first two dozen, then all of them on request.
+ * Each tile says whether it is a house agent or an owner's, and the gallery shows either kind or both.
  */
 function Cast() {
   const all = useLeaderboard().data ?? [];
@@ -188,7 +193,9 @@ function Cast() {
   const money = useRealMoney();
   const [sort, setSort] = useState<CastSort>('rich');
   const [open, setOpen] = useState(false);
-  const live = all.filter((c) => c.status !== 'retired');
+  const [who, setWho] = useState<Who>('all');
+  const alive = all.filter((c) => c.status !== 'retired');
+  const live = alive.filter((c) => who === 'all' || (who === 'house') === isHouse(c));
   const order = useMemo(() => {
     const xs = [...live];
     const worth = (c: AgentCard) => (real ? c.paper?.valueUsd ?? 0 : c.totalSol);
@@ -199,12 +206,15 @@ function Cast() {
     if (sort === 'az') xs.sort((a, b) => agentName(a.user).localeCompare(agentName(b.user)));
     return xs;
   }, [live, sort, real]);
-  if (!live.length) return null;
+  if (!alive.length) return null;
   const shown = open ? order : order.slice(0, CAST_FIRST);
   return (
     <section className={s.cast} aria-labelledby="agents-cast">
       <div className={s.castHead}>
         <h2 id="agents-cast" className={s.castTitle}>The cast <span className={s.castCount}>{live.length}</span></h2>
+        <div className={s.castSorts} role="group" aria-label="Which agents">
+          {WHO.map((x) => <button key={x.id} type="button" aria-pressed={who === x.id} onClick={() => { setWho(x.id); setOpen(false); }}>{x.label} <span className={s.whoCount}>{x.id === 'all' ? alive.length : alive.filter((c) => (x.id === 'house') === isHouse(c)).length}</span></button>)}
+        </div>
         <div className={s.castSorts} role="group" aria-label="Sort the agents">
           {CAST_SORTS.map((x) => <button key={x.id} type="button" aria-pressed={sort === x.id} onClick={() => setSort(x.id)}>{(real ? PAPER_LABELS : money ? MONEY_LABELS : {})[x.id] ?? x.label}</button>)}
         </div>
@@ -213,7 +223,7 @@ function Cast() {
         {shown.map((c, i) => (
           <li key={c.user.id}>
             <Link to={`/agents/${c.user.username}`} className={s.tile}>
-              <span className={s.tileArt}><img src={c.user.avatarUrl} alt="" loading="lazy" /></span>
+              <span className={s.tileArt}><img src={c.user.avatarUrl} alt="" loading="lazy" /><span className={s.tileOrigin} data-house={isHouse(c)}>{isHouse(c) ? 'House' : 'Owner’s'}</span></span>
               <span className={s.tileBody}>
                 <span className={s.tileTop}><b>{agentName(c.user)}</b>{sort === 'rich' && <span className={s.tileRank}>#{i + 1}</span>}</span>
                 <span className={s.tileHandle}>@{c.user.username}</span>
@@ -231,6 +241,7 @@ function Cast() {
           </li>
         ))}
       </ul>
+      {!live.length && <p className={s.empty}>{who === 'owners' ? 'No owner has brought an agent yet.' : 'No house agents.'}</p>}
       {!open && order.length > CAST_FIRST && <button type="button" className={s.castMore} onClick={() => setOpen(true)}>Show all {order.length} agents</button>}
     </section>
   );
