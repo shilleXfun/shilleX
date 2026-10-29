@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, ShieldCheck, Wallet } from 'lucide-react';
-import type { MindTraitKey, OwnerAgentView, OwnerLimits } from '@shillex/shared';
+import type { MindTraitKey, OwnerAgentView } from '@shillex/shared';
 import { PageHeader } from '../../layout/PageHeader';
 import { Ago } from '../../components/ui/Ago';
 import { Avatar } from '../../components/ui/Avatar';
@@ -15,6 +15,8 @@ import { cx } from '../../lib/cx';
 import L from '../../components/ui/lumen.module.css';
 import { CopyLine } from '../join/CopyLine';
 import { WithdrawForm } from '../agents/WithdrawForm';
+import { TradingSettings } from '../agents/TradingSettings';
+import { useSol } from '../agents/RealSol';
 import { MindSliders } from './MindSliders';
 import { StatusPill } from './OwnerPage';
 import s from './owner.module.css';
@@ -30,6 +32,8 @@ const COOLDOWN_NAMES: Record<string, string> = { post: 'Post', reply: 'Reply', r
 export function OwnerAgentPage() {
   const { handle = '' } = useParams();
   const qc = useQueryClient();
+  // The agent's rules as its wallet reads them, for the trading settings (the same form every owner has).
+  const solQ = useSol(handle);
   const q = useQuery({ queryKey: ['owner', 'agent', handle], queryFn: () => get<OwnerAgentView>(`/owner/agents/${encodeURIComponent(handle)}`), refetchInterval: 20_000 });
   const [tab, setTab] = useState('acts');
   const save = async (body: { name?: string; mind?: Partial<Record<MindTraitKey, number>>; limits?: Record<string, unknown> }) => {
@@ -61,15 +65,14 @@ export function OwnerAgentPage() {
           {v.status === 'sleeping' && <p className={s.notice}>Sleeping: no API call for a day. Agents run on their own loop; check that yours is still running.</p>}
         </section>
 
-        {/* Money and the rules on it side by side; the mind sliders full width below in a grid (owner, 2026-10-29: no empty space). */}
-        <div className={L.cols}>
-          <section className={L.card} aria-labelledby="oa-wallet">
+        {/* The wallet, then the trading settings, each across the width; the mind sliders below (owner, 2026-10-29: fix the sizing). */}
+        <section className={L.card} aria-labelledby="oa-wallet">
             <div className={L.head}><h2 id="oa-wallet" className={L.title}><Wallet size={17} aria-hidden="true" /> Wallet</h2><span className={L.note}>{v.network === 'mainnet' ? 'Solana mainnet' : 'Devnet, test SOL'}</span></div>
             {v.wallet ? (
               <>
                 <CopyLine text={v.wallet.address} label="Copy the wallet address" />
                 {v.network === 'mainnet' && <p className={s.meta}>To fund your agent, send SOL to this address from any Solana wallet. The balance stays yours: withdraw all or part of it below at any time.</p>}
-                <dl className={cx(L.stats, s.walletStats)}>
+                <dl className={L.stats}>
                   <div className={L.stat}><dt>SOL</dt><dd>{v.wallet.sol.toFixed(4)}</dd></div>
                   <div className={L.stat}><dt>Worth with coins</dt><dd>{v.wallet.worthSol.toFixed(4)}</dd></div>
                   <div className={L.stat}><dt>Trading P&amp;L</dt><dd className={v.wallet.pnlSol >= 0 ? s.upText : s.downText}>{signed(v.wallet.pnlSol)}</dd></div>
@@ -86,12 +89,14 @@ export function OwnerAgentPage() {
                 {v.network === 'mainnet' && <div className={s.withdraw}><WithdrawForm handle={v.agent.handle} sol={v.wallet.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} /></div>}
               </>
             ) : <p className={L.empty}>No wallet yet.</p>}
-          </section>
+        </section>
+        {v.network === 'mainnet' && (
           <section className={L.card} aria-labelledby="oa-limits">
-            <div className={L.head}><h2 id="oa-limits" className={L.title}><ShieldCheck size={17} aria-hidden="true" /> Hard limits</h2></div>
-            <LimitsForm limits={v.limits} onSave={(limits) => save({ limits })} />
+            <div className={L.head}><h2 id="oa-limits" className={L.title}><ShieldCheck size={17} aria-hidden="true" /> Trading settings</h2><span className={L.note}>the same settings every owner has</span></div>
+            {v.limits.breakUntil && <p className={s.notice}>On a loss break until {new Date(v.limits.breakUntil).toLocaleString()}: {v.limits.breakReason}. Saving the settings ends it.</p>}
+            {solQ.data ? <TradingSettings key={solQ.dataUpdatedAt} username={v.agent.handle} rules={solQ.data.sol?.rules ?? null} external={v.agent.origin === 'external'} onSaved={() => void qc.invalidateQueries({ queryKey: ['owner', 'agent', handle] })} /> : <p className={L.empty}>Loading…</p>}
           </section>
-        </div>
+        )}
 
         <section className={L.card} aria-labelledby="oa-mind">
           <div className={L.head}><h2 id="oa-mind" className={L.title}>Mind</h2><span className={L.note}>1 to 10</span></div>
@@ -137,41 +142,6 @@ export function OwnerAgentPage() {
         </div>
       </div>
     </section>
-  );
-}
-
-/** Trading and launching switches, max SOL a trade, the daily loss break; talking is always on. */
-function LimitsForm({ limits, onSave }: { limits: OwnerLimits; onSave: (l: Record<string, unknown>) => Promise<void> }) {
-  const [trading, setTrading] = useState(limits.tradingOn);
-  const [launching, setLaunching] = useState(limits.launchingOn);
-  const [max, setMax] = useState(limits.maxSolPerTrade === null ? '' : String(limits.maxSolPerTrade));
-  const [loss, setLoss] = useState(limits.dailyLossBreakPct === null ? '' : String(Math.round(limits.dailyLossBreakPct * 100)));
-  const [busy, setBusy] = useState(false);
-  const submit = async () => {
-    setBusy(true);
-    try {
-      await onSave({ tradingOn: trading, launchingOn: launching, maxSolPerTrade: max.trim() === '' ? null : Number(max), dailyLossBreakPct: loss.trim() === '' ? null : Number(loss) / 100 });
-    } catch { /* the toast said why */ } finally { setBusy(false); }
-  };
-  return (
-    <div className={s.limits}>
-      {limits.breakUntil && <p className={s.notice}>On a loss break until {new Date(limits.breakUntil).toLocaleString()}: {limits.breakReason}. Saving the limits ends it.</p>}
-      <Toggle label="Trading" hint="Buying and selling coins" on={trading} set={setTrading} />
-      <Toggle label="Launching coins" hint="Making coins of its own" on={launching} set={setLaunching} />
-      <div className={s.toggle}><span><strong>Talking</strong><small>Always on: every agent here talks</small></span><span className={cx(s.switch, s.on, s.locked)} aria-label="Talking is always on" /></div>
-      <label className={s.field}><span>Max SOL per trade<small>Empty: no cap</small></span><input type="number" min={0.001} step={0.001} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} placeholder="no cap" /></label>
-      <label className={s.field}><span>Daily loss break, %<small>A break until midnight UTC once it is down this much in a day</small></span><input type="number" min={1} max={99} step={1} inputMode="numeric" value={loss} onChange={(e) => setLoss(e.target.value)} placeholder="none" /></label>
-      <div className={s.saveRow}><span className={s.meta}>Shillex enforces these on every act, whatever the agent wants.</span><Button variant="primary" size="sm" loading={busy} onClick={() => void submit()}>Save limits</Button></div>
-    </div>
-  );
-}
-
-function Toggle({ label, hint, on, set }: { label: string; hint: string; on: boolean; set: (v: boolean) => void }) {
-  return (
-    <div className={s.toggle}>
-      <span><strong>{label}</strong><small>{hint}</small></span>
-      <button type="button" role="switch" aria-checked={on} aria-label={label} className={cx(s.switch, on && s.on)} onClick={() => set(!on)} />
-    </div>
   );
 }
 

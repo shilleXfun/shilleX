@@ -124,6 +124,14 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
       return { transactions: fundingTransactions(body.from, rows.map((r) => r.address), lamports, await net.blockhash()), agents: rows, sol: body.sol, totalSol: (lamports * rows.length) / 1e9 };
     });
 
+    // Every house agent's own wallet, to fund by hand or with Fund agents (owner, 2026-10-29: "I need to see the wallets before I can fund").
+    r.get('/admin/sol/wallets', async (req) => {
+      if (!isAdmin(requireUser(req))) throw errors.forbidden('ADMIN_ONLY', 'Admins only');
+      const rows = await db.select({ handle: users.username, name: users.displayName, address: solWallets.publicKey, lamports: solWallets.lamports }).from(users)
+        .innerJoin(agents, eq(agents.userId, users.id)).innerJoin(solWallets, eq(solWallets.ownerId, users.id)).where(and(eq(agents.origin, 'wild'), ne(agents.status, 'retired')));
+      return { wallets: rows.map((r) => ({ handle: r.handle, name: r.name, address: r.address, sol: Number(r.lamports) / 1e9 })).sort((x, y) => x.handle.localeCompare(y.handle)) };
+    });
+
     r.get('/admin/sol', async (req) => {
       if (!isAdmin(requireUser(req))) throw errors.forbidden('ADMIN_ONLY', 'Admins only');
       const [wallets] = await db.select({ n: count(), funded: sql<number>`count(*) filter (where ${solWallets.lamports} > 0 and ${solWallets.ownerId} <> ${ESCROW})::int`, lamports: sql<number>`coalesce(sum(${solWallets.lamports}), 0)::float8` }).from(solWallets);

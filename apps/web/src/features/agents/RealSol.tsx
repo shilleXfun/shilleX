@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, ExternalLink } from 'lucide-react';
-import { abbreviateMint, relativeTime, type OwnerRules, type SolView } from '@shillex/shared';
+import { relativeTime, type OwnerRules, type SolView } from '@shillex/shared';
 import { errorMessage, get, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { WithdrawForm } from './WithdrawForm';
+import { TradingSettings } from './TradingSettings';
 import { Button } from '../../components/ui/Button';
 import { FlatSection as Section } from './FlatSection';
 import s from './agents.module.css';
@@ -45,7 +46,7 @@ export function rulesWords(x: OwnerRules | null): string[] {
   return w;
 }
 
-export function RealSolCard({ username }: { username: string }) {
+export function RealSolCard({ username, external = false }: { username: string; /** An outside agent: launching is off until its owner turns it on. */ external?: boolean }) {
   const q = useSol(username);
   const w = q.data?.sol;
   const [copied, setCopied] = useState(false);
@@ -56,9 +57,9 @@ export function RealSolCard({ username }: { username: string }) {
     <>
       <Section id="agent-sol" title="Wallet" note={<span className={r.note}><span className={r.dot} data-s={status} aria-hidden="true" />{fmt(w.sol)} SOL</span>}>
         <div className={r.fund}>
-          <span className={r.fundLabel}>{w.mine ? 'Deposit address' : 'Its wallet'}</span>
+          <span className={r.fundLabel}>{w.mine ? 'Deposit address' : 'Its wallet (anyone can send SOL to it)'}</span>
           <span className={r.addr}>
-            <a href={solscan(`account/${w.address}`)} target="_blank" rel="noreferrer" title={w.address}>{w.mine ? w.address : abbreviateMint(w.address)}</a>
+            <a href={solscan(`account/${w.address}`)} target="_blank" rel="noreferrer" title={w.address}>{w.address}</a>
             <button type="button" className={r.icon} aria-label="Copy the address" onClick={() => { void navigator.clipboard?.writeText(w.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>
               <Copy size={14} aria-hidden="true" />
             </button>
@@ -98,89 +99,18 @@ export function RealSolCard({ username }: { username: string }) {
           {words.length ? <ul className={r.ruleList}>{words.map((x) => <li key={x}>{x}</li>)}</ul> : <p className={r.muted}>None: it decides freely within its balance.</p>}
         </div>
       </Section>
-      {w.mine && <OwnerPanel username={username} w={w} />}
+      {w.mine && <OwnerPanel username={username} w={w} external={external} />}
     </>
   );
 }
 
-type Draft = Record<string, string | boolean>;
-const toDraft = (x: OwnerRules | null): Draft => ({
-  tradingOn: x?.tradingOn !== false, maxSolPerTrade: x?.maxSolPerTrade?.toString() ?? '', maxTradesPerDay: x?.maxTradesPerDay?.toString() ?? '',
-  stopLossPct: x?.stopLossPct !== undefined ? String(Math.round(x.stopLossPct * 100)) : '',
-  takeProfit: (x?.takeProfit ?? []).map((t) => `${t.x}x:${Math.round(t.sellPct * 100)}`).join(', '),
-  maxLossPerDaySol: x?.maxLossPerDaySol?.toString() ?? '', maxLossTotalSol: x?.maxLossTotalSol?.toString() ?? '',
-  pumpOnly: Boolean(x?.pumpOnly), minMcapUsd: x?.minMcapUsd?.toString() ?? '', minHolders: x?.minHolders?.toString() ?? '', minLiquidityUsd: x?.minLiquidityUsd?.toString() ?? '',
-  blacklist: (x?.blacklist ?? []).join(', '), canBuyServices: x?.canBuyServices !== false, canSellServices: x?.canSellServices !== false,
-  maxServiceSpendPerDaySol: x?.maxServiceSpendPerDaySol?.toString() ?? '',
-});
-const n = (v: string | boolean | undefined) => (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
-function fromDraft(d: Draft): OwnerRules {
-  const ladder = String(d.takeProfit).split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => {
-    const m = /^(\d+(?:\.\d+)?)\s*x\s*[:@]?\s*(\d+(?:\.\d+)?)\s*%?$/i.exec(p);
-    return m ? [{ x: Number(m[1]), sellPct: Math.min(100, Number(m[2])) / 100 }] : [];
-  });
-  const r: OwnerRules = {
-    ...(d.tradingOn ? {} : { tradingOn: false }), maxSolPerTrade: n(d.maxSolPerTrade), maxTradesPerDay: n(d.maxTradesPerDay),
-    stopLossPct: n(d.stopLossPct) !== undefined ? n(d.stopLossPct)! / 100 : undefined, takeProfit: ladder.length ? ladder : undefined,
-    maxLossPerDaySol: n(d.maxLossPerDaySol), maxLossTotalSol: n(d.maxLossTotalSol), ...(d.pumpOnly ? { pumpOnly: true } : {}),
-    minMcapUsd: n(d.minMcapUsd), minHolders: n(d.minHolders), minLiquidityUsd: n(d.minLiquidityUsd),
-    blacklist: String(d.blacklist).split(',').map((b) => b.trim()).filter(Boolean),
-    ...(d.canBuyServices ? {} : { canBuyServices: false }), ...(d.canSellServices ? {} : { canSellServices: false }), maxServiceSpendPerDaySol: n(d.maxServiceSpendPerDaySol),
-  };
-  return Object.fromEntries(Object.entries(r).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as OwnerRules;
-}
-
-const FIELDS: { key: string; label: string; hint: string; kind: 'num' | 'text' | 'bool' }[] = [
-  { key: 'tradingOn', label: 'Trading on', hint: 'Off: it buys and sells nothing', kind: 'bool' },
-  { key: 'maxSolPerTrade', label: 'Max SOL per trade', hint: 'e.g. 0.02', kind: 'num' },
-  { key: 'maxTradesPerDay', label: 'Max trades per day', hint: 'e.g. 10', kind: 'num' },
-  { key: 'stopLossPct', label: 'Stop loss %', hint: 'e.g. 30: sells all at −30%', kind: 'num' },
-  { key: 'takeProfit', label: 'Take profit', hint: 'e.g. 2x:50, 5x:100', kind: 'text' },
-  { key: 'maxLossPerDaySol', label: 'Max loss per day (SOL)', hint: 'then it pauses until tomorrow', kind: 'num' },
-  { key: 'maxLossTotalSol', label: 'Max loss in total (SOL)', hint: 'then it pauses until you save again', kind: 'num' },
-  { key: 'pumpOnly', label: 'pump.fun coins only', hint: '', kind: 'bool' },
-  { key: 'minMcapUsd', label: 'Min market cap ($)', hint: 'e.g. 100000', kind: 'num' },
-  { key: 'minHolders', label: 'Min holders', hint: 'e.g. 300', kind: 'num' },
-  { key: 'minLiquidityUsd', label: 'Min liquidity ($)', hint: 'e.g. 20000', kind: 'num' },
-  { key: 'blacklist', label: 'Blacklist', hint: '$TICKERS or mint addresses, commas', kind: 'text' },
-  { key: 'canBuyServices', label: 'Can buy services', hint: '', kind: 'bool' },
-  { key: 'canSellServices', label: 'Can sell services', hint: '', kind: 'bool' },
-  { key: 'maxServiceSpendPerDaySol', label: 'Max spend on services per day (SOL)', hint: '', kind: 'num' },
-];
-
-/** The owner's controls: its rules (empty = the agent decides) and a withdrawal (WithdrawForm). */
-function OwnerPanel({ username, w }: { username: string; w: SolView }) {
+/** The owner's controls: the trading settings (TradingSettings, the same for every owner) and a withdrawal (WithdrawForm). */
+function OwnerPanel({ username, w, external }: { username: string; w: SolView; external: boolean }) {
   const qc = useQueryClient();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(w.rules));
-  const [msg, setMsg] = useState<{ ok: boolean; text: string; sig?: string } | null>(null);
-  const set = (k: string, v: string | boolean) => setDraft((d) => ({ ...d, [k]: v }));
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    setSaving(true);
-    try {
-      await put(`/agents/${encodeURIComponent(username)}/rules`, { rules: fromDraft(draft) });
-      setMsg({ ok: true, text: 'Saved. Your agent follows these rules from its next trade.' });
-      await qc.invalidateQueries({ queryKey: ['sol', username] });
-    } catch (e) { setMsg({ ok: false, text: errorMessage(e) }); } finally { setSaving(false); }
-  };
   return (
-    <Section id="agent-owner" title="Owner settings" note="only you see this">
-      <p className={r.muted}>Leave a field empty and your agent decides for itself.</p>
-      <div className={r.form}>
-        {FIELDS.map((f) => (
-          <label key={f.key} className={cx(r.field, f.kind === 'bool' && r.check)}>
-            {f.kind === 'bool'
-              ? <input type="checkbox" checked={Boolean(draft[f.key])} onChange={(e) => set(f.key, e.target.checked)} />
-              : <input type="text" inputMode={f.kind === 'num' ? 'decimal' : undefined} value={String(draft[f.key] ?? '')} placeholder={f.hint} onChange={(e) => set(f.key, e.target.value)} />}
-            <span>{f.label}</span>
-          </label>
-        ))}
-      </div>
-      <div className={r.actions}>
-        <Button size="sm" variant="primary" loading={saving} onClick={() => void save()}>Save rules</Button>
-      </div>
-      <WithdrawForm handle={username} sol={w.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['sol', username] })} />
-      {msg && <p className={msg.ok ? r.ok : r.err} role="status">{msg.text}{msg.sig && <> <a href={solscan(`tx/${msg.sig}`)} target="_blank" rel="noreferrer">View on Solscan</a></>}</p>}
+    <Section id="agent-owner" title="Trading settings" note="only you see this">
+      <TradingSettings username={username} rules={w.rules} external={external} />
+      <div style={{ marginTop: 18 }}><WithdrawForm handle={username} sol={w.sol} onDone={() => void qc.invalidateQueries({ queryKey: ['sol', username] })} /></div>
     </Section>
   );
 }

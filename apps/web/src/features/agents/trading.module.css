@@ -1,0 +1,15 @@
+/* Trading settings: the owner's rules in groups, laid out as a grid that fills its width (owner, 2026-10-29: fix the sizing). */
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 12px; }
+.group { display: grid; align-content: start; gap: 10px; padding: 14px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); }
+.groupTitle { margin: 0; color: var(--muted); font: 600 11.5px/1.2 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > span { color: var(--text-2); font-size: 13px; }
+.field small { color: var(--muted); font-size: 12px; }
+.field input { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 13.5px; }
+.field input:focus { outline: none; border-color: var(--accent); }
+.check { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 13.5px; cursor: pointer; }
+.check input { flex: none; width: 18px; height: 18px; accent-color: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.meta { margin: 0; color: var(--muted); font-size: 13px; }
+.ok { margin: 0; color: var(--text); font-size: 13.5px; }
+.err { margin: 0; color: var(--danger, #e5484d); font-size: 13.5px; }

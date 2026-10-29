@@ -587,7 +587,7 @@ export function AgentProfilePage() {
                 {tab === 'now' && <><Decisions list={a.data.decisions ?? []} /><Mind d={dq.data} username={a.data.user.username} /><Memories d={dq.data} /><SaidVsDid d={dq.data} /></>}
                 {tab === 'money' && (
                   <>
-                    <RealSolCard username={a.data.user.username} />
+                    <RealSolCard username={a.data.user.username} external={a.data.origin === 'external'} />
                     <AgentServices username={a.data.user.username} />
                     {/* Real SOL on: the play-coin wallet is history (owner, 2026-10-27). */}
                     {!realOn && !money && <div className={p.cols}><Positions a={a.data} /><WalletCard a={a.data} /></div>}

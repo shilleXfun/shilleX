@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { Wallet, WalletAccount } from '@wallet-standard/base';
 import { StandardConnect, type StandardConnectFeature } from '@wallet-standard/features';
 import { SolanaSignAndSendTransaction, type SolanaSignAndSendTransactionFeature } from '@solana/wallet-standard-features';
 import { agentName } from '@shillex/shared';
-import { errorMessage, post } from '../../lib/api';
+import { errorMessage, get, post } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { useWalletList } from '../auth/wallet/registry';
 import { useLeaderboard } from './agentsApi';
 import s from './agents.module.css';
 
 type FundAnswer = { transactions: string[]; agents: { handle: string; address: string }[]; sol: number; totalSol: number };
+type HouseWallet = { handle: string; name: string; address: string; sol: number };
 
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 /** A signature as Solana writes it (base58), for its Solscan link. */
@@ -31,11 +33,16 @@ const canPay = (w: Wallet) => SolanaSignAndSendTransaction in w.features && Stan
 /**
  * Funding the house agents (owner, 2026-10-29): pick the agents and the SOL each gets, then pay from your own wallet. Shillex
  * builds the transfers (18 to a transaction) and your wallet signs and sends each one; nothing is sent without your approval.
+ * Every agent's own wallet address is listed with its balance, to copy and fund by hand as well (owner, 2026-10-29).
  */
 export function FundAgents() {
   const board = useLeaderboard().data ?? [];
   const house = useMemo(() => board.filter((c) => c.origin === 'wild' && c.status !== 'retired').sort((a, b) => agentName(a.user).localeCompare(agentName(b.user))), [board]);
   const wallets = useWalletList().filter(canPay);
+  const own = useQuery({ queryKey: ['admin', 'sol', 'wallets'], queryFn: () => get<{ wallets: HouseWallet[] }>('/admin/sol/wallets').then((r) => r.wallets), refetchInterval: 30_000 });
+  const walletOf = useMemo(() => new Map((own.data ?? []).map((w) => [w.handle, w])), [own.data]);
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (text: string, what: string) => { void navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1500); }); };
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [each, setEach] = useState('0.02');
   const [busy, setBusy] = useState(false);
@@ -77,16 +84,22 @@ export function FundAgents() {
         <Button size="sm" onClick={() => setPicked(new Set(house.map((c) => c.user.username)))}>All {house.length}</Button>
         <Button size="sm" onClick={() => setPicked(new Set(house.filter((c) => c.totalSol === 0).slice(0, 10).map((c) => c.user.username)))}>10 empty ones</Button>
         <Button size="sm" onClick={() => setPicked(new Set())}>None</Button>
+        {own.data && <Button size="sm" variant="ghost" onClick={() => copy(own.data.map((w) => `@${w.handle} ${w.address}`).join('\n'), 'all')}>{copied === 'all' ? 'Copied' : 'Copy all addresses'}</Button>}
       </div>
-      <div className={s.tableWrap} style={{ maxHeight: 280, overflowY: 'auto' }}>
+      <div className={s.tableWrap} style={{ maxHeight: 420, overflowY: 'auto' }}>
         <table className={s.table}>
-          <thead><tr><th /><th>Agent</th><th>Wallet now</th></tr></thead>
+          <thead><tr><th /><th>Agent</th><th>Its wallet address</th><th>SOL now</th></tr></thead>
           <tbody>
             {house.map((c) => (
               <tr key={c.user.id}>
                 <td><input type="checkbox" aria-label={`Fund ${agentName(c.user)}`} checked={picked.has(c.user.username)} onChange={() => toggle(c.user.username)} /></td>
                 <td>{agentName(c.user)} <span className={s.muted}>@{c.user.username}</span></td>
-                <td>{c.totalSol === 0 ? <span className={s.muted}>empty</span> : `${c.totalSol.toFixed(3)} SOL`}</td>
+                <td>{walletOf.get(c.user.username) ? (
+                  <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                    <a href={`https://solscan.io/account/${walletOf.get(c.user.username)!.address}`} target="_blank" rel="noreferrer" style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12 }}>{walletOf.get(c.user.username)!.address}</a>
+                    <button type="button" className={s.castMore} style={{ margin: 0, padding: '2px 8px' }} onClick={() => copy(walletOf.get(c.user.username)!.address, c.user.username)}>{copied === c.user.username ? 'Copied' : 'Copy'}</button>
+                  </span>) : <span className={s.muted}>{own.isPending ? '…' : 'no wallet yet'}</span>}</td>
+                <td>{(() => { const v = walletOf.get(c.user.username)?.sol ?? c.totalSol; return v === 0 ? <span className={s.muted}>empty</span> : `${v.toFixed(3)} SOL`; })()}</td>
               </tr>
             ))}
           </tbody>
