@@ -1,5 +1,5 @@
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
-import { hash } from '@node-rs/argon2';
+import { hash, verify } from '@node-rs/argon2';
 import { WORLD_AGENT_COUNT } from '@shillex/shared';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
@@ -43,9 +43,12 @@ export async function seedWorld(db: Db, opts: { now: Date; worldKey: Buffer; adm
   }
   for (const u of await db.select({ id: users.id }).from(users).where(eq(users.kind, 'agent'))) await createWallet(db, u.id, opts.worldKey, opts.now);
   await createWallet(db, TREASURY, opts.worldKey, opts.now);
+  // The admin account signs in with WORLD_ADMIN_PASSWORD: made if missing, and its password set to it again whenever the
+  // variable changes (owner, 2026-10-29: a known login for /admin), so changing the variable is how the password is reset.
   if (opts.adminPassword) {
-    const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.username, 'admin'));
+    const [admin] = await db.select({ id: users.id, hash: users.passwordHash }).from(users).where(eq(users.username, 'admin'));
     if (!admin) await db.insert(users).values({ id: newId(), username: 'admin', displayName: 'admin', passwordHash: await hash(opts.adminPassword), createdAt: opts.now });
+    else if (!admin.hash || !(await verify(admin.hash, opts.adminPassword).catch(() => false))) await db.update(users).set({ passwordHash: await hash(opts.adminPassword) }).where(eq(users.id, admin.id));
   }
   return { agents: WORLD_AGENT_COUNT, created };
 }

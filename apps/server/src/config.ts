@@ -389,7 +389,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
     mainnetLaunch: on(env.MAINNET_LAUNCH, false),
     worldKey: env.WORLD_KEY || undefined,
-    adminUsernames: (env.ADMIN_USERNAMES ?? 'admin').split(',').map((s) => s.trim()).filter(Boolean),
+    // The account WORLD_ADMIN_PASSWORD signs in is always an admin, whatever ADMIN_USERNAMES lists.
+    adminUsernames: [...new Set([...(env.ADMIN_USERNAMES ?? 'admin').split(','), ...(env.WORLD_ADMIN_PASSWORD ? ['admin'] : [])].map((s) => s.trim()).filter(Boolean))],
     worldAdminPassword: env.WORLD_ADMIN_PASSWORD || undefined,
     adminDevPassword: env.ADMIN_DEV_PASSWORD || (nodeEnv !== 'production' && worldChain === 'memory' ? '12345' : null),
     worldChain,
