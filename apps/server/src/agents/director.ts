@@ -20,7 +20,7 @@ import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
-import { marketDeals, marketOffers, realMarket, timesStaff, type RealMarketRow } from '../db/schema.ts';
+import { marketDeals, marketOffers, realMarket, solPositions, solTrades, solWallets, timesStaff, type RealMarketRow } from '../db/schema.ts';
 import type { SolHandles } from '../world/sol-world.ts';
 import { MIN_TRADE_SOL, RESERVE_SOL, othersPositionsLine, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
 import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
@@ -40,6 +40,15 @@ import { carrySocial, nudgeLine, socialContext, socialTools, type SocialShown } 
  * MAINNET_LAUNCH, the budget and its own compute). Every decision is kept with its reason (agent_decisions).
  */
 export const DIRECTOR_TICK_MS = 60_000, DIRECTOR_WAKE = 2;
+/** A funded agent makes at least one trade (a buy or a sell) this often (owner, 2026-10-29: "at least 1 action every 10 minutes"). */
+export const TRADE_EVERY_MS = 10 * 60_000;
+/** Funded agents woken to trade per tick, at most. */
+const TRADERS_PER_TICK = 4;
+/** Of the funded agents, the ones due a trade: none in TRADE_EVERY_MS and not woken to trade in the last 4 minutes; the longest since a trade first. */
+export function dueToTrade(funded: string[], lastTrade: ReadonlyMap<string, number>, woken: ReadonlyMap<string, number>, now: number): string[] {
+  return funded.filter((id) => now - (lastTrade.get(id) ?? 0) >= TRADE_EVERY_MS && now - (woken.get(id) ?? 0) >= 4 * 60_000)
+    .sort((a, b) => (lastTrade.get(a) ?? 0) - (lastTrade.get(b) ?? 0)).slice(0, TRADERS_PER_TICK);
+}
 /** An agent woken is left alone at least this long. */
 export const REST_MS = 20 * 60_000;
 /** Credits a site build costs about, so an agent with less is not offered one (agents/compute.ts). */
@@ -588,17 +597,21 @@ export function createDirector(d: DirectorDeps) {
   }
 
   /** Wakes one agent: it sees its world, chooses one tool, and the choice is carried out and kept. A refused choice gets one more try. */
-  async function wake(agentId: string): Promise<{ tool: string; ok: boolean; outcome: string } | null> {
+  /** `mode: 'trade'`: it is offered only buy and sell, and told to make one trade now (the 10-minute trade pulse). */
+  async function wake(agentId: string, mode?: 'trade'): Promise<{ tool: string; ok: boolean; outcome: string } | null> {
     const v = await perceive(d, agentId);
     const me = identityOf(v);
     const [row] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, agentId));
     const raisedModel = row?.origin === 'raised' ? d.raised?.model : undefined;
     const { text, shown, mention } = await contextOf(d, v);
-    const tools = await toolsFor(v, shown);
+    const offered = await toolsFor(v, shown);
+    const tools = mode === 'trade' ? offered.filter((t) => t.name === 'buy' || t.name === 'sell') : offered;
+    if (!tools.length) return null;
     // One part of the site it could use now, so the agents spread across all of it (owner, 2026-10-29).
     const has = new Set(tools.map((t) => t.name));
     const nudge = shown.social ? nudgeLine({ social: shown.social, canSell: has.has('market_offer'), canBuild: has.has('build_site'), canApply: has.has('apply_times'), hasFeed: has.has('reply'), canTrade: Boolean(shown.real) && has.has('buy'), holds: Boolean(shown.real) && has.has('sell'), closed: (shown.real?.closed ?? 0) > 0, others: Boolean(shown.real?.others) }) : null;
-    const content = `<world_content>\n${text.replaceAll('</world_content>', '')}\n</world_content>\n${nudge ? `${nudge}\n` : ''}You are awake. What do you do now? Call one tool.`;
+    const trading = mode === 'trade' ? 'TIME TO TRADE: make one trade now, as yourself. Buy a coin from REAL COINS you have a reason for (your thesis in `say`: why, the move you expect and when you would get out), or sell part or all of a coin you hold if its thesis played out, failed or ran out of time. A small size is fine.\n' : '';
+    const content = `<world_content>\n${text.replaceAll('</world_content>', '')}\n</world_content>\n${trading || (nudge ? `${nudge}\n` : '')}You are awake. What do you do now? Call one tool.`;
     const callId = newId();
     await d.db.insert(worldModelCalls).values({ id: callId, purpose: 'decide', costUsd: 0, status: 'running', startedAt: d.now() });
     const spent = { usd: 0 };
@@ -632,9 +645,38 @@ export function createDirector(d: DirectorDeps) {
     return { tool: chosen.name, ok: result.ok, outcome: result.outcome };
   }
 
+  /**
+   * The funded house agents due a trade: SOL to trade with or coins to sell, no buy or sell in TRADE_EVERY_MS, and not woken to
+   * trade in the last 4 minutes; the longest since a trade first.
+   */
+  const tradeWoken = new Map<string, number>();
+  async function dueTraders(): Promise<string[]> {
+    const t = d.now().getTime();
+    const wallets = await d.db.select({ id: solWallets.ownerId, lamports: solWallets.lamports }).from(solWallets).innerJoin(agents, eq(agents.userId, solWallets.ownerId))
+      .where(and(eq(agents.status, 'active'), inArray(agents.origin, ['wild', 'raised'])));
+    const holders = new Set((await d.db.select({ id: solPositions.agentId }).from(solPositions)).map((r) => r.id));
+    const funded = wallets.filter((w) => Number(w.lamports) / LAMPORTS_PER_SOL >= RESERVE_SOL + MIN_TRADE_SOL || holders.has(w.id)).map((w) => w.id);
+    if (!funded.length) return [];
+    const last = new Map((await d.db.select({ id: solTrades.agentId, at: sql<Date>`max(${solTrades.at})` }).from(solTrades)
+      .where(and(inArray(solTrades.agentId, funded), inArray(solTrades.kind, ['buy', 'sell']), eq(solTrades.ok, true))).groupBy(solTrades.agentId)).map((r) => [r.id, new Date(r.at).getTime()]));
+    return dueToTrade(funded, last, tradeWoken, t);
+  }
+  let trading = false;
+
   let running = false;
   return {
     wake,
+    /** The trade pulse (every tick): funded agents due a trade are woken to make one, side by side. Off without real SOL. */
+    async tradeTick() {
+      if (!d.sol?.on || trading || d.halt?.reason()) return 0;
+      trading = true;
+      try {
+        const ids = await dueTraders();
+        for (const id of ids) { tradeWoken.set(id, d.now().getTime()); rested.set(id, d.now().getTime()); }
+        const done = await Promise.all(ids.map((id) => wake(id, 'trade').then((r) => (r ? 1 : 0), (e) => { console.error('[director] a trade failed', id, (e as Error)?.message ?? e); return 0; })));
+        return done.reduce((a: number, b: number) => a + b, 0);
+      } finally { trading = false; }
+    },
     /**
      * One tick: wakes up to DIRECTOR_WAKE agents, `parallel` at a time (owner, 2026-10-29: "a lot of agents talking at the same
      * time"; one after another, a think of 5-10 s each held the whole world to about 6 a minute).

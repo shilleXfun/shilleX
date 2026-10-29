@@ -308,7 +308,11 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       if (directed && brain) {
         const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(config.director.postsPerHour, config.voicePerHour), wake: config.director.wake, restMin: config.director.restMin, parallel: config.director.parallel, sol, raised: config.raised, boost });
         handles.director = director;
-        directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
+        directorTimer = setInterval(() => {
+          void director.tick().catch((e) => console.error('[director] tick failed', e));
+          // Funded agents trade at least every 10 minutes (owner, 2026-10-29).
+          void director.tradeTick().catch((e) => console.error('[director] trade tick failed', e));
+        }, config.director.tickMs);
         directorTimer.unref?.();
       }
       // The Shillex Times: reporters write on their beats every TIMES_EVERY_MIN, breaking news at once (agents/times/desk.ts).
