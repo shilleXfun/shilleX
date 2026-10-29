@@ -116,7 +116,9 @@ export async function sceneIdeas(d: SceneDeps): Promise<SceneIdea[]> {
   const recent = await db.select({ kind: scenes.kind, cast: scenes.cast, startedAt: scenes.startedAt, endedAt: scenes.endedAt, premise: scenes.premise, coinMint: scenes.coinMint }).from(scenes)
     .where(or(isNull(scenes.endedAt), gte(scenes.startedAt, new Date(nowMs - 24 * HOUR)))).orderBy(desc(scenes.startedAt));
   const busy = new Set(recent.filter((s) => !s.endedAt).flatMap((s) => s.cast));
-  const usedPairs = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - PAIR_REST_MS).flatMap((s) => pairsOf(s.cast)));
+  // A busy world (SCENES_MAX_RUNNING above 2, owner 2026-10-29: many agents talking at once) rests pairs, topics and speakers a quarter as long.
+  const restScale = (d.config.maxRunning ?? 2) > 2 ? 0.25 : 1;
+  const usedPairs = new Set(recent.filter((s) => s.startedAt.getTime() >= nowMs - PAIR_REST_MS * restScale).flatMap((s) => pairsOf(s.cast)));
   const welcomed = new Set(recent.filter((s) => s.kind === 'welcome').map((s) => s.premise.subjectId).filter(Boolean));
   const free = (id: string) => live.has(id) && !busy.has(id);
   const affm = await affinityMap(db);

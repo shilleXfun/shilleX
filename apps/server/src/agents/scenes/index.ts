@@ -44,6 +44,7 @@ export function startScenes(d: SceneDeps): Scenes {
   const halt = d.halt ?? createModelHalt(d.now);
   let directing: Promise<string | null> | null = null, playing: Promise<void> | null = null, taking: Promise<unknown> | null = null, threading: Promise<unknown> | null = null;
   const counts = { started: 0, model: 0, phrasebook: 0, longTakes: 0, threads: 0 };
+  let quietSaidAt = 0;
   const timers = new Set<NodeJS.Timeout>();
   const later = (ms: number, fn: () => void) => { const t = setTimeout(() => { timers.delete(t); if (!stopped) fn(); }, ms); t.unref?.(); timers.add(t); };
   const modelOpen = () => Boolean(d.brain) && !halt.reason() && !d.moments?.halted();
@@ -53,8 +54,10 @@ export function startScenes(d: SceneDeps): Scenes {
   async function createScene(): Promise<string | null> {
     const [{ n }] = await d.db.select({ n: sql<number>`count(*)::int` }).from(scenes).where(isNull(scenes.endedAt)) as [{ n: number }];
     if (Number(n) >= (d.config.maxRunning ?? MAX_RUNNING)) return null;
-    const idea = pickIdea(await sceneIdeas(d), d.rng);
-    if (!idea) return null;
+    const pool = await sceneIdeas(d);
+    const idea = pickIdea(pool, d.rng);
+    // Why no scene started, said at most every ten minutes (2026-10-29: one scene in seven minutes with room for five).
+    if (!idea) { if (d.now().getTime() - quietSaidAt > 600_000) { quietSaidAt = d.now().getTime(); console.log(`[scenes] no scene to start: ${pool.length} ideas, ${n} running`); } return null; }
     const { premise, anchor } = await premiseOf(d, idea);
     const m = await sceneMaterial(d, idea, premise, anchor);
     if (!m) return null;

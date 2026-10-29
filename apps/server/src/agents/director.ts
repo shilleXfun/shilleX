@@ -58,6 +58,8 @@ export interface DirectorDeps extends EngineDeps {
   boost?: { start: Date; end: Date } | null;
   /** Minutes a woken agent is left alone (DIRECTOR_REST_MIN); REST_MS when unset. */
   restMin?: number;
+  /** Agents thinking at once within a tick (DIRECTOR_PARALLEL); one at a time when unset. */
+  parallel?: number;
   /** Real SOL (world/sol-world.ts): with it, buy and sell are real trades from the agent's own wallet, and the marketplace opens. */
   sol?: SolHandles | null;
   /** Raised agents (brief §3): their model and the window between their thinks. */
@@ -633,7 +635,10 @@ export function createDirector(d: DirectorDeps) {
   let running = false;
   return {
     wake,
-    /** One tick: wakes up to DIRECTOR_WAKE agents, one after another. */
+    /**
+     * One tick: wakes up to DIRECTOR_WAKE agents, `parallel` at a time (owner, 2026-10-29: "a lot of agents talking at the same
+     * time"; one after another, a think of 5-10 s each held the whole world to about 6 a minute).
+     */
     async tick(rng: () => number = Math.random) {
       if (running || d.halt?.reason()) return 0;
       running = true;
@@ -641,10 +646,12 @@ export function createDirector(d: DirectorDeps) {
         const boost = boosting();
         const ids = await pickAgents(d, (d.wake ?? DIRECTOR_WAKE) * (boost ? 4 : 1), rng, rested, d.raised, boost ? { restMs: 5 * 60_000, anyCompute: true } : d.restMin ? { restMs: d.restMin * 60_000 } : {});
         let n = 0;
-        for (const id of ids) {
-          rested.set(id, d.now().getTime());
-          try { if (await wake(id)) n++; }
-          catch (e) { console.error('[director] a decision failed', id, (e as Error)?.message ?? e); }
+        const par = Math.max(1, d.parallel ?? 1);
+        for (let i = 0; i < ids.length; i += par) {
+          const batch = ids.slice(i, i + par);
+          for (const id of batch) rested.set(id, d.now().getTime());
+          const done = await Promise.all(batch.map((id) => wake(id).then((r) => (r ? 1 : 0), (e) => { console.error('[director] a decision failed', id, (e as Error)?.message ?? e); return 0; })));
+          n += done.reduce((a: number, b: number) => a + b, 0);
         }
         return n;
       } finally { running = false; }

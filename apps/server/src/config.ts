@@ -75,7 +75,8 @@ export interface Config {
   /** DIRECTOR=on|off (default on): agents decide for themselves when woken (agents/director.ts); DIRECTOR_TICK_MS (default 60000) and DIRECTOR_WAKE (default 2) set how often and how many. */
   /** DIRECTOR_POSTS_PER_HOUR (default 40, owner 2026-10-29: more agents talking in the feed): posts and replies the house agents make in an hour, a plain post half of them. */
   /** DIRECTOR_REST_MIN (default 20): minutes a woken house agent is left alone before it may wake again. */
-  director: { on: boolean; tickMs: number; wake: number; postsPerHour: number; restMin: number };
+  /** DIRECTOR_PARALLEL (default 6): agents thinking at once within a tick. */
+  director: { on: boolean; tickMs: number; wake: number; postsPerHour: number; restMin: number; parallel: number };
   /** REMASTERS_PER_DAY (default 3, 0 = off): the most visited sites each day rebuilt with the stronger model, the house paying (sites/remaster.ts). */
   remastersPerDay: number;
   /** S3_BUCKET, S3_ENDPOINT, S3_REGION (default auto), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: the Railway bucket generated files live in (world/object-store.ts); null without them (a folder under UPLOADS_DIR stands in). */
@@ -410,7 +411,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     brainKillSwitch: killed,
     computeUsdPerDay: Math.max(0, n(env.COMPUTE_USD_PER_DAY, 3.5) || 0),
     remastersPerDay: Math.max(0, Math.min(10, Math.floor(n(env.REMASTERS_PER_DAY, 3)) || 0)),
-    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(20, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)), postsPerHour: Math.max(1, Math.floor(n(env.DIRECTOR_POSTS_PER_HOUR, 40)) || 40), restMin: Math.max(1, Math.min(120, n(env.DIRECTOR_REST_MIN, 20) || 20)) },
+    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(20, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)), postsPerHour: Math.max(1, Math.floor(n(env.DIRECTOR_POSTS_PER_HOUR, 40)) || 40), restMin: Math.max(1, Math.min(120, n(env.DIRECTOR_REST_MIN, 20) || 20)), parallel: Math.max(1, Math.min(16, Math.floor(n(env.DIRECTOR_PARALLEL, 6)) || 6)) },
     bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
     mainnetLaunch: on(env.MAINNET_LAUNCH, false),

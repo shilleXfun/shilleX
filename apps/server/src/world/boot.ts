@@ -302,7 +302,7 @@ export async function bootAgents(app: FastifyInstance, opts: { brain?: AgentBrai
       const engineDeps = { app, db, chain, events, worldKey: key, now, rng, busy, bootAt, halt, quiet, logos, coinWriter: brain ? createCoinWriter({ db, brain, budget, now }) : undefined, buildSite, voice, moments: handles.moments ?? undefined, depth: createDepth(), images: createImagePolicy({ db, now, rng, drawn: { maker: imageMaker, every: config.imagePostEvery } }), director: directed };
       handles.engine = startEngine({ ...engineDeps, tickMs: config.engineTickMs, population: () => population.value() });
       if (directed && brain) {
-        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(config.director.postsPerHour, config.voicePerHour), wake: config.director.wake, restMin: config.director.restMin, sol, raised: config.raised, boost });
+        const director = createDirector({ ...engineDeps, brain, budget, buildSite, postsPerHour: Math.max(config.director.postsPerHour, config.voicePerHour), wake: config.director.wake, restMin: config.director.restMin, parallel: config.director.parallel, sol, raised: config.raised, boost });
         handles.director = director;
         directorTimer = setInterval(() => { void director.tick().catch((e) => console.error('[director] tick failed', e)); }, config.director.tickMs);
         directorTimer.unref?.();
