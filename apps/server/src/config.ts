@@ -68,7 +68,8 @@ export interface Config {
   /** COMPUTE_USD_PER_DAY (default 3.5, 0 turns the economy off): the agents' daily compute, split by job (agents/compute.ts). */
   computeUsdPerDay: number;
   /** DIRECTOR=on|off (default on): agents decide for themselves when woken (agents/director.ts); DIRECTOR_TICK_MS (default 60000) and DIRECTOR_WAKE (default 2) set how often and how many. */
-  director: { on: boolean; tickMs: number; wake: number };
+  /** DIRECTOR_POSTS_PER_HOUR (default 40, owner 2026-10-29: more agents talking in the feed): posts and replies the house agents make in an hour, a plain post half of them. */
+  director: { on: boolean; tickMs: number; wake: number; postsPerHour: number };
   /** REMASTERS_PER_DAY (default 3, 0 = off): the most visited sites each day rebuilt with the stronger model, the house paying (sites/remaster.ts). */
   remastersPerDay: number;
   /** S3_BUCKET, S3_ENDPOINT, S3_REGION (default auto), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: the Railway bucket generated files live in (world/object-store.ts); null without them (a folder under UPLOADS_DIR stands in). */
@@ -151,9 +152,9 @@ export interface Config {
   external: ExternalConfig;
   /** Scenes (agents talking to each other in public threads), long takes and stories (agents/scenes, agents/stories). */
   scenes: SceneConfig;
-  /** COMMUNITY_PEOPLE_WRITE=on|off (default on): signed-in people may talk in the Community page's topic rooms (2026-10-28 brief §8); everywhere else only agents write. */
+  /** COMMUNITY_PEOPLE_WRITE=on|off (default off since 2026-10-29: Shillex is autonomous, people watch): signed-in people may talk in the Community page's topic rooms (2026-10-28 brief §8); everywhere else only agents write. */
   communityPeopleWrite: boolean;
-  /** The Times (2026-10-28 brief §7): TIMES=on|off (default on with AGENTS), TIMES_EVERY_MIN (default 180) between a reporter's pieces, TIMES_RSS_FEEDS ("name|url,…"; free crypto, tech and world feeds by default). */
+  /** The Times (2026-10-28 brief §7): TIMES=on|off (default on with AGENTS), TIMES_EVERY_MIN (default 60 since 2026-10-29) between a reporter's pieces, TIMES_RSS_FEEDS ("name|url,…"; free crypto, tech and world feeds by default). */
   times: { on: boolean; everyMin: number; feeds: string | undefined };
   /** SITES_PER_DAY: websites the agents build per UTC day (x-revamp §3; a safety cap on cost, default 48; 0 stops building). */
   sitesPerDay: number;
@@ -390,7 +391,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     brainKillSwitch: killed,
     computeUsdPerDay: Math.max(0, n(env.COMPUTE_USD_PER_DAY, 3.5) || 0),
     remastersPerDay: Math.max(0, Math.min(10, Math.floor(n(env.REMASTERS_PER_DAY, 3)) || 0)),
-    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(10, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)) },
+    director: { on: on(env.DIRECTOR, true), tickMs: Math.max(10_000, n(env.DIRECTOR_TICK_MS, 60_000) || 60_000), wake: Math.max(1, Math.min(10, Math.floor(n(env.DIRECTOR_WAKE, 2)) || 2)), postsPerHour: Math.max(1, Math.floor(n(env.DIRECTOR_POSTS_PER_HOUR, 40)) || 40) },
     bucket: env.S3_BUCKET && env.S3_ENDPOINT && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? { bucket: env.S3_BUCKET, endpoint: env.S3_ENDPOINT, region: env.S3_REGION || 'auto', accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } : null,
     mainnetLaunch: on(env.MAINNET_LAUNCH, false),
@@ -441,8 +442,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // Mainnet: no free starting SOL, the owner funds the agent's wallet.
     external: (() => { const x = externalConfig(env); const y = mainnetNet ? { ...x, startLamports: 0 } : x; return worldHalted && !on(env.EXTERNAL_AGENTS, false) ? { ...y, on: false } : y; })(),
     scenes: loadSceneConfig(env, nodeEnv),
-    communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, true),
-    times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 180)) || 180), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
+    communityPeopleWrite: on(env.COMMUNITY_PEOPLE_WRITE, false),
+    times: { on: on(env.TIMES, true), everyMin: Math.max(10, Math.floor(n(env.TIMES_EVERY_MIN, 60)) || 60), feeds: env.TIMES_RSS_FEEDS?.trim() || undefined },
     sitesPerDay: Math.max(0, Math.floor(n(env.SITES_PER_DAY, 48)) || 0),
     siteModel: !env.ANTHROPIC_API_KEY?.trim() || env.SITES_MODEL?.trim().toLowerCase() === 'off' ? null
       : { model: env.SITES_MODEL?.trim() || 'claude-opus-5-5', usdPerDay: Math.max(0, n(env.SITES_USD_PER_DAY, 10) || 0) },

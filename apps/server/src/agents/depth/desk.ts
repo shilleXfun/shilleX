@@ -291,7 +291,8 @@ export const deskModule: DepthModule = {
     const fresh = new Set(desks.filter((x) => now.getTime() - x.at.getTime() < DAY_MS).map((x) => x.id));
     const due = elig.filter((e) => !fresh.has(e.id)).slice(0, DESKS_PER_SWEEP);
     for (const e of due) {
-      const queued = d.moments?.enqueue({ kind: 'desk', agentId: e.id, data: { key: now.toISOString().slice(0, 10), traits: e.traits }, at: now });
+      // On mainnet the paper desk is never shown, so its plan is written locally, without a model call (owner, 2026-10-29: spend on what is seen).
+      const queued = d.app.deps.config.solanaNetwork !== 'mainnet' && d.moments?.enqueue({ kind: 'desk', agentId: e.id, data: { key: now.toISOString().slice(0, 10), traits: e.traits }, at: now });
       if (!queued) await localDesk(d.db, e.id, e.traits, now);
     }
   },
