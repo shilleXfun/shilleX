@@ -8,7 +8,8 @@ import { TopBar } from './TopBar';
 import { LiveTape } from './LiveTape';
 import { SiteSearch } from './SiteSearch';
 import { MomentToasts } from './MomentToasts';
-import { IconRail } from './IconRail';
+import { SiteNav } from './SiteNav';
+import { WorldPanel } from './WorldPanel';
 import { MobileTabBar } from './MobileTabBar';
 import { ReconnectBanner } from './ReconnectBanner';
 import { Toaster } from '../components/ui/Toaster';
@@ -61,9 +62,9 @@ const route = {
 };
 
 /**
- * The layout both shells share, after Linear's app (2026-10-18, the owner's pick from the design lab): a sidebar panel
- * the height of the window and the page filling the rest, with the page's route transition; on phones the top bar and
- * the tab bar instead. `me` null is a visitor (public sections only); `children` are the shell's own overlays (banners,
+ * The layout both shells share (owner, 2026-10-31: "move the things from the left side panel to up the site, and make the main a
+ * main, but it can't be fully width so add something on the right side"): the menu across the top, the trades tape, then the
+ * page in a centred column with the world's side column on its right; on phones the top bar and the tab bar instead. `me` null is a visitor (public sections only); `children` are the shell's own overlays (banners,
  * dialogs, toasts, panels, the world's overlay).
  */
 export function ShellFrame({ me, children }: { me: MeView | null; children?: ReactNode }) {
@@ -78,6 +79,10 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
   // A community channel is immersive on mobile: no tab bar or top bar (it renders its own back header).
   const inChannel = useMatch('/c/:slug/:channelId');
   const landing = pathname === '/';
+  // Chats and community channels need the room: no side column there.
+  const wide = parts[1] === 'messages' || parts[1] === 'c';
+  // An agent's or a coin's page has its own column of facts on the right: centred, without the world's column.
+  const detail = !wide && ((parts[1] === 'agents' && !!parts[2] && !['new', 'backchannel'].includes(parts[2]!)) || (parts[1] === 'coins' && !!parts[2]) || parts[1] === 'real');
   const mainRef = useRef<HTMLElement>(null);
   useScrollReveal(mainRef, REVEAL, pathname === '/');
   const first = useRef(true);
@@ -96,16 +101,21 @@ export function ShellFrame({ me, children }: { me: MeView | null; children?: Rea
       ) : (
         <>
           <TopBar me={me} />
-          <div className={sh.frame}>
-            <aside className={sh.railCol} aria-label="Primary"><IconRail me={me} /></aside>
+          <SiteNav me={me} />
+          <LiveTape />
+          <div className={sh.frame} data-wide={wide || undefined} data-detail={detail || undefined}>
             <main id="main" ref={mainRef} className={sh.main} tabIndex={-1}>
-              <LiveTape />
-              <SiteSearch />
+              <div className={sh.mainSearch}><SiteSearch /></div>
               {/* Keyed by path only: the token panel (?token=) and tabs (?tab=) change search, not the page. */}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={pageKey} className={s.page} variants={route} initial="hidden" animate="show" exit="exit">{outlet}</motion.div>
               </AnimatePresence>
             </main>
+            {!wide && !detail && (
+              <aside className={sh.side} aria-label="The world now">
+                <WorldPanel visitor={!me} />
+              </aside>
+            )}
           </div>
         </>
       )}

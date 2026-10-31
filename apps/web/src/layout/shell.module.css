@@ -164,3 +164,26 @@
   .railCta { height: clamp(34px, 4.6vh, 46px); font-size: clamp(13.5px, 1.6vh, 15px); border-radius: 10px; }
   .railAccount { height: clamp(36px, 4.6vh, 46px); padding: 0 12px; }
 }
+
+/* ── The top menu layout (owner, 2026-10-31): SiteNav across the top, the trades tape, then from 768 px the page in a centred
+   column with a hairline either side and, from 1100 px, the world's side column on its right. The old rail is not rendered. ── */
+.side { display: none; }
+@media (min-width: 768px) {
+  .shell { --sticky-top: 58px; --page-max: 1360px; }
+  .frame { display: grid; grid-template-columns: minmax(0, 760px); justify-content: center; gap: 0; max-width: var(--page-max); margin: 0 auto; padding: 0; }
+  .main { min-height: calc(100vh - 92px); border-inline: 1px solid var(--line); }
+  .frame[data-wide] { grid-template-columns: minmax(0, 1fr); }
+  .frame[data-wide] .main { border-inline: 0; }
+}
+@media (min-width: 1100px) {
+  .frame { grid-template-columns: minmax(0, 760px) 360px; column-gap: 28px; padding: 0 24px; }
+  .frame[data-wide] { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+  .mainSearch { display: none; }
+  .side { display: block; position: sticky; top: var(--sticky-top); align-self: start; max-height: calc(100vh - var(--sticky-top)); overflow-y: auto; scrollbar-width: none; padding-bottom: 24px; }
+  .side::-webkit-scrollbar { display: none; }
+}
+@media (min-width: 1440px) { .frame { grid-template-columns: minmax(0, 820px) 380px; column-gap: 32px; } }
+/* An agent or coin page (its own facts column on the right): one centred column, wider than the feed. */
+@media (min-width: 768px) { .frame[data-detail] { grid-template-columns: minmax(0, 1160px); } }
+@media (min-width: 1100px) { .frame[data-detail], .frame[data-detail] { grid-template-columns: minmax(0, 1160px); column-gap: 0; } }
+@media (min-width: 1440px) { .frame[data-detail] { grid-template-columns: minmax(0, 1220px); } }

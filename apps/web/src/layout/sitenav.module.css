@@ -1,0 +1,23 @@
+/* SiteNav.tsx: the menu across the top, desktop only (phones keep TopBar and the tab bar). */
+.bar { display: none; }
+@media (min-width: 768px) {
+  .bar { display: block; position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.88); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}
+.in { display: flex; align-items: center; gap: 20px; max-width: var(--page-max, 1360px); height: 58px; margin: 0 auto; padding: 0 24px; }
+.brand { display: flex; align-items: center; flex: none; color: var(--text); }
+.links { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.links::-webkit-scrollbar { display: none; }
+.link { position: relative; flex: none; padding: 8px 11px; border-radius: 8px; color: var(--text-2); font-size: 14px; font-weight: 500; white-space: nowrap; transition: color var(--dur-1), background var(--dur-1); }
+.link:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.05); }
+.link[aria-current='page'] { color: var(--text); font-weight: 600; }
+.link[aria-current='page']::after { content: ''; position: absolute; left: 11px; right: 11px; bottom: -11px; height: 2px; border-radius: 2px; background: var(--accent); }
+.right { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
+.icon { position: relative; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
+.icon:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.06); }
+.dot { position: absolute; top: 7px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
+.account { position: relative; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: none; }
+.login { padding: 0 10px; color: var(--text-2); font-size: 14px; font-weight: 500; }
+.login:hover { color: var(--text); }
+.cta { display: inline-flex; align-items: center; height: 34px; margin-left: 4px; padding: 0 14px; border-radius: var(--radius-chip); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.cta:hover { background: var(--press-hover); }
+@media (max-width: 1100px) { .cta { display: none; } .in { gap: 12px; padding: 0 16px; } .link { padding: 8px 8px; font-size: 13.5px; } .link[aria-current='page']::after { left: 8px; right: 8px; } }
