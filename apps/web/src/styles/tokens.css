@@ -1,25 +1,24 @@
-/* Shillex (2026-10-14): Linear's precision, X's structure, Moltbook's plainness. Token names are stable; every page reads them. */
+/* Shillex (2026-10-31, owner: "different colours, more tech"): Moltbook's graphite, an orange press, teal links, Geist. Token names are stable; every page reads them. */
 :root {
   color-scheme: dark;
-  /* Near-black, solid surfaces and hairlines. White is what a person presses; orange is only the logo's X and what is
-     live; soft blue is a link (mentions, tickers); green and red are money moving. */
+  /* Near-black, solid surfaces and hairlines. Orange is the logo's X, what a person presses and what is live; teal is a link (mentions, tickers); green and red are money moving. */
   /* The two ends as RGB triples, for tints written rgb(var(--fg-rgb) / .06): a theme flips them and every tint follows. */
   --fg-rgb: 255 255 255;
-  --bg-rgb: 8 9 10;
-  --bg: #08090A;
+  --bg-rgb: 13 14 16;
+  --bg: #0D0E10;
   /* The sidebar panel (Linear layout). */
-  --rail-bg: #111215;
-  --panel: #0F1012;
-  --raised: #16171A;
-  --hover: #1D1E22;
-  --bg-hover: #0C0D0F;
+  --rail-bg: #141518;
+  --panel: #17181B;
+  --raised: #1E2024;
+  --hover: #25272C;
+  --bg-hover: #121316;
   /* Hairlines: row dividers, column and card edges. */
   --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  --line-strong: rgba(255, 255, 255, 0.13);
   --line-hover: rgba(255, 255, 255, 0.24);
-  --text: #F7F8F8;
-  --muted: #7C818B;
-  --text-2: #B4B8C0;
+  --text: #E8EAED;
+  --muted: #80858E;
+  --text-2: #AEB3BB;
   /* Orange: the brand mark and what is live. */
   --accent: #F28C38;
   --accent-hover: #F59E55;
@@ -27,19 +26,19 @@
   --accent-soft: rgba(242, 140, 56, 0.14);
   --accent-line: rgba(242, 140, 56, 0.45);
   --accent-wash: rgba(242, 140, 56, 0.06);
-  --accent-select: rgba(138, 180, 255, 0.3);
+  --accent-select: rgba(45, 212, 191, 0.3);
   /* White: the primary action. */
-  --press: #F7F8F8;
-  --press-hover: #FFFFFF;
-  --press-ink: #08090A;
+  --press: #F28C38;
+  --press-hover: #F59E55;
+  --press-ink: #160A02;
   /* Soft blue: links, @mentions and $tickers. */
-  --token: #8AB4FF;
-  --token-soft: rgba(138, 180, 255, 0.1);
-  --token-line: rgba(138, 180, 255, 0.4);
-  --token-hover: rgba(138, 180, 255, 0.18);
-  --token-ink: #06101F;
-  --up: #4CC38A;
-  --up-soft: rgba(76, 195, 138, 0.12);
+  --token: #2DD4BF;
+  --token-soft: rgba(45, 212, 191, 0.1);
+  --token-line: rgba(45, 212, 191, 0.4);
+  --token-hover: rgba(45, 212, 191, 0.18);
+  --token-ink: #03150F;
+  --up: #46D160;
+  --up-soft: rgba(70, 209, 96, 0.12);
   --down: #EB5757;
   --down-soft: rgba(235, 87, 87, 0.12);
   --warn: #F2C94C;
@@ -49,14 +48,14 @@
   --heat-soft: rgba(242, 140, 56, 0.14);
   --coin: #F2E6D0;
   --ghost: #5E6069;
-  --scrim: rgba(8, 9, 10, 0.72);
-  --scrim-strong: rgba(8, 9, 10, 0.9);
-  --scrim-soft: rgba(8, 9, 10, 0.55);
+  --scrim: rgba(13, 14, 16, 0.72);
+  --scrim-strong: rgba(13, 14, 16, 0.9);
+  --scrim-soft: rgba(13, 14, 16, 0.55);
   /* Surfaces are solid; the old glass tokens resolve to solid panels so every page follows without a blur. */
   --glass: var(--panel);
   --glass-blur: none;
   --card: var(--panel);
-  --card-hover: #141518;
+  --card-hover: #1B1D20;
   --card-solid: var(--panel);
   --card-blur: none;
   --card-shadow: none;
@@ -79,11 +78,11 @@
   /* System emoji first; the bundled Twemoji (base.css) only fills glyphs the OS lacks, e.g. Unicode 13+ such as 🪖 on
      Windows 10, which otherwise render as empty boxes. */
   --font-emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Twemoji';
-  --font-ui: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
+  --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, var(--font-emoji), sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, var(--font-emoji), monospace;
   /* Real code only (keys, JSON, curl, shortcuts). */
   --font-code: var(--font-mono);
-  /* One family: Inter, tight for titles, plain for reading. */
+  /* One family: Geist, tight for titles, plain for reading; Geist Mono for figures. */
   --font-brand: var(--font-ui);
 
   /* 12 / 13.5 / 15 (posts and body) / 18 / 24 / 32 / 48; display for the home headline only. */

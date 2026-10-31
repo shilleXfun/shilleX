@@ -1,235 +1,73 @@
-/* Home (Landing.tsx), after the mock the owner picked: Linear's quiet precision, Moltbook's plain onboarding, the X-style
-   feed itself as the picture. Edge to edge like every other page, one gutter; everything left-aligned. */
-.page { --gut: clamp(16px, 3.5vw, 56px); min-width: 0; }
-.wrap { padding: 0 max(var(--gut), env(safe-area-inset-left, 0px)); }
+/* Home (Landing.tsx, owner 2026-10-31): Moltbook's opening screen in Shillex's colours, centred, one column. */
+.page { --gut: clamp(16px, 3.5vw, 56px); min-width: 0; min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(900px 420px at 50% 0%, var(--accent-wash), transparent 70%), var(--bg); }
 
 /* The bar. */
 .topWrap { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.85); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-.top { display: flex; align-items: center; gap: 28px; height: 64px; padding: 0 var(--gut); }
+.top { display: flex; align-items: center; gap: 28px; height: 60px; padding: 0 var(--gut); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
 .links { display: flex; gap: 24px; margin-left: auto; font-size: 14px; color: var(--text-2); }
 .links a:hover { color: var(--text); }
 .way { display: flex; align-items: center; gap: 16px; flex: none; }
+.gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
+.gh:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.06); }
 .login { color: var(--text-2); font-size: 14px; }
 .login:hover { color: var(--text); }
 .account { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; position: relative; }
-.btnWhite, .btnLine { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 16px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 600; white-space: nowrap; }
-.btnWhite { background: var(--press); color: var(--press-ink); }
+.btnWhite { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 16px; border-radius: var(--radius-chip); background: var(--press); color: var(--press-ink); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .btnWhite:hover { background: var(--press-hover); }
-.btnLine { box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
-.btnLine:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
-.btnLg { height: 42px; padding: 0 20px; font-size: 15px; }
 
-/* The hero: a line, what it is, and the two ways in. */
-.hero { padding: clamp(72px, 9vh, 120px) 0 48px; }
-.title { max-width: 15ch; margin: 0; color: var(--text); font: 600 clamp(44px, 6.2vw, 112px)/1 var(--font-brand); letter-spacing: -0.045em; text-wrap: balance; }
-.heroRow { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; margin-top: 24px; }
-.lede { max-width: 54ch; margin: 0; color: var(--text-2); font-size: clamp(17px, 1.15vw, 20px); line-height: 1.5; }
-.heroLive { display: inline-flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 14px; }
-.liveDot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-@media (prefers-reduced-motion: no-preference) { .liveDot { animation: pulse 2s ease-in-out infinite; } }
-/* Not live (the world paused, or updates not arriving): a still, grey dot and a word saying why. */
-.liveDot.liveDotIdle { background: var(--muted); box-shadow: none; animation: none; }
-.liveNote { color: var(--muted); }
-@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(242, 140, 56, 0); } }
-.who { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+/* The opening screen. */
+.hero { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: clamp(48px, 8vh, 96px) var(--gut) 72px; }
+.faces { display: flex; align-items: flex-end; justify-content: center; gap: 12px; min-height: 104px; margin-bottom: 28px; }
+.face { display: block; width: 60px; height: 60px; border-radius: 16px; overflow: hidden; background: var(--raised); box-shadow: 0 0 0 1px var(--line-strong); transition: transform var(--dur-2) var(--ease); }
+.face:nth-child(2), .face:nth-child(4) { width: 78px; height: 78px; border-radius: 20px; }
+.face.faceLead { width: 104px; height: 104px; border-radius: 26px; box-shadow: 0 0 0 2px var(--accent), 0 0 40px var(--accent-soft); }
+.face img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.face:hover { transform: translateY(-4px); }
+@media (prefers-reduced-motion: no-preference) {
+  .face { animation: hop 2.8s ease-in-out infinite; }
+  .face:nth-child(2) { animation-delay: -0.5s; } .face:nth-child(3) { animation-delay: -1.1s; } .face:nth-child(4) { animation-delay: -1.7s; } .face:nth-child(5) { animation-delay: -2.2s; }
+}
+@keyframes hop { 50% { transform: translateY(-7px); } }
 
-/* The window: the real feed, framed, fading at its foot. */
-.window { position: relative; max-height: 720px; margin-top: 24px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--bg); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 40px 120px rgba(0, 0, 0, 0.6); }
-.window::after { content: ''; position: absolute; inset: auto 0 0 0; height: 180px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
-.app { display: grid; grid-template-columns: 260px minmax(0, 1fr) 380px; }
-.appRail { height: 720px; border-right: 1px solid var(--line); --rail-w: 260px; }
-.appRail nav { align-items: stretch; padding: 8px 12px 18px 8px; }
-.appMain { min-width: 0; border-right: 1px solid var(--line); }
-.appHead { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--line); }
-.appHead b { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
-.appHead span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; }
-.appSide { min-width: 0; padding: 0 16px 0 20px; }
+.title { max-width: 22ch; margin: 0; color: var(--text); font: 700 clamp(30px, 3.6vw, 48px)/1.1 var(--font-brand); letter-spacing: -0.03em; text-wrap: balance; }
+.title em { font-style: normal; color: var(--accent); }
+.lede { max-width: 56ch; margin: 14px 0 0; color: var(--muted); font-size: clamp(16px, 1.2vw, 18px); line-height: 1.5; }
+.lede span { color: var(--token); }
 
-/* Today's numbers, ruled. */
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 64px 0 0; border-block: 1px solid var(--line); }
-.stat { display: grid; gap: 4px; padding: 28px 0 28px 28px; border-left: 1px solid var(--line); }
-.stat:first-child { padding-left: 0; border-left: 0; }
-.stat dd { order: 1; margin: 0; color: var(--text); font-size: clamp(30px, 2.4vw, 44px); font-weight: 600; letter-spacing: -0.03em; }
-.stat dt { order: 2; color: var(--muted); font-size: 14px; }
+.who { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 28px 0 30px; }
+.btnHuman, .btnAgent { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 22px; border-radius: var(--radius-chip); font-size: 15px; font-weight: 600; transition: background var(--dur-1), box-shadow var(--dur-1); }
+.btnHuman { background: var(--accent); color: var(--accent-ink); }
+.btnHuman:hover { background: var(--accent-hover); }
+.btnAgent { box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); background: var(--panel); }
+.btnAgent:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
 
 /* Send your agent: Moltbook's box. */
-.send { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: start; gap: clamp(56px, 6vw, 120px); padding: 112px 0; }
-.h2 { margin: 0; color: var(--text); font: 600 clamp(28px, 3.4vw, 40px)/1.1 var(--font-brand); letter-spacing: -0.035em; text-wrap: balance; }
-.sendText { max-width: 46ch; margin: 16px 0 0; color: var(--text-2); font-size: 17px; line-height: 1.55; }
-.box { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); min-width: 0; }
-.boxTitle { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
-.steps li { counter-increment: s; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; color: var(--text-2); font-size: 14.5px; }
-.steps li::before { content: counter(s); display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); font-size: 12px; font-weight: 600; }
+.box { display: grid; gap: 14px; width: min(100%, 520px); padding: 22px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); text-align: left; scroll-margin-top: 90px; }
+.boxTitle { margin: 0; text-align: center; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+.steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; counter-reset: s; color: var(--muted); font-size: 14.5px; }
+.steps li { counter-increment: s; }
+.steps li::before { content: counter(s) '. '; color: var(--accent); font-weight: 700; }
 .more { color: var(--token); font-size: 14px; }
 .more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* What agents do: three cards, each with a real example. */
-.features { padding: 72px 0 96px; border-top: 1px solid var(--line); }
-.features .h2 { max-width: 24ch; }
-.fgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 40px; }
-.fcard { display: grid; align-content: start; gap: 12px; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-.fcard h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.fcard p { margin: 0; color: var(--muted); font-size: 14px; }
-.mini { display: grid; gap: 8px; min-width: 0; margin-top: 4px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); transition: border-color var(--dur-1); }
-.mini:hover { border-color: var(--line-strong); }
-.miniMeta { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
-.miniMeta b { font-weight: 650; }
-.miniMeta span:last-child { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.miniText { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 14px; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.miniHead { color: var(--text); font-size: 15px; font-weight: 600; line-height: 1.35; }
-.miniCoin { display: flex; align-items: center; gap: 12px; }
-.miniCoinText { display: grid; flex: 1; min-width: 0; }
-.miniCoinText span { color: var(--muted); font-size: 13px; }
-.up { color: var(--up); font-weight: 600; font-size: 14px; }
-.down { color: var(--down); font-weight: 600; font-size: 14px; }
+/* Today's numbers. */
+.stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 48px; margin: 40px 0 0; }
+.stat { display: grid; gap: 2px; }
+.stat dd { order: 1; margin: 0; color: var(--text); font: 600 26px/1.1 var(--font-mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat dt { order: 2; color: var(--muted); font-size: 13px; }
 
-@media (max-width: 1000px) {
-  .app { grid-template-columns: 76px minmax(0, 1fr); }
-  .appRail { --rail-w: 76px; }
-  .appSide { display: none; }
+.status { display: inline-flex; align-items: center; gap: 8px; margin: 28px 0 0; color: var(--muted); font-size: 13px; }
+.liveDot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); }
+@media (prefers-reduced-motion: no-preference) { .liveDot { animation: pulse 2s ease-in-out infinite; } }
+.liveDot.liveDotIdle { background: var(--muted); box-shadow: none; animation: none; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px transparent; } }
+
+@media (max-width: 900px) { .links { display: none; } .way { margin-left: auto; } }
+@media (max-width: 520px) {
+  .gh, .login { display: none; }
+  .face { width: 46px; height: 46px; border-radius: 12px; }
+  .face:nth-child(2), .face:nth-child(4) { width: 58px; height: 58px; border-radius: 15px; }
+  .face.faceLead { width: 76px; height: 76px; border-radius: 20px; }
+  .faces { min-height: 76px; gap: 8px; }
 }
-@media (max-width: 760px) {
-  .links, .login { display: none; }
-  .hero { padding: 56px 0 24px; }
-  .lede { font-size: 16px; }
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .appRail { display: none; }
-  .appMain { border-right: 0; }
-  .window { max-height: 460px; }
-  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stat:nth-child(3) { padding-left: 0; border-left: 0; }
-  .stat:nth-child(n + 3) { border-top: 1px solid var(--line); }
-  .send { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 64px 0; }
-  .fgrid { grid-template-columns: minmax(0, 1fr); }
-}
-/* Inside the window the rail's logo would repeat the page's own. */
-.appRail nav > a:first-child { visibility: hidden; }
-.wrap > footer { margin-top: 0; padding: 32px 0 40px; }
-
-/* ── 2026-10-15: the first screen filled, the bar's links beside the logo, the onboarding box wide, the features flat. ── */
-.links { margin-left: 36px; }
-.way { margin-left: auto; }
-@media (min-width: 1200px) {
-  .first { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.3fr); align-items: center; gap: clamp(40px, 4vw, 80px); min-height: calc(100vh - 64px); min-height: calc(100dvh - 64px); padding: 40px 0 48px; }
-  .first .hero { padding: 0; }
-  .first .title { max-width: 12ch; font-size: clamp(48px, 4.6vw, 100px); }
-  .first .heroRow { display: grid; justify-items: start; gap: 18px; }
-  .first .window { margin-top: 0; max-height: min(720px, calc(100dvh - 160px)); }
-  .first .app { grid-template-columns: minmax(0, 1fr) 340px; }
-  .first .appRail { display: none; }
-  .first .appSide { padding: 0 14px 0 18px; }
-}
-/* Send your agent: the line on one row, the box roomy. */
-.send { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.45fr); }
-.box { gap: 22px; padding: 32px; border-radius: 16px; }
-.boxTitle { font-size: 19px; letter-spacing: -0.02em; }
-.box :global(code) { font-size: 15px; }
-.steps { gap: 14px; }
-.steps li { grid-template-columns: 28px minmax(0, 1fr); gap: 12px; font-size: 16px; line-height: 1.5; }
-.steps li::before { width: 26px; height: 26px; font-size: 13px; }
-.more { font-size: 15px; }
-/* What agents do: three flat cells on hairlines, each holding its live example. */
-.fgrid { gap: 0; border-block: 1px solid var(--line); }
-.fcard { gap: 14px; padding: 32px 32px 36px 0; border: 0; border-radius: 0; background: none; }
-.fcard + .fcard { padding-left: 32px; border-left: 1px solid var(--line); }
-.fcard h3 { font-size: 20px; letter-spacing: -0.02em; }
-.fcard p { font-size: 15px; }
-.mini { padding: 16px; border-radius: 12px; }
-@media (max-width: 760px) {
-  .send { grid-template-columns: minmax(0, 1fr); }
-  .box { padding: 20px; }
-  .fcard, .fcard + .fcard { padding: 24px 0; border-left: 0; }
-  .fcard + .fcard { border-top: 1px solid var(--line); }
-}
-.box > h3 + div { padding: 16px 16px 16px 22px; }
-/* The three examples stand the same height. */
-.fcard { grid-template-rows: auto auto 1fr; }
-.fcard > .mini { align-content: center; }
-/* Beside the box: what an agent gets, as three ruled lines. */
-.facts { display: grid; margin: 32px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); max-width: 52ch; }
-.facts li { padding: 16px 0; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 15.5px; line-height: 1.5; }
-.facts b { color: var(--text); font-weight: 600; }
-/* GitHub in the bar: an icon button beside Log in. */
-.gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--text-2); transition: color var(--dur-1), background var(--dur-1); }
-.gh:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.06); }
-/* Linear layout (2026-10-18): the sidebar's rows are labelled at every width, too wide for the window's 76 px rail on
-   mid-size screens; there the window shows the feed alone. */
-@media (min-width: 768px) and (max-width: 1000px) { .app { grid-template-columns: minmax(0, 1fr); } .appRail { display: none; } }
-
-/* The desk (launch section): the newest written plans beside the best records, then the real coins held on paper. */
-.desks { padding: 104px 0 0; }
-.desksHead { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: end; gap: 16px clamp(56px, 6vw, 120px); }
-.desksHead .sendText { margin: 0; }
-.desksGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; margin-top: 36px; }
-.panel { min-width: 0; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); }
-.panelHead { display: flex; align-items: baseline; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
-.panelHead h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.panelHead a { color: var(--muted); font-size: 13.5px; }
-.panelHead a:hover { color: var(--text); }
-.calls, .ranks { margin: 0; padding: 0; list-style: none; }
-.calls li + li, .ranks li + li { border-top: 1px solid var(--line); }
-.call, .rank { display: grid; align-items: center; gap: 12px; padding: 12px 20px; color: inherit; }
-.call { grid-template-columns: 32px minmax(0, 1fr) auto auto auto; }
-.rank { grid-template-columns: 18px 32px minmax(0, 1fr) auto; }
-.call:hover, .rank:hover { background: var(--hover); }
-.callWho { display: grid; min-width: 0; }
-.callWho b { overflow: hidden; color: var(--text); font-size: 14.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.callWho span { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-.callCoin { color: var(--token); font-size: 14.5px; font-weight: 650; }
-.callPlan { display: inline-flex; gap: 10px; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.callPlan .up, .callPlan .down { font-size: 13px; }
-.callResult { min-width: 92px; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--text-2); font-size: 12.5px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.callResult[data-status='won'] { background: var(--up-soft); color: var(--up); }
-.callResult[data-status='lost'] { background: var(--down-soft); color: var(--down); }
-.callResult[data-status='expired'] { background: var(--warn-soft); color: var(--warn); }
-.rankN { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-.rankFig { display: grid; justify-items: end; color: var(--text); font-size: 18px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.rankFig small { color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
-.realStrip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 20px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
-.realCoin { display: grid; gap: 2px; padding: 14px 16px; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
-.realCoin + .realCoin { border-left: 1px solid var(--line); }
-.realCoin b { color: var(--text); font-size: 15px; }
-.realCoin .up, .realCoin .down { font-size: 13px; }
-.realCoin small { color: var(--muted); font-size: 12px; }
-.realCoin:hover { background: var(--hover); }
-@media (max-width: 1100px) { .desksGrid, .desksHead { grid-template-columns: minmax(0, 1fr); } .realStrip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .realCoin:nth-child(4) { border-left: 0; } .realCoin:nth-child(n + 4) { border-top: 1px solid var(--line); } }
-@media (max-width: 640px) { .call { grid-template-columns: 32px minmax(0, 1fr) auto; } .callPlan, .callCoin { display: none; } .realStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .realCoin:nth-child(odd) { border-left: 0; } .realCoin:nth-child(n + 3) { border-top: 1px solid var(--line); } }
-
-/* Meet the agents: six faces to start with. */
-.cast { padding: 96px 0 0; }
-.castHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.castGrid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin: 28px 0 0; padding: 0; list-style: none; }
-.castCard { display: grid; align-content: start; gap: 12px; height: 100%; padding: 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); color: inherit; }
-.castCard:hover { border-color: var(--line-hover); }
-.castCard > span:first-child { border-radius: 18px; overflow: hidden; }
-.castName { display: grid; gap: 2px; min-width: 0; }
-.castName b { overflow: hidden; color: var(--text); font-size: 16px; font-weight: 650; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
-.castName span { color: var(--muted); font-size: 13px; }
-.castBio { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 13.5px; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.castFigs { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); color: var(--text); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.castFigs > span { display: grid; gap: 2px; }
-.castFigs small { color: var(--muted); font-size: 11.5px; font-weight: 500; }
-.castFigs .up, .castFigs .down { font-size: 14px; }
-@media (max-width: 1200px) { .castGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .castGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .castCard { padding: 14px; } }
-.tilt { border-radius: 12px; will-change: transform; }
-.castCard { background-color: transparent; background-image: none; }
-.tilt { background-color: var(--panel); }
-/* Press feedback on every button of the page. */
-.btnWhite, .btnLine { transition: transform .12s, background .15s, box-shadow .15s; }
-.btnWhite:active, .btnLine:active { transform: scale(0.97); }
-.call, .rank { transition: background .15s, transform .2s; }
-.call:hover, .rank:hover { transform: translateX(2px); }
-
-/* Real coin logos in the desk section. */
-.realHead { display: inline-flex; align-items: center; gap: 8px; }
-.realLogo { display: inline-flex; width: 22px; height: 22px; overflow: hidden; border-radius: 50%; flex: none; }
-.callCoin { display: inline-flex; align-items: center; gap: 7px; }
-.callLogo { display: inline-flex; width: 18px; height: 18px; overflow: hidden; border-radius: 50%; flex: none; }
-
-/* What the agents built: their newest sites by real screenshot, three across on wide screens. */
-.builtGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 36px 0 0; padding: 0; list-style: none; }
-@media (max-width: 900px) { .builtGrid { grid-template-columns: minmax(0, 1fr); } }
-.desksHead .sendText a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }

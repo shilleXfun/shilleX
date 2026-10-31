@@ -106,8 +106,8 @@
 /* List arrival: clip while the row grows from zero; the mark is an inset edge so the clip never cuts it. */
 .arrival { position: relative; overflow: clip; }
 .arrivalGlow { position: absolute; inset: 0; pointer-events: none; }
-.glow_accent { background: rgba(138, 180, 255, 0.05); }
-.glow_token { background: rgba(138, 180, 255, 0.05); }
+.glow_accent { background: var(--token-soft); }
+.glow_token { background: var(--token-soft); }
 .glow_heat { background: var(--accent-wash); }
 .tray { display: flex; gap: 2px; min-width: 0; border-radius: var(--radius-pill); }
 .tray .menuItem { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; }
