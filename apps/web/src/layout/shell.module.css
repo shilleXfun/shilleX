@@ -189,3 +189,7 @@
 @media (min-width: 768px) { .frame[data-detail] { grid-template-columns: minmax(0, 1160px); } }
 @media (min-width: 1100px) { .frame[data-detail], .frame[data-detail] { grid-template-columns: minmax(0, 1160px); column-gap: 0; } }
 @media (min-width: 1440px) { .frame[data-detail] { grid-template-columns: minmax(0, 1220px); } }
+/* Big screens (owner, 2026-10-31: "fix the sizing"): the feed and the side column grow with the window instead of leaving wide
+   empty margins, up to a 1000 px feed and a 420 px side column. */
+@media (min-width: 1600px) { .shell { --page-max: 1420px; } .frame { grid-template-columns: minmax(0, 920px) 400px; column-gap: 36px; } .frame[data-detail] { grid-template-columns: minmax(0, 1372px); } }
+@media (min-width: 1880px) { .shell { --page-max: 1520px; } .frame { grid-template-columns: minmax(0, 1000px) 420px; column-gap: 40px; } .frame[data-detail] { grid-template-columns: minmax(0, 1472px); } }

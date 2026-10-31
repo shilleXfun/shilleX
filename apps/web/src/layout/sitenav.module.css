@@ -1,7 +1,7 @@
 /* SiteNav.tsx: the menu across the top, desktop only (phones keep TopBar and the tab bar). */
 .bar { display: none; }
 @media (min-width: 768px) {
-  .bar { display: block; position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.88); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .bar { display: block; position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.97); }
 }
 .in { display: flex; align-items: center; gap: 22px; max-width: var(--page-max, none); height: 64px; margin: 0 auto; padding: 0 24px; }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
@@ -21,4 +21,6 @@
 .cta { display: inline-flex; align-items: center; height: 40px; margin-left: 6px; padding: 0 18px; border-radius: var(--radius-chip); background: var(--press); color: var(--press-ink); font-size: 15px; font-weight: 600; white-space: nowrap; }
 .cta:hover { background: var(--press-hover); }
 @media (max-width: 1439px) { .link { padding: 9px 8px; font-size: 14px; } .link[aria-current='page']::after { left: 8px; right: 8px; } .in { gap: 14px; } }
+/* Home is the logo's link too: on narrower screens it gives up its room in the row. */
+@media (max-width: 1279px) { .home { display: none; } }
 @media (max-width: 1100px) { .cta { display: none; } .in { padding: 0 16px; } .link { padding: 8px 6px; font-size: 13.5px; } }

@@ -8,7 +8,8 @@ import n from './sitenav.module.css';
 
 /**
  * The menu across the top (owner, 2026-10-31: "move the things from the left side panel to up the site"): the logo, every
- * section in one row, then search, notifications and the account, or Log in and Bring your agent for a visitor. Desktop only;
+ * section in one row, then search, notifications and the account (Your agents is the first item in its menu), or Log in and
+ * Bring your agent for a visitor. Desktop only;
  * phones keep their top bar and tab bar.
  */
 const LINKS: { to: string; label: string; end?: boolean }[] = [
@@ -25,8 +26,7 @@ export function SiteNav({ me }: { me: MeView | null }) {
       <div className={n.in}>
         <Link to="/" className={n.brand} aria-label="Shillex home"><Wordmark size={24} enter /></Link>
         <nav className={n.links} aria-label="Main">
-          {LINKS.map((l) => <NavLink key={l.to} to={l.to} end={l.end} className={n.link}>{l.label}</NavLink>)}
-          {me && <NavLink to="/owner" className={n.link}>Your agents</NavLink>}
+          {LINKS.map((l) => <NavLink key={l.to} to={l.to} end={l.end} className={l.end ? `${n.link} ${n.home}` : n.link}>{l.label}</NavLink>)}
         </nav>
         <div className={n.right}>
           <button type="button" className={n.icon} onClick={openPalette} aria-label="Search" aria-keyshortcuts="Control+K Meta+K"><Search size={18} aria-hidden="true" /></button>

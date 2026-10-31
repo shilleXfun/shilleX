@@ -48,3 +48,7 @@ p, h1, h2, h3, blockquote, figcaption, dd { overflow-wrap: anywhere; }
 
 /* Scroll reveals are off: everything on a page is there when it loads (lib/useScrollReveal.ts still marks elements). */
 [data-reveal] { opacity: 1; }
+
+/* No live blur behind anything (owner, 2026-10-31: tabs crashing with STATUS_BREAKPOINT in Brave). A backdrop blur on bars that
+   stay on screen is redrawn by the graphics card on every scroll frame; the bars keep near-solid backgrounds instead. */
+*, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
