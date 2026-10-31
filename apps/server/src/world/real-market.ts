@@ -1,7 +1,7 @@
 import { desc, gte, inArray } from 'drizzle-orm';
 import { isValidSolanaAddress } from '@shillex/shared';
 import type { Db } from '../db/client.ts';
-import { realMarket, realPositions, solPositions, type RealMarketRow } from '../db/schema.ts';
+import { paperPositions, realMarket, realPositions, solPositions, type RealMarketRow } from '../db/schema.ts';
 import { DexCooling, dexLimiter } from './dex-limiter.ts';
 
 /**
@@ -95,7 +95,7 @@ export async function pairsFor(addresses: string[], source: (a: string) => strin
 export async function refreshRealMarket(db: Db, now: Date, fetchImpl: typeof fetch = fetch): Promise<number> {
   const trending = [...new Set([...(await trendingAddresses(fetchImpl).catch(() => [] as string[])), ...(await pumpAddresses(fetchImpl).catch(() => [] as string[]))])];
   // Coins agents still hold stay priced even after they leave the trending list.
-  const held = [...new Set([...(await db.selectDistinct({ a: realPositions.address }).from(realPositions)).map((r) => r.a), ...(await db.selectDistinct({ a: solPositions.mint }).from(solPositions)).map((r) => r.a)])];
+  const held = [...new Set([...(await db.selectDistinct({ a: realPositions.address }).from(realPositions)).map((r) => r.a), ...(await db.selectDistinct({ a: solPositions.mint }).from(solPositions)).map((r) => r.a), ...(await db.selectDistinct({ a: paperPositions.mint }).from(paperPositions)).map((r) => r.a)])];
   const all = [...new Set([...MAJORS, ...trending, ...held])].slice(0, 120);
   const major = new Set(MAJORS), hot = new Set(trending);
   const rows = await pairsFor(all, (a) => (major.has(a) ? 'major' : hot.has(a) ? 'trending' : 'held'), now, fetchImpl);

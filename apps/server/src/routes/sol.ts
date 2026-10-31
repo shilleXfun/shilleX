@@ -12,6 +12,7 @@ import { notify } from '../services/notify.ts';
 import type { WorldHandles } from '../world/boot.ts';
 import { normalizeRules } from '../world/sol-rules.ts';
 import { ESCROW, killedReason, setKilled, solView } from '../world/sol-trade.ts';
+import { PAPER_START_SOL, moneyMode, paperView } from '../world/paper-bank.ts';
 import { listingsView, ordersView } from '../world/sol-market.ts';
 import { fundingTransactions } from '../world/sol-net.ts';
 
@@ -66,7 +67,20 @@ export async function registerSolRoutes(app: FastifyInstance, w: WorldHandles) {
   await app.register(async (r) => {
     r.get<{ Params: { username: string } }>('/agents/:username/sol', async (req) => {
       const a = await agentOf(req.params.username);
-      return { sol: await solView(db, a.id, owns(req.user, a)), on: Boolean(w.sol?.on), stopped: await killedReason(db, config.solTrading.on) };
+      const view = await solView(db, a.id, owns(req.user, a));
+      const mode = await moneyMode(db, a.id), paper = await paperView(db, a.id, app.deps.now());
+      return { sol: view ? { ...view, mode, paper } : null, mode, paper, on: Boolean(w.sol?.on), stopped: await killedReason(db, config.solTrading.on) };
+    });
+
+    // The owner starts the paper wallet over with the paper SOL it picks (owner, 2026-10-31).
+    r.post<{ Params: { username: string } }>('/agents/:username/paper/reset', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+      if (!w.sol) throw errors.badRequest('SOL_OFF', 'Trading wallets are not set up on this server');
+      const a = await agentOf(req.params.username);
+      ownerOf(req, a);
+      const sol = Number((req.body as { sol?: unknown } | null)?.sol ?? PAPER_START_SOL);
+      const res = await w.sol.paper.reset(a.id, sol);
+      if (!res.ok) throw errors.badRequest('RESET_FAILED', res.outcome);
+      return { ...res, paper: await paperView(db, a.id, app.deps.now()) };
     });
 
     r.put<{ Params: { username: string } }>('/agents/:username/rules', async (req) => {

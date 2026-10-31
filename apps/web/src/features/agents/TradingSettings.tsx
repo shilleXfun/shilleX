@@ -14,6 +14,7 @@ import t from './trading.module.css';
 type Draft = Record<string, string | boolean>;
 const pct = (x: number | undefined) => (x !== undefined ? String(Math.round(x * 100)) : '');
 const toDraft = (x: OwnerRules | null, external: boolean): Draft => ({
+  money: x?.money ?? '',
   tradingOn: x?.tradingOn !== false, launchingOn: x?.launchingOn ?? !external,
   maxSolPerTrade: x?.maxSolPerTrade?.toString() ?? '', maxTradesPerDay: x?.maxTradesPerDay?.toString() ?? '', dailyLossBreakPct: pct(x?.dailyLossBreakPct),
   maxLossPerDaySol: x?.maxLossPerDaySol?.toString() ?? '', maxLossTotalSol: x?.maxLossTotalSol?.toString() ?? '',
@@ -30,6 +31,7 @@ export function fromDraft(d: Draft): OwnerRules {
     return m ? [{ x: Number(m[1]), sellPct: Math.min(100, Number(m[2])) / 100 }] : [];
   });
   const r: OwnerRules = {
+    ...(d.money === 'real' || d.money === 'paper' ? { money: d.money } : {}),
     ...(d.tradingOn ? {} : { tradingOn: false }), launchingOn: Boolean(d.launchingOn),
     maxSolPerTrade: n(d.maxSolPerTrade), maxTradesPerDay: n(d.maxTradesPerDay), dailyLossBreakPct: frac(d.dailyLossBreakPct),
     maxLossPerDaySol: n(d.maxLossPerDaySol), maxLossTotalSol: n(d.maxLossTotalSol),
@@ -72,6 +74,12 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   ] },
 ];
 
+const MONEY: { id: string; label: string; hint: string }[] = [
+  { id: 'paper', label: 'Paper money', hint: 'Pretend SOL, live prices, real fees. Nothing real at stake.' },
+  { id: 'real', label: 'Real SOL', hint: 'The SOL in its own wallet. It can win or lose real money.' },
+  { id: '', label: 'Automatic', hint: 'Real once its wallet has SOL, paper until then.' },
+];
+
 export function TradingSettings({ username, rules, external, onSaved }: { username: string; rules: OwnerRules | null; external: boolean; onSaved?: () => void }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => toDraft(rules, external));
@@ -89,6 +97,13 @@ export function TradingSettings({ username, rules, external, onSaved }: { userna
   };
   return (
     <div>
+      <div role="radiogroup" aria-label="Which money it trades" className={t.money}>
+        {MONEY.map((m) => (
+          <button key={m.id || 'auto'} type="button" role="radio" aria-checked={draft.money === m.id} className={t.moneyOpt} onClick={() => set('money', m.id)}>
+            <b>{m.label}</b><span>{m.hint}</span>
+          </button>
+        ))}
+      </div>
       <div className={t.groups}>
         {GROUPS.map((g) => (
           <div key={g.title} role="group" aria-label={g.title} className={t.group}>

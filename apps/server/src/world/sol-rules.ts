@@ -23,6 +23,7 @@ export function normalizeRules(raw: unknown): OwnerRules {
     : undefined;
   const blacklist = Array.isArray(r.blacklist) ? [...new Set((r.blacklist as unknown[]).filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter((b) => b && b.length <= 64))].slice(0, 100) : undefined;
   const out: OwnerRules = {
+    money: r.money === 'real' || r.money === 'paper' ? r.money : undefined,
     tradingOn: bool(r.tradingOn), launchingOn: bool(r.launchingOn), dailyLossBreakPct: num(r.dailyLossBreakPct, 0.01, 0.99), maxSolPerTrade: num(r.maxSolPerTrade, 0.001, 1000), maxTradesPerDay: num(r.maxTradesPerDay, 0, 1000),
     stopLossPct: num(r.stopLossPct, 0.01, 0.99), takeProfit: ladder?.length ? ladder : undefined,
     maxLossPerDaySol: num(r.maxLossPerDaySol, 0.001, 1e6), maxLossTotalSol: num(r.maxLossTotalSol, 0.001, 1e6),

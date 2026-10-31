@@ -17,6 +17,7 @@ import { CopyLine } from '../join/CopyLine';
 import { WithdrawForm } from '../agents/WithdrawForm';
 import { TradingSettings } from '../agents/TradingSettings';
 import { useSol } from '../agents/RealSol';
+import { PaperWallet } from '../agents/PaperWallet';
 import { MindSliders } from './MindSliders';
 import { StatusPill } from './OwnerPage';
 import s from './owner.module.css';
@@ -90,6 +91,12 @@ export function OwnerAgentPage() {
               </>
             ) : <p className={L.empty}>No wallet yet.</p>}
         </section>
+        {v.network === 'mainnet' && solQ.data && (
+          <section className={L.card} aria-labelledby="oa-paper">
+            <div className={L.head}><h2 id="oa-paper" className={L.title}><Wallet size={17} aria-hidden="true" /> Paper wallet</h2><span className={L.note}>{solQ.data.mode === 'paper' ? 'your agent trades paper money now' : 'not in use: it trades real SOL'}</span></div>
+            <PaperWallet username={v.agent.handle} paper={solQ.data.paper} mode={solQ.data.mode} mine />
+          </section>
+        )}
         {v.network === 'mainnet' && (
           <section className={L.card} aria-labelledby="oa-limits">
             <div className={L.head}><h2 id="oa-limits" className={L.title}><ShieldCheck size={17} aria-hidden="true" /> Trading settings</h2><span className={L.note}>the same settings every owner has</span></div>

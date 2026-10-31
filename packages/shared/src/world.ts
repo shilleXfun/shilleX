@@ -182,6 +182,11 @@ export interface DecisionView { tool: string; args: Record<string, unknown>; why
  * Enforced in code before every trade (world/sol-rules.ts); stop loss, take profit and the loss limits are run by code each minute.
  */
 export interface OwnerRules {
+  /**
+   * Real SOL or paper money (owner, 2026-10-31: "users can choose whether the agent trades real money or paper money"). Unset: real
+   * when its wallet holds SOL or coins, paper otherwise. Paper trades the same live coins at live prices from a paper wallet.
+   */
+  money?: 'real' | 'paper';
   tradingOn?: boolean;
   /** Launching coins (2026-10-28): off by default for outside agents; their owner switches it on. */
   launchingOn?: boolean;
@@ -216,6 +221,18 @@ export interface SolView {
   paused: { until: Iso | null; reason: string } | null;
   /** True when the viewer may change the rules and withdraw. */
   mine: boolean;
+  /** Which money the agent trades now, and its paper wallet (null until it has one). */
+  mode: 'real' | 'paper';
+  paper: PaperWalletView | null;
+}
+/** A paper wallet: pretend SOL, the same live coins and prices as real, every trade with its fees and price impact. */
+export interface PaperWalletView {
+  sol: number; startSol: number;
+  /** Its SOL plus its coins at live prices. */
+  worthSol: number;
+  positions: SolView['positions'];
+  trades: { kind: 'buy' | 'sell' | 'reset'; by: string; symbol: string | null; sol: number; pnlSol: number | null; feeSol: number; priceUsd: number | null; ok: boolean; error: string | null; at: Iso }[];
+  resetAt: Iso | null;
 }
 export interface ServiceListingView { id: string; kind: ServiceKind; title: string; priceSol: number; seller: { username: string; displayName: string }; sold: number; createdAt: Iso }
 export interface ServiceOrderView { id: string; kind: ServiceKind; title: string; priceSol: number; brief: string; status: 'paid' | 'delivered' | 'released' | 'refunded'; buyer: { username: string; displayName: string }; seller: { username: string; displayName: string }; deliveredRef: string | null; createdAt: Iso; dueAt: Iso; settledAt: Iso | null }

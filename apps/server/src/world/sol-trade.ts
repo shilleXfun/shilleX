@@ -341,7 +341,7 @@ export async function othersPositionsLine(db: Db, me: string, limit = 5): Promis
 }
 
 /** An agent's wallet for its profile. `mine`: the viewer owns it. No network read: the balance is the last one read. */
-export async function solView(db: Db, agentId: string, mine: boolean): Promise<SolView | null> {
+export async function solView(db: Db, agentId: string, mine: boolean): Promise<Omit<SolView, 'mode' | 'paper'> | null> {
   const [w] = await db.select({ publicKey: solWallets.publicKey, lamports: solWallets.lamports, checkedAt: solWallets.checkedAt }).from(solWallets).where(eq(solWallets.ownerId, agentId));
   if (!w) return null;
   const trades = await db.select().from(solTrades).where(eq(solTrades.agentId, agentId)).orderBy(desc(solTrades.at)).limit(30);

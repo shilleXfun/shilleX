@@ -337,6 +337,13 @@
       "when": 1793276691459,
       "tag": "0047_times_staff",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793454784401,
+      "tag": "0048_paper_money",
+      "breakpoints": true
     }
   ]
 }

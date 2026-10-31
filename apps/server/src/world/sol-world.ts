@@ -6,6 +6,7 @@ import { createSolBank, type SolBank } from './sol-trade.ts';
 import { settlePass, type MarketDeps } from './sol-market.ts';
 import { refreshRealMarket } from './real-market.ts';
 import { launchCoin, type LaunchPlan, type Launched } from './sol-launch.ts';
+import { createPaperBank, type PaperBank } from './paper-bank.ts';
 
 /**
  * Real SOL at boot (2026-10-27): the vault, the bank, the marketplace and their timers. Wallets exist (and deposits are seen) as
@@ -13,6 +14,8 @@ import { launchCoin, type LaunchPlan, type Launched } from './sol-launch.ts';
  */
 export interface SolHandles {
   bank: SolBank; market: MarketDeps; net: SolNet; on: boolean;
+  /** Paper money (2026-10-31): the same trades from a paper wallet, for agents whose owner chose paper (or with no real SOL). */
+  paper: PaperBank;
   /** A real coin launch from the agent's own wallet (world/sol-launch.ts), when MAINNET_LAUNCH is on. */
   launch(agentId: string, plan: LaunchPlan): Promise<Launched>;
   /** The agents' posts about their money go through the engine once it runs (agents/depth/system.ts systemAct). */
@@ -32,6 +35,7 @@ export async function bootSol(db: Db, config: Config, now: () => Date): Promise<
   const say = (agentId: string, text: string) => (sayFn ? sayFn(agentId, text).catch(() => null) : Promise.resolve(null));
   const bank = createSolBank({ db, net, master, now, on: c.on, say });
   const market: MarketDeps = { db, bank, now, say };
+  const paper = createPaperBank({ db, now, say, hasHolders: (mint, n) => net.hasHolders(mint, n) });
   console.log(`[sol] real SOL ${c.on ? 'trading on' : 'trading off (wallets, deposits and withdrawals only)'}: ${await bank.ensureWallets()} new agent wallets`);
 
   const timers: NodeJS.Timeout[] = [];
@@ -47,12 +51,11 @@ export async function bootSol(db: Db, config: Config, now: () => Date): Promise<
   every(120 * S, 'balances', () => bank.refreshBalances());
   every(10 * 60 * S, 'wallets', () => bank.ensureWallets());
   every(60 * S, 'settlement', () => settlePass(market));
-  if (c.on) {
-    every(60 * S, 'exits', () => bank.exitPass());
-    // The coins agents see and hold, priced (the paper desk used to do this; it is off while real SOL is on).
-    every(3 * 60 * S, 'market', () => refreshRealMarket(db, now()));
-    void refreshRealMarket(db, now()).catch(() => undefined);
-  }
+  if (c.on) every(60 * S, 'exits', () => bank.exitPass());
+  // Paper wallets trade with real SOL off too: their stop losses and take profits each minute, and the coins priced for both.
+  every(60 * S, 'paper exits', () => paper.exitPass());
+  every(3 * 60 * S, 'market', () => refreshRealMarket(db, now()));
+  void refreshRealMarket(db, now()).catch(() => undefined);
   const launch = (agentId: string, plan: LaunchPlan) => launchCoin({ db, net, master, now, on: c.on, launchOn: config.mainnetLaunch, say }, agentId, plan);
-  return { bank, market, net, on: c.on, launch, setSay: (fn) => { sayFn = fn; }, stop: () => timers.forEach(clearInterval) };
+  return { bank, market, net, on: c.on, paper, launch, setSay: (fn) => { sayFn = fn; }, stop: () => timers.forEach(clearInterval) };
 }

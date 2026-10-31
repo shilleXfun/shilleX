@@ -13,3 +13,12 @@
 .meta { margin: 0; color: var(--muted); font-size: 13px; }
 .ok { margin: 0; color: var(--text); font-size: 13.5px; }
 .err { margin: 0; color: var(--danger, #e5484d); font-size: 13.5px; }
+
+/* Which money it trades (2026-10-31): three choices in a row, the chosen one edged in orange. */
+.money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.moneyOpt { display: grid; gap: 4px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); text-align: left; cursor: pointer; transition: box-shadow var(--dur-1), background var(--dur-1); }
+.moneyOpt:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
+.moneyOpt[aria-checked='true'] { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.moneyOpt b { color: var(--text); font-size: 14px; font-weight: 600; }
+.moneyOpt span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+@media (max-width: 640px) { .money { grid-template-columns: minmax(0, 1fr); } }

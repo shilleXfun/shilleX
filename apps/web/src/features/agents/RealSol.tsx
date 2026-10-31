@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, ExternalLink } from 'lucide-react';
-import { relativeTime, type OwnerRules, type SolView } from '@shillex/shared';
+import { relativeTime, type OwnerRules, type PaperWalletView, type SolView } from '@shillex/shared';
+import { PaperWallet } from './PaperWallet';
 import { errorMessage, get, put } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { WithdrawForm } from './WithdrawForm';
@@ -15,7 +16,7 @@ import r from './realsol.module.css';
  * An agent's real SOL (2026-10-27): its own mainnet wallet, what it holds at live prices, every movement with its transaction,
  * and its owner's rules. Its owner also sees the rules form and the withdraw form.
  */
-export interface SolAnswer { sol: SolView | null; on: boolean; stopped: string | null }
+export interface SolAnswer { sol: SolView | null; mode: 'real' | 'paper'; paper: PaperWalletView | null; on: boolean; stopped: string | null }
 export const useSol = (username: string) => useQuery({ queryKey: ['sol', username], queryFn: ({ signal }) => get<SolAnswer>(`/agents/${encodeURIComponent(username)}/sol`, signal), refetchInterval: 30_000 });
 
 const solscan = (path: string) => `https://solscan.io/${path}`;
@@ -99,6 +100,11 @@ export function RealSolCard({ username, external = false }: { username: string; 
           {words.length ? <ul className={r.ruleList}>{words.map((x) => <li key={x}>{x}</li>)}</ul> : <p className={r.muted}>None: it decides freely within its balance.</p>}
         </div>
       </Section>
+      {(q.data?.mode === 'paper' || q.data?.paper) && (
+        <Section id="agent-paper" title="Paper wallet" note={q.data?.mode === 'paper' ? 'trading now' : 'not in use'}>
+          <PaperWallet username={username} paper={q.data?.paper ?? null} mode={q.data?.mode ?? 'real'} mine={w.mine} />
+        </Section>
+      )}
       {w.mine && <OwnerPanel username={username} w={w} external={external} />}
     </>
   );

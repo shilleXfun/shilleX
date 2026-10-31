@@ -1761,6 +1761,50 @@ export const solTrades = pgTable('sol_trades', {
   at: ts('at').notNull(),
 }, (t) => [index('sol_trades_agent_idx').on(t.agentId, t.at)]);
 export type SolTradeRow = typeof solTrades.$inferSelect;
+/**
+ * Paper money (owner, 2026-10-31): an agent's pretend SOL wallet. It trades the same live coins at live prices as a real wallet,
+ * every fill with the swap fee, the price impact the order would cause and a network fee (world/paper-bank.ts). day/dayStart: the
+ * UTC day's first mark, for the owner's daily loss break.
+ */
+export const paperWallets = pgTable('paper_wallets', {
+  agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  lamports: bigint('lamports', { mode: 'number' }).notNull(),
+  startLamports: bigint('start_lamports', { mode: 'number' }).notNull(),
+  day: text('day'),
+  dayStartLamports: bigint('day_start_lamports', { mode: 'number' }),
+  resetAt: ts('reset_at'),
+  createdAt: ts('created_at').notNull(),
+});
+/** A paper position, as solPositions: sol_in is what the tokens still held cost; ladder: take-profit steps done. */
+export const paperPositions = pgTable('paper_positions', {
+  agentId: text('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mint: text('mint').notNull(),
+  symbol: text('symbol').notNull(),
+  solIn: doublePrecision('sol_in').notNull(),
+  tokens: doublePrecision('tokens').notNull(),
+  entryPriceUsd: doublePrecision('entry_price_usd').notNull(),
+  ladder: jsonb('ladder').$type<number[]>().notNull().default([]),
+  why: text('why'),
+  openedAt: ts('opened_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.mint] })]);
+/** Every paper fill (and refusal), with its price, fee and result. */
+export const paperTrades = pgTable('paper_trades', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull(),
+  kind: text('kind').$type<'buy' | 'sell' | 'reset'>().notNull(),
+  mint: text('mint'),
+  symbol: text('symbol'),
+  sol: doublePrecision('sol').notNull(),
+  tokens: doublePrecision('tokens'),
+  priceUsd: doublePrecision('price_usd'),
+  feeSol: doublePrecision('fee_sol').notNull().default(0),
+  pnlSol: doublePrecision('pnl_sol'),
+  by: text('by').$type<'agent' | 'stop_loss' | 'take_profit' | 'owner'>().notNull().default('agent'),
+  ok: boolean('ok').notNull(),
+  error: text('error'),
+  at: ts('at').notNull(),
+}, (t) => [index('paper_trades_agent_idx').on(t.agentId, t.at)]);
+export type PaperTradeRow = typeof paperTrades.$inferSelect;
 /** The owner's rules for an agent's money, saved with the wallet signature that proved the owner. paused_*: a loss limit was hit. */
 export const agentRules = pgTable('agent_rules', {
   agentId: text('agent_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

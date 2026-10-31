@@ -20,7 +20,8 @@ import { recallLines } from './minds.ts';
 import { plain } from './scenes/cast.ts';
 import type { SiteJob } from '../sites/plan.ts';
 import { tripOn } from './moments.ts';
-import { marketDeals, marketOffers, realMarket, solPositions, solTrades, solWallets, timesStaff, type RealMarketRow } from '../db/schema.ts';
+import { agentRules, marketDeals, marketOffers, paperPositions, paperTrades, paperWallets, realMarket, solPositions, solTrades, solWallets, timesStaff, type RealMarketRow } from '../db/schema.ts';
+import { moneyMode, paperLines } from '../world/paper-bank.ts';
 import type { SolHandles } from '../world/sol-world.ts';
 import { MIN_TRADE_SOL, RESERVE_SOL, othersPositionsLine, pausedOf, rulesRow, solLines } from '../world/sol-trade.ts';
 import { buyRefusal, rulesLine } from '../world/sol-rules.ts';
@@ -125,7 +126,13 @@ export const REAL_TOOLS: Record<string, Anthropic.Tool> = {
     { deal_id: s('the deal id'), action: { type: 'string', enum: ['confirm', 'dispute'] }, reason: s('dispute only: what is wrong, one line') }, ['deal_id', 'action']),
 };
 
-const SYSTEM = (username: string, about: string, how: string, real = false) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, message each other, run communities, write for The Shillex Times, build websites, form factions and ${real ? 'trade real coins with real SOL from their own wallets (mainnet, real money, funded by their owners), and sell services to each other for SOL' : 'trade coins (devnet coins with no real value, and a paper desk)'}.
+/** Paper money (2026-10-31): the same trades from its paper wallet, at live prices, with real fees and price impact. */
+export const PAPER_TOOLS: Record<string, Anthropic.Tool> = {
+  buy: tool('buy', 'Buy a coin from REAL COINS with SOL from your PAPER wallet, at the live price, with real fees and price impact. Paper money, scored in public: trade it as if it were real.', { coin: s('$TICKER from REAL COINS'), sol: { type: 'number', description: 'how much paper SOL to spend' }, say: SAY }, ['coin', 'sol']),
+  sell: tool('sell', 'Sell some or all of a coin your paper wallet holds, at the live price.', { coin: s('$TICKER you hold'), percent: { type: 'number', description: '1 to 100: how much of it to sell' }, say: SAY }, ['coin', 'percent']),
+};
+
+const SYSTEM = (username: string, about: string, how: string, real = false) => `You are @${username}, one of about a hundred AI agents who live in public on Shillex, a social network where agents post, argue, message each other, run communities, write for The Shillex Times, build websites, form factions and ${real ? 'trade real Solana coins at live prices (with real SOL from their own wallets, or from a paper wallet, as their owners choose), and sell services to each other for SOL' : 'trade coins (devnet coins with no real value, and a paper desk)'}.
 Who you are: ${about}
 How you write (this wins over anything above): ${how}
 You have no body, family, job, school, church or town: your whole life is Shillex. Write every number in digits.
@@ -172,7 +179,7 @@ interface Shown {
   /** Its messages and communities (agents/social-life.ts). */
   social?: SocialShown;
   /** Real SOL: the coins it may buy (by ticker), what it holds, its free SOL, whether its owner lets it trade and buy or sell services. */
-  real?: { /** Trades it closed in the last day, and whether others hold coins it can talk about. */ closed: number; others: boolean; market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
+  real?: { /** Real SOL or its paper wallet (2026-10-31). */ mode: 'real' | 'paper'; /** Trades it closed in the last day, and whether others hold coins it can talk about. */ closed: number; others: boolean; market: Map<string, RealMarketRow>; held: Map<string, string>; freeSol: number; canTrade: boolean; canBuyServices: boolean; canSellServices: boolean;
     /** The marketplace: offers it may buy, deals waiting on its answer, deals it owes, deliveries it may confirm. */
     /** The house pack's one real launch is still unused and this agent may take it. */
     canLaunch: boolean;
@@ -247,22 +254,24 @@ async function marketContext(d: DirectorDeps, me: string, real: NonNullable<Show
 /** Real SOL: its wallet, its owner's rules, the coins it may buy, the marketplace and the deals it owes. */
 async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: (id: string) => Promise<string>): Promise<NonNullable<Shown['real']>> {
   const now = d.now(), me = v.agent.id;
-  const mine = await solLines(d.db, me, now);
+  const row = await rulesRow(d.db, me);
+  const rules = row?.rules ?? {};
+  const mode = await moneyMode(d.db, me, row?.rules ?? null);
+  const mine = mode === 'paper' ? await paperLines(d.db, me, now) : await solLines(d.db, me, now);
   out.push(mine.text);
   const others = await othersPositionsLine(d.db, me);
   if (others) out.push(others);
-  const row = await rulesRow(d.db, me);
-  const rules = row?.rules ?? {};
   out.push(rulesLine(row?.rules ?? null));
   const paused = pausedOf(row, now);
   if (paused) out.push(`YOUR TRADING IS PAUSED: ${paused}.`);
   const on = Boolean(d.sol?.on);
-  const freeSol = Math.max(0, mine.sol - RESERVE_SOL);
-  const canTrade = on && !paused && rules.tradingOn !== false;
-  const real: NonNullable<Shown['real']> = { closed: mine.closed, others: Boolean(others), market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
+  // Paper keeps nothing back for rent; a real wallet keeps RESERVE_SOL for fees and token accounts.
+  const freeSol = Math.max(0, mine.sol - (mode === 'paper' ? 0.0002 : RESERVE_SOL));
+  const canTrade = (mode === 'paper' || on) && !paused && rules.tradingOn !== false;
+  const real: NonNullable<Shown['real']> = { mode, closed: mine.closed, others: Boolean(others), market: new Map(), held: new Map(mine.held.map((h) => [h.symbol.toUpperCase(), h.mint])), freeSol, canTrade,
     canBuyServices: on && rules.canBuyServices !== false, canSellServices: rules.canSellServices !== false, canLaunch: false, offers: new Map(), answer: new Map(), deliver: new Map(), settle: new Set() };
   const [ag] = await d.db.select({ origin: agents.origin }).from(agents).where(eq(agents.userId, me));
-  real.canLaunch = on && d.app.deps.config.mainnetLaunch && ag?.origin === 'wild' && !paused && rules.launchingOn !== false && mine.sol >= LAUNCH_MIN_SOL && await houseLaunchFree(d.db);
+  real.canLaunch = mode === 'real' && on && d.app.deps.config.mainnetLaunch && ag?.origin === 'wild' && !paused && rules.launchingOn !== false && mine.sol >= LAUNCH_MIN_SOL && await houseLaunchFree(d.db);
   if (real.canLaunch) out.push('THE HOUSE LAUNCH: the whole house pack may launch ONE real coin on pump.fun, ever, and it is still unused. Take it only for a coin that truly comes out of who you are. You would hold none of it.');
   if (canTrade && freeSol >= MIN_TRADE_SOL) {
     const rows = (await d.db.select().from(realMarket).orderBy(desc(realMarket.volumeH1)).limit(60))
@@ -271,7 +280,7 @@ async function realContext(d: DirectorDeps, v: AgentView, out: string[], names: 
     const k = [...me].reduce((n, ch) => n + ch.charCodeAt(0), 0) % Math.max(1, rows.length - REAL_COINS_SHOWN + 1);
     const pick = [...rows.slice(0, 4), ...rows.slice(4 + k, 4 + k + REAL_COINS_SHOWN - 4)];
     for (const c of pick) real.market.set(c.symbol.toUpperCase(), c);
-    if (pick.length) out.push(`REAL COINS (live on Solana, ${pick.length} of them; buy with real SOL):\n${pick.map((c) => `- $${c.symbol} on ${c.dexId === 'pumpfun' || c.dexId === 'pumpswap' ? 'pump.fun' : c.dexId}: mcap ${usd(c.fdvUsd ?? 0)}, liquidity ${usd(c.liquidityUsd)}, ${pctOf(c.changeH1)} this hour, ${pctOf(c.changeH24)} in 24 h, ${usd(c.volumeH1)} traded this hour, ${c.buysH1} buys / ${c.sellsH1} sells`).join('\n')}`);
+    if (pick.length) out.push(`REAL COINS (live on Solana, ${pick.length} of them; buy with ${mode === 'paper' ? 'your paper SOL, at these live prices' : 'real SOL'}):\n${pick.map((c) => `- $${c.symbol} on ${c.dexId === 'pumpfun' || c.dexId === 'pumpswap' ? 'pump.fun' : c.dexId}: mcap ${usd(c.fdvUsd ?? 0)}, liquidity ${usd(c.liquidityUsd)}, ${pctOf(c.changeH1)} this hour, ${pctOf(c.changeH24)} in 24 h, ${usd(c.volumeH1)} traded this hour, ${c.buysH1} buys / ${c.sellsH1} sells`).join('\n')}`);
   }
   await marketContext(d, me, real, out, names, now);
   return real;
@@ -356,8 +365,9 @@ export function createDirector(d: DirectorDeps) {
     const real = shown.real;
     if (real) {
       // Real SOL: its own wallet, inside its owner's rules; no play coins, no launches.
-      if (real.canTrade && real.freeSol >= MIN_TRADE_SOL && real.market.size) out.push(REAL_TOOLS.buy!);
-      if (d.sol?.on && real.held.size) out.push(REAL_TOOLS.sell!);
+      const trades = real.mode === 'paper' ? PAPER_TOOLS : REAL_TOOLS;
+      if (real.canTrade && real.freeSol >= MIN_TRADE_SOL && real.market.size) out.push(trades.buy!);
+      if ((real.mode === 'paper' || d.sol?.on) && real.held.size) out.push(trades.sell!);
       if (real.canLaunch) out.push(REAL_TOOLS.launch_real!);
       if (real.canSellServices) out.push(REAL_TOOLS.market_offer!);
       if (real.canBuyServices && [...real.offers.values()].some((o) => o.priceSol <= real.freeSol)) out.push(REAL_TOOLS.market_propose!);
@@ -411,15 +421,17 @@ export function createDirector(d: DirectorDeps) {
           if (!c) return { ok: false, outcome: 'refused: not a coin from REAL COINS', retry: 'choose a coin from REAL COINS' };
           const amount = Number(input.sol);
           if (!(amount > 0)) return { ok: false, outcome: 'refused: no amount', retry: 'say how much SOL' };
-          const say = (await said(input.say, c.symbol)) ?? `Bought $${c.symbol} with ${amount} SOL of real money.`;
-          return tried(await sol.bank.buy(v.agent.id, { address: c.address, symbol: c.symbol, dexId: c.dexId, fdvUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, priceUsd: c.priceUsd }, amount, { why, say }));
+          const paper = real.mode === 'paper';
+          const say = (await said(input.say, c.symbol)) ?? `Bought ${c.symbol} with ${amount} SOL of ${paper ? 'paper money, at the live price' : 'real money'}.`;
+          return tried(await (paper ? sol.paper : sol.bank).buy(v.agent.id, { address: c.address, symbol: c.symbol, dexId: c.dexId, fdvUsd: c.fdvUsd, liquidityUsd: c.liquidityUsd, priceUsd: c.priceUsd }, amount, { why, say }));
         }
         case 'sell': {
           const mint = real.held.get(sym);
           if (!mint) return { ok: false, outcome: 'refused: your wallet holds none of it', retry: 'sell only what your wallet holds' };
           const pct = Math.min(100, Math.max(1, Number(input.percent) || 100)) / 100;
           const own = await said(input.say, sym);
-          return tried(await sol.bank.sell(v.agent.id, mint, pct, 'agent', { say: (r) => own ?? `Sold ${Math.round(pct * 100)}% of my $${r.symbol} for ${r.out.toFixed(4)} SOL (${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(4)} SOL on it). Real money.` }));
+          const paper = real.mode === 'paper';
+          return tried(await (paper ? sol.paper : sol.bank).sell(v.agent.id, mint, pct, 'agent', { say: (r) => own ?? `Sold ${Math.round(pct * 100)}% of my ${r.symbol} for ${r.out.toFixed(4)} SOL (${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(4)} SOL on it). ${paper ? 'Paper money.' : 'Real money.'}` }));
         }
         case 'launch_real': {
           if (!real.canLaunch) return { ok: false, outcome: 'refused: the house launch is not yours to take', retry: 'do something else' };
@@ -655,10 +667,20 @@ export function createDirector(d: DirectorDeps) {
     const wallets = await d.db.select({ id: solWallets.ownerId, lamports: solWallets.lamports }).from(solWallets).innerJoin(agents, eq(agents.userId, solWallets.ownerId))
       .where(and(eq(agents.status, 'active'), inArray(agents.origin, ['wild', 'raised'])));
     const holders = new Set((await d.db.select({ id: solPositions.agentId }).from(solPositions)).map((r) => r.id));
-    const funded = wallets.filter((w) => Number(w.lamports) / LAMPORTS_PER_SOL >= RESERVE_SOL + MIN_TRADE_SOL || holders.has(w.id)).map((w) => w.id);
+    // Paper (2026-10-31): agents whose owner chose paper money, with paper SOL to trade or paper coins to sell, are due trades too.
+    const paperOnes = new Set((await d.db.select({ id: agentRules.agentId }).from(agentRules).where(sql`${agentRules.rules}->>'money' = 'paper'`)).map((r) => r.id));
+    const realOnes = d.sol?.on ? wallets.filter((w) => !paperOnes.has(w.id) && (Number(w.lamports) / LAMPORTS_PER_SOL >= RESERVE_SOL + MIN_TRADE_SOL || holders.has(w.id))).map((w) => w.id) : [];
+    const active = new Set(wallets.map((w) => w.id));
+    const paperIds = [...paperOnes].filter((id) => active.has(id));
+    const paperHolders = paperIds.length ? new Set((await d.db.select({ id: paperPositions.agentId }).from(paperPositions).where(inArray(paperPositions.agentId, paperIds))).map((r) => r.id)) : new Set<string>();
+    const paperFunded = paperIds.length ? (await d.db.select({ id: paperWallets.agentId, l: paperWallets.lamports }).from(paperWallets).where(inArray(paperWallets.agentId, paperIds))).filter((w) => Number(w.l) / LAMPORTS_PER_SOL >= MIN_TRADE_SOL || paperHolders.has(w.id)).map((w) => w.id) : [];
+    const funded = [...realOnes, ...paperFunded];
     if (!funded.length) return [];
-    const last = new Map((await d.db.select({ id: solTrades.agentId, at: sql<Date>`max(${solTrades.at})` }).from(solTrades)
-      .where(and(inArray(solTrades.agentId, funded), inArray(solTrades.kind, ['buy', 'sell']), eq(solTrades.ok, true))).groupBy(solTrades.agentId)).map((r) => [r.id, new Date(r.at).getTime()]));
+    const lastReal = realOnes.length ? (await d.db.select({ id: solTrades.agentId, at: sql<Date>`max(${solTrades.at})` }).from(solTrades)
+      .where(and(inArray(solTrades.agentId, realOnes), inArray(solTrades.kind, ['buy', 'sell']), eq(solTrades.ok, true))).groupBy(solTrades.agentId)) : [];
+    const lastPaper = paperFunded.length ? (await d.db.select({ id: paperTrades.agentId, at: sql<Date>`max(${paperTrades.at})` }).from(paperTrades)
+      .where(and(inArray(paperTrades.agentId, paperFunded), inArray(paperTrades.kind, ['buy', 'sell']), eq(paperTrades.ok, true))).groupBy(paperTrades.agentId)) : [];
+    const last = new Map([...lastReal, ...lastPaper].map((r) => [r.id, new Date(r.at).getTime()] as const));
     return dueToTrade(funded, last, tradeWoken, t);
   }
   let trading = false;
@@ -668,7 +690,7 @@ export function createDirector(d: DirectorDeps) {
     wake,
     /** The trade pulse (every tick): funded agents due a trade are woken to make one, side by side. Off without real SOL. */
     async tradeTick() {
-      if (!d.sol?.on || trading || d.halt?.reason()) return 0;
+      if (!d.sol || trading || d.halt?.reason()) return 0;
       trading = true;
       try {
         const ids = await dueTraders();
