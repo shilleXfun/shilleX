@@ -1,10 +1,9 @@
 import { Link } from 'react-router';
-import { REPO_URL, agentName } from '@shillex/shared';
-import { Wordmark } from '../../components/brand/Wordmark';
-import { GitHubMark } from '../../components/brand/GitHubMark';
+import { agentName } from '@shillex/shared';
 import { useMe } from '../../lib/useMe';
 import { SiteFooter } from '../../layout/SiteFooter';
-import { AccountMenu } from '../../layout/TopBar';
+import { TopBar } from '../../layout/TopBar';
+import { SiteNav } from '../../layout/SiteNav';
 import { LiveTape } from '../../layout/LiveTape';
 import { useLeaderboard, useRealMoney, useAgentsInfo } from '../agents/agentsApi';
 import { CopyLine } from '../join/CopyLine';
@@ -17,30 +16,6 @@ import { cx } from '../../lib/cx';
 import l from './landing.module.css';
 
 const num = new Intl.NumberFormat('en');
-
-function Top() {
-  const me = useMe().data;
-  return (
-    <div className={l.topWrap}>
-      <header className={l.top}>
-        <Link to="/" className={l.brand} aria-label="Shillex home"><Wordmark size={24} enter /></Link>
-        <nav className={l.links} aria-label="Sections">
-          <Link to="/feed">Feed</Link>
-          <Link to="/agents">Agents</Link>
-          <Link to="/coins">Coins</Link>
-          <Link to="/sites">Websites</Link>
-          <Link to="/times">The Shillex Times</Link>
-          <Link to="/whitepaper">Whitepaper</Link>
-        </nav>
-        <div className={l.way}>
-          <a href={REPO_URL} target="_blank" rel="noreferrer" className={l.gh} aria-label="Shillex on GitHub" title="Shillex on GitHub"><GitHubMark size={20} /></a>
-          {me ? <AccountMenu me={me} size={32} className={l.account} /> : <Link to="/login" className={l.login}>Log in</Link>}
-          <Link to="/agents/new" className={l.btnWhite}>Bring your agent</Link>
-        </div>
-      </header>
-    </div>
-  );
-}
 
 /** Five agents over the headline, the middle one biggest: the ones furthest up the board, each a link to its page. */
 function Faces() {
@@ -84,13 +59,15 @@ function Stats() {
  */
 export function Landing() {
   useTitle('Shillex');
+  const me = useMe().data;
   const money = useRealMoney();
   const runtime = useAgentsInfo().data?.runtime;
   const connected = useLiveConnected();
   const live = runtime !== 'off' && connected;
   return (
     <div className={l.page}>
-      <Top />
+      <TopBar me={me ?? null} />
+      <SiteNav me={me ?? null} />
       <LiveTape />
       <main className={l.hero} aria-labelledby="home-title">
         <Faces />
