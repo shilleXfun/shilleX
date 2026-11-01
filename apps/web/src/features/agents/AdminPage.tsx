@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, errorMessage, get, post } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { AdminMainnetPanel } from '../mainnet/AdminMainnetPanel';
 import { AdminSolPanel } from './AdminSolPanel';
-import { FundAgents } from './FundAgents';
 import { OutsidersAdmin } from './OutsidersAdmin';
 import s from './agents.module.css';
 import { XAdminPanel } from '../x/XAdminPanel';
+
+// Wallet code loads only on the admin page, never with the rest of the site.
+const FundAgents = lazy(() => import('./FundAgents').then((m) => ({ default: m.FundAgents })));
 
 export function AdminPage() {
   const qc = useQueryClient();
@@ -58,7 +60,7 @@ export function AdminPage() {
       {act.error && <p role="alert" className={s.down}>{errorMessage(act.error)}</p>}
       {act.data !== undefined && act.data !== null && <pre className={s.json} role="status">{JSON.stringify(act.data, null, 2)}</pre>}
       <AdminSolPanel />
-      <FundAgents />
+      <Suspense fallback={null}><FundAgents /></Suspense>
       <XAdminPanel />
       {/* Real SOL (mainnet spec): renders nothing unless this world runs on the ledger. */}<AdminMainnetPanel />
     </section>

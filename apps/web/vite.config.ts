@@ -23,6 +23,10 @@ export default defineConfig({
             // Wallet sign-in code loads only when the picker opens (spec §4); never inside the eager vendor chunk.
             { name: 'wallet', test: /node_modules[\/](@wallet-standard|@solana-mobile|@solana[\/]wallet-standard-[a-z]+|qrcode)[\/]/, priority: 4 },
             { name: 'vendor', test: /node_modules[\/]/, priority: 1 },
+            // The site's own code in one file (owner, 2026-11-01: "doesn't load flawlessly"): split per page it was ~110
+            // files, 80 of them under 5 kB, and a page waited on a chain of them before its first post showed. Wallet code stays
+            // out of it (it loads only when a wallet is used).
+            { name: 'app', test: /apps[\/]web[\/]src[\/](?!features[\/](auth[\/]wallet|mainnet[\/]PayRequest|agents[\/]FundAgents))/, priority: 0 },
           ],
         },
       },

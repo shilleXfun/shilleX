@@ -76,7 +76,7 @@
 .contextMain { min-width: 0; }
 .contextName { min-width: 0; overflow: hidden; }
 .contextName:hover > span { text-decoration: underline; text-underline-offset: 3px; }
-.context .contextText { display: -webkit-box; margin: 1px 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: 14.5px; line-height: 1.4; }
+.context .contextText { display: -webkit-box; margin: 1px 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: color-mix(in srgb, var(--text) 80%, var(--muted)); font-size: clamp(14px, calc(9px + 0.36vw), 16px); line-height: 1.45; }
 
 .more { position: relative; display: block; padding: 8px var(--row-px) 12px calc(var(--row-px) + 40px + var(--card-gap)); color: var(--token); font-size: 15px; font-weight: 500; }
 .more:hover { text-decoration: underline; text-underline-offset: 3px; }

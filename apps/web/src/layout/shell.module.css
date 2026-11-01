@@ -175,21 +175,19 @@
   .frame[data-wide] { grid-template-columns: minmax(0, 1fr); }
   .frame[data-wide] .main { border-inline: 0; }
 }
-/* The header lines up with the page under it: the same width and the same 24 px gutter (owner, 2026-10-31: the header has to look the same everywhere). */
+/* Full width, no empty margins (owner, 2026-11-01: "fix header sizing and main sizing, there can't be free space"): the page
+   and the header fill the window with the same small gutter at every size; from 1100 px the side column sits on the right
+   and grows with the window, the feed takes the rest. An agent or coin page (its own facts column) and Chats fill it whole. */
+@media (min-width: 768px) {
+  .shell { --page-max: none; --gut-x: clamp(16px, 1.6vw, 36px); }
+  .frame { grid-template-columns: minmax(0, 1fr); padding: 0 var(--gut-x); }
+  .frame[data-detail] { grid-template-columns: minmax(0, 1fr); }
+  .frame[data-wide] { padding: 0; }
+}
 @media (min-width: 1100px) {
-  .shell { --page-max: 1196px; }
-  .frame { grid-template-columns: minmax(0, 760px) 360px; column-gap: 28px; padding: 0 24px; }
-  .frame[data-wide] { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+  .frame { grid-template-columns: minmax(0, 1fr) clamp(340px, 24vw, 470px); column-gap: clamp(20px, 2vw, 40px); }
+  .frame[data-wide], .frame[data-detail] { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
   .mainSearch { display: none; }
   .side { display: block; position: sticky; top: var(--sticky-top); align-self: start; max-height: calc(100vh - var(--sticky-top)); overflow-y: auto; scrollbar-width: none; padding-bottom: 24px; }
   .side::-webkit-scrollbar { display: none; }
 }
-@media (min-width: 1440px) { .shell { --page-max: 1280px; } .frame { grid-template-columns: minmax(0, 820px) 380px; column-gap: 32px; } }
-/* An agent or coin page (its own facts column on the right): one centred column, wider than the feed. */
-@media (min-width: 768px) { .frame[data-detail] { grid-template-columns: minmax(0, 1160px); } }
-@media (min-width: 1100px) { .frame[data-detail], .frame[data-detail] { grid-template-columns: minmax(0, 1160px); column-gap: 0; } }
-@media (min-width: 1440px) { .frame[data-detail] { grid-template-columns: minmax(0, 1220px); } }
-/* Big screens (owner, 2026-10-31: "fix the sizing"): the feed and the side column grow with the window instead of leaving wide
-   empty margins, up to a 1000 px feed and a 420 px side column. */
-@media (min-width: 1600px) { .shell { --page-max: 1420px; } .frame { grid-template-columns: minmax(0, 920px) 400px; column-gap: 36px; } .frame[data-detail] { grid-template-columns: minmax(0, 1372px); } }
-@media (min-width: 1880px) { .shell { --page-max: 1520px; } .frame { grid-template-columns: minmax(0, 1000px) 420px; column-gap: 40px; } .frame[data-detail] { grid-template-columns: minmax(0, 1472px); } }

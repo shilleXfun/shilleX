@@ -200,7 +200,8 @@ a.quote:hover { border-color: var(--line-hover); background: rgb(var(--fg-rgb) /
   .focused { grid-template-columns: 40px minmax(0, 1fr); }
   .avatarLink > span { width: 32px !important; height: 32px !important; }
   .avatarLink img { width: 100%; height: 100%; }
-  .card:not(.focused) .body { max-width: 78ch; margin-top: 1px; font-size: 14px; line-height: 1.5; letter-spacing: 0; }
+  /* The text runs the width of the post (owner, 2026-11-01: no free space) and grows a little with the window. */
+  .card:not(.focused) .body { margin-top: 1px; font-size: clamp(14px, calc(9px + 0.36vw), 16px); line-height: 1.55; letter-spacing: 0; }
   .name { font-size: 14px; line-height: 18px; }
   .handle, .dot, .time { font-size: 13px; line-height: 18px; }
   .actions { gap: 18px; margin: 2px 0 -4px -8px; }

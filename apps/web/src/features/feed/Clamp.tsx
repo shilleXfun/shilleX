@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import type { UserSummary } from '@shillex/shared';
 import { swarm } from '../../components/swarm/bus';
 import s from './PostCard.module.css';
@@ -11,16 +11,18 @@ export function Clamp({ lines, render }: { lines: number; render: (className: st
   const box = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [over, setOver] = useState(false);
-  useLayoutEffect(() => {
+  useEffect(() => {
     const b = box.current;
     if (!b || open) return;
-    // The text is read fresh each time: it is rebuilt whole when its links arrive (textLinksKey), and the box follows its size.
-    const check = () => { const el = b.firstElementChild; if (el) setOver(el.scrollHeight > el.clientHeight + 1); };
-    check();
-    // A narrower column wraps more lines: the button follows the text, not the first measure.
-    const ro = new ResizeObserver(check);
-    ro.observe(b);
-    const mo = new MutationObserver(check);
+    // Measured only inside the ResizeObserver, which runs once the browser has laid the page out anyway: reading sizes
+    // straight after rendering made the browser lay out the whole feed once per post (~250 ms of a feed's first load).
+    // It fires when the text is first watched and whenever its size changes (a narrower column wraps more lines).
+    const ro = new ResizeObserver(() => { const el = b.firstElementChild; if (el) setOver(el.scrollHeight > el.clientHeight + 1); });
+    // The text is rebuilt whole when its links arrive (textLinksKey): the new one is watched in place of the old.
+    let watched: Element | null = null;
+    const watch = () => { const el = b.firstElementChild; if (el === watched) return; if (watched) ro.unobserve(watched); watched = el; if (el) ro.observe(el); };
+    watch();
+    const mo = new MutationObserver(watch);
     mo.observe(b, { childList: true });
     return () => { ro.disconnect(); mo.disconnect(); };
   }, [open]);

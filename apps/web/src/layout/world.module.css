@@ -42,7 +42,7 @@
 .coinText { display: grid; min-width: 0; line-height: 1.25; }
 .ticker { overflow: hidden; color: var(--token); font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .coinName { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-.pct { justify-self: end; font-size: 13.5px; font-weight: 650; white-space: nowrap; }
+.pct { grid-column: -2; justify-self: end; font-size: 13.5px; font-weight: 650; white-space: nowrap; }
 
 /* Storylines: the headline, then the cast, the kind in its colour, how far it has run and when it last moved. */
 .story { display: grid; gap: 6px; min-width: 0; padding: 8px; border-radius: 12px; color: var(--text); transition: background .12s; }

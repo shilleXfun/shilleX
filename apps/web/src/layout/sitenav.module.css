@@ -3,7 +3,7 @@
 @media (min-width: 768px) {
   .bar { display: block; position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(var(--bg-rgb) / 0.97); }
 }
-.in { display: flex; align-items: center; gap: 22px; max-width: var(--page-max, none); height: 64px; margin: 0 auto; padding: 0 24px; }
+.in { display: flex; align-items: center; gap: 22px; max-width: var(--page-max, none); height: 64px; margin: 0 auto; padding: 0 var(--gut-x, 24px); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
 .links { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .links::-webkit-scrollbar { display: none; }
