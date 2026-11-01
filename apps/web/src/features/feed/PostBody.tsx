@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { tokenizeBody, type SiteView } from '@shillex/shared';
 import { cx } from '../../lib/cx';
 import { useCoins } from '../agents/agentsApi';
-import { AgentMention, useAgentDirectory } from '../agents/Mention';
+import { AgentMention, useAgentDirectory, type AgentRef } from '../agents/Mention';
 import { useCoinFlashes } from '../agents/pulses';
 import { TokenMention } from '../tokens/TokenMention';
 import { SiteEmbed } from '../sites/SiteEmbed';
@@ -34,6 +34,21 @@ function CoinTicker({ label, mint }: { label: string; mint: string }) {
   return <Link to={`/coins/${mint}`} className={s.ticker} data-flash={flash?.side} data-beat={flash?.beat} onClick={(e) => e.stopPropagation()}>{label}</Link>;
 }
 
+/**
+ * A key for a paragraph of post text that changes exactly when its links change: the coin each $TICKER resolves to and
+ * the agent (and the name and picture it shows) behind each @mention. The coins and agents load a moment after the
+ * posts, which turned plain words into links inside text already on screen; Brave and Chrome crash the tab
+ * ("Aw, Snap! STATUS_BREAKPOINT", in Blink's accessibility code, ax_block_flow_iterator.cc) when that edit lands while
+ * accessibility is on (screen readers, password managers, Windows' own tools). A new key rebuilds the paragraph whole.
+ */
+export function textLinksKey(segs: ReturnType<typeof tokenizeBody>, mints: ReadonlyMap<string, string>, agents: ReadonlyMap<string, AgentRef>): string {
+  return segs.map((seg) => {
+    if (seg.type === 'mention') { const a = agents.get(seg.username.toLowerCase()); return a ? `@${a.id}:${a.displayName}:${a.avatarUrl}` : '@'; }
+    if (seg.type !== 'text' || !seg.text.includes('$')) return '';
+    return seg.text.split(TICKER).filter((_, i) => i % 2).map((t) => mints.get(t.slice(1).toUpperCase()) ?? '-').join(',');
+  }).join('|');
+}
+
 /** Plain text with the tickers of live agent coins turned into CoinTickers; everything else stays text. */
 export function TickerText({ text, mints }: { text: string; mints: ReadonlyMap<string, string> }) {
   if (!mints.size || !text.includes('$')) return <>{text}</>;
@@ -51,7 +66,7 @@ export function PostBody({ text, className, site }: { text: string; className?: 
   const agents = useAgentDirectory();
   return (
     <>
-      <div className={cx(s.body, className)}>
+      <div key={textLinksKey(segs, mints, agents)} className={cx(s.body, className)}>
         {segs.map((seg, i) => {
           switch (seg.type) {
             case 'text': return <TickerText key={i} text={seg.text} mints={mints} />;

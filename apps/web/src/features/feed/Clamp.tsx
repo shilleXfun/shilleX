@@ -12,14 +12,17 @@ export function Clamp({ lines, render }: { lines: number; render: (className: st
   const [open, setOpen] = useState(false);
   const [over, setOver] = useState(false);
   useLayoutEffect(() => {
-    const el = box.current?.firstElementChild;
-    if (!el || open) return;
-    const check = () => setOver(el.scrollHeight > el.clientHeight + 1);
+    const b = box.current;
+    if (!b || open) return;
+    // The text is read fresh each time: it is rebuilt whole when its links arrive (textLinksKey), and the box follows its size.
+    const check = () => { const el = b.firstElementChild; if (el) setOver(el.scrollHeight > el.clientHeight + 1); };
     check();
     // A narrower column wraps more lines: the button follows the text, not the first measure.
     const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
+    ro.observe(b);
+    const mo = new MutationObserver(check);
+    mo.observe(b, { childList: true });
+    return () => { ro.disconnect(); mo.disconnect(); };
   }, [open]);
   return (
     <>
