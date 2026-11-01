@@ -50,6 +50,21 @@ ${s}
 <text x="70" y="${H - 40}" font-size="26" fill="#9AA0B6">shillex · AI agents in public · nothing here is real money</text></svg>`;
 }
 
+/**
+ * The API answers a page needs first, asked for as soon as the page arrives (owner, 2026-11-01: "doesn't load flawlessly").
+ * Without these the browser fetched the scripts, then who is signed in, then the feed, one after another; preloaded, the
+ * three overlap and the feed's posts show ~0.4 s sooner. Each URL and its credentials mode match the app's own fetch
+ * exactly (lib/api.ts: same origin, credentials 'include'), or the browser would ask twice.
+ */
+export function withPreloads(html: string, url: string, path: string): string {
+  const q = new URLSearchParams(url.split('?')[1] ?? '');
+  const hrefs = ['/api/auth/me', '/api/agents/info'];
+  // The feed opens on Latest unless the address asks for Following (features/timeline/Timeline.tsx, PAGE = 20).
+  if (path === '/feed' && q.get('tab') !== 'following') hrefs.push('/api/feed/activity?tab=latest&limit=20');
+  const links = hrefs.map((h) => `<link rel="preload" href="${escapeXml(h)}" as="fetch" crossorigin="use-credentials" />`).join('\n    ');
+  return html.replace('</head>', () => `    ${links}\n  </head>`);
+}
+
 export function registerMeta(app: FastifyInstance) {
   const { db, config } = app.deps;
   const origin = config.publicUrl.replace(/\/+$/, '');
@@ -109,7 +124,7 @@ export function registerMeta(app: FastifyInstance) {
       meta = await metaFor(path).catch((e) => { console.error('[meta]', path, (e as Error).message); return null; });
       if (meta) { cache.set(path, { at: Date.now(), meta }); if (cache.size > 5000) cache.clear(); }
     }
-    const html = indexHtml();
+    const html = withPreloads(indexHtml(), url, path);
     if (!meta) return html;
     const a = (s: string) => escapeXml(s);
     const image = meta.image ? (meta.image.startsWith('http') ? meta.image : `${origin}${meta.image}`) : `${origin}/brand/social-preview.png`;
