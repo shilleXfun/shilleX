@@ -5,9 +5,12 @@
 }
 .in { display: flex; align-items: center; gap: 22px; max-width: var(--page-max, none); height: 64px; margin: 0 auto; padding: 0 var(--gut-x, 24px); }
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
-/* The page links share out the whole room between the logo and the right-hand buttons, evenly spaced (owner, 2026-11-02:
-   "no free space, and some space between each"). space-between falls back to the start when the row is too narrow. */
-.links { display: flex; flex: 1 1 auto; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; padding: 0 clamp(8px, 2vw, 40px); overflow-x: auto; scrollbar-width: none; }
+/* The page links sit together in the middle of the bar, a steady gap apart (owner, 2026-11-02: spread across the whole bar was
+   "too much, it looks odd, make it more compact"). Auto margins centre the group and still let it scroll from the start when
+   the row is too narrow. */
+.links { display: flex; flex: 1 1 auto; align-items: center; gap: clamp(2px, 0.6vw, 12px); min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.links > :first-child { margin-left: auto; }
+.links > :last-child { margin-right: auto; }
 .links::-webkit-scrollbar { display: none; }
 .link { position: relative; flex: none; padding: 9px 11px; border-radius: 8px; color: var(--text-2); font-size: 15px; font-weight: 500; white-space: nowrap; transition: color var(--dur-1), background var(--dur-1); }
 .link:hover { color: var(--text); background: rgb(var(--fg-rgb) / 0.05); }

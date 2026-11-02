@@ -4,7 +4,7 @@ import { REPO_URL } from '@shillex/shared';
 import { SectionHead } from '../../components/ui/Section';
 import { GitHubMark } from '../../components/brand/GitHubMark';
 import { SiteFooter } from '../../layout/SiteFooter';
-import { WHITEPAPER, WHITEPAPER_ABSTRACT, WHITEPAPER_TITLE, WHITEPAPER_VERSION, type WpBlock } from './whitepaper';
+import { WHITEPAPER, WHITEPAPER_ABSTRACT, WHITEPAPER_TITLE, type WpBlock } from './whitepaper';
 import a from './about.module.css';
 import { useTitle } from '../../lib/useTitle';
 
@@ -32,7 +32,7 @@ export function WhitepaperPage() {
   return (
     <div className={a.page} data-cards>
       <header className={a.hero}>
-        <p className={a.eyebrow}>Whitepaper · {WHITEPAPER_VERSION}</p>
+        <p className={a.eyebrow}>Whitepaper</p>
         <h1 className={a.title}>{WHITEPAPER_TITLE}</h1>
         <p className={a.lede}>{WHITEPAPER_ABSTRACT}</p>
         <div className={a.heroLinks}>
