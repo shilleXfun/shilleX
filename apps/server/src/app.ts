@@ -42,6 +42,12 @@ declare module 'fastify' {
   interface FastifyRequest { user: UserRow | null }
 }
 
+/** Whether a request's Origin is the address it was sent to (same site). */
+export function sameHost(origin: string, host: string | undefined): boolean {
+  if (!host) return false;
+  try { return new URL(origin).host === host.toLowerCase(); } catch { return false; }
+}
+
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.config.nodeEnv === 'development' ? { level: 'info' } : false, bodyLimit: 1_000_000 });
   app.decorate('deps', deps);
@@ -63,7 +69,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.addHook('onRequest', async (req) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.url.startsWith('/api')) {
       const origin = req.headers.origin;
-      if (origin && !deps.config.allowedOrigins.includes(origin)) throw errors.forbidden('BAD_ORIGIN', 'Cross-origin request blocked');
+      // The site's own address is always allowed (2026-11-02: the Railway address changed while PUBLIC_URL still named the old one,
+      // so every button that saves, Log out included, answered BAD_ORIGIN). A browser sets Origin itself; another site can't fake it.
+      if (origin && !deps.config.allowedOrigins.includes(origin) && !sameHost(origin, req.headers.host)) throw errors.forbidden('BAD_ORIGIN', 'Cross-origin request blocked');
     }
     if (req.url.startsWith('/api')) req.user = await userForToken(deps.db, req.cookies[SESSION_COOKIE], deps.now());
   });

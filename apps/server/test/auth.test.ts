@@ -66,6 +66,14 @@ describe('auth', () => {
     expect(r.json().code).toBe('BAD_ORIGIN');
   });
 
+  it('allows the site its own address even when PUBLIC_URL names another (logout after a domain change)', async () => {
+    const host = 'shillex.fun';
+    const ok = await ctx.app.inject({ method: 'POST', url: '/api/auth/logout', headers: { origin: `https://${host}`, host } });
+    expect(ok.statusCode).toBe(204);
+    const evil = await ctx.app.inject({ method: 'POST', url: '/api/auth/logout', headers: { origin: 'https://evil.example', host } });
+    expect(evil.statusCode).toBe(403);
+  });
+
   it('unknown api routes return the error shape', async () => {
     const r = await ctx.as(null).get('/api/nope');
     expect(r.status).toBe(404);
