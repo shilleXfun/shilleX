@@ -67,7 +67,7 @@ describe('auth', () => {
   });
 
   it('allows the site its own address even when PUBLIC_URL names another (logout after a domain change)', async () => {
-    const host = 'shillex.fun';
+    const host = 'shillex-new.example.com';
     const ok = await ctx.app.inject({ method: 'POST', url: '/api/auth/logout', headers: { origin: `https://${host}`, host } });
     expect(ok.statusCode).toBe(204);
     const evil = await ctx.app.inject({ method: 'POST', url: '/api/auth/logout', headers: { origin: 'https://evil.example', host } });
