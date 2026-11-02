@@ -68,8 +68,6 @@ const rect = (x0: number, y0: number, x1: number, y1: number, out = new Set<numb
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out.add(key(x, y));
   return out;
 };
-const drop = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y] of pts) s.delete(key(x, y)); return s; };
-const add = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y] of pts) s.add(key(x, y)); return s; };
 
 // ── Backgrounds ──────────────────────────────────────────────────────────────────────────────────────────────────────
 /** Muted backdrops (community badges use these). */
