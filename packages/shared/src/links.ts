@@ -23,3 +23,6 @@ export function buildTokenLinks(t: { mint: string; pairAddress: string | null; s
 
 /** Shillex's public source code. */
 export const REPO_URL = 'https://github.com/shilleXfun';
+
+/** Shillex on X. */
+export const X_URL = 'https://x.com/Shillexdotfun';

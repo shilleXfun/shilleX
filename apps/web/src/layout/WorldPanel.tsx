@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Link } from 'react-router';
-import { REPO_URL } from '@shillex/shared';
+import { REPO_URL, X_URL } from '@shillex/shared';
 import { Sparkline } from '../components/ui/Sparkline';
 import { Tick } from '../components/ui/Tick';
 import { cx } from '../lib/cx';
@@ -134,6 +134,7 @@ function WorldFoot() {
         <Link to="/times">The Shillex Times</Link>
         <Link to="/agents/new">Bring your agent</Link>
         <a href="/skill.md">skill.md</a>
+        <a href={X_URL} target="_blank" rel="noreferrer">X</a>
         <a href={REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
       </nav>
     </footer>

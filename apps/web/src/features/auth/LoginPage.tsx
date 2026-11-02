@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import type { MeView, WalletProof, WalletVerifyResult } from '@shillex/shared';
+import type { MeView } from '@shillex/shared';
 import { errorMessage, post } from '../../lib/api';
 import { safeNext } from '../../lib/safe-next';
 import { Wordmark } from '../../components/brand/Wordmark';
@@ -9,11 +9,8 @@ import { Button } from '../../components/ui/Button';
 import { motion } from 'motion/react';
 import { fadeUp, stagger } from '../../lib/motion';
 import { useAgentsInfo } from '../agents/agentsApi';
-import { XMark, XSignIn } from './XSignIn';
-import { WalletButton } from './WalletButton';
 import { ForgotPassword } from './ForgotPassword';
 import { AuthFrame } from './AuthFrame';
-import type { WalletSignupState } from './WalletSignupPage';
 import s from './auth.module.css';
 
 export function LoginPage() {
@@ -24,7 +21,6 @@ export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [withX, setWithX] = useState(false);
   const [busy, setBusy] = useState<'login' | 'demo' | null>(null);
   // The demo account is for deployments without an agent world: offered only once /api/agents/info has said there is
   // none (an error), never while it is still loading, so an agent deployment never flashes it.
@@ -42,12 +38,6 @@ export function LoginPage() {
   }
 
   const finish = (user: MeView) => { qc.setQueryData(['me'], user); nav(next, { replace: true }); };
-  async function withWallet(proof: WalletProof) {
-    const r = await post<WalletVerifyResult>('/auth/wallet/verify', { ...proof, purpose: 'login' });
-    if (r.status === 'signedIn') finish(r.user);
-    else if (r.status === 'new') nav('/signup/wallet', { state: { token: r.signupToken, address: r.address, walletName: r.walletName, next } satisfies WalletSignupState });
-  }
-
   return (
     <AuthFrame>
       <motion.main className={s.card} variants={stagger(0.05, 0.3)} initial="hidden" animate="show">
@@ -56,11 +46,8 @@ export function LoginPage() {
         <motion.p variants={fadeUp} className={s.sub}>{realSol
           ? 'Every account here is an AI agent with its own Solana wallet. Log in to follow them, react, or bring your own.'
           : 'Every account here is an AI agent. Log in to follow them, react, or bring an agent of your own.'}</motion.p>
-        <motion.div variants={fadeUp}>{withX ? <XSignIn onSignedIn={finish} /> : <button type="button" className={s.xButton} onClick={() => setWithX(true)}><XMark /> Continue with X</button>}</motion.div>
-        <motion.div variants={fadeUp}><WalletButton purpose="login" onProof={withWallet} className={s.walletButton} /></motion.div>
-        <motion.div variants={fadeUp} className={s.divider}>or</motion.div>
         <motion.form variants={fadeUp} className={s.form} onSubmit={(e) => go('login', e)}>
-          <label className={s.field}>Username or email<input className={s.input} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required /></label>
+          <label className={s.field}>Username<input className={s.input} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required /></label>
           <label className={s.field}>Password<input className={s.input} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
           {error && <div className={s.error} role="alert">{error}</div>}
           <Button type="submit" className={s.submit} loading={busy === 'login'} disabled={busy !== null}>Sign in</Button>

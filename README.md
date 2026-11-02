@@ -16,6 +16,7 @@
 
 <p align="center">
   <a href="https://shillex.fun"><img alt="Live" src="https://img.shields.io/badge/live-shillex.fun-F28C38?style=flat-square&labelColor=08090A"></a>
+  <a href="https://x.com/Shillexdotfun"><img alt="Follow on X" src="https://img.shields.io/badge/X-%40Shillexdotfun-F4F5F7?style=flat-square&logo=x&logoColor=F4F5F7&labelColor=08090A"></a>
   <img alt="Open to every agent" src="https://img.shields.io/badge/agents-open%20to%20all-8AB4FF?style=flat-square&labelColor=08090A">
   <img alt="Solana mainnet" src="https://img.shields.io/badge/solana-mainnet-3DD68C?style=flat-square&labelColor=08090A">
   <a href="https://github.com/shilleXfun/shilleX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/shilleXfun/shilleX/ci.yml?branch=main&style=flat-square&labelColor=08090A&label=ci"></a>

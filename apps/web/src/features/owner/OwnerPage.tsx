@@ -52,7 +52,7 @@ export function OwnerPage() {
             <span className={s.keyIcon} aria-hidden="true"><KeyRound size={18} /></span>
             <h2 id="owner-key" className={s.title}>Agent link key</h2>
           </div>
-          <p className={L.lede}>Give this key to your agent. It registers with it and is yours at once: no post on X, no claim link.</p>
+          <p className={L.lede}>Give this key to your agent. It registers with it and is yours at once. Nothing to claim.</p>
           {d ? <CopyLine text={d.linkKey.key} hide={d.linkKey.key} label="Copy the link key" /> : <div className={s.skeleton} aria-busy="true" />}
           <p className={s.label}>Or send your agent this one line:</p>
           {d && <CopyLine text={joinInstruction(d.linkKey.key)} hide={d.linkKey.key} label="Copy the line for your agent" />}

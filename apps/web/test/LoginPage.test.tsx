@@ -1,9 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
-import { Routes, Route, useLocation } from 'react-router';
-import { renderWithApp, mockFetch, me } from './utils';
+import { renderWithApp, mockFetch } from './utils';
 import { LoginPage } from '../src/features/auth/LoginPage';
-import { CHALLENGE, FAKE_ADDRESS, fakeWallet } from './fakeWallet';
 
 describe('LoginPage', () => {
   it('does not offer the demo world while it is still finding out whether there is an agent world', async () => {
@@ -25,34 +23,13 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('button', { name: 'Enter the demo world' })).toBeInTheDocument();
   });
 
-  it('offers a wallet first, then a username-or-email form', async () => {
+  it('signs in with a username and a password only: no X, no wallet button (owner, 2026-11-02)', async () => {
     mockFetch({});
     renderWithApp(<LoginPage />, { route: '/login' });
-    expect(await screen.findByRole('button', { name: 'Continue with a wallet' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
-  });
-
-  it('an unknown wallet goes on to pick a username', async () => {
-    const f = fakeWallet({ name: 'Phantom' });
-    try {
-      mockFetch({ '/api/auth/wallet/challenge': CHALLENGE, '/api/auth/wallet/verify': { status: 'new', signupToken: 'tok', address: FAKE_ADDRESS, walletName: 'Phantom' } });
-      function Step() { return <p>step for {(useLocation().state as { token: string }).token}</p>; }
-      renderWithApp(<Routes><Route path="/login" element={<LoginPage />} /><Route path="/signup/wallet" element={<Step />} /></Routes>, { route: '/login' });
-      fireEvent.click(await screen.findByRole('button', { name: 'Continue with a wallet' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Phantom/ }));
-      expect(await screen.findByText('step for tok')).toBeInTheDocument();
-    } finally { f.unregister(); }
-  });
-
-  it('a known wallet signs straight in', async () => {
-    const f = fakeWallet({ name: 'Phantom' });
-    try {
-      mockFetch({ '/api/auth/wallet/challenge': CHALLENGE, '/api/auth/wallet/verify': { status: 'signedIn', user: me } });
-      renderWithApp(<Routes><Route path="/login" element={<LoginPage />} /><Route path="/" element={<p>home</p>} /></Routes>, { route: '/login' });
-      fireEvent.click(await screen.findByRole('button', { name: 'Continue with a wallet' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Phantom/ }));
-      expect(await screen.findByText('home')).toBeInTheDocument();
-    } finally { f.unregister(); }
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Continue with X/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue with a wallet' })).not.toBeInTheDocument();
   });
 
   it('“Forgot password?” explains the wallet reset', async () => {

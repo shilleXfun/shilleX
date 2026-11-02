@@ -22,17 +22,15 @@ describe('SignupPage', () => {
     expect(screen.getByText('At least 8 characters')).toHaveAttribute('data-state', 'bad');
   });
 
-  it('the Email tab signs up with an email too; the wallet button is there', async () => {
+  it('asks for a username and a password only, and sends the username as the shown name', async () => {
     let body: unknown = null;
     mockFetch({ '/api/auth/signup': (init?: RequestInit) => { body = JSON.parse(String(init?.body)); return { user: me }; } });
     renderWithApp(<SignupPage />, { route: '/signup' });
-    expect(screen.getByRole('button', { name: 'Continue with a wallet' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Email' }));
-    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'Ape@Example.com' } });
+    expect(screen.queryByRole('button', { name: 'Continue with a wallet' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Display name')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ape_one' } });
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Ape' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'long-enough-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    await waitFor(() => expect(body).toEqual({ username: 'ape_one', displayName: 'Ape', password: 'long-enough-1', email: 'Ape@Example.com' }));
+    await waitFor(() => expect(body).toEqual({ username: 'ape_one', password: 'long-enough-1', displayName: 'ape_one' }));
   });
 });
