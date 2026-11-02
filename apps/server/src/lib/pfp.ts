@@ -80,7 +80,8 @@ export const SKIES = ['#7EB6D9', '#E59A8C', '#A796DE', '#D8CB6E', '#7FC79D', '#F
 // ── Animals: 10 kinds × 5 coats (owner, 2026-11-02: "something related to dogs, cats, animals, in a pixel way") ──────
 /** base, shade, light (muzzle, belly), and an optional mark (ears, tips, spots, beak). */
 type Tone = [string, string, string, string?];
-interface Kind { name: string; tones: [string, Tone][]; hat?: false; draw: (c: Canvas, t: Tone, mouth: number, coat: string) => void }
+interface Kind { name: string; tones: [string, Tone][]; hat?: false;
+  /** Ears above the head: they poke out through a hat (else a capped dog reads as a person). */ ears?: true; draw: (c: Canvas, t: Tone, mouth: number, coat: string) => void }
 
 const EYE_Y = 13;
 const WHITE = '#F4F4F2';
@@ -137,6 +138,7 @@ function pointyEars(c: Canvas, t: Tone, inner: string, outer = t[0]) {
 const KINDS: Kind[] = [
   {
     name: 'Dog',
+    ears: true,
     tones: [['Shiba', ['#E39A3B', '#C07A26', '#F7E6C8']], ['Black and tan', ['#34302F', '#211E1D', '#E7C9A0']], ['Sesame', ['#B07A45', '#8A5A2E', '#F2DFC2']], ['Cream', ['#EBD3A6', '#CDB283', '#FBF3E2']], ['Red', ['#C8552E', '#A0411F', '#F6E1CC']]],
     draw(c, t, m) {
       neck(c, t);
@@ -162,6 +164,7 @@ const KINDS: Kind[] = [
   },
   {
     name: 'Cat',
+    ears: true,
     tones: [['Ginger', ['#E8892E', '#C46D1C', '#F7C58A']], ['Black', ['#2B2B30', '#1A1A1E', '#45454E']], ['White', ['#F2EFEA', '#D3CEC6', '#FFFFFF']], ['Gray tabby', ['#8E949C', '#71767D', '#B7BCC2']], ['Siamese', ['#EADCC2', '#CDBB9C', '#F7EFE0', '#5A4232']]],
     draw(c, t, m, name) {
       neck(c, t);
@@ -176,6 +179,7 @@ const KINDS: Kind[] = [
   },
   {
     name: 'Fox',
+    ears: true,
     tones: [['Red', ['#E0662C', '#B84E1D', '#FFF4E8', '#2A1E1A']], ['Arctic', ['#EDEFF3', '#C9CDD6', '#FFFFFF', '#8F98AB']], ['Silver', ['#6C6F78', '#4E5058', '#E8E8EC', '#22232A']], ['Fennec', ['#E9C890', '#C8A56C', '#FBF1DE', '#B07A45']], ['Crimson', ['#B83A2C', '#8E2B20', '#F3DCCB', '#2A1E1A']]],
     draw(c, t, m) {
       neck(c, t);
@@ -199,6 +203,7 @@ const KINDS: Kind[] = [
   },
   {
     name: 'Bear',
+    ears: true,
     tones: [['Grizzly', ['#8B5A34', '#6B4226', '#C8A07A']], ['Black', ['#2F2A27', '#1F1B19', '#8A7A6A']], ['Polar', ['#F1EEE6', '#D4CFC4', '#FFFFFF']], ['Panda', ['#F4F2EE', '#D6D2CA', '#FFFFFF', '#1E1E1E']], ['Honey', ['#D49A3E', '#B17C29', '#F1CD8E']]],
     draw(c, t, m, name) {
       const panda = name === 'Panda', dark = t[3] ?? t[1];
@@ -256,6 +261,7 @@ const KINDS: Kind[] = [
   },
   {
     name: 'Hamster',
+    ears: true,
     tones: [['Golden', ['#E5A65A', '#C4863C', '#FAEBD3']], ['Snow', ['#F3F0EA', '#D5D0C6', '#FFFFFF']], ['Gray', ['#A0A2A8', '#808288', '#E6E6EA']], ['Panda', ['#2F2D33', '#1F1D22', '#F2F0EC']], ['Cinnamon', ['#C9784A', '#A65E35', '#F6DCC4']]],
     draw(c, t, m) {
       neck(c, t);
@@ -436,9 +442,14 @@ export function pfpFrom(picks: [number, number, number, number], background = 0,
   const S = SHIRTS[Math.floor(shirt / 5)]!;
   S.draw(c, COLOURS[S.colours[shirt % 5]!]!, tone);
   kind.draw(c, tone, expression, coatName);
+  const sky = SKIES[background % SKIES.length], bare = [...c.px];
   // A negative pick leaves the layer off (no hat, no glasses; the review sheets show each layer alone).
   if (glasses >= 0) { const G = GLASSES[Math.floor(glasses / 5)]!; c.sprite(G.runs, palette(G.colours[glasses % 5]!, G.accent), G.ink === false ? null : INK); }
-  if (hat >= 0 && kind.hat !== false) { const H = HATS[Math.floor(hat / 5)]!; c.sprite(H.runs, palette(H.colours[hat % 5]!, H.accent), H.ink === false ? null : INK); }
+  if (hat >= 0 && kind.hat !== false) {
+    const H = HATS[Math.floor(hat / 5)]!; c.sprite(H.runs, palette(H.colours[hat % 5]!, H.accent), H.ink === false ? null : INK);
+    // The ears' tips poke out through the hat (rows 0-5, above the brim).
+    if (kind.ears) for (let i = 0; i < 6 * N; i++) if (bare[i] !== sky) c.px[i] = bare[i];
+  }
   return c.svg();
 }
 
