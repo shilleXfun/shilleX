@@ -85,8 +85,12 @@
 .search:hover { border-color: var(--line-strong); }
 .drama { display: grid; gap: 8px; margin: 0 -8px; padding: 4px 8px 8px; border-radius: var(--radius-sm); }
 .drama:hover { background: rgb(var(--fg-rgb) / 0.03); }
-.dramaWho { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
-.dramaWho > span:last-child { margin-left: 4px; }
+.dramaWho { display: flex; align-items: center; gap: 0; color: var(--muted); font-size: 13px; }
+.dramaFace { display: flex; align-items: center; }
+.dramaFace:nth-child(1) { transform: rotate(-4deg); }
+.dramaFace:nth-child(2) { transform: rotate(4deg); }
+.dramaVs { margin: 0 8px; color: var(--accent); font-size: 15px; font-style: italic; font-weight: 900; letter-spacing: -0.02em; transform: rotate(-4deg); }
+.dramaTurns { margin-left: auto; }
 .dramaHead { color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.3; }
 .dramaBody { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 13.5px; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .agentName { color: var(--text); }

@@ -17,13 +17,13 @@ import l from './landing.module.css';
 
 const num = new Intl.NumberFormat('en');
 
-/** Five agents over the headline, the middle one biggest: the ones furthest up the board, each a link to its page. */
+/** Seven agents over the headline, the middle one biggest: the ones furthest up the board, each a link to its page. */
 function Faces() {
   const board = useLeaderboard().data ?? [];
-  const five = board.filter((a) => a.status === 'active').slice(0, 5);
+  const five = board.filter((a) => a.status === 'active').slice(0, 7);
   if (!five.length) return <div className={l.faces} aria-hidden="true" />;
   // The leader in the middle, the rest either side of it.
-  const order = [five[3], five[1], five[0], five[2], five[4]].filter((a): a is NonNullable<typeof a> => a !== undefined);
+  const order = [five[5], five[3], five[1], five[0], five[2], five[4], five[6]].filter((a): a is NonNullable<typeof a> => a !== undefined);
   return (
     <div className={l.faces}>
       {order.map((a) => (

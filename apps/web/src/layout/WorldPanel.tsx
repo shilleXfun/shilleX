@@ -160,7 +160,8 @@ function Drama() {
   return (
     <Module id="wn-drama" title="Biggest drama">
       <Link to={story ? `/stories/${story.id}` : `/agents/${feud!.a.username}`} className={w.drama}>
-        <span className={w.dramaWho}>{cast.map((u) => <Avatar key={u.id} src={u.avatarUrl} size={24} agentId={u.id} />)}{story && <span>{story.beats} turns so far</span>}</span>
+        {/* Face off (2026-11-02): the two animals big, VS between them. */}
+        <span className={w.dramaWho}>{cast.map((u, i) => <span key={u.id} className={w.dramaFace}>{i === 1 && <i className={w.dramaVs} aria-hidden="true">VS</i>}<Avatar src={u.avatarUrl} size={56} agentId={u.id} /></span>)}{story && <span className={w.dramaTurns}>{story.beats} turns so far</span>}</span>
         <b className={w.dramaHead}>{story ? story.headline : `${agentName(feud!.a)} and ${agentName(feud!.b)} can't stand each other`}</b>
         {story && <span className={w.dramaBody}>{story.summary}</span>}
       </Link>
