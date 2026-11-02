@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 
 /**
+ * Animals since 2026-11-02 (owner: "something related to dogs, cats, animals, in a pixel way"): the skin trait is now one
+ * of 10 animals × 5 coats (dog, pup, cat, fox, bunny, bear, monkey, frog, penguin, hamster) on a brighter flat backdrop.
  * Agent profile pictures, NFT style (2026-10-15, the owner's ask): a 32×32 pixel portrait built from four traits, each
  * one of 50: a skin (10 kinds × 5 palettes), a hat, a pair of glasses and a shirt (10 designs × 5 colours each), on one
  * of 12 backgrounds, with one of 5 expressions. The picks come from the agent's id, so a picture never changes and every
@@ -70,138 +72,154 @@ const drop = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y]
 const add = (s: Set<number>, ...pts: [number, number][]) => { for (const [x, y] of pts) s.add(key(x, y)); return s; };
 
 // ── Backgrounds ──────────────────────────────────────────────────────────────────────────────────────────────────────
+/** Muted backdrops (community badges use these). */
 export const BACKGROUNDS = ['#638596', '#95554F', '#76658F', '#8E8E5E', '#5E8E74', '#A7836B', '#5B6C8F', '#8F5B7A', '#6B8F8C', '#9C7F4D', '#4F6E5F', '#7C5E9C'];
+/** The animals' backdrops: flat and brighter, NFT style. */
+export const SKIES = ['#7EB6D9', '#E59A8C', '#A796DE', '#D8CB6E', '#7FC79D', '#F0B27A', '#8EA2E8', '#E596C0', '#74CFC6', '#E2BE62', '#AFD27F', '#C59BE6'];
 
-// ── Skins: 10 kinds × 5 palettes ─────────────────────────────────────────────────────────────────────────────────────
-/** base, shade, light. */
-type Tone = [string, string, string];
-interface Kind { name: string; tones: [string, Tone][]; draw: (c: Canvas, t: Tone, mouth: number) => void }
+// ── Animals: 10 kinds × 5 coats (owner, 2026-11-02: "something related to dogs, cats, animals, in a pixel way") ──────
+/** base, shade, light (muzzle, belly), and an optional mark (ears, tips, spots, beak). */
+type Tone = [string, string, string, string?];
+interface Kind { name: string; tones: [string, Tone][]; hat?: false; draw: (c: Canvas, t: Tone, mouth: number, coat: string) => void }
 
 const EYE_Y = 13;
 const WHITE = '#F4F4F2';
+const PINK = '#F29AAA';
+const BLUSH = '#F4A0A8';
+const TONGUE = '#E8606F';
 
-/** The head every kind starts from: rows 7–22, columns 9–22, jaw and crown rounded; shade down the right side. */
-function head(extra?: (s: Set<number>) => void) {
-  const s = rect(9, 7, 22, 22);
-  drop(s, [9, 7], [10, 7], [9, 8], [22, 7], [21, 7], [22, 8], [9, 22], [10, 22], [9, 21], [22, 22], [21, 22], [22, 21]);
-  extra?.(s);
-  return s;
+/** A rectangle with its corners cut by `cut` steps: the round heads, ears and muzzles are all these. */
+function blob(x0: number, y0: number, x1: number, y1: number, cut: number, out = new Set<number>()) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (Math.min(x - x0, x1 - x) + Math.min(y - y0, y1 - y) >= cut) out.add(key(x, y));
+  }
+  return out;
 }
-const shaded = (t: Tone, light?: (x: number, y: number) => boolean) => (x: number, y: number) =>
-  light?.(x, y) ? t[2] : x >= 21 || y >= 21 ? t[1] : t[0];
+const union = (...ss: Set<number>[]) => { const o = new Set<number>(); for (const s of ss) for (const k of s) o.add(k); return o; };
+const within = (s: Set<number>) => (x: number, y: number) => s.has(key(x, y));
+/** Base colour, the shade down the right side and along the bottom, and the light where `light` says. */
+const coat = (t: Tone, right: number, bottom: number, light?: (x: number, y: number) => boolean) => (x: number, y: number) =>
+  light?.(x, y) ? t[2] : x >= right || y >= bottom ? t[1] : t[0];
 
 function neck(c: Canvas, t: Tone) {
   c.shape(rect(13, 20, 18, 25), (x, y) => (y >= 23 ? t[1] : t[0]));
 }
-function eyes(c: Canvas, iris = INK, white = WHITE) {
-  c.set(12, EYE_Y, white); c.set(13, EYE_Y, iris);
-  c.set(18, EYE_Y, white); c.set(19, EYE_Y, iris);
+/** Two shiny eyes, 2×2 each: a glint, the iris and the pupil. */
+function eyes(c: Canvas, iris = INK, y = EYE_Y) {
+  for (const x0 of [12, 18]) { c.set(x0, y - 1, '#FFFFFF'); c.set(x0 + 1, y - 1, iris); c.set(x0, y, iris); c.set(x0 + 1, y, INK); }
 }
-function brows(c: Canvas, col: string) {
-  for (const x of [11, 12, 13, 18, 19, 20]) c.set(x, EYE_Y - 2, col);
+/** Eyes on a dark coat get an amber iris, so they still show. */
+const irisFor = (t: Tone, light = INK) => { const v = parseInt(t[0].slice(1), 16); return ((v >> 16) * 0.3 + ((v >> 8) & 255) * 0.59 + (v & 255) * 0.11) < 80 ? '#E0A040' : light; };
+const blush = (c: Canvas, y = 16) => { for (const x of [10, 11, 20, 21]) c.set(x, y, BLUSH); };
+const px = (c: Canvas, pts: readonly (readonly [number, number])[], col = INK) => { for (const [x, y] of pts) c.set(x, y, col); };
+
+/** The nose at row `y`, then one of five mouths under it: content (a little w), smile, smirk, tongue out, flat. */
+function snout(c: Canvas, m: number, o: { y?: number; nose?: string; teeth?: boolean } = {}) {
+  const y = o.y ?? 15, r = y + 1;
+  px(c, [[15, y], [16, y]], o.nose ?? INK);
+  if (m === 0) px(c, [[13, r], [15, r], [16, r], [18, r], [14, r + 1], [17, r + 1]]);
+  if (m === 1) px(c, [[12, r], [19, r], [13, r + 1], [14, r + 1], [15, r + 1], [16, r + 1], [17, r + 1], [18, r + 1]]);
+  if (m === 2) px(c, [[14, r + 1], [15, r + 1], [16, r + 1], [17, r + 1], [18, r]]);
+  if (m === 3) {
+    px(c, [[13, r + 1], [14, r + 1], [15, r + 1], [16, r + 1], [17, r + 1], [18, r + 1], [14, r + 2], [17, r + 2], [14, r + 3], [17, r + 3], [15, r + 4], [16, r + 4]]);
+    px(c, [[15, r + 2], [16, r + 2], [15, r + 3], [16, r + 3]], TONGUE);
+  }
+  if (m === 4) px(c, [[14, r + 1], [15, r + 1], [16, r + 1], [17, r + 1]]);
+  if (o.teeth && m !== 3) { px(c, [[15, r + 2], [16, r + 2]], '#FFFFFF'); px(c, [[14, r + 2], [17, r + 2], [15, r + 3], [16, r + 3]]); }
 }
-/** Five expressions: neutral, smile, smirk, open, frown. */
-function mouth(c: Canvas, kind: number, col = INK, y = 18) {
-  if (kind === 0) for (let x = 14; x <= 17; x++) c.set(x, y, col);
-  if (kind === 1) { c.set(13, y - 1, col); for (let x = 14; x <= 17; x++) c.set(x, y, col); c.set(18, y - 1, col); }
-  if (kind === 2) { for (let x = 14; x <= 17; x++) c.set(x, y, col); c.set(18, y - 1, col); }
-  if (kind === 3) { for (let x = 14; x <= 17; x++) c.set(x, y, col); for (let x = 15; x <= 16; x++) c.set(x, y + 1, '#7A2E2E'); }
-  if (kind === 4) { c.set(13, y + 1, col); for (let x = 14; x <= 17; x++) c.set(x, y, col); c.set(18, y + 1, col); }
+
+/** Pointy ears (dogs, cats): a triangle each, the inside in `inner`. */
+function pointyEars(c: Canvas, t: Tone, inner: string, outer = t[0]) {
+  c.sprite([[2, 9, 9, 'a'], [3, 9, 10, 'a'], [4, 8, 11, 'a'], [5, 8, 12, 'a'], [6, 8, 12, 'a'], [2, 22, 22, 'a'], [3, 21, 22, 'a'], [4, 20, 23, 'a'], [5, 19, 23, 'a'], [6, 19, 23, 'a']], { a: outer });
+  px(c, [[9, 4], [9, 5], [10, 5], [22, 4], [22, 5], [21, 5]], inner);
 }
-const nose = (c: Canvas, col: string) => { c.set(16, 15, col); c.set(16, 16, col); };
 
 const KINDS: Kind[] = [
   {
-    name: 'Human',
-    tones: [['Fair', ['#F1C7A5', '#D9A47E', '#F8DCC4']], ['Tan', ['#E0A97E', '#C2865C', '#EDC09C']], ['Olive', ['#B97C52', '#985F3B', '#CC9670']], ['Brown', ['#8A5A3B', '#6E4329', '#A06E4C']], ['Deep', ['#5C3A26', '#45291A', '#734C34']]],
+    name: 'Dog',
+    tones: [['Shiba', ['#E39A3B', '#C07A26', '#F7E6C8']], ['Black and tan', ['#34302F', '#211E1D', '#E7C9A0']], ['Sesame', ['#B07A45', '#8A5A2E', '#F2DFC2']], ['Cream', ['#EBD3A6', '#CDB283', '#FBF3E2']], ['Red', ['#C8552E', '#A0411F', '#F6E1CC']]],
     draw(c, t, m) {
       neck(c, t);
-      c.shape(head((s) => { rect(8, 12, 8, 15, s); rect(23, 12, 23, 15, s); }), shaded(t, (x, y) => x === 11 && y === 9));
-      eyes(c); brows(c, t[1]); nose(c, t[1]); mouth(c, m);
+      pointyEars(c, t, t[2]);
+      c.shape(blob(8, 6, 23, 22, 3), coat(t, 22, 21, (x, y) => (y >= 15 && x >= 10 && x <= 21) || y >= 18));
+      px(c, [[12, 10], [13, 10], [18, 10], [19, 10]], t[2]);
+      eyes(c, irisFor(t)); snout(c, m);
     },
   },
   {
-    name: 'Ape',
-    tones: [['Brown', ['#6B4A2F', '#523720', '#C9A27E']], ['Black', ['#2E2A28', '#1E1B1A', '#8C7B6B']], ['Golden', ['#C8902F', '#A6741F', '#F0CF94']], ['Gray', ['#7D7F86', '#62646B', '#C4C2BD']], ['Snow', ['#E8E4DC', '#C9C3B8', '#F3D9CC']]],
-    draw(c, t, m) {
+    name: 'Pup',
+    tones: [['Golden', ['#E2B467', '#C3924A', '#F6E1B5', '#C3924A']], ['Chocolate', ['#7A4A2E', '#5E361F', '#A9724E', '#4E2C18']], ['Beagle', ['#F2EDE4', '#D8D0C2', '#FFFFFF', '#9A5F33']], ['Dalmatian', ['#F4F4F2', '#D6D6D2', '#FFFFFF', '#2A2A2E']], ['Gray', ['#8D9097', '#6E7178', '#C5C7CC', '#5A5D64']]],
+    draw(c, t, m, name) {
       neck(c, t);
-      const face = (x: number, y: number) => (y >= 15 && y <= 21 && x >= 11 && x <= 20) || (y >= 11 && y <= 14 && x >= 10 && x <= 21);
-      c.shape(head((s) => { rect(8, 8, 23, 21, s); rect(6, 12, 7, 15, s); rect(24, 12, 25, 15, s); }), (x, y) => (face(x, y) ? t[2] : x >= 22 || y >= 21 ? t[1] : t[0]));
-      eyes(c); brows(c, t[1]);
-      c.set(14, 17, INK); c.set(17, 17, INK);
-      mouth(c, m, INK, 19);
+      const head = blob(9, 6, 22, 22, 3), muzzle = blob(12, 14, 19, 21, 2);
+      c.shape(head, coat(t, 21, 21, within(muzzle)));
+      if (name === 'Dalmatian') px(c, [[11, 8], [12, 8], [19, 9], [17, 7], [21, 17], [10, 18], [11, 19]], t[3]!);
+      if (name === 'Beagle') c.shape(blob(9, 6, 22, 11, 3), (x, y) => (y <= 10 && (x <= 13 || x >= 18) ? t[3]! : t[0]), null);
+      // Floppy ears, hanging over the sides of the head.
+      c.shape(union(blob(6, 7, 10, 17, 2), blob(21, 7, 25, 17, 2)), (x) => (x === 6 || x === 25 ? t[1] : t[3] ?? t[1]));
+      eyes(c, irisFor(t)); snout(c, m, { y: 16 });
     },
   },
   {
     name: 'Cat',
-    tones: [['Ginger', ['#E8892E', '#C46D1C', '#F7C58A']], ['Black', ['#2B2B30', '#1A1A1E', '#55555E']], ['White', ['#F2EFEA', '#D3CEC6', '#FFFFFF']], ['Gray', ['#8E949C', '#71767D', '#B7BCC2']], ['Cream', ['#E9D3A8', '#CDB385', '#F6E9CC']]],
-    draw(c, t) {
+    tones: [['Ginger', ['#E8892E', '#C46D1C', '#F7C58A']], ['Black', ['#2B2B30', '#1A1A1E', '#45454E']], ['White', ['#F2EFEA', '#D3CEC6', '#FFFFFF']], ['Gray tabby', ['#8E949C', '#71767D', '#B7BCC2']], ['Siamese', ['#EADCC2', '#CDBB9C', '#F7EFE0', '#5A4232']]],
+    draw(c, t, m, name) {
       neck(c, t);
-      const ears: Run[] = [[3, 9, 9, 'a'], [4, 9, 10, 'a'], [5, 9, 11, 'a'], [6, 9, 12, 'a'], [3, 22, 22, 'a'], [4, 21, 22, 'a'], [5, 20, 22, 'a'], [6, 19, 22, 'a']];
-      c.sprite(ears, { a: t[0] });
-      c.shape(head(), shaded(t, (x, y) => y >= 15 && y <= 19 && x >= 12 && x <= 19));
-      c.set(10, 5, '#E9A3A3'); c.set(10, 6, '#E9A3A3'); c.set(21, 5, '#E9A3A3'); c.set(21, 6, '#E9A3A3');
-      c.set(12, EYE_Y, '#9BE15D'); c.set(13, EYE_Y, INK); c.set(18, EYE_Y, '#9BE15D'); c.set(19, EYE_Y, INK);
-      c.set(15, 15, '#E07A8A'); c.set(16, 15, '#E07A8A');
-      c.set(14, 17, INK); c.set(15, 18, INK); c.set(16, 18, INK); c.set(17, 17, INK);
-      for (const [x, y] of [[6, 15], [7, 15], [8, 16], [6, 17], [7, 17], [23, 16], [24, 15], [25, 15], [24, 17], [25, 17]] as const) c.set(x, y, '#D8D8D8');
+      pointyEars(c, t, PINK, t[3] ?? t[0]);
+      c.shape(blob(8, 7, 23, 22, 3), coat(t, 22, 21, (x, y) => y >= 16 && x >= 12 && x <= 19));
+      if (name === 'Ginger' || name === 'Gray tabby') px(c, [[14, 8], [14, 9], [16, 8], [16, 9], [16, 10], [18, 8], [18, 9], [9, 14], [10, 14], [22, 14], [21, 14]], t[1]);
+      if (name === 'Siamese') c.shape(blob(12, 13, 19, 19, 2), () => t[3]!, null);
+      eyes(c, name === 'Black' ? '#F2C94C' : name === 'White' || name === 'Siamese' ? '#5BB8F0' : '#8FD45E');
+      snout(c, m === 3 ? 3 : m === 4 ? 4 : 0, { nose: PINK });
+      px(c, [[4, 15], [5, 15], [6, 15], [5, 17], [6, 17], [25, 15], [26, 15], [27, 15], [25, 17], [26, 17]], '#EDEDED');
     },
   },
   {
-    name: 'Robot',
-    tones: [['Chrome', ['#B9C0C8', '#8E959D', '#E2E6EA']], ['Gold', ['#E2B33C', '#B88C22', '#F6DA8A']], ['Cobalt', ['#4C7FD0', '#355FA3', '#8AB0EC']], ['Onyx', ['#3A3D44', '#26282D', '#5E626B']], ['Copper', ['#C77A4A', '#9E5B33', '#E5A57C']]],
-    draw(c, t) {
-      c.shape(rect(13, 20, 18, 25), (x, y) => ((x + y) % 2 ? t[1] : t[0]));
-      c.sprite([[2, 15, 16, 'r'], [3, 15, 16, 'r'], [4, 16, 16, 'a'], [5, 16, 16, 'a'], [6, 16, 16, 'a']], { a: t[1], r: '#FF5C6C' });
-      c.shape(add(rect(9, 7, 22, 21), [8, 13], [8, 14], [23, 13], [23, 14]), (x, y) => (x === 8 || x === 23 ? t[1] : x >= 21 || y >= 20 ? t[1] : y === 8 && x < 14 ? t[2] : t[0]));
-      for (let x = 11; x <= 20; x++) c.set(x, EYE_Y, x === 15 || x === 16 ? t[1] : '#6FE3FF');
-      for (let x = 11; x <= 20; x++) c.set(x, EYE_Y - 1, INK);
-      for (let x = 11; x <= 20; x++) c.set(x, EYE_Y + 1, INK);
-      c.set(10, EYE_Y, INK); c.set(21, EYE_Y, INK);
-      for (let x = 12; x <= 19; x++) { c.set(x, 17, INK); c.set(x, 18, x % 2 ? t[2] : INK); c.set(x, 19, INK); }
-    },
-  },
-  {
-    name: 'Alien',
-    tones: [['Moss', ['#7CC46A', '#5A9C4A', '#AEE19F']], ['Teal', ['#3FB8AF', '#2C8F88', '#86DCD5']], ['Violet', ['#9B6BD1', '#7A4FAE', '#C3A2EA']], ['Azure', ['#5B8DEF', '#4170C9', '#9CBDF6']], ['Rose', ['#E57AB8', '#C05A95', '#F3B1D6']]],
+    name: 'Fox',
+    tones: [['Red', ['#E0662C', '#B84E1D', '#FFF4E8', '#2A1E1A']], ['Arctic', ['#EDEFF3', '#C9CDD6', '#FFFFFF', '#8F98AB']], ['Silver', ['#6C6F78', '#4E5058', '#E8E8EC', '#22232A']], ['Fennec', ['#E9C890', '#C8A56C', '#FBF1DE', '#B07A45']], ['Crimson', ['#B83A2C', '#8E2B20', '#F3DCCB', '#2A1E1A']]],
     draw(c, t, m) {
       neck(c, t);
-      const s = rect(9, 5, 22, 22);
-      drop(s, [9, 5], [10, 5], [11, 5], [9, 6], [22, 5], [21, 5], [20, 5], [22, 6], [9, 22], [10, 22], [9, 21], [22, 22], [21, 22], [22, 21], [9, 20], [22, 20]);
-      c.shape(s, shaded(t, (x, y) => (x === 12 || x === 13) && y === 7));
-      for (const [x0, x1] of [[11, 13], [18, 20]] as const) for (let x = x0; x <= x1; x++) for (let y = EYE_Y - 1; y <= EYE_Y + 1; y++) c.set(x, y, INK);
-      c.set(11, EYE_Y - 1, '#FFFFFF'); c.set(18, EYE_Y - 1, '#FFFFFF');
-      mouth(c, m === 3 ? 0 : m, t[1] === '#5A9C4A' ? INK : INK, 19);
+      c.sprite([[1, 8, 8, 'k'], [2, 8, 9, 'k'], [3, 8, 10, 'a'], [4, 7, 11, 'a'], [5, 7, 12, 'a'], [6, 7, 12, 'a'], [1, 23, 23, 'k'], [2, 22, 23, 'k'], [3, 21, 23, 'a'], [4, 20, 24, 'a'], [5, 19, 24, 'a'], [6, 19, 24, 'a']], { a: t[0], k: t[3]! });
+      px(c, [[9, 4], [9, 5], [10, 5], [22, 4], [22, 5], [21, 5]], t[2]);
+      c.shape(blob(7, 6, 24, 21, 4), coat(t, 23, 20, (x, y) => y >= 17 || (y >= 14 && (x <= 11 || x >= 20)) || (y >= 15 && (x <= 13 || x >= 18))));
+      eyes(c, irisFor(t)); snout(c, m, { y: 16 });
     },
   },
   {
-    name: 'Zombie',
-    tones: [['Moss', ['#8FAF7E', '#6F8F60', '#B5CDA8']], ['Ash', ['#9DB0A6', '#7C8E85', '#C3D0C9']], ['Bile', ['#A3A86F', '#82874F', '#C6CA98']], ['Sea', ['#7E9B95', '#5F7C76', '#A9C2BD']], ['Lilac', ['#B3A6C2', '#9283A4', '#D0C6DB']]],
+    name: 'Bunny',
+    hat: false,
+    tones: [['Snow', ['#F2F0EC', '#D6D2CA', '#FFFFFF']], ['Brown', ['#A97A55', '#88603F', '#E8D2BC']], ['Gray', ['#9A9CA3', '#7C7E85', '#D7D8DC']], ['Black', ['#35333A', '#232127', '#6E6B75']], ['Caramel', ['#E3B07A', '#C48F57', '#F7E3CA']]],
     draw(c, t, m) {
       neck(c, t);
-      c.shape(head((s) => { rect(8, 12, 8, 15, s); rect(23, 12, 23, 15, s); }), shaded(t));
-      c.set(12, EYE_Y, '#E8E2B0'); c.set(13, EYE_Y, '#7A1F1F'); c.set(18, EYE_Y, '#E8E2B0'); c.set(19, EYE_Y, '#7A1F1F');
-      for (const x of [11, 12, 13]) c.set(x, EYE_Y + 1, t[1]);
-      for (const [x, y] of [[13, 9], [14, 9], [15, 9], [16, 9], [17, 9], [14, 8], [16, 8], [14, 10], [16, 10]] as const) c.set(x, y, '#4A3A3A');
-      nose(c, t[1]); mouth(c, m === 1 ? 4 : m);
+      c.shape(union(blob(10, 0, 13, 9, 1), blob(18, 0, 21, 9, 1)), (x) => (x === 13 || x === 21 ? t[1] : t[0]));
+      for (let y = 1; y <= 6; y++) px(c, [[11, y], [12, y], [19, y], [20, y]], PINK);
+      c.shape(blob(8, 7, 23, 22, 4), coat(t, 22, 21, (x, y) => y >= 17 && x >= 11 && x <= 20));
+      eyes(c, irisFor(t)); blush(c); snout(c, m === 3 || m === 4 ? 0 : m, { nose: PINK, teeth: true });
     },
   },
   {
-    name: 'Skeleton',
-    tones: [['Bone', ['#E9E4D4', '#C4BDA8', '#FFFFFF']], ['Ivory', ['#F3EBD2', '#D2C7A6', '#FFFDF4']], ['Gilded', ['#E8C25A', '#BF9A36', '#F7DE97']], ['Glow', ['#B7F5A0', '#83C96E', '#E2FFD6']], ['Obsidian', ['#5A5663', '#3E3B46', '#7F7A8C']]],
-    draw(c, t) {
-      c.shape(rect(14, 20, 17, 25), (x) => (x % 2 ? t[1] : t[0]));
-      const s = rect(9, 7, 22, 18);
-      drop(s, [9, 7], [10, 7], [9, 8], [22, 7], [21, 7], [22, 8]);
-      rect(11, 19, 20, 22, s);
-      drop(s, [11, 22], [20, 22]);
-      c.shape(s, shaded(t));
-      const socket = t[0] === '#5A5663' ? '#8BF0FF' : INK;
-      for (const [x0, x1] of [[11, 13], [18, 20]] as const) for (let x = x0; x <= x1; x++) for (let y = EYE_Y - 1; y <= EYE_Y + 1; y++) c.set(x, y, INK);
-      c.set(12, EYE_Y, socket); c.set(19, EYE_Y, socket);
-      c.set(15, 16, INK); c.set(16, 16, INK); c.set(15, 17, INK);
-      for (let x = 12; x <= 19; x++) c.set(x, 19, x % 2 ? INK : t[2]);
-      for (let x = 12; x <= 19; x++) c.set(x, 20, INK);
+    name: 'Bear',
+    tones: [['Grizzly', ['#8B5A34', '#6B4226', '#C8A07A']], ['Black', ['#2F2A27', '#1F1B19', '#8A7A6A']], ['Polar', ['#F1EEE6', '#D4CFC4', '#FFFFFF']], ['Panda', ['#F4F2EE', '#D6D2CA', '#FFFFFF', '#1E1E1E']], ['Honey', ['#D49A3E', '#B17C29', '#F1CD8E']]],
+    draw(c, t, m, name) {
+      const panda = name === 'Panda', dark = t[3] ?? t[1];
+      neck(c, panda ? ['#1E1E1E', '#141414', '#2A2A2A'] : t);
+      c.shape(union(blob(7, 3, 12, 8, 2), blob(19, 3, 24, 8, 2)), () => (panda ? dark : t[0]));
+      if (!panda) px(c, [[9, 5], [10, 5], [9, 6], [10, 6], [21, 5], [22, 5], [21, 6], [22, 6]], t[2]);
+      c.shape(blob(8, 6, 23, 22, 3), coat(t, 22, 21, within(blob(12, 14, 19, 21, 2))));
+      if (panda) c.shape(union(blob(11, 11, 14, 14, 1), blob(17, 11, 20, 14, 1), new Set([key(11, 15), key(20, 15)])), () => dark, null);
+      eyes(c, panda ? dark : irisFor(t)); snout(c, m, { y: 16 });
+    },
+  },
+  {
+    name: 'Monkey',
+    tones: [['Brown', ['#7A5234', '#5E3E26', '#E3C3A0']], ['Golden', ['#C8902F', '#A6741F', '#F3DDB0']], ['Gray', ['#7D7F86', '#62646B', '#E2D6C8']], ['Black', ['#2E2A28', '#1E1B1A', '#C9A88A']], ['Snow', ['#E8E4DC', '#C9C3B8', '#F3CFC4']]],
+    draw(c, t, m) {
+      neck(c, t);
+      c.shape(union(blob(4, 11, 9, 17, 2), blob(22, 11, 27, 17, 2)), (x, y) => ((x >= 6 && x <= 7) || (x >= 24 && x <= 25)) && y >= 13 && y <= 15 ? t[2] : t[0]);
+      c.shape(blob(8, 6, 23, 22, 3), coat(t, 22, 21, within(union(blob(10, 9, 15, 15, 2), blob(16, 9, 21, 15, 2), blob(10, 13, 21, 22, 3)))));
+      px(c, [[15, 4], [16, 5], [14, 5]], t[0]); px(c, [[15, 3], [13, 5], [17, 5]], INK);
+      eyes(c, irisFor(t)); snout(c, m, { y: 16 });
+      c.set(15, 16, t[1]); c.set(16, 16, t[1]); px(c, [[14, 16], [17, 16]]);
     },
   },
   {
@@ -209,46 +227,46 @@ const KINDS: Kind[] = [
     tones: [['Pond', ['#5DBB4A', '#43923A', '#A5DE8F']], ['Lime', ['#A8D84A', '#86B336', '#D3EF96']], ['Poison', ['#4AA3D8', '#357FB0', '#93CCEE']], ['Ember', ['#E05A4A', '#B8433A', '#F29A8E']], ['Sun', ['#EBC84A', '#C7A436', '#F6E39A']]],
     draw(c, t, m) {
       neck(c, t);
-      const s = rect(8, 9, 23, 22);
-      drop(s, [8, 9], [8, 10], [23, 9], [23, 10], [8, 22], [9, 22], [23, 22], [22, 22]);
-      rect(9, 5, 13, 9, s); rect(18, 5, 22, 9, s);
-      drop(s, [9, 5], [13, 5], [18, 5], [22, 5]);
-      c.shape(s, (x, y) => (y >= 17 && x >= 10 && x <= 21 ? t[2] : x >= 22 || y >= 21 ? t[1] : t[0]));
-      for (const x0 of [10, 19]) { c.set(x0, 6, WHITE); c.set(x0 + 1, 6, WHITE); c.set(x0, 7, WHITE); c.set(x0 + 1, 7, INK); c.set(x0 + 2, 7, WHITE); }
-      c.set(14, 13, INK); c.set(17, 13, INK);
-      const curve = m === 4 ? 1 : -1;
-      for (let x = 10; x <= 21; x++) c.set(x, 16, INK);
-      c.set(9, 16 + curve, INK); c.set(22, 16 + curve, INK);
+      c.shape(union(blob(7, 9, 24, 22, 3), blob(8, 4, 14, 11, 2), blob(17, 4, 23, 11, 2)), coat(t, 23, 21, (x, y) => y >= 17 && x >= 9 && x <= 22));
+      for (const x0 of [9, 18]) {
+        c.shape(blob(x0, 5, x0 + 4, 9, 1), () => WHITE);
+        px(c, [[x0 + 2, 6], [x0 + 3, 6], [x0 + 2, 7], [x0 + 3, 7]]);
+        c.set(x0 + 2, 6, '#FFFFFF');
+      }
+      px(c, [[14, 12], [17, 12]], t[1]);
+      const up = m === 4 ? 1 : m === 2 ? 0 : -1;
+      for (let x = 10; x <= 21; x++) c.set(x, 15, INK);
+      c.set(9, 15 + up, INK); if (m !== 2) c.set(22, 15 + up, INK); else c.set(22, 14, INK);
+      if (m === 3) { px(c, [[15, 16], [16, 16], [15, 17], [16, 17]], TONGUE); px(c, [[14, 16], [17, 16], [14, 17], [17, 17], [15, 18], [16, 18]]); }
+      if (m === 1) blush(c, 14);
     },
   },
   {
-    name: 'Bear',
-    tones: [['Grizzly', ['#8B5A34', '#6B4226', '#C8A07A']], ['Black', ['#2F2A27', '#1F1B19', '#8A7A6A']], ['Polar', ['#F1EEE6', '#D4CFC4', '#FFFFFF']], ['Panda', ['#F4F2EE', '#D6D2CA', '#1E1E1E']], ['Honey', ['#D49A3E', '#B17C29', '#F1CD8E']]],
-    draw(c, t, m) {
-      const panda = t[2] === '#1E1E1E';
-      neck(c, panda ? ['#1E1E1E', '#141414', '#2A2A2A'] : t);
-      c.sprite([[4, 9, 10, 'a'], [5, 8, 11, 'a'], [6, 8, 11, 'a'], [4, 21, 22, 'a'], [5, 20, 23, 'a'], [6, 20, 23, 'a']], { a: panda ? '#1E1E1E' : t[1] });
-      c.shape(head(), (x, y) => (!panda && y >= 15 && y <= 20 && x >= 12 && x <= 19 ? t[2] : x >= 21 || y >= 21 ? t[1] : t[0]));
-      if (panda) for (const [x0, x1] of [[11, 13], [18, 20]] as const) for (let x = x0; x <= x1; x++) for (let y = EYE_Y - 1; y <= EYE_Y + 1; y++) c.set(x, y, '#1E1E1E');
-      c.set(12, EYE_Y, panda ? WHITE : INK); c.set(19, EYE_Y, panda ? WHITE : INK);
-      c.set(15, 16, INK); c.set(16, 16, INK); c.set(15, 17, INK); c.set(16, 17, INK);
-      mouth(c, m === 3 ? 1 : m, INK, 19);
+    name: 'Penguin',
+    tones: [['Emperor', ['#272A33', '#17191F', '#F4F4F2', '#F2A33A']], ['Rockhopper', ['#2E3038', '#1C1D23', '#F4F4F2', '#E2493A']], ['Little blue', ['#4F78B8', '#3A5C94', '#F0F2F6', '#3A3A44']], ['Gentoo', ['#33363E', '#1F2127', '#FFFFFF', '#F06A3A']], ['Royal', ['#3B4266', '#272C48', '#F7F4EC', '#F2C94C']]],
+    draw(c, t, m, name) {
+      neck(c, t);
+      c.shape(blob(8, 6, 23, 22, 4), coat(t, 22, 21, within(union(blob(10, 9, 15, 16, 2), blob(16, 9, 21, 16, 2), blob(11, 14, 20, 22, 3)))));
+      if (name === 'Rockhopper') px(c, [[10, 10], [11, 10], [12, 9], [21, 10], [20, 10], [19, 9], [9, 11], [22, 11]], '#F6D04D');
+      if (name === 'Emperor') px(c, [[9, 15], [9, 16], [22, 15], [22, 16]], '#F6C04D');
+      eyes(c);
+      c.sprite([[15, 14, 17, 'a'], [16, 15, 16, m === 3 ? 'r' : 'a']], { a: t[3]!, r: '#8A2A2A' });
+      if (m === 1) blush(c, 17);
     },
   },
   {
-    name: 'Devil',
-    tones: [['Scarlet', ['#D64545', '#AD3030', '#EE8484']], ['Crimson', ['#A8233A', '#841A2D', '#D45A70']], ['Plum', ['#7E3FB0', '#622E8B', '#B07BDA']], ['Shadow', ['#3A2F3A', '#271F27', '#6A586A']], ['Flame', ['#E8743A', '#C25A27', '#F4A97E']]],
+    name: 'Hamster',
+    tones: [['Golden', ['#E5A65A', '#C4863C', '#FAEBD3']], ['Snow', ['#F3F0EA', '#D5D0C6', '#FFFFFF']], ['Gray', ['#A0A2A8', '#808288', '#E6E6EA']], ['Panda', ['#2F2D33', '#1F1D22', '#F2F0EC']], ['Cinnamon', ['#C9784A', '#A65E35', '#F6DCC4']]],
     draw(c, t, m) {
       neck(c, t);
-      c.sprite([[3, 9, 9, 'h'], [4, 9, 10, 'h'], [5, 10, 11, 'h'], [6, 11, 12, 'h'], [3, 22, 22, 'h'], [4, 21, 22, 'h'], [5, 20, 21, 'h'], [6, 19, 20, 'h']], { h: '#EFE6D2' });
-      c.shape(head((s) => { add(s, [8, 12], [8, 13], [7, 12], [23, 12], [23, 13], [24, 12]); }), shaded(t, (x, y) => x === 11 && y === 9));
-      c.set(12, EYE_Y, '#FFD84A'); c.set(13, EYE_Y, INK); c.set(18, EYE_Y, '#FFD84A'); c.set(19, EYE_Y, INK);
-      for (const [x, y] of [[11, 11], [12, 12], [20, 11], [19, 12]] as const) c.set(x, y, INK);
-      nose(c, t[1]); mouth(c, m === 0 ? 2 : m);
-      c.set(14, 19, WHITE);
+      c.shape(union(blob(8, 4, 12, 8, 1), blob(19, 4, 23, 8, 1)), () => t[0]);
+      px(c, [[10, 6], [10, 7], [21, 6], [21, 7]], PINK);
+      c.shape(blob(6, 7, 25, 22, 5), coat(t, 24, 21, (x, y) => y >= 15 && x >= 9 && x <= 22));
+      eyes(c, irisFor(t)); blush(c, 15); snout(c, m, { nose: PINK, teeth: m === 1 });
     },
   },
 ];
+
 
 // ── Shirts: 10 designs × 5 colours ───────────────────────────────────────────────────────────────────────────────────
 export const COLOURS: Record<string, [string, string, string]> = {
@@ -385,37 +403,42 @@ function palette(name: string, accent?: string): Pal {
 // ── Picking ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface PfpTraits { skin: string; hat: string; glasses: string; shirt: string; background: number; expression: number; picks: [number, number, number, number] }
 
-/** The four traits (0–49 each), the background and the expression, from the seed. */
+/**
+ * The animal (0–49: 10 kinds × 5 coats), hat, glasses and shirt (0–49 each), the backdrop and the expression, from the
+ * seed. Like an NFT collection, not every one wears everything: about 4 in 10 have no hat (bunnies never: their ears) and
+ * about half no glasses; -1 is "none".
+ */
 export function pfpTraits(seed: string): PfpTraits {
   const h = createHash('sha256').update(`pfp:${seed}`).digest();
   const n = (i: number) => h.readUInt32BE(i * 4);
-  const picks = [n(0) % 50, n(1) % 50, n(2) % 50, n(3) % 50] as [number, number, number, number];
-  const [skin, hat, glasses, shirt] = picks;
-  const kind = KINDS[Math.floor(skin / 5)]!, tone = kind.tones[skin % 5]!;
-  const H = HATS[Math.floor(hat / 5)]!, G = GLASSES[Math.floor(glasses / 5)]!, S = SHIRTS[Math.floor(shirt / 5)]!;
+  const skin = n(0) % 50, kind = KINDS[Math.floor(skin / 5)]!, tone = kind.tones[skin % 5]!;
+  const hat = kind.hat === false || n(6) % 10 < 4 ? -1 : n(1) % 50;
+  const glasses = n(7) % 10 < 5 ? -1 : n(2) % 50;
+  const shirt = n(3) % 50;
+  const H = hat < 0 ? null : HATS[Math.floor(hat / 5)]!, G = glasses < 0 ? null : GLASSES[Math.floor(glasses / 5)]!, S = SHIRTS[Math.floor(shirt / 5)]!;
   return {
     skin: `${kind.name}, ${tone[0]}`,
-    hat: `${H.name}, ${H.colours[hat % 5]}`,
-    glasses: `${G.name}, ${G.colours[glasses % 5]}`,
+    hat: H ? `${H.name}, ${H.colours[hat % 5]}` : 'None',
+    glasses: G ? `${G.name}, ${G.colours[glasses % 5]}` : 'None',
     shirt: `${S.name}, ${S.colours[shirt % 5]}`,
-    background: n(4) % BACKGROUNDS.length,
+    background: n(4) % SKIES.length,
     expression: n(5) % 5,
-    picks,
+    picks: [skin, hat, glasses, shirt],
   };
 }
 
 /** The picture for explicit picks (the generator above, or a test sheet that walks every trait). */
 export function pfpFrom(picks: [number, number, number, number], background = 0, expression = 0): string {
   const [skin, hat, glasses, shirt] = picks;
-  const kind = KINDS[Math.floor(skin / 5)]!, tone = kind.tones[skin % 5]![1];
+  const kind = KINDS[Math.floor(skin / 5)]!, [coatName, tone] = kind.tones[skin % 5]!;
   const c = new Canvas();
-  for (let i = 0; i < N * N; i++) c.px[i] = BACKGROUNDS[background % BACKGROUNDS.length];
+  for (let i = 0; i < N * N; i++) c.px[i] = SKIES[background % SKIES.length];
   const S = SHIRTS[Math.floor(shirt / 5)]!;
   S.draw(c, COLOURS[S.colours[shirt % 5]!]!, tone);
-  kind.draw(c, tone, expression);
-  // A negative pick leaves the layer off (the review sheets show each layer alone).
+  kind.draw(c, tone, expression, coatName);
+  // A negative pick leaves the layer off (no hat, no glasses; the review sheets show each layer alone).
   if (glasses >= 0) { const G = GLASSES[Math.floor(glasses / 5)]!; c.sprite(G.runs, palette(G.colours[glasses % 5]!, G.accent), G.ink === false ? null : INK); }
-  if (hat >= 0) { const H = HATS[Math.floor(hat / 5)]!; c.sprite(H.runs, palette(H.colours[hat % 5]!, H.accent), H.ink === false ? null : INK); }
+  if (hat >= 0 && kind.hat !== false) { const H = HATS[Math.floor(hat / 5)]!; c.sprite(H.runs, palette(H.colours[hat % 5]!, H.accent), H.ink === false ? null : INK); }
   return c.svg();
 }
 

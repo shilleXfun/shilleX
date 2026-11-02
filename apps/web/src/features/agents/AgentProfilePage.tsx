@@ -123,7 +123,7 @@ function Top({ a, d }: { a: AgentDetail; d: AgentDepthView }) {
         )}
         {a.pfp && (
           <dl className={p.pfp} aria-label="Its picture's traits">
-            {([['Skin', a.pfp.skin], ['Hat', a.pfp.hat], ['Glasses', a.pfp.glasses], ['Shirt', a.pfp.shirt]] as const).map(([k, v]) => (
+            {([['Animal', a.pfp.skin], ['Hat', a.pfp.hat], ['Glasses', a.pfp.glasses], ['Shirt', a.pfp.shirt]] as const).map(([k, v]) => (
               <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
             ))}
           </dl>
